@@ -2,8 +2,12 @@ import { Stack } from "expo-router";
 import { StatusBar } from 'expo-status-bar';
 
 import "./global.css";
+import { useNotificationHandler } from "../lib/notificationHandler";
 
 export default function RootLayout() {
+  // Set up notification tap handling for deep linking
+  useNotificationHandler();
+
   return (
     <>
       <StatusBar style="dark" />

@@ -5,16 +5,24 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// ============================================================
+// TOGGLE THIS FLAG FOR EXPO GO vs DEV BUILD TESTING
+// Set to false when testing in Expo Go to avoid errors
+// Set to true when testing notifications in a development build
+// ============================================================
+const ENABLE_NOTIFICATIONS = true;
+
+// Configure notifications (only if enabled)
+if (ENABLE_NOTIFICATIONS) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export type Timer = {
   id: string;
@@ -37,16 +45,16 @@ type TimerListener = (timers: Map<number, Timer>, tick: number) => void;
 class TimerStore {
   private timers: Map<string, InternalTimer> = new Map();
   private listeners: Set<TimerListener> = new Set();
-  private notificationsInitialized = false;
-  private tick = 0; // Increment on each update to force React re-renders
+  private notificationsReady = false;
+  private tick = 0;
 
   constructor() {
-    this.initNotifications();
+    if (ENABLE_NOTIFICATIONS) {
+      this.initNotifications();
+    }
   }
 
   private async initNotifications() {
-    if (this.notificationsInitialized) return;
-
     try {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -57,28 +65,31 @@ class TimerStore {
       }
 
       if (finalStatus !== "granted") {
-        console.log("Notification permissions not granted");
+        console.log("⚠️ Notification permissions not granted");
+        return;
       }
 
       // Android-specific channel
       if (Platform.OS === "android") {
         await Notifications.setNotificationChannelAsync("rest-timer", {
           name: "Rest Timer",
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
+          importance: Notifications.AndroidImportance.LOW, // LOW = no sound, no popup, just shows in tray
+          vibrationPattern: [0],
           lightColor: "#007AFF",
+          sound: undefined,
+          enableVibrate: false,
         });
       }
 
-      this.notificationsInitialized = true;
+      this.notificationsReady = true;
+      console.log("✅ Notifications initialized successfully");
     } catch (error) {
-      console.log("Error initializing notifications:", error);
+      console.log("❌ Error initializing notifications:", error);
     }
   }
 
   subscribe(listener: TimerListener): () => void {
     this.listeners.add(listener);
-    // Immediately call with current state
     listener(this.getTimersByExercise(), this.tick);
     return () => this.listeners.delete(listener);
   }
@@ -89,11 +100,9 @@ class TimerStore {
     this.listeners.forEach((listener) => listener(timersByExercise, this.tick));
   }
 
-  // Returns a Map of exerciseId -> Timer (deep cloned for React state)
   private getTimersByExercise(): Map<number, Timer> {
     const result = new Map<number, Timer>();
     this.timers.forEach((timer) => {
-      // Deep clone to ensure React detects changes
       result.set(timer.exerciseId, {
         id: timer.id,
         exerciseId: timer.exerciseId,
@@ -152,13 +161,15 @@ class TimerStore {
   }
 
   createTimer(exerciseId: number, exerciseName: string, durationSeconds: number): string {
-    // Remove existing timer for this exercise if any
     const existingTimer = Array.from(this.timers.values()).find((t) => t.exerciseId === exerciseId);
     if (existingTimer) {
       this.deleteTimer(existingTimer.id);
     }
 
     const id = `timer-${exerciseId}-${Date.now()}`;
+    // Use a stable notification ID based on exercise ID (so updates replace instead of create new)
+    const notificationId = `rest-timer-${exerciseId}`;
+    
     const timer: InternalTimer = {
       id,
       exerciseId,
@@ -168,7 +179,7 @@ class TimerStore {
       isRunning: false,
       startedAt: null,
       intervalId: null,
-      notificationId: null,
+      notificationId,
     };
     this.timers.set(id, timer);
     this.notify();
@@ -179,7 +190,6 @@ class TimerStore {
     const timer = this.timers.get(id);
     if (!timer || timer.isRunning) return;
 
-    // Reset to duration if at 0
     if (timer.remainingSeconds <= 0) {
       timer.remainingSeconds = timer.durationSeconds;
     }
@@ -187,8 +197,8 @@ class TimerStore {
     timer.isRunning = true;
     timer.startedAt = Date.now();
 
-    // Schedule/update notification
-    await this.updateNotification(timer);
+    // Show initial notification
+    await this.showTimerNotification(timer);
     this.notify();
 
     timer.intervalId = setInterval(async () => {
@@ -197,8 +207,7 @@ class TimerStore {
 
       if (t.remainingSeconds > 0) {
         t.remainingSeconds -= 1;
-        // Update notification every second
-        await this.updateNotification(t);
+        await this.showTimerNotification(t);
         this.notify();
       } else {
         await this.timerComplete(id);
@@ -210,45 +219,56 @@ class TimerStore {
     const timer = this.timers.get(id);
     if (!timer) return;
 
+    const exerciseName = timer.exerciseName;
     await this.stopTimer(id);
 
     // Send completion notification
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Rest Complete! 💪",
-          body: `Time to continue ${timer.exerciseName}`,
-          sound: true,
-        },
-        trigger: null, // Immediate
-      });
-    } catch (error) {
-      console.log("Error sending completion notification:", error);
+    if (ENABLE_NOTIFICATIONS && this.notificationsReady) {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Rest Complete! 💪",
+            body: `Time to continue ${exerciseName}`,
+            sound: true,
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+            data: { 
+              exerciseId: timer.exerciseId, 
+              exerciseName: exerciseName,
+            },
+          },
+          trigger: null,
+        });
+        console.log("✅ Sent completion notification");
+      } catch (error) {
+        console.log("❌ Error sending completion notification:", error);
+      }
     }
   }
 
-  private async updateNotification(timer: InternalTimer): Promise<void> {
-    try {
-      // Cancel previous notification
-      if (timer.notificationId) {
-        await Notifications.dismissNotificationAsync(timer.notificationId);
-      }
+  private async showTimerNotification(timer: InternalTimer): Promise<void> {
+    if (!ENABLE_NOTIFICATIONS || !this.notificationsReady) return;
 
-      // Create ongoing notification showing countdown
-      const notificationId = await Notifications.scheduleNotificationAsync({
+    try {
+      // Use scheduleNotificationAsync with a fixed identifier to update in place
+      // By using the same identifier, the notification is replaced instead of creating a new one
+      await Notifications.scheduleNotificationAsync({
+        identifier: timer.notificationId!, // Fixed ID per exercise - replaces existing
         content: {
           title: `⏱️ ${timer.exerciseName}`,
-          body: `Rest: ${TimerStore.formatTime(timer.remainingSeconds)}`,
-          sticky: true, // Android: makes it ongoing
+          body: `Rest: ${TimerStore.formatTime(timer.remainingSeconds)} remaining`,
+          sticky: true,
           autoDismiss: false,
-          data: { timerId: timer.id },
+          priority: Notifications.AndroidNotificationPriority.LOW, // Low = silent update
+          data: { 
+            timerId: timer.id, 
+            exerciseId: timer.exerciseId,
+            exerciseName: timer.exerciseName,
+          },
         },
-        trigger: null, // Immediate
+        trigger: null,
       });
-
-      timer.notificationId = notificationId;
     } catch (error) {
-      console.log("Error updating notification:", error);
+      console.log("❌ Error showing timer notification:", error);
     }
   }
 
@@ -262,11 +282,10 @@ class TimerStore {
     }
     timer.isRunning = false;
 
-    // Dismiss notification when stopped
-    if (timer.notificationId) {
+    // Dismiss notification
+    if (timer.notificationId && ENABLE_NOTIFICATIONS) {
       try {
         await Notifications.dismissNotificationAsync(timer.notificationId);
-        timer.notificationId = null;
       } catch (error) {
         console.log("Error dismissing notification:", error);
       }
@@ -303,7 +322,7 @@ class TimerStore {
       clearInterval(timer.intervalId);
     }
 
-    if (timer.notificationId) {
+    if (timer.notificationId && ENABLE_NOTIFICATIONS) {
       try {
         await Notifications.dismissNotificationAsync(timer.notificationId);
       } catch (error) {
@@ -315,7 +334,6 @@ class TimerStore {
     this.notify();
   }
 
-  // Format seconds as MM:SS
   static formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -323,5 +341,4 @@ class TimerStore {
   }
 }
 
-// Singleton instance
 export const timerStore = new TimerStore();
