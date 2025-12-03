@@ -1,35 +1,50 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+const _layout = () => {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
+        tabBarStyle: {
+          position: "absolute",
+          left: 12,
+          right: 12,
+          bottom: 24,
+          borderRadius: 16,
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 8,
+          backgroundColor: "#fff",
+          borderTopWidth: 0,
+          elevation: 8,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.12,
+          shadowRadius: 10,
+        },
+      }}
+    >
+      <Tabs.Screen 
+        name="index" 
+        options={{ title: "Overview", headerShown: false, tabBarIcon: ({ color, size }) => (
+        <MaterialCommunityIcons name="home" color={color} size={size} />
+      )}} />
+      <Tabs.Screen 
+        name="exercises" 
+        options={{ title: "Exercises", headerShown: false, tabBarIcon: ({ color, size }) => (
+        <MaterialCommunityIcons name="dumbbell" color={color} size={size} />
+      )}} />
+      <Tabs.Screen 
+        name="programs" 
+        options={{ title: "Programs", headerShown: false, tabBarIcon: ({ color, size }) => (
+        <MaterialCommunityIcons name="book" color={color} size={size} />
+      )}} />
+      <Tabs.Screen 
+        name="settings" 
+        options={{ title: "Settings", headerShown: false, tabBarIcon: ({ color, size }) => (
+        <MaterialCommunityIcons name="cog" color={color} size={size} />
+      )}} />
     </Tabs>
-  );
+  )
 }
+
+export default _layout
