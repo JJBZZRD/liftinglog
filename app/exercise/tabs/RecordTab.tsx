@@ -3,15 +3,18 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TimerModal from "../../../components/TimerModal";
+import { getLastRestSeconds, setLastRestSeconds } from "../../../lib/db/exercises";
 import {
     addSet,
     addWorkoutExercise,
     completeWorkout,
     deleteSet,
     getOrCreateActiveWorkout,
+    getWorkoutExerciseById,
     listSetsForExercise,
     listWorkoutExercises,
     updateSet,
+    updateWorkoutExerciseInputs,
     type SetRow,
 } from "../../../lib/db/workouts";
 import { timerStore, type Timer } from "../../../lib/timerStore";
@@ -24,8 +27,8 @@ export default function RecordTab() {
   const [workoutId, setWorkoutId] = useState<number | null>(null);
   const [workoutExerciseId, setWorkoutExerciseId] = useState<number | null>(null);
   const [sets, setSets] = useState<SetRow[]>([]);
-  const [weight, setWeight] = useState("");
-  const [reps, setReps] = useState("");
+  const [weight, setWeightState] = useState("");
+  const [reps, setRepsState] = useState("");
   const [note, setNote] = useState("");
   const [setIndex, setSetIndex] = useState(1);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -51,24 +54,60 @@ export default function RecordTab() {
       (we) => we.exerciseId === exerciseId
     );
 
+    let weId: number;
     if (existingWorkoutExercise) {
-      setWorkoutExerciseId(existingWorkoutExercise.id);
+      weId = existingWorkoutExercise.id;
+      setWorkoutExerciseId(weId);
+      
+      // Load persisted weight and reps from the workout exercise
+      if (existingWorkoutExercise.currentWeight !== null) {
+        setWeightState(String(existingWorkoutExercise.currentWeight));
+      }
+      if (existingWorkoutExercise.currentReps !== null) {
+        setRepsState(String(existingWorkoutExercise.currentReps));
+      }
     } else {
-      const newWorkoutExerciseId = await addWorkoutExercise({
+      weId = await addWorkoutExercise({
         workout_id: activeWorkoutId,
         exercise_id: exerciseId,
       });
-      setWorkoutExerciseId(newWorkoutExerciseId);
+      setWorkoutExerciseId(weId);
     }
 
     const exerciseSets = await listSetsForExercise(activeWorkoutId, exerciseId);
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+
+    // Load last used rest time for this exercise
+    const lastRest = await getLastRestSeconds(exerciseId);
+    if (lastRest !== null && lastRest > 0) {
+      const mins = Math.floor(lastRest / 60);
+      const secs = lastRest % 60;
+      setTimerMinutes(String(mins));
+      setTimerSeconds(String(secs));
+    }
   }, [exerciseId]);
 
   useEffect(() => {
     loadWorkout();
   }, [loadWorkout]);
+
+  // Wrapper functions to persist weight and reps to database
+  const setWeight = useCallback((value: string) => {
+    setWeightState(value);
+    if (workoutExerciseId) {
+      const numValue = value.trim() ? parseFloat(value) : null;
+      updateWorkoutExerciseInputs(workoutExerciseId, { currentWeight: numValue });
+    }
+  }, [workoutExerciseId]);
+
+  const setReps = useCallback((value: string) => {
+    setRepsState(value);
+    if (workoutExerciseId) {
+      const numValue = value.trim() ? parseInt(value, 10) : null;
+      updateWorkoutExerciseInputs(workoutExerciseId, { currentReps: numValue });
+    }
+  }, [workoutExerciseId]);
 
   // Subscribe to timer updates for real-time countdown display
   useEffect(() => {
@@ -108,9 +147,15 @@ export default function RecordTab() {
 
   const handleCompleteWorkout = useCallback(async () => {
     if (!workoutId) return;
+    
+    // Cancel any running timer for this exercise
+    if (currentTimer) {
+      await timerStore.deleteTimer(currentTimer.id);
+    }
+    
     await completeWorkout(workoutId);
     router.back();
-  }, [workoutId]);
+  }, [workoutId, currentTimer]);
 
   // Timer button handlers
   const handleTimerPress = useCallback(async () => {
@@ -124,15 +169,24 @@ export default function RecordTab() {
         await timerStore.startTimer(currentTimer.id);
       }
     } else {
-      // No timer exists - create one with default 90 seconds and start it
+      // No timer exists - create one with current settings and start it
       const mins = parseInt(timerMinutes, 10) || 1;
       const secs = parseInt(timerSeconds, 10) || 30;
       const totalSeconds = mins * 60 + secs;
+
+      // Save the rest time for this exercise
+      await setLastRestSeconds(exerciseId, totalSeconds);
 
       const id = timerStore.createTimer(exerciseId, exerciseName, totalSeconds);
       await timerStore.startTimer(id);
     }
   }, [exerciseId, exerciseName, currentTimer, timerMinutes, timerSeconds]);
+
+  // Callback to save rest time when timer is started from modal
+  const handleSaveRestTime = useCallback(async (seconds: number) => {
+    if (!exerciseId) return;
+    await setLastRestSeconds(exerciseId, seconds);
+  }, [exerciseId]);
 
   const handleTimerLongPress = useCallback(() => {
     // Pre-fill with current timer duration if exists
@@ -314,12 +368,18 @@ export default function RecordTab() {
           >
             {currentTimer
               ? formatTime(currentTimer.remainingSeconds)
-              : "Rest Timer"}
+              : formatTime((parseInt(timerMinutes, 10) || 1) * 60 + (parseInt(timerSeconds, 10) || 30))}
           </Text>
         </Pressable>
-        <Pressable style={[styles.actionButton, styles.completeButton]} onPress={handleCompleteWorkout}>
-          <MaterialCommunityIcons name="check-circle" size={20} color="#fff" />
-          <Text style={[styles.actionButtonText, styles.completeButtonText]}>Complete Workout</Text>
+        <Pressable 
+          style={[styles.actionButton, styles.completeButton, sets.length === 0 && styles.completeButtonDisabled]} 
+          onPress={handleCompleteWorkout}
+          disabled={sets.length === 0}
+        >
+          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? "#999" : "#fff"} />
+          <Text style={[styles.actionButtonText, styles.completeButtonText, sets.length === 0 && styles.completeButtonTextDisabled]}>
+            Complete Workout
+          </Text>
         </Pressable>
       </View>
 
@@ -411,6 +471,7 @@ export default function RecordTab() {
         seconds={timerSeconds}
         onMinutesChange={setTimerMinutes}
         onSecondsChange={setTimerSeconds}
+        onSaveRestTime={handleSaveRestTime}
       />
     </View>
   );
@@ -580,10 +641,16 @@ const styles = StyleSheet.create({
   completeButton: {
     backgroundColor: "#007AFF",
   },
+  completeButtonDisabled: {
+    backgroundColor: "#e5e5ea",
+  },
   completeButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  completeButtonTextDisabled: {
+    color: "#999",
   },
   actionButtonText: {
     fontSize: 16,

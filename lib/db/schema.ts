@@ -8,6 +8,8 @@ export const exercises = sqliteTable("exercises", {
   equipment: text("equipment"),
   isBodyweight: integer("is_bodyweight", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at"),
+  lastRestSeconds: integer("last_rest_seconds"),
+  isPinned: integer("is_pinned", { mode: "boolean" }).notNull().default(false),
 });
 
 export const workouts = sqliteTable("workouts", {
@@ -23,6 +25,8 @@ export const workoutExercises = sqliteTable("workout_exercises", {
   exerciseId: integer("exercise_id").notNull(),
   orderIndex: integer("order_index"),
   note: text("note"),
+  currentWeight: real("current_weight"),
+  currentReps: integer("current_reps"),
 });
 
 export const sets = sqliteTable("sets", {

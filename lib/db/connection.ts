@@ -35,7 +35,9 @@ sqlite.execSync(`
     muscle_group TEXT,
     equipment TEXT,
     is_bodyweight INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER
+    created_at INTEGER,
+    last_rest_seconds INTEGER,
+    is_pinned INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS workouts (
@@ -51,6 +53,8 @@ sqlite.execSync(`
     exercise_id INTEGER NOT NULL,
     order_index INTEGER,
     note TEXT,
+    current_weight REAL,
+    current_reps INTEGER,
     FOREIGN KEY(workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
     FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
   );
@@ -187,6 +191,33 @@ sqlite.execSync(`
   CREATE INDEX IF NOT EXISTS idx_pr_events_exercise_time ON pr_events(exercise_id, occurred_at);
   CREATE INDEX IF NOT EXISTS idx_planned_workouts_date ON planned_workouts(planned_for);
 `);
+
+// Migrations for existing databases
+// Add last_rest_seconds column to exercises table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE exercises ADD COLUMN last_rest_seconds INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+
+// Add current_weight and current_reps columns to workout_exercises table if they don't exist
+try {
+  sqlite.execSync(`ALTER TABLE workout_exercises ADD COLUMN current_weight REAL;`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  sqlite.execSync(`ALTER TABLE workout_exercises ADD COLUMN current_reps INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+
+// Add is_pinned column to exercises table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE exercises ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;`);
+} catch {
+  // Column already exists, ignore
+}
 
 export const db = drizzle(sqlite);
 

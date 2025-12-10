@@ -3,6 +3,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, View, useWindowDimensions } from "react-native";
 import { SceneMap, TabBar, TabView } from "react-native-tab-view";
+import { isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 import VisualisationTab from "./tabs/VisualisationTab";
@@ -15,6 +16,7 @@ const renderScene = SceneMap({
 
 export default function ExerciseModalScreen() {
   const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string }>();
+  const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const title = typeof params.name === "string" ? params.name : "Exercise";
   const layout = useWindowDimensions();
   const [index, setIndex] = useState(0);
@@ -23,6 +25,14 @@ export default function ExerciseModalScreen() {
     { key: "history", title: "History" },
     { key: "visualisation", title: "Visualisation" },
   ]);
+  const [isPinned, setIsPinned] = useState(false);
+
+  // Load pin state on mount
+  useEffect(() => {
+    if (exerciseId) {
+      isExercisePinned(exerciseId).then(setIsPinned);
+    }
+  }, [exerciseId]);
 
   // Switch to history tab when returning from edit-workout (indicated by refreshHistory param)
   useEffect(() => {
@@ -31,10 +41,11 @@ export default function ExerciseModalScreen() {
     }
   }, [params.refreshHistory]);
 
-  const handlePinExercise = useCallback(() => {
-    // Placeholder for future feature
-    console.log("Pin exercise feature - to be implemented");
-  }, []);
+  const handlePinExercise = useCallback(async () => {
+    if (!exerciseId) return;
+    const newPinnedState = await togglePinExercise(exerciseId);
+    setIsPinned(newPinnedState);
+  }, [exerciseId]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -55,11 +66,15 @@ export default function ExerciseModalScreen() {
           headerRight: () => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Pin exercise"
+              accessibilityLabel={isPinned ? "Unpin exercise" : "Pin exercise"}
               onPress={handlePinExercise}
               style={{ paddingHorizontal: 12, paddingVertical: 6 }}
             >
-              <MaterialCommunityIcons name="pin" size={24} color="#007AFF" />
+              <MaterialCommunityIcons 
+                name={isPinned ? "pin" : "pin-outline"} 
+                size={24} 
+                color={isPinned ? "#007AFF" : "#666"} 
+              />
             </Pressable>
           ),
         }}
@@ -84,4 +99,3 @@ export default function ExerciseModalScreen() {
     </View>
   );
 }
-

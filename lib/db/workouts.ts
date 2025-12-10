@@ -216,4 +216,20 @@ export async function getExerciseHistory(exerciseId: number): Promise<WorkoutHis
   return entries;
 }
 
+export async function getWorkoutExerciseById(id: number): Promise<WorkoutExercise | null> {
+  const rows = await db.select().from(workoutExercises).where(eq(workoutExercises.id, id));
+  return rows[0] ?? null;
+}
+
+export async function updateWorkoutExerciseInputs(
+  workoutExerciseId: number,
+  updates: { currentWeight?: number | null; currentReps?: number | null }
+): Promise<void> {
+  const mapped: Partial<typeof workoutExercises.$inferInsert> = {};
+  if (updates.currentWeight !== undefined) mapped.currentWeight = updates.currentWeight;
+  if (updates.currentReps !== undefined) mapped.currentReps = updates.currentReps;
+  if (Object.keys(mapped).length === 0) return;
+  await db.update(workoutExercises).set(mapped).where(eq(workoutExercises.id, workoutExerciseId)).run();
+}
+
 

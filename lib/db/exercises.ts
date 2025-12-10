@@ -65,3 +65,42 @@ export async function lastPerformedAt(exerciseId: number): Promise<number | null
   return rows[0]?.performedAt ?? null;
 }
 
+export async function getLastRestSeconds(exerciseId: number): Promise<number | null> {
+  const rows = await db.select({ lastRestSeconds: exercises.lastRestSeconds })
+    .from(exercises)
+    .where(eq(exercises.id, exerciseId));
+  return rows[0]?.lastRestSeconds ?? null;
+}
+
+export async function setLastRestSeconds(exerciseId: number, seconds: number): Promise<void> {
+  await db.update(exercises)
+    .set({ lastRestSeconds: seconds })
+    .where(eq(exercises.id, exerciseId))
+    .run();
+}
+
+export async function getPinnedExercises(): Promise<Exercise[]> {
+  const rows = await db.select()
+    .from(exercises)
+    .where(eq(exercises.isPinned, true))
+    .orderBy(exercises.name);
+  return rows;
+}
+
+export async function togglePinExercise(exerciseId: number): Promise<boolean> {
+  const exercise = await getExerciseById(exerciseId);
+  if (!exercise) return false;
+  
+  const newPinnedState = !exercise.isPinned;
+  await db.update(exercises)
+    .set({ isPinned: newPinnedState })
+    .where(eq(exercises.id, exerciseId))
+    .run();
+  return newPinnedState;
+}
+
+export async function isExercisePinned(exerciseId: number): Promise<boolean> {
+  const exercise = await getExerciseById(exerciseId);
+  return exercise?.isPinned ?? false;
+}
+

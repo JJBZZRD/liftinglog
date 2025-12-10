@@ -19,6 +19,7 @@ interface TimerModalProps {
   seconds: string;
   onMinutesChange: (value: string) => void;
   onSecondsChange: (value: string) => void;
+  onSaveRestTime?: (seconds: number) => Promise<void>;
 }
 
 const PRESETS = [
@@ -40,6 +41,7 @@ export default function TimerModal({
   seconds,
   onMinutesChange,
   onSecondsChange,
+  onSaveRestTime,
 }: TimerModalProps) {
   const handleStartTimer = async () => {
     const mins = parseInt(minutes, 10) || 0;
@@ -47,6 +49,11 @@ export default function TimerModal({
     const totalSeconds = mins * 60 + secs;
 
     if (totalSeconds <= 0) return;
+
+    // Save the rest time for this exercise
+    if (onSaveRestTime) {
+      await onSaveRestTime(totalSeconds);
+    }
 
     let timerId: string;
     if (currentTimer) {
