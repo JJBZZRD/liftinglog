@@ -1,13 +1,15 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
-import { useCallback, useState } from "react";
-import { FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useCallback, useRef, useState } from "react";
+import { Animated, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../components/AddExerciseModal";
 import { deleteExercise, lastPerformedAt, listExercises, updateExercise, type Exercise } from "../../lib/db/exercises";
 
 export default function ExercisesScreen() {
+  const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Exercise[]>([]);
   const [fabActive, setFabActive] = useState(false);
   const [lastPerformedAtByExerciseId, setLastPerformedAtByExerciseId] = useState<Record<number, number | null>>({});
@@ -17,6 +19,16 @@ export default function ExercisesScreen() {
   const [isDeleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [renameText, setRenameText] = useState("");
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const HEADER_HEIGHT = 120 + insets.top;
+  
+  // Shadow opacity based on scroll position (0 when at top, 1 when scrolled)
+  const headerShadowOpacity = scrollY.interpolate({
+    inputRange: [0, 20],
+    outputRange: [0, 0.15],
+    extrapolate: "clamp",
+  });
 
   const reloadExercises = useCallback(async () => {
     const rows = await listExercises();
@@ -44,16 +56,54 @@ export default function ExercisesScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
+      {/* Fixed Header */}
+      <Animated.View 
+        style={[
+          styles.headerContainer, 
+          { paddingTop: insets.top },
+          {
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: headerShadowOpacity,
+            shadowRadius: 8,
+            elevation: scrollY.interpolate({
+              inputRange: [0, 20],
+              outputRange: [0, 4],
+              extrapolate: "clamp",
+            }),
+          }
+        ]}
+      >
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Exercises</Text>
+          <Text style={styles.headerSubtitle}>Your exercise library</Text>
+        </View>
+        {/* Fade gradient */}
+        <LinearGradient
+          colors={["#f5f5f5", "rgba(245, 245, 245, 0)"]}
+          style={styles.headerFade}
+        />
+      </Animated.View>
+
       <FlatList
         data={items}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 16, gap: 12 }}
+        contentContainerStyle={{ 
+          padding: 16, 
+          gap: 12,
+          paddingTop: HEADER_HEIGHT + 8,
+          paddingBottom: 100, // Space for bottom nav bar
+        }}
         bounces
         alwaysBounceVertical
         overScrollMode="always"
         decelerationRate="fast"
         scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
         renderItem={({ item }) => (
           <Link
             href={{ pathname: "/exercise/[id]", params: { id: String(item.id), name: item.name } }}
@@ -254,8 +304,35 @@ export default function ExercisesScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
-
+const styles = StyleSheet.create({
+  headerContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: "#f5f5f5",
+  },
+  headerContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#000",
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 4,
+  },
+  headerFade: {
+    height: 24,
+  },
+});
