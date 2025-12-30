@@ -181,7 +181,7 @@ export default function PinnedExercisesOverlay() {
         <Animated.View style={{ transform: [{ rotate: rotateInterpolation }] }}>
           <MaterialCommunityIcons
             name={isOpen ? "close" : "pin"}
-            size={20}
+            size={24}
             color="#fff"
           />
         </Animated.View>
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 999,
-    paddingTop: 116,
+    paddingTop: 108,
     paddingHorizontal: 16,
   },
   dropdown: {
@@ -284,11 +284,11 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: "absolute",
-    top: 60,
-    right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    top: 48,
+    right: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#007AFF",
     alignItems: "center",
     justifyContent: "center",
