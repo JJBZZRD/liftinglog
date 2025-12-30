@@ -1,7 +1,8 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   addSet,
   addWorkoutExercise,
@@ -30,6 +31,12 @@ export default function EditWorkoutScreen() {
   const [editReps, setEditReps] = useState("");
   const [editNote, setEditNote] = useState("");
 
+  // Date picker state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [editDate, setEditDate] = useState(new Date());
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+
   const loadWorkout = useCallback(async () => {
     if (!exerciseId || !workoutId) return;
 
@@ -51,6 +58,11 @@ export default function EditWorkoutScreen() {
     const exerciseSets = await listSetsForExercise(workoutId, exerciseId);
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+    
+    // Set the date from the first set, or use current date
+    if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
+      setSelectedDate(new Date(exerciseSets[0].performedAt));
+    }
   }, [exerciseId, workoutId]);
 
   useEffect(() => {
@@ -77,12 +89,13 @@ export default function EditWorkoutScreen() {
       reps: repsValue,
       note: noteValue,
       set_index: setIndex,
+      performed_at: selectedDate.getTime(),
     });
 
     // Only clear note field, keep weight and reps for quick entry
     setNote("");
     await loadWorkout();
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, loadWorkout]);
+  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
 
   const handleSaveEdits = useCallback(() => {
     // Sets are already saved when added/updated
@@ -106,6 +119,7 @@ export default function EditWorkoutScreen() {
     setEditWeight(set.weightKg !== null ? String(set.weightKg) : "");
     setEditReps(set.reps !== null ? String(set.reps) : "");
     setEditNote(set.note || "");
+    setEditDate(set.performedAt ? new Date(set.performedAt) : new Date());
     setEditModalVisible(true);
   }, []);
 
@@ -125,6 +139,7 @@ export default function EditWorkoutScreen() {
       weight_kg: weightValue,
       reps: repsValue,
       note: noteValue,
+      performed_at: editDate.getTime(),
     });
 
     setEditModalVisible(false);
@@ -140,6 +155,45 @@ export default function EditWorkoutScreen() {
     setSelectedSet(null);
     await loadWorkout();
   }, [selectedSet, loadWorkout]);
+
+  const formatDate = (date: Date): string => {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    
+    if (isToday) {
+      return "Today";
+    }
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+    
+    return date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const handleDateChange = useCallback((_event: any, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+    if (date) {
+      setSelectedDate(date);
+    }
+  }, []);
+
+  const handleEditDateChange = useCallback((_event: any, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowEditDatePicker(false);
+    }
+    if (date) {
+      setEditDate(date);
+    }
+  }, []);
 
   if (!exerciseId || !workoutId) {
     return (
@@ -169,6 +223,48 @@ export default function EditWorkoutScreen() {
       />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Date Picker */}
+        <View style={styles.dateSection}>
+          <Pressable
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <MaterialCommunityIcons name="calendar" size={20} color="#007AFF" />
+            <Text style={styles.dateButtonText}>{formatDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color="#666" />
+          </Pressable>
+          {showDatePicker && (
+            <Modal
+              visible={showDatePicker}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <Pressable
+                style={styles.datePickerOverlay}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <View style={styles.datePickerContainer}>
+                  <View style={styles.datePickerHeader}>
+                    <Text style={styles.datePickerTitle}>Select Date</Text>
+                    <Pressable onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.datePickerDone}>Done</Text>
+                    </Pressable>
+                  </View>
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                    style={styles.datePicker}
+                  />
+                </View>
+              </Pressable>
+            </Modal>
+          )}
+        </View>
+
         {/* Input Section */}
         <View style={styles.inputSection}>
           <Text style={styles.sectionTitle}>Add Set</Text>
@@ -314,6 +410,46 @@ export default function EditWorkoutScreen() {
                 multiline
               />
             </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Date</Text>
+              <Pressable
+                style={styles.editDateButton}
+                onPress={() => setShowEditDatePicker(true)}
+              >
+                <MaterialCommunityIcons name="calendar" size={18} color="#007AFF" />
+                <Text style={styles.editDateButtonText}>{formatDate(editDate)}</Text>
+              </Pressable>
+            </View>
+            {showEditDatePicker && (
+              <Modal
+                visible={showEditDatePicker}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowEditDatePicker(false)}
+              >
+                <Pressable
+                  style={styles.datePickerOverlay}
+                  onPress={() => setShowEditDatePicker(false)}
+                >
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <Text style={styles.datePickerTitle}>Select Date</Text>
+                      <Pressable onPress={() => setShowEditDatePicker(false)}>
+                        <Text style={styles.datePickerDone}>Done</Text>
+                      </Pressable>
+                    </View>
+                    <DateTimePicker
+                      value={editDate}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      onChange={handleEditDateChange}
+                      maximumDate={new Date()}
+                      style={styles.datePicker}
+                    />
+                  </View>
+                </Pressable>
+              </Modal>
+            )}
             <View style={styles.modalButtonsContainer}>
               <Pressable
                 style={[styles.modalButton, styles.deleteButton]}
@@ -362,6 +498,76 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100, // Space for action buttons
+  },
+  dateSection: {
+    marginBottom: 20,
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f7ff",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    gap: 8,
+  },
+  dateButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  datePickerContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    width: "90%",
+    maxWidth: 360,
+    overflow: "hidden",
+  },
+  datePickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e5ea",
+  },
+  datePickerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#000",
+  },
+  datePickerDone: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  datePicker: {
+    height: 200,
+    backgroundColor: "#fff",
+  },
+  editDateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f9f9f9",
+    borderWidth: 1,
+    borderColor: "#e5e5ea",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  editDateButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#007AFF",
   },
   inputSection: {
     marginBottom: 24,

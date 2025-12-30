@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "./connection";
-import { exercises, type ExerciseRow, sets } from "./schema";
+import { exercises, type ExerciseRow, sets, workoutExercises } from "./schema";
 
 export type Exercise = ExerciseRow;
 
@@ -57,6 +57,14 @@ export async function updateExercise(
 }
 
 export async function deleteExercise(id: number): Promise<void> {
+  // Delete related records first to avoid foreign key constraint errors
+  // Delete all sets that reference this exercise
+  await db.delete(sets).where(eq(sets.exerciseId, id)).run();
+  
+  // Delete all workout exercises that reference this exercise
+  await db.delete(workoutExercises).where(eq(workoutExercises.exerciseId, id)).run();
+  
+  // Now delete the exercise itself
   await db.delete(exercises).where(eq(exercises.id, id)).run();
 }
 

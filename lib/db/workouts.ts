@@ -139,12 +139,14 @@ export async function updateSet(setId: number, updates: {
   reps?: number | null;
   note?: string | null;
   set_index?: number | null;
+  performed_at?: number | null;
 }): Promise<void> {
   const mapped: Partial<typeof sets.$inferInsert> = {};
   if (updates.weight_kg !== undefined) mapped.weightKg = updates.weight_kg;
   if (updates.reps !== undefined) mapped.reps = updates.reps;
   if (updates.note !== undefined) mapped.note = updates.note;
   if (updates.set_index !== undefined) mapped.setIndex = updates.set_index;
+  if (updates.performed_at !== undefined) mapped.performedAt = updates.performed_at;
   if (Object.keys(mapped).length === 0) return;
   await db.update(sets).set(mapped).where(eq(sets.id, setId)).run();
 }

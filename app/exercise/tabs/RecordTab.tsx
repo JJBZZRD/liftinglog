@@ -1,7 +1,8 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TimerModal from "../../../components/TimerModal";
 import { getLastRestSeconds, setLastRestSeconds } from "../../../lib/db/exercises";
 import {
@@ -42,6 +43,10 @@ export default function RecordTab() {
   const [currentTimer, setCurrentTimer] = useState<Timer | null>(null);
   const [timerMinutes, setTimerMinutes] = useState("1");
   const [timerSeconds, setTimerSeconds] = useState("30");
+
+  // Date picker state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const loadWorkout = useCallback(async () => {
     if (!exerciseId) return;
@@ -139,11 +144,12 @@ export default function RecordTab() {
       reps: repsValue,
       note: noteValue,
       set_index: setIndex,
+      performed_at: selectedDate.getTime(),
     });
 
     setNote("");
     await loadWorkout();
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, loadWorkout]);
+  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
 
   const handleCompleteWorkout = useCallback(async () => {
     if (!workoutId) return;
@@ -252,6 +258,36 @@ export default function RecordTab() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const formatDate = (date: Date): string => {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    
+    if (isToday) {
+      return "Today";
+    }
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+    
+    return date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const handleDateChange = useCallback((_event: any, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+    if (date) {
+      setSelectedDate(date);
+    }
+  }, []);
+
   const renderSetItem = ({ item, index }: { item: SetRow; index: number }) => (
     <Pressable onLongPress={() => handleLongPressSet(item)} delayLongPress={400}>
       <View style={styles.setItem}>
@@ -280,6 +316,48 @@ export default function RecordTab() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Date Picker */}
+        <View style={styles.dateSection}>
+          <Pressable
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <MaterialCommunityIcons name="calendar" size={20} color="#007AFF" />
+            <Text style={styles.dateButtonText}>{formatDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color="#666" />
+          </Pressable>
+          {showDatePicker && (
+            <Modal
+              visible={showDatePicker}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <Pressable
+                style={styles.datePickerOverlay}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <View style={styles.datePickerContainer}>
+                  <View style={styles.datePickerHeader}>
+                    <Text style={styles.datePickerTitle}>Select Date</Text>
+                    <Pressable onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.datePickerDone}>Done</Text>
+                    </Pressable>
+                  </View>
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                    style={styles.datePicker}
+                  />
+                </View>
+              </Pressable>
+            </Modal>
+          )}
+        </View>
+
         {/* Input Section */}
         <View style={styles.inputSection}>
           <Text style={styles.sectionTitle}>Add Set</Text>
@@ -498,6 +576,60 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
+  },
+  dateSection: {
+    marginBottom: 20,
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f7ff",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    gap: 8,
+  },
+  dateButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  datePickerContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    width: "90%",
+    maxWidth: 360,
+    overflow: "hidden",
+  },
+  datePickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e5ea",
+  },
+  datePickerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#000",
+  },
+  datePickerDone: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  datePicker: {
+    height: 200,
+    backgroundColor: "#fff",
   },
   inputSection: {
     marginBottom: 24,
