@@ -1,23 +1,27 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import SetItem from "../../../components/lists/SetItem";
+import DatePickerModal from "../../../components/modals/DatePickerModal";
+import EditSetModal from "../../../components/modals/EditSetModal";
 import TimerModal from "../../../components/TimerModal";
 import { getLastRestSeconds, setLastRestSeconds } from "../../../lib/db/exercises";
 import {
-    addSet,
-    addWorkoutExercise,
-    completeWorkout,
-    deleteSet,
-    getOrCreateActiveWorkout,
-    getWorkoutExerciseById,
-    listSetsForExercise,
-    listWorkoutExercises,
-    updateSet,
-    updateWorkoutExerciseInputs,
-    type SetRow,
+  addSet,
+  addWorkoutExercise,
+  completeWorkout,
+  deleteSet,
+  getOrCreateActiveWorkout,
+  listSetsForExercise,
+  listWorkoutExercises,
+  updateSet,
+  updateWorkoutDate,
+  updateWorkoutExerciseInputs,
+  type SetRow,
 } from "../../../lib/db/workouts";
+import { colors } from "../../../lib/theme/colors";
+import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 
 export default function RecordTab() {
@@ -34,9 +38,6 @@ export default function RecordTab() {
   const [setIndex, setSetIndex] = useState(1);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
-  const [editWeight, setEditWeight] = useState("");
-  const [editReps, setEditReps] = useState("");
-  const [editNote, setEditNote] = useState("");
 
   // Timer state with real-time updates
   const [timerModalVisible, setTimerModalVisible] = useState(false);
@@ -47,6 +48,17 @@ export default function RecordTab() {
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Handler for date change - updates state immediately, syncs to DB
+  const handleDateChange = useCallback((date: Date) => {
+    setSelectedDate(date);
+    setShowDatePicker(false);
+    
+    // Update workout date in background
+    if (workoutId) {
+      updateWorkoutDate(workoutId, date.getTime());
+    }
+  }, [workoutId]);
 
   const loadWorkout = useCallback(async () => {
     if (!exerciseId) return;
@@ -64,7 +76,6 @@ export default function RecordTab() {
       weId = existingWorkoutExercise.id;
       setWorkoutExerciseId(weId);
       
-      // Load persisted weight and reps from the workout exercise
       if (existingWorkoutExercise.currentWeight !== null) {
         setWeightState(String(existingWorkoutExercise.currentWeight));
       }
@@ -83,7 +94,6 @@ export default function RecordTab() {
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
 
-    // Load last used rest time for this exercise
     const lastRest = await getLastRestSeconds(exerciseId);
     if (lastRest !== null && lastRest > 0) {
       const mins = Math.floor(lastRest / 60);
@@ -97,7 +107,6 @@ export default function RecordTab() {
     loadWorkout();
   }, [loadWorkout]);
 
-  // Wrapper functions to persist weight and reps to database
   const setWeight = useCallback((value: string) => {
     setWeightState(value);
     if (workoutExerciseId) {
@@ -114,7 +123,6 @@ export default function RecordTab() {
     }
   }, [workoutExerciseId]);
 
-  // Subscribe to timer updates for real-time countdown display
   useEffect(() => {
     const unsubscribe = timerStore.subscribe((timersByExercise, _tick) => {
       if (exerciseId) {
@@ -154,33 +162,29 @@ export default function RecordTab() {
   const handleCompleteWorkout = useCallback(async () => {
     if (!workoutId) return;
     
-    // Cancel any running timer for this exercise
     if (currentTimer) {
       await timerStore.deleteTimer(currentTimer.id);
     }
     
-    await completeWorkout(workoutId);
+    // Complete workout with the selected date
+    await completeWorkout(workoutId, selectedDate.getTime());
     router.back();
-  }, [workoutId, currentTimer]);
+  }, [workoutId, currentTimer, selectedDate]);
 
-  // Timer button handlers
   const handleTimerPress = useCallback(async () => {
     if (!exerciseId) return;
 
     if (currentTimer) {
-      // Toggle start/stop
       if (currentTimer.isRunning) {
         await timerStore.stopTimer(currentTimer.id);
       } else {
         await timerStore.startTimer(currentTimer.id);
       }
     } else {
-      // No timer exists - create one with current settings and start it
       const mins = parseInt(timerMinutes, 10) || 1;
       const secs = parseInt(timerSeconds, 10) || 30;
       const totalSeconds = mins * 60 + secs;
 
-      // Save the rest time for this exercise
       await setLastRestSeconds(exerciseId, totalSeconds);
 
       const id = timerStore.createTimer(exerciseId, exerciseName, totalSeconds);
@@ -188,14 +192,12 @@ export default function RecordTab() {
     }
   }, [exerciseId, exerciseName, currentTimer, timerMinutes, timerSeconds]);
 
-  // Callback to save rest time when timer is started from modal
   const handleSaveRestTime = useCallback(async (seconds: number) => {
     if (!exerciseId) return;
     await setLastRestSeconds(exerciseId, seconds);
   }, [exerciseId]);
 
   const handleTimerLongPress = useCallback(() => {
-    // Pre-fill with current timer duration if exists
     if (currentTimer) {
       const mins = Math.floor(currentTimer.durationSeconds / 60);
       const secs = currentTimer.durationSeconds % 60;
@@ -207,33 +209,22 @@ export default function RecordTab() {
 
   const handleLongPressSet = useCallback((set: SetRow) => {
     setSelectedSet(set);
-    setEditWeight(set.weightKg !== null ? String(set.weightKg) : "");
-    setEditReps(set.reps !== null ? String(set.reps) : "");
-    setEditNote(set.note || "");
     setEditModalVisible(true);
   }, []);
 
-  const handleUpdateSet = useCallback(async () => {
+  const handleUpdateSet = useCallback(async (updates: { weight_kg: number; reps: number; note: string | null }) => {
     if (!selectedSet) return;
 
-    const weightValue = editWeight.trim() ? parseFloat(editWeight) : null;
-    const repsValue = editReps.trim() ? parseInt(editReps, 10) : null;
-    const noteValue = editNote.trim() || null;
-
-    if (!weightValue || weightValue === 0 || !repsValue || repsValue === 0) {
-      return;
-    }
-
     await updateSet(selectedSet.id, {
-      weight_kg: weightValue,
-      reps: repsValue,
-      note: noteValue,
+      weight_kg: updates.weight_kg,
+      reps: updates.reps,
+      note: updates.note,
     });
 
     setEditModalVisible(false);
     setSelectedSet(null);
     await loadWorkout();
-  }, [selectedSet, editWeight, editReps, editNote, loadWorkout]);
+  }, [selectedSet, loadWorkout]);
 
   const handleDeleteSet = useCallback(async () => {
     if (!selectedSet) return;
@@ -252,61 +243,14 @@ export default function RecordTab() {
     );
   }
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const formatDate = (date: Date): string => {
-    const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
-    
-    if (isToday) {
-      return "Today";
-    }
-    
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) {
-      return "Yesterday";
-    }
-    
-    return date.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const handleDateChange = useCallback((_event: any, date?: Date) => {
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-    }
-    if (date) {
-      setSelectedDate(date);
-    }
-  }, []);
-
   const renderSetItem = ({ item, index }: { item: SetRow; index: number }) => (
-    <Pressable onLongPress={() => handleLongPressSet(item)} delayLongPress={400}>
-      <View style={styles.setItem}>
-        <View style={styles.setNumber}>
-          <Text style={styles.setNumberText}>{index + 1}</Text>
-        </View>
-        <View style={styles.setDetails}>
-          <View style={styles.setInfoRow}>
-            <Text style={styles.setInfo}>
-              {item.weightKg !== null ? `${item.weightKg} kg` : "—"}
-            </Text>
-            <Text style={styles.setInfo}>
-              {item.reps !== null ? `${item.reps} reps` : "—"}
-            </Text>
-          </View>
-          {item.note && <Text style={styles.setNote}>{item.note}</Text>}
-        </View>
-      </View>
-    </Pressable>
+    <SetItem
+      index={index + 1}
+      weightKg={item.weightKg}
+      reps={item.reps}
+      note={item.note}
+      onLongPress={() => handleLongPressSet(item)}
+    />
   );
 
   return (
@@ -322,40 +266,10 @@ export default function RecordTab() {
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color="#007AFF" />
-            <Text style={styles.dateButtonText}>{formatDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color="#666" />
+            <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
+            <Text style={styles.dateButtonText}>{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textSecondary} />
           </Pressable>
-          {showDatePicker && (
-            <Modal
-              visible={showDatePicker}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setShowDatePicker(false)}
-            >
-              <Pressable
-                style={styles.datePickerOverlay}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <View style={styles.datePickerContainer}>
-                  <View style={styles.datePickerHeader}>
-                    <Text style={styles.datePickerTitle}>Select Date</Text>
-                    <Pressable onPress={() => setShowDatePicker(false)}>
-                      <Text style={styles.datePickerDone}>Done</Text>
-                    </Pressable>
-                  </View>
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display={Platform.OS === "ios" ? "spinner" : "default"}
-                    onChange={handleDateChange}
-                    maximumDate={new Date()}
-                    style={styles.datePicker}
-                  />
-                </View>
-              </Pressable>
-            </Modal>
-          )}
         </View>
 
         {/* Input Section */}
@@ -409,11 +323,6 @@ export default function RecordTab() {
               keyExtractor={(item) => String(item.id)}
               renderItem={renderSetItem}
               scrollEnabled={false}
-              bounces
-              alwaysBounceVertical
-              overScrollMode="always"
-              decelerationRate="fast"
-              scrollEventThrottle={16}
               nestedScrollEnabled
             />
           )}
@@ -435,7 +344,7 @@ export default function RecordTab() {
           <MaterialCommunityIcons
             name={currentTimer?.isRunning ? "pause" : "timer"}
             size={20}
-            color={currentTimer?.isRunning ? "#fff" : "#007AFF"}
+            color={currentTimer?.isRunning ? colors.surface : colors.primary}
           />
           <Text
             style={[
@@ -454,89 +363,33 @@ export default function RecordTab() {
           onPress={handleCompleteWorkout}
           disabled={sets.length === 0}
         >
-          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? "#999" : "#fff"} />
+          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? colors.textTertiary : colors.surface} />
           <Text style={[styles.actionButtonText, styles.completeButtonText, sets.length === 0 && styles.completeButtonTextDisabled]}>
             Complete Workout
           </Text>
         </Pressable>
       </View>
 
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        value={selectedDate}
+        onChange={handleDateChange}
+      />
+
       {/* Edit Set Modal */}
-      <Modal
+      <EditSetModal
         visible={editModalVisible}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => {
+        onClose={() => {
           setEditModalVisible(false);
           setSelectedSet(null);
         }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            setEditModalVisible(false);
-            setSelectedSet(null);
-          }}
-        >
-          <ScrollView
-            style={styles.modalContent}
-            contentContainerStyle={styles.modalContentContainer}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.modalTitle}>Edit Set</Text>
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Weight (kg)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editWeight}
-                  onChangeText={setEditWeight}
-                  placeholder="0"
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Reps</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editReps}
-                  onChangeText={setEditReps}
-                  placeholder="0"
-                  keyboardType="number-pad"
-                />
-              </View>
-            </View>
-            <View style={styles.noteInputGroup}>
-              <Text style={styles.inputLabel}>Note (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.noteInput]}
-                value={editNote}
-                onChangeText={setEditNote}
-                placeholder="Add a note..."
-                multiline
-              />
-            </View>
-            <View style={styles.modalButtonsContainer}>
-              <Pressable style={[styles.modalButton, styles.deleteButton]} onPress={handleDeleteSet}>
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setEditModalVisible(false);
-                  setSelectedSet(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={[styles.modalButton, styles.saveButton]} onPress={handleUpdateSet}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </Pressable>
-      </Modal>
+        set={selectedSet}
+        onSave={handleUpdateSet}
+        onDelete={handleDeleteSet}
+        showDatePicker={false}
+      />
 
       {/* Timer Modal */}
       <TimerModal
@@ -564,11 +417,11 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: "#ff3b30",
+    color: colors.error,
   },
   recordContainer: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
   scrollView: {
     flex: 1,
@@ -583,7 +436,7 @@ const styles = StyleSheet.create({
   dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f0f7ff",
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
@@ -593,43 +446,7 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#007AFF",
-  },
-  datePickerOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  datePickerContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    width: "90%",
-    maxWidth: 360,
-    overflow: "hidden",
-  },
-  datePickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e5ea",
-  },
-  datePickerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#000",
-  },
-  datePickerDone: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#007AFF",
-  },
-  datePicker: {
-    height: 200,
-    backgroundColor: "#fff",
+    color: colors.primary,
   },
   inputSection: {
     marginBottom: 24,
@@ -638,7 +455,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 16,
-    color: "#000",
+    color: colors.text,
   },
   inputRow: {
     flexDirection: "row",
@@ -647,21 +464,20 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     flex: 1,
-    marginBottom: 0,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#666",
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#e5e5ea",
+    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
   noteInput: {
     minHeight: 80,
@@ -671,14 +487,14 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   addButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: "center",
     marginTop: 8,
   },
   addButtonText: {
-    color: "#fff",
+    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -687,50 +503,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#999",
+    color: colors.textTertiary,
     textAlign: "center",
     paddingVertical: 24,
-  },
-  setItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  setNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#007AFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  setNumberText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  setDetails: {
-    flex: 1,
-  },
-  setInfoRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 4,
-  },
-  setInfo: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#000",
-  },
-  setNote: {
-    fontSize: 14,
-    color: "#666",
-    fontStyle: "italic",
   },
   actionButtons: {
     position: "absolute",
@@ -739,9 +514,9 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     padding: 16,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: "#e5e5ea",
+    borderTopColor: colors.border,
     gap: 12,
   },
   actionButton: {
@@ -754,100 +529,37 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timerButton: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: "#007AFF",
+    borderColor: colors.primary,
   },
   timerButtonActive: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   timerButtonText: {
-    color: "#007AFF",
+    color: colors.primary,
     fontSize: 16,
     fontWeight: "600",
   },
   timerButtonTextActive: {
-    color: "#fff",
+    color: colors.surface,
   },
   completeButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
   },
   completeButtonDisabled: {
-    backgroundColor: "#e5e5ea",
+    backgroundColor: colors.border,
   },
   completeButtonText: {
-    color: "#fff",
+    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
   },
   completeButtonTextDisabled: {
-    color: "#999",
+    color: colors.textTertiary,
   },
   actionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "45%",
-  },
-  modalContentContainer: {
-    padding: 24,
-    flexDirection: "column",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 20,
-    color: "#000",
-  },
-  modalButtonsContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 20,
-    width: "100%",
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  deleteButton: {
-    backgroundColor: "#ff3b30",
-  },
-  deleteButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cancelButton: {
-    backgroundColor: "#f0f0f0",
-    borderWidth: 1,
-    borderColor: "#e5e5ea",
-  },
-  cancelButtonText: {
-    color: "#000",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  saveButton: {
-    backgroundColor: "#007AFF",
-  },
-  saveButtonText: {
-    color: "#fff",
     fontSize: 16,
     fontWeight: "600",
   },

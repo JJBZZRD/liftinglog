@@ -1,0 +1,200 @@
+/**
+ * Set Item Component
+ * 
+ * A reusable component for displaying a workout set. This consolidates
+ * the set item rendering pattern used in:
+ * - RecordTab.tsx
+ * - HistoryTab.tsx
+ * - edit-workout.tsx
+ */
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from '../../lib/theme/colors';
+
+interface SetItemProps {
+  /** Set index (1-based for display) */
+  index: number;
+  /** Weight in kg */
+  weightKg: number | null;
+  /** Number of reps */
+  reps: number | null;
+  /** Optional note */
+  note?: string | null;
+  /** Called on long press (for edit mode) */
+  onLongPress?: () => void;
+  /** Long press delay in ms (default: 400) */
+  delayLongPress?: number;
+  /** Variant styling */
+  variant?: 'default' | 'compact';
+}
+
+/**
+ * SetItem displays a single workout set with:
+ * - Numbered badge
+ * - Weight and reps
+ * - Optional note
+ * - Optional long-press handler for editing
+ */
+export default function SetItem({
+  index,
+  weightKg,
+  reps,
+  note,
+  onLongPress,
+  delayLongPress = 400,
+  variant = 'default',
+}: SetItemProps) {
+  const content = (
+    <View style={[styles.container, variant === 'compact' && styles.containerCompact]}>
+      <View style={[styles.badge, variant === 'compact' && styles.badgeCompact]}>
+        <Text style={[styles.badgeText, variant === 'compact' && styles.badgeTextCompact]}>
+          {index}
+        </Text>
+      </View>
+      <View style={styles.details}>
+        <View style={styles.infoRow}>
+          <Text style={styles.info}>
+            {weightKg !== null ? `${weightKg} kg` : '—'}
+          </Text>
+          <Text style={styles.info}>
+            {reps !== null ? `${reps} reps` : '—'}
+          </Text>
+        </View>
+        {note && (
+          <Text style={styles.note} numberOfLines={variant === 'compact' ? 1 : undefined}>
+            {note}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+
+  if (onLongPress) {
+    return (
+      <Pressable onLongPress={onLongPress} delayLongPress={delayLongPress}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return content;
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  containerCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+    backgroundColor: colors.surface,
+  },
+  badge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  badgeCompact: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  badgeText: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  badgeTextCompact: {
+    fontSize: 12,
+  },
+  details: {
+    flex: 1,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 4,
+  },
+  info: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  note: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+});
+
+/**
+ * SetItemList - Helper component for rendering a list of sets
+ */
+interface SetData {
+  id: number;
+  weightKg: number | null;
+  reps: number | null;
+  note?: string | null;
+}
+
+interface SetItemListProps {
+  sets: SetData[];
+  onLongPressSet?: (set: SetData) => void;
+  variant?: 'default' | 'compact';
+  emptyText?: string;
+}
+
+export function SetItemList({
+  sets,
+  onLongPressSet,
+  variant = 'default',
+  emptyText = 'No sets recorded',
+}: SetItemListProps) {
+  if (sets.length === 0) {
+    return (
+      <View style={emptyStyles.container}>
+        <Text style={emptyStyles.text}>{emptyText}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {sets.map((set, index) => (
+        <SetItem
+          key={set.id}
+          index={index + 1}
+          weightKg={set.weightKg}
+          reps={set.reps}
+          note={set.note}
+          onLongPress={onLongPressSet ? () => onLongPressSet(set) : undefined}
+          variant={variant}
+        />
+      ))}
+    </>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  container: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  text: {
+    fontSize: 14,
+    color: colors.textTertiary,
+    textAlign: 'center',
+  },
+});
+
+

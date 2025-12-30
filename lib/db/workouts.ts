@@ -18,6 +18,10 @@ export async function completeWorkout(workoutId: number, completedAt?: number): 
   await db.update(workouts).set({ completedAt: completedAt ?? Date.now() }).where(eq(workouts.id, workoutId)).run();
 }
 
+export async function updateWorkoutDate(workoutId: number, date: number): Promise<void> {
+  await db.update(workouts).set({ startedAt: date }).where(eq(workouts.id, workoutId)).run();
+}
+
 export async function getWorkoutById(id: number): Promise<Workout | null> {
   const rows = await db.select().from(workouts).where(eq(workouts.id, id));
   return rows[0] ?? null;

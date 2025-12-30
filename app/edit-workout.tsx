@@ -1,8 +1,10 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import SetItem from "../components/lists/SetItem";
+import DatePickerModal from "../components/modals/DatePickerModal";
+import EditSetModal from "../components/modals/EditSetModal";
 import {
   addSet,
   addWorkoutExercise,
@@ -10,8 +12,11 @@ import {
   listSetsForExercise,
   listWorkoutExercises,
   updateSet,
+  updateWorkoutDate,
   type SetRow,
 } from "../lib/db/workouts";
+import { colors } from "../lib/theme/colors";
+import { formatRelativeDate } from "../lib/utils/formatters";
 
 export default function EditWorkoutScreen() {
   const params = useLocalSearchParams<{ exerciseId?: string; workoutId?: string; exerciseName?: string }>();
@@ -27,26 +32,33 @@ export default function EditWorkoutScreen() {
   const [setIndex, setSetIndex] = useState(1);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
-  const [editWeight, setEditWeight] = useState("");
-  const [editReps, setEditReps] = useState("");
-  const [editNote, setEditNote] = useState("");
 
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [editDate, setEditDate] = useState(new Date());
-  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+
+  // Handler for date change - updates state immediately, syncs to DB
+  const handleDateChange = useCallback((date: Date) => {
+    setSelectedDate(date);
+    setShowDatePicker(false);
+    
+    // Update workout and sets in background
+    if (workoutId) {
+      updateWorkoutDate(workoutId, date.getTime());
+      sets.forEach((set) => {
+        updateSet(set.id, { performed_at: date.getTime() });
+      });
+    }
+  }, [workoutId, sets]);
 
   const loadWorkout = useCallback(async () => {
     if (!exerciseId || !workoutId) return;
 
-    // Check if workout exercise exists
     const workoutExercises = await listWorkoutExercises(workoutId);
     const existingWorkoutExercise = workoutExercises.find((we) => we.exerciseId === exerciseId);
     if (existingWorkoutExercise) {
       setWorkoutExerciseId(existingWorkoutExercise.id);
     } else {
-      // Create workout exercise
       const newWorkoutExerciseId = await addWorkoutExercise({
         workout_id: workoutId,
         exercise_id: exerciseId,
@@ -54,12 +66,10 @@ export default function EditWorkoutScreen() {
       setWorkoutExerciseId(newWorkoutExerciseId);
     }
 
-    // Load sets
     const exerciseSets = await listSetsForExercise(workoutId, exerciseId);
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
     
-    // Set the date from the first set, or use current date
     if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
       setSelectedDate(new Date(exerciseSets[0].performedAt));
     }
@@ -76,9 +86,8 @@ export default function EditWorkoutScreen() {
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
-    // Validate: weight and reps cannot be zero or null
     if (!weightValue || weightValue === 0 || !repsValue || repsValue === 0) {
-      return; // Don't add set if weight or reps is zero or missing
+      return;
     }
 
     await addSet({
@@ -92,14 +101,11 @@ export default function EditWorkoutScreen() {
       performed_at: selectedDate.getTime(),
     });
 
-    // Only clear note field, keep weight and reps for quick entry
     setNote("");
     await loadWorkout();
   }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
 
   const handleSaveEdits = useCallback(() => {
-    // Sets are already saved when added/updated
-    // Navigate back to exercise page with refresh param to trigger history reload and switch to history tab
     if (exerciseId) {
       router.replace({
         pathname: "/exercise/[id]",
@@ -116,36 +122,23 @@ export default function EditWorkoutScreen() {
 
   const handleLongPressSet = useCallback((set: SetRow) => {
     setSelectedSet(set);
-    setEditWeight(set.weightKg !== null ? String(set.weightKg) : "");
-    setEditReps(set.reps !== null ? String(set.reps) : "");
-    setEditNote(set.note || "");
-    setEditDate(set.performedAt ? new Date(set.performedAt) : new Date());
     setEditModalVisible(true);
   }, []);
 
-  const handleUpdateSet = useCallback(async () => {
+  const handleUpdateSet = useCallback(async (updates: { weight_kg: number; reps: number; note: string | null; performed_at?: number }) => {
     if (!selectedSet) return;
 
-    const weightValue = editWeight.trim() ? parseFloat(editWeight) : null;
-    const repsValue = editReps.trim() ? parseInt(editReps, 10) : null;
-    const noteValue = editNote.trim() || null;
-
-    // Validate: weight and reps cannot be zero or null
-    if (!weightValue || weightValue === 0 || !repsValue || repsValue === 0) {
-      return; // Don't update set if weight or reps is zero or missing
-    }
-
     await updateSet(selectedSet.id, {
-      weight_kg: weightValue,
-      reps: repsValue,
-      note: noteValue,
-      performed_at: editDate.getTime(),
+      weight_kg: updates.weight_kg,
+      reps: updates.reps,
+      note: updates.note,
+      performed_at: updates.performed_at,
     });
 
     setEditModalVisible(false);
     setSelectedSet(null);
     await loadWorkout();
-  }, [selectedSet, editWeight, editReps, editNote, loadWorkout]);
+  }, [selectedSet, loadWorkout]);
 
   const handleDeleteSet = useCallback(async () => {
     if (!selectedSet) return;
@@ -155,45 +148,6 @@ export default function EditWorkoutScreen() {
     setSelectedSet(null);
     await loadWorkout();
   }, [selectedSet, loadWorkout]);
-
-  const formatDate = (date: Date): string => {
-    const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
-    
-    if (isToday) {
-      return "Today";
-    }
-    
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) {
-      return "Yesterday";
-    }
-    
-    return date.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const handleDateChange = useCallback((_event: any, date?: Date) => {
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-    }
-    if (date) {
-      setSelectedDate(date);
-    }
-  }, []);
-
-  const handleEditDateChange = useCallback((_event: any, date?: Date) => {
-    if (Platform.OS === "android") {
-      setShowEditDatePicker(false);
-    }
-    if (date) {
-      setEditDate(date);
-    }
-  }, []);
 
   if (!exerciseId || !workoutId) {
     return (
@@ -214,9 +168,9 @@ export default function EditWorkoutScreen() {
               accessibilityRole="button"
               accessibilityLabel="Go back"
               onPress={() => router.back()}
-              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+              style={styles.headerButton}
             >
-              <MaterialCommunityIcons name="arrow-left" size={24} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
             </Pressable>
           ),
         }}
@@ -229,40 +183,10 @@ export default function EditWorkoutScreen() {
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color="#007AFF" />
-            <Text style={styles.dateButtonText}>{formatDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color="#666" />
+            <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
+            <Text style={styles.dateButtonText}>{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textSecondary} />
           </Pressable>
-          {showDatePicker && (
-            <Modal
-              visible={showDatePicker}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setShowDatePicker(false)}
-            >
-              <Pressable
-                style={styles.datePickerOverlay}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <View style={styles.datePickerContainer}>
-                  <View style={styles.datePickerHeader}>
-                    <Text style={styles.datePickerTitle}>Select Date</Text>
-                    <Pressable onPress={() => setShowDatePicker(false)}>
-                      <Text style={styles.datePickerDone}>Done</Text>
-                    </Pressable>
-                  </View>
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display={Platform.OS === "ios" ? "spinner" : "default"}
-                    onChange={handleDateChange}
-                    maximumDate={new Date()}
-                    style={styles.datePicker}
-                  />
-                </View>
-              </Pressable>
-            </Modal>
-          )}
         </View>
 
         {/* Input Section */}
@@ -318,28 +242,14 @@ export default function EditWorkoutScreen() {
               data={sets}
               keyExtractor={(item) => String(item.id)}
               scrollEnabled={false}
-              renderItem={({ item, index: setListIndex }) => (
-                <Pressable
+              renderItem={({ item, index }) => (
+                <SetItem
+                  index={index + 1}
+                  weightKg={item.weightKg}
+                  reps={item.reps}
+                  note={item.note}
                   onLongPress={() => handleLongPressSet(item)}
-                  style={styles.setItem}
-                >
-                  <View style={styles.setNumber}>
-                    <Text style={styles.setNumberText}>{setListIndex + 1}</Text>
-                  </View>
-                  <View style={styles.setDetails}>
-                    <View style={styles.setInfoRow}>
-                      {item.weightKg !== null && (
-                        <Text style={styles.setInfo}>{item.weightKg} kg</Text>
-                      )}
-                      {item.reps !== null && (
-                        <Text style={styles.setInfo}>{item.reps} reps</Text>
-                      )}
-                    </View>
-                    {item.note && (
-                      <Text style={styles.setNote}>{item.note}</Text>
-                    )}
-                  </View>
-                </Pressable>
+                />
               )}
             />
           )}
@@ -348,135 +258,32 @@ export default function EditWorkoutScreen() {
 
       {/* Action Button */}
       <View style={styles.actionButtons}>
-        <Pressable style={[styles.actionButton, styles.saveButton]} onPress={handleSaveEdits}>
-          <MaterialCommunityIcons name="check-circle" size={20} color="#fff" />
-          <Text style={[styles.actionButtonText, styles.saveButtonText]}>Save Edits</Text>
+        <Pressable style={styles.saveButton} onPress={handleSaveEdits}>
+          <MaterialCommunityIcons name="check-circle" size={20} color={colors.surface} />
+          <Text style={styles.saveButtonText}>Save Edits</Text>
         </Pressable>
       </View>
 
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        value={selectedDate}
+        onChange={handleDateChange}
+      />
+
       {/* Edit Set Modal */}
-      <Modal
+      <EditSetModal
         visible={editModalVisible}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => {
+        onClose={() => {
           setEditModalVisible(false);
           setSelectedSet(null);
         }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            setEditModalVisible(false);
-            setSelectedSet(null);
-          }}
-        >
-          <ScrollView
-            style={styles.modalContent}
-            contentContainerStyle={styles.modalContentContainer}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.modalTitle}>Edit Set</Text>
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Weight (kg)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editWeight}
-                  onChangeText={setEditWeight}
-                  placeholder="0.0"
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Reps</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editReps}
-                  onChangeText={setEditReps}
-                  placeholder="0"
-                  keyboardType="number-pad"
-                />
-              </View>
-            </View>
-            <View style={[styles.inputGroup, styles.noteInputGroup]}>
-              <Text style={styles.inputLabel}>Note (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.noteInput]}
-                value={editNote}
-                onChangeText={setEditNote}
-                placeholder="Add a note..."
-                multiline
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Date</Text>
-              <Pressable
-                style={styles.editDateButton}
-                onPress={() => setShowEditDatePicker(true)}
-              >
-                <MaterialCommunityIcons name="calendar" size={18} color="#007AFF" />
-                <Text style={styles.editDateButtonText}>{formatDate(editDate)}</Text>
-              </Pressable>
-            </View>
-            {showEditDatePicker && (
-              <Modal
-                visible={showEditDatePicker}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowEditDatePicker(false)}
-              >
-                <Pressable
-                  style={styles.datePickerOverlay}
-                  onPress={() => setShowEditDatePicker(false)}
-                >
-                  <View style={styles.datePickerContainer}>
-                    <View style={styles.datePickerHeader}>
-                      <Text style={styles.datePickerTitle}>Select Date</Text>
-                      <Pressable onPress={() => setShowEditDatePicker(false)}>
-                        <Text style={styles.datePickerDone}>Done</Text>
-                      </Pressable>
-                    </View>
-                    <DateTimePicker
-                      value={editDate}
-                      mode="date"
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      onChange={handleEditDateChange}
-                      maximumDate={new Date()}
-                      style={styles.datePicker}
-                    />
-                  </View>
-                </Pressable>
-              </Modal>
-            )}
-            <View style={styles.modalButtonsContainer}>
-              <Pressable
-                style={[styles.modalButton, styles.deleteButton]}
-                onPress={handleDeleteSet}
-              >
-                <MaterialCommunityIcons name="delete" size={20} color="#fff" />
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setEditModalVisible(false);
-                  setSelectedSet(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalButton, styles.saveButtonModal]}
-                onPress={handleUpdateSet}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </Pressable>
-      </Modal>
+        set={selectedSet}
+        onSave={handleUpdateSet}
+        onDelete={handleDeleteSet}
+        showDatePicker={true}
+      />
     </View>
   );
 }
@@ -484,11 +291,15 @@ export default function EditWorkoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
+  },
+  headerButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   errorText: {
     fontSize: 16,
-    color: "#ff3b30",
+    color: colors.error,
     textAlign: "center",
     marginTop: 50,
   },
@@ -497,7 +308,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100, // Space for action buttons
+    paddingBottom: 100,
   },
   dateSection: {
     marginBottom: 20,
@@ -505,7 +316,7 @@ const styles = StyleSheet.create({
   dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f0f7ff",
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
@@ -515,59 +326,7 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#007AFF",
-  },
-  datePickerOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  datePickerContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    width: "90%",
-    maxWidth: 360,
-    overflow: "hidden",
-  },
-  datePickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e5ea",
-  },
-  datePickerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#000",
-  },
-  datePickerDone: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#007AFF",
-  },
-  datePicker: {
-    height: 200,
-    backgroundColor: "#fff",
-  },
-  editDateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f9f9f9",
-    borderWidth: 1,
-    borderColor: "#e5e5ea",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  editDateButtonText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#007AFF",
+    color: colors.primary,
   },
   inputSection: {
     marginBottom: 24,
@@ -576,7 +335,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 16,
-    color: "#000",
+    color: colors.text,
   },
   inputRow: {
     flexDirection: "row",
@@ -585,38 +344,34 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     flex: 1,
-    marginBottom: 0,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#666",
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#e5e5ea",
+    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
   noteInput: {
     minHeight: 80,
     textAlignVertical: "top",
-  },
-  noteInputGroup: {
-    marginBottom: 0,
+    marginBottom: 16,
   },
   addButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: "center",
-    marginTop: 8,
   },
   addButtonText: {
-    color: "#fff",
+    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -625,152 +380,32 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#999",
+    color: colors.textTertiary,
     textAlign: "center",
     paddingVertical: 24,
-  },
-  setItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  setNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#007AFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  setNumberText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  setDetails: {
-    flex: 1,
-  },
-  setInfoRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 4,
-  },
-  setInfo: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#000",
-  },
-  setNote: {
-    fontSize: 14,
-    color: "#666",
-    fontStyle: "italic",
   },
   actionButtons: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: "row",
     padding: 16,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: "#e5e5ea",
+    borderTopColor: colors.border,
   },
-  actionButton: {
-    flex: 1,
+  saveButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.primary,
     padding: 14,
     borderRadius: 8,
     gap: 8,
   },
-  saveButton: {
-    backgroundColor: "#007AFF",
-  },
   saveButtonText: {
-    color: "#fff",
+    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "45%",
-    elevation: 0,
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  modalContentContainer: {
-    paddingTop: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    flexDirection: "column",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 20,
-    color: "#000",
-  },
-  modalButtonsContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 20,
-    marginBottom: 0,
-    width: "100%",
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 6,
-  },
-  deleteButton: {
-    backgroundColor: "#ff3b30",
-  },
-  deleteButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cancelButton: {
-    backgroundColor: "#f0f0f0",
-    borderWidth: 1,
-    borderColor: "#e5e5ea",
-  },
-  cancelButtonText: {
-    color: "#000",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  saveButtonModal: {
-    backgroundColor: "#007AFF",
   },
 });
-
