@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import "./global.css";
 import { useNotificationHandler } from "../lib/notificationHandler";
@@ -9,7 +10,7 @@ export default function RootLayout() {
   useNotificationHandler();
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="dark" />
       <Stack>
         <Stack.Screen 
@@ -28,6 +29,6 @@ export default function RootLayout() {
           options={{ presentation: "modal" }}
         />
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }

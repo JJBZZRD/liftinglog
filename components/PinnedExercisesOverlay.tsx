@@ -10,7 +10,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { getPinnedExercises, type Exercise } from "../lib/db/exercises";
+import { Swipeable } from "react-native-gesture-handler";
+import { getPinnedExercises, togglePinExercise, type Exercise } from "../lib/db/exercises";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -96,6 +97,40 @@ export default function PinnedExercisesOverlay() {
     });
   }, [closeDropdown]);
 
+  const handleUnpinExercise = useCallback(async (exerciseId: number) => {
+    await togglePinExercise(exerciseId);
+    // Update the list immediately
+    setPinnedExercises((prev) => prev.filter((e) => e.id !== exerciseId));
+  }, []);
+
+  const renderRightActions = useCallback(
+    (
+      progress: Animated.AnimatedInterpolation<number>,
+      _dragX: Animated.AnimatedInterpolation<number>,
+      exerciseId: number
+    ) => {
+      const translateX = progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [140, 0],
+      });
+
+      return (
+        <Animated.View
+          style={[styles.swipeAction, { transform: [{ translateX }] }]}
+        >
+          <Pressable
+            style={styles.removeButton}
+            onPress={() => handleUnpinExercise(exerciseId)}
+          >
+            <MaterialCommunityIcons name="pin-off" size={22} color="#fff" />
+            <Text style={styles.removeButtonText}>Unpin</Text>
+          </Pressable>
+        </Animated.View>
+      );
+    },
+    [handleUnpinExercise]
+  );
+
   const rotateInterpolation = buttonRotation.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "45deg"],
@@ -144,32 +179,42 @@ export default function PinnedExercisesOverlay() {
           ) : (
             <View style={styles.exerciseList}>
               {pinnedExercises.map((exercise) => (
-                <Pressable
+                <Swipeable
                   key={exercise.id}
-                  style={styles.exerciseItem}
-                  onPress={() => handleExercisePress(exercise)}
+                  renderRightActions={(progress, dragX) =>
+                    renderRightActions(progress, dragX, exercise.id)
+                  }
+                  overshootRight={false}
+                  rightThreshold={140}
+                  friction={2}
+                  onSwipeableOpen={() => handleUnpinExercise(exercise.id)}
                 >
-                  <View style={styles.exerciseIcon}>
+                  <Pressable
+                    style={styles.exerciseItem}
+                    onPress={() => handleExercisePress(exercise)}
+                  >
+                    <View style={styles.exerciseIcon}>
+                      <MaterialCommunityIcons
+                        name="dumbbell"
+                        size={20}
+                        color="#007AFF"
+                      />
+                    </View>
+                    <View style={styles.exerciseInfo}>
+                      <Text style={styles.exerciseName}>{exercise.name}</Text>
+                      {exercise.muscleGroup && (
+                        <Text style={styles.exerciseMuscle}>
+                          {exercise.muscleGroup}
+                        </Text>
+                      )}
+                    </View>
                     <MaterialCommunityIcons
-                      name="dumbbell"
-                      size={20}
-                      color="#007AFF"
+                      name="chevron-right"
+                      size={24}
+                      color="#ccc"
                     />
-                  </View>
-                  <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseName}>{exercise.name}</Text>
-                    {exercise.muscleGroup && (
-                      <Text style={styles.exerciseMuscle}>
-                        {exercise.muscleGroup}
-                      </Text>
-                    )}
-                  </View>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={24}
-                    color="#ccc"
-                  />
-                </Pressable>
+                  </Pressable>
+                </Swipeable>
               ))}
             </View>
           )}
@@ -259,6 +304,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 16,
+    backgroundColor: "#fff",
+  },
+  swipeAction: {
+    justifyContent: "center",
+    alignItems: "flex-end",
+  },
+  removeButton: {
+    backgroundColor: "#FF3B30",
+    justifyContent: "center",
+    alignItems: "center",
+    width: 140,
+    height: "100%",
+    flexDirection: "column",
+    gap: 4,
+  },
+  removeButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   exerciseIcon: {
     width: 40,
@@ -300,4 +364,3 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
 });
-

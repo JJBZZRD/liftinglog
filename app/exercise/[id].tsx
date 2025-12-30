@@ -1,9 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SceneMap, TabBar, TabView } from "react-native-tab-view";
-import { isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
+import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 import VisualisationTab from "./tabs/VisualisationTab";
@@ -26,6 +26,7 @@ export default function ExerciseModalScreen() {
     { key: "visualisation", title: "Visualisation" },
   ]);
   const [isPinned, setIsPinned] = useState(false);
+  const [showPinLimitTooltip, setShowPinLimitTooltip] = useState(false);
 
   // Load pin state on mount
   useEffect(() => {
@@ -43,12 +44,49 @@ export default function ExerciseModalScreen() {
 
   const handlePinExercise = useCallback(async () => {
     if (!exerciseId) return;
+    
+    // If already pinned, allow unpinning
+    if (isPinned) {
+      const newPinnedState = await togglePinExercise(exerciseId);
+      setIsPinned(newPinnedState);
+      return;
+    }
+    
+    // Check if we're at the limit before pinning
+    const currentCount = await getPinnedExercisesCount();
+    if (currentCount >= MAX_PINNED_EXERCISES) {
+      setShowPinLimitTooltip(true);
+      return;
+    }
+    
     const newPinnedState = await togglePinExercise(exerciseId);
     setIsPinned(newPinnedState);
-  }, [exerciseId]);
+  }, [exerciseId, isPinned]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* Pin limit tooltip overlay */}
+      <Modal
+        visible={showPinLimitTooltip}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPinLimitTooltip(false)}
+      >
+        <Pressable 
+          style={styles.tooltipOverlay} 
+          onPress={() => setShowPinLimitTooltip(false)}
+        >
+          <View style={styles.tooltipContainer}>
+            <View style={styles.tooltipArrow} />
+            <View style={styles.tooltip}>
+              <Text style={styles.tooltipText}>
+                Max {MAX_PINNED_EXERCISES} pins! Unpin one first 📌
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
       <Stack.Screen
         options={{
           presentation: "modal",
@@ -99,3 +137,45 @@ export default function ExerciseModalScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  tooltipOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  tooltipContainer: {
+    position: "absolute",
+    top: 64,
+    right: 16,
+    alignItems: "flex-end",
+  },
+  tooltipArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderBottomWidth: 8,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "#333",
+    marginRight: 20,
+  },
+  tooltip: {
+    backgroundColor: "#333",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    maxWidth: 200,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  tooltipText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+});

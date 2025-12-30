@@ -79,12 +79,21 @@ export async function setLastRestSeconds(exerciseId: number, seconds: number): P
     .run();
 }
 
+export const MAX_PINNED_EXERCISES = 5;
+
 export async function getPinnedExercises(): Promise<Exercise[]> {
   const rows = await db.select()
     .from(exercises)
     .where(eq(exercises.isPinned, true))
     .orderBy(exercises.name);
   return rows;
+}
+
+export async function getPinnedExercisesCount(): Promise<number> {
+  const rows = await db.select()
+    .from(exercises)
+    .where(eq(exercises.isPinned, true));
+  return rows.length;
 }
 
 export async function togglePinExercise(exerciseId: number): Promise<boolean> {
