@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../components/AddExerciseModal";
 import { deleteExercise, lastPerformedAt, listExercises, updateExercise, type Exercise } from "../../lib/db/exercises";
 
+type SortOption = "alphabetical" | "lastCompleted";
+
 export default function ExercisesScreen() {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Exercise[]>([]);
@@ -20,8 +22,45 @@ export default function ExercisesScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [renameText, setRenameText] = useState("");
   const scrollY = useRef(new Animated.Value(0)).current;
+  
+  // Filter and search state
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [showSearchPopup, setShowSearchPopup] = useState(false);
+  const [sortOption, setSortOption] = useState<SortOption>("alphabetical");
+  const [sortAscending, setSortAscending] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const HEADER_HEIGHT = 120 + insets.top;
+  const HEADER_HEIGHT = 105 + insets.top;
+
+  // Filter and sort the items
+  const filteredAndSortedItems = useCallback(() => {
+    let result = [...items];
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter((item) => 
+        item.name.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply sort
+    if (sortOption === "alphabetical") {
+      result.sort((a, b) => {
+        const comparison = a.name.localeCompare(b.name);
+        return sortAscending ? comparison : -comparison;
+      });
+    } else if (sortOption === "lastCompleted") {
+      result.sort((a, b) => {
+        const aTime = lastPerformedAtByExerciseId[a.id] ?? 0;
+        const bTime = lastPerformedAtByExerciseId[b.id] ?? 0;
+        // Ascending = oldest first, Descending = most recent first
+        return sortAscending ? aTime - bTime : bTime - aTime;
+      });
+    }
+    
+    return result;
+  }, [items, searchQuery, sortOption, sortAscending, lastPerformedAtByExerciseId]);
   
   // Shadow opacity based on scroll position (0 when at top, 1 when scrolled)
   const headerShadowOpacity = scrollY.interpolate({
@@ -78,6 +117,28 @@ export default function ExercisesScreen() {
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Exercises</Text>
           <Text style={styles.headerSubtitle}>Your exercise library</Text>
+          <View style={styles.headerIcons}>
+            <Pressable 
+              style={styles.headerIconButton}
+              onPress={() => setShowFilterPopup(true)}
+            >
+              <MaterialCommunityIcons 
+                name="sort" 
+                size={22} 
+                color={(sortOption !== "alphabetical" || !sortAscending) ? "#007AFF" : "#666"} 
+              />
+            </Pressable>
+            <Pressable 
+              style={styles.headerIconButton}
+              onPress={() => setShowSearchPopup(true)}
+            >
+              <MaterialCommunityIcons 
+                name="magnify" 
+                size={22} 
+                color={searchQuery ? "#007AFF" : "#666"} 
+              />
+            </Pressable>
+          </View>
         </View>
         {/* Fade gradient */}
         <LinearGradient
@@ -87,12 +148,12 @@ export default function ExercisesScreen() {
       </Animated.View>
 
       <FlatList
-        data={items}
+        data={filteredAndSortedItems()}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ 
           padding: 16, 
           gap: 12,
-          paddingTop: HEADER_HEIGHT + 8,
+          paddingTop: HEADER_HEIGHT + 45,
           paddingBottom: 100, // Space for bottom nav bar
         }}
         bounces
@@ -304,6 +365,145 @@ export default function ExercisesScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Filter popup */}
+      <Modal
+        visible={showFilterPopup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterPopup(false)}
+      >
+        <Pressable
+          style={styles.popupOverlay}
+          onPress={() => setShowFilterPopup(false)}
+        >
+          <View style={[styles.popupContainerLeft, { top: insets.top + 95 }]}>
+            <View style={styles.popupArrowLeft} />
+            <Pressable style={styles.popup} onPress={() => {}}>
+              <Text style={styles.popupTitle}>Sort by</Text>
+              <Pressable
+                style={styles.popupOption}
+                onPress={() => {
+                  setSortOption("alphabetical");
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="sort-alphabetical-ascending" 
+                  size={20} 
+                  color={sortOption === "alphabetical" ? "#007AFF" : "#666"} 
+                />
+                <Text style={[
+                  styles.popupOptionText,
+                  sortOption === "alphabetical" && styles.popupOptionTextActive
+                ]}>
+                  Alphabetically
+                </Text>
+                {sortOption === "alphabetical" && (
+                  <MaterialCommunityIcons name="check" size={18} color="#007AFF" />
+                )}
+              </Pressable>
+              <Pressable
+                style={styles.popupOption}
+                onPress={() => {
+                  setSortOption("lastCompleted");
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="clock-outline" 
+                  size={20} 
+                  color={sortOption === "lastCompleted" ? "#007AFF" : "#666"} 
+                />
+                <Text style={[
+                  styles.popupOptionText,
+                  sortOption === "lastCompleted" && styles.popupOptionTextActive
+                ]}>
+                  Last completed
+                </Text>
+                {sortOption === "lastCompleted" && (
+                  <MaterialCommunityIcons name="check" size={18} color="#007AFF" />
+                )}
+              </Pressable>
+              
+              <View style={styles.popupDivider} />
+              
+              <Text style={styles.popupTitle}>Order</Text>
+              <Pressable
+                style={styles.popupOption}
+                onPress={() => setSortAscending(true)}
+              >
+                <MaterialCommunityIcons 
+                  name="arrow-up" 
+                  size={20} 
+                  color={sortAscending ? "#007AFF" : "#666"} 
+                />
+                <Text style={[
+                  styles.popupOptionText,
+                  sortAscending && styles.popupOptionTextActive
+                ]}>
+                  Ascending
+                </Text>
+                {sortAscending && (
+                  <MaterialCommunityIcons name="check" size={18} color="#007AFF" />
+                )}
+              </Pressable>
+              <Pressable
+                style={styles.popupOption}
+                onPress={() => setSortAscending(false)}
+              >
+                <MaterialCommunityIcons 
+                  name="arrow-down" 
+                  size={20} 
+                  color={!sortAscending ? "#007AFF" : "#666"} 
+                />
+                <Text style={[
+                  styles.popupOptionText,
+                  !sortAscending && styles.popupOptionTextActive
+                ]}>
+                  Descending
+                </Text>
+                {!sortAscending && (
+                  <MaterialCommunityIcons name="check" size={18} color="#007AFF" />
+                )}
+              </Pressable>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Search popup */}
+      <Modal
+        visible={showSearchPopup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSearchPopup(false)}
+      >
+        <Pressable
+          style={styles.popupOverlay}
+          onPress={() => setShowSearchPopup(false)}
+        >
+          <View style={[styles.popupContainerLeft, { top: insets.top + 95, left: 56 }]}>
+            <View style={styles.popupArrowLeft} />
+            <Pressable style={styles.popup} onPress={() => {}}>
+              <View style={styles.searchInputContainer}>
+                <MaterialCommunityIcons name="magnify" size={20} color="#999" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search exercises..."
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable onPress={() => setSearchQuery("")}>
+                    <MaterialCommunityIcons name="close-circle" size={18} color="#999" />
+                  </Pressable>
+                )}
+              </View>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -320,7 +520,16 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 4,
+  },
+  headerIcons: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  headerIconButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   headerTitle: {
     fontSize: 32,
@@ -333,6 +542,84 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   headerFade: {
-    height: 24,
+    height: 8,
+  },
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  popupContainerLeft: {
+    position: "absolute",
+    left: 16,
+    alignItems: "flex-start",
+  },
+  popupArrowLeft: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderBottomWidth: 8,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "#fff",
+    marginLeft: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  popup: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 200,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  popupTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#999",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  popupDivider: {
+    height: 1,
+    backgroundColor: "#f0f0f0",
+    marginVertical: 8,
+  },
+  popupOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  popupOptionText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+  },
+  popupOptionTextActive: {
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+  searchInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#000",
+    paddingVertical: 4,
   },
 });
