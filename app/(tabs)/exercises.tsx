@@ -377,7 +377,7 @@ export default function ExercisesScreen() {
           style={styles.popupOverlay}
           onPress={() => setShowFilterPopup(false)}
         >
-          <View style={[styles.popupContainerLeft, { top: insets.top + 95 }]}>
+          <View style={[styles.popupContainerLeft, { top: insets.top + 125 }]}>
             <View style={styles.popupArrowLeft} />
             <Pressable style={styles.popup} onPress={() => {}}>
               <Text style={styles.popupTitle}>Sort by</Text>
@@ -481,7 +481,7 @@ export default function ExercisesScreen() {
           style={styles.popupOverlay}
           onPress={() => setShowSearchPopup(false)}
         >
-          <View style={[styles.popupContainerLeft, { top: insets.top + 95, left: 56 }]}>
+          <View style={[styles.popupContainerLeft, { top: insets.top + 125, left: 64 }]}>
             <View style={styles.popupArrowLeft} />
             <Pressable style={styles.popup} onPress={() => {}}>
               <View style={styles.searchInputContainer}>
