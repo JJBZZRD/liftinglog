@@ -1,0 +1,236 @@
+# WorkoutLog Development Guidelines
+
+## Theme Implementation
+
+### Required: Use Dynamic Theme Colors
+
+All visual components MUST use the theme system for colors. Never hardcode color values.
+
+```typescript
+// CORRECT: Use useTheme hook
+import { useTheme } from '../lib/theme/ThemeContext';
+
+function MyComponent() {
+  const { themeColors } = useTheme();
+  return (
+    <View style={{ backgroundColor: themeColors.background }}>
+      <Text style={{ color: themeColors.text }}>Content</Text>
+    </View>
+  );
+}
+
+// WRONG: Hardcoded colors
+function BadComponent() {
+  return (
+    <View style={{ backgroundColor: '#f5f5f5' }}>
+      <Text style={{ color: '#000' }}>Content</Text>
+    </View>
+  );
+}
+```
+
+### Available Theme Colors
+
+Use these semantic color tokens from `themeColors`:
+
+**Backgrounds:**
+- `background` - Main page background
+- `surface` - Cards, modals, containers
+- `surfaceSecondary` - Input backgrounds, secondary surfaces
+
+**Text:**
+- `text` - Primary text (titles, body)
+- `textSecondary` - Subtitles, labels
+- `textTertiary` - Hints, disabled text
+- `textPlaceholder` - Input placeholders (use with `placeholderTextColor` prop)
+- `textLight` - Very light/muted text
+
+**Interactive:**
+- `primary` - Primary actions, links, active states
+- `primaryLight` - Light primary for backgrounds (e.g., date picker button bg)
+- `pressed` - Press state color
+
+**Status:**
+- `success` - Success states (green)
+- `warning` - Warning states (orange)
+- `error` / `destructive` - Error states, delete actions (red)
+
+**Borders:**
+- `border` - Standard borders
+- `borderLight` - Subtle borders
+
+**Overlays:**
+- `overlay` - Modal backdrop (semi-transparent)
+- `overlayDark` - Darker overlay
+- `shadow` - Shadow color (use with shadowColor property)
+
+### TextInput Components
+
+Always set `placeholderTextColor` for visibility in both themes:
+
+```typescript
+<TextInput
+  style={[styles.input, { 
+    borderColor: themeColors.border,
+    backgroundColor: themeColors.surface,
+    color: themeColors.text 
+  }]}
+  placeholderTextColor={themeColors.textPlaceholder}
+  placeholder="Enter value..."
+/>
+```
+
+### Icons
+
+Use theme colors for icons:
+
+```typescript
+<MaterialCommunityIcons 
+  name="dumbbell" 
+  size={24} 
+  color={themeColors.primary}  // Active state
+  // or
+  color={themeColors.textSecondary}  // Inactive state
+/>
+```
+
+### Modals
+
+Use BaseModal component or apply theme colors to custom modals:
+
+```typescript
+// Use BaseModal (automatically themed)
+<BaseModal visible={visible} onClose={onClose}>
+  <Text style={{ color: themeColors.text }}>Content</Text>
+</BaseModal>
+
+// Custom modal
+<Modal visible={visible} transparent>
+  <Pressable style={{ backgroundColor: themeColors.overlay }}>
+    <View style={{ backgroundColor: themeColors.surface }}>
+      ...
+    </View>
+  </Pressable>
+</Modal>
+```
+
+### StyleSheet Pattern
+
+Keep non-color styles in StyleSheet, apply colors inline:
+
+```typescript
+function MyComponent() {
+  const { themeColors } = useTheme();
+  
+  return (
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <Text style={[styles.title, { color: themeColors.text }]}>Title</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+});
+```
+
+### Stack.Screen Header Styling
+
+When using Expo Router's Stack.Screen, apply theme to header:
+
+```typescript
+<Stack.Screen
+  options={{
+    title: "Screen Title",
+    headerStyle: { backgroundColor: themeColors.surface },
+    headerTitleStyle: { color: themeColors.text },
+    headerLeft: () => (
+      <Pressable onPress={() => router.back()}>
+        <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+      </Pressable>
+    ),
+  }}
+/>
+```
+
+### Tab Bar (Already Configured)
+
+Tab bar colors are set in `app/(tabs)/_layout.tsx`. New tabs automatically inherit theming.
+
+## File Structure Conventions
+
+- **Screens**: `app/` directory (Expo Router)
+- **Components**: `components/` directory
+- **Modals**: `components/modals/` directory
+- **List Items**: `components/lists/` directory
+- **Theme**: `lib/theme/` directory
+- **Database**: `lib/db/` directory
+- **Hooks**: `lib/hooks/` directory
+- **Utilities**: `lib/utils/` directory
+
+## Component Patterns
+
+### New Screen Template
+
+```typescript
+import { StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../lib/theme/ThemeContext';
+
+export default function NewScreen() {
+  const { themeColors } = useTheme();
+
+  return (
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <Text style={[styles.title, { color: themeColors.text }]}>
+        Screen Title
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+});
+```
+
+### New Modal Template
+
+```typescript
+import BaseModal from '../components/modals/BaseModal';
+import { useTheme } from '../lib/theme/ThemeContext';
+
+interface MyModalProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function MyModal({ visible, onClose }: MyModalProps) {
+  const { themeColors } = useTheme();
+
+  return (
+    <BaseModal visible={visible} onClose={onClose}>
+      <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: '600' }}>
+        Modal Title
+      </Text>
+      {/* Modal content */}
+    </BaseModal>
+  );
+}
+```
+

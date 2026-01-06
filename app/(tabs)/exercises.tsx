@@ -8,11 +8,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../components/AddExerciseModal";
 import BaseModal from "../../components/modals/BaseModal";
 import { deleteExercise, lastPerformedAt, listExercises, updateExercise, type Exercise } from "../../lib/db/exercises";
-import { colors } from "../../lib/theme/colors";
+import { useTheme } from "../../lib/theme/ThemeContext";
 
 type SortOption = "alphabetical" | "lastCompleted";
 
 export default function ExercisesScreen() {
+  const { themeColors } = useTheme();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Exercise[]>([]);
   const [fabActive, setFabActive] = useState(false);
@@ -110,14 +111,14 @@ export default function ExercisesScreen() {
   }, [selectedExercise, reloadExercises]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Fixed Header */}
       <Animated.View 
         style={[
           styles.headerContainer, 
-          { paddingTop: insets.top },
+          { paddingTop: insets.top, backgroundColor: themeColors.background },
           {
-            shadowColor: colors.shadow,
+            shadowColor: themeColors.shadow,
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: headerShadowOpacity,
             shadowRadius: 8,
@@ -130,8 +131,8 @@ export default function ExercisesScreen() {
         ]}
       >
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Exercises</Text>
-          <Text style={styles.headerSubtitle}>Your exercise library</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Exercises</Text>
+          <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]}>Your exercise library</Text>
           <View style={styles.headerIcons}>
             <Pressable 
               style={styles.headerIconButton}
@@ -140,7 +141,7 @@ export default function ExercisesScreen() {
               <MaterialCommunityIcons 
                 name="sort" 
                 size={22} 
-                color={(sortOption !== "alphabetical" || !sortAscending) ? colors.primary : colors.textSecondary} 
+                color={(sortOption !== "alphabetical" || !sortAscending) ? themeColors.primary : themeColors.textSecondary} 
               />
             </Pressable>
             <Pressable 
@@ -150,13 +151,13 @@ export default function ExercisesScreen() {
               <MaterialCommunityIcons 
                 name="magnify" 
                 size={22} 
-                color={searchQuery ? colors.primary : colors.textSecondary} 
+                color={searchQuery ? themeColors.primary : themeColors.textSecondary} 
               />
             </Pressable>
           </View>
         </View>
         <LinearGradient
-          colors={[colors.background, "rgba(245, 245, 245, 0)"]}
+          colors={[themeColors.background, "transparent"]}
           style={styles.headerFade}
         />
       </Animated.View>
@@ -190,10 +191,16 @@ export default function ExercisesScreen() {
                 setRenameText(item.name);
                 setActionModalVisible(true);
               }}
-              style={styles.exerciseCard}
+              style={{
+                borderWidth: 1,
+                borderRadius: 10,
+                padding: 12,
+                backgroundColor: themeColors.surface,
+                borderColor: themeColors.border,
+              }}
             >
-              <Text style={styles.exerciseName}>{item.name}</Text>
-              <Text style={styles.exerciseDate}>
+              <Text style={{ fontWeight: "600", marginBottom: 4, color: themeColors.text }}>{item.name}</Text>
+              <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
                 {lastPerformedAtByExerciseId[item.id]
                   ? new Date(lastPerformedAtByExerciseId[item.id] as number).toLocaleDateString()
                   : "Never"}
@@ -209,12 +216,12 @@ export default function ExercisesScreen() {
         accessibilityLabel="Add exercise"
         onPressIn={() => setFabActive(true)}
         onPress={() => setAddModalVisible(true)}
-        style={[styles.fab, { borderColor: fabActive ? colors.textSecondary : colors.primary }]}
+        style={[styles.fab, { backgroundColor: themeColors.surface, borderColor: fabActive ? themeColors.textSecondary : themeColors.primary, shadowColor: themeColors.shadow }]}
       >
         <MaterialCommunityIcons 
           name="plus" 
           size={28} 
-          color={fabActive ? colors.textSecondary : colors.primary} 
+          color={fabActive ? themeColors.textSecondary : themeColors.primary} 
         />
       </Pressable>
 
@@ -232,7 +239,7 @@ export default function ExercisesScreen() {
         visible={isActionModalVisible}
         onClose={() => setActionModalVisible(false)}
       >
-        <Text style={styles.modalTitle}>Exercise options</Text>
+        <Text style={[styles.modalTitle, { color: themeColors.text }]}>Exercise options</Text>
         <Pressable
           onPress={() => {
             setActionModalVisible(false);
@@ -240,7 +247,7 @@ export default function ExercisesScreen() {
           }}
           style={styles.modalOption}
         >
-          <Text style={styles.modalOptionText}>Rename</Text>
+          <Text style={[styles.modalOptionText, { color: themeColors.primary }]}>Rename</Text>
         </Pressable>
         <Pressable
           onPress={() => {
@@ -249,11 +256,11 @@ export default function ExercisesScreen() {
           }}
           style={styles.modalOption}
         >
-          <Text style={styles.modalOptionTextDestructive}>Delete</Text>
+          <Text style={[styles.modalOptionTextDestructive, { color: themeColors.destructive }]}>Delete</Text>
         </Pressable>
         <View style={styles.modalCancelRow}>
           <Pressable onPress={() => setActionModalVisible(false)} style={styles.modalCancelButton}>
-            <Text style={styles.modalCancelText}>Cancel</Text>
+            <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Cancel</Text>
           </Pressable>
         </View>
       </BaseModal>
@@ -264,19 +271,20 @@ export default function ExercisesScreen() {
         onClose={() => setRenameModalVisible(false)}
         maxWidth={520}
       >
-        <Text style={styles.modalTitle}>Rename exercise</Text>
+        <Text style={[styles.modalTitle, { color: themeColors.text }]}>Rename exercise</Text>
         <TextInput
           placeholder="New name"
           value={renameText}
           onChangeText={setRenameText}
-          style={styles.input}
+          placeholderTextColor={themeColors.textPlaceholder}
+          style={[styles.input, { borderColor: themeColors.border, color: themeColors.text, backgroundColor: themeColors.surfaceSecondary }]}
         />
         <View style={styles.modalButtonRow}>
           <Pressable onPress={() => setRenameModalVisible(false)} style={styles.modalCancelButton}>
-            <Text style={styles.modalCancelText}>Cancel</Text>
+            <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Cancel</Text>
           </Pressable>
-          <Pressable onPress={handleRename} style={styles.modalPrimaryButton}>
-            <Text style={styles.modalPrimaryButtonText}>Save</Text>
+          <Pressable onPress={handleRename} style={[styles.modalPrimaryButton, { backgroundColor: themeColors.primary }]}>
+            <Text style={[styles.modalPrimaryButtonText, { color: themeColors.surface }]}>Save</Text>
           </Pressable>
         </View>
       </BaseModal>
@@ -286,14 +294,14 @@ export default function ExercisesScreen() {
         visible={isDeleteConfirmVisible}
         onClose={() => setDeleteConfirmVisible(false)}
       >
-        <Text style={styles.modalTitle}>Delete exercise?</Text>
-        <Text style={styles.modalMessage}>This action cannot be undone.</Text>
+        <Text style={[styles.modalTitle, { color: themeColors.text }]}>Delete exercise?</Text>
+        <Text style={[styles.modalMessage, { color: themeColors.textSecondary }]}>This action cannot be undone.</Text>
         <View style={styles.modalButtonRow}>
           <Pressable onPress={() => setDeleteConfirmVisible(false)} style={styles.modalCancelButton}>
-            <Text style={styles.modalCancelText}>Cancel</Text>
+            <Text style={[styles.modalCancelText, { color: themeColors.textSecondary }]}>Cancel</Text>
           </Pressable>
-          <Pressable onPress={handleDelete} style={styles.modalDestructiveButton}>
-            <Text style={styles.modalDestructiveButtonText}>Delete</Text>
+          <Pressable onPress={handleDelete} style={[styles.modalDestructiveButton, { backgroundColor: themeColors.destructive }]}>
+            <Text style={[styles.modalDestructiveButtonText, { color: themeColors.surface }]}>Delete</Text>
           </Pressable>
         </View>
       </BaseModal>
@@ -310,9 +318,9 @@ export default function ExercisesScreen() {
           onPress={() => setShowFilterPopup(false)}
         >
           <View style={[styles.popupContainerLeft, { top: insets.top + 125 }]}>
-            <View style={styles.popupArrowLeft} />
-            <Pressable style={styles.popup} onPress={() => {}}>
-              <Text style={styles.popupTitle}>Sort by</Text>
+            <View style={[styles.popupArrowLeft, { borderBottomColor: themeColors.surface }]} />
+            <Pressable style={[styles.popup, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]} onPress={() => {}}>
+              <Text style={[styles.popupTitle, { color: themeColors.textTertiary }]}>Sort by</Text>
               <Pressable
                 style={styles.popupOption}
                 onPress={() => setSortOption("alphabetical")}
@@ -320,16 +328,17 @@ export default function ExercisesScreen() {
                 <MaterialCommunityIcons 
                   name="sort-alphabetical-ascending" 
                   size={20} 
-                  color={sortOption === "alphabetical" ? colors.primary : colors.textSecondary} 
+                  color={sortOption === "alphabetical" ? themeColors.primary : themeColors.textSecondary} 
                 />
                 <Text style={[
                   styles.popupOptionText,
-                  sortOption === "alphabetical" && styles.popupOptionTextActive
+                  { color: themeColors.text },
+                  sortOption === "alphabetical" && { color: themeColors.primary, fontWeight: "600" }
                 ]}>
                   Alphabetically
                 </Text>
                 {sortOption === "alphabetical" && (
-                  <MaterialCommunityIcons name="check" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons name="check" size={18} color={themeColors.primary} />
                 )}
               </Pressable>
               <Pressable
@@ -339,22 +348,23 @@ export default function ExercisesScreen() {
                 <MaterialCommunityIcons 
                   name="clock-outline" 
                   size={20} 
-                  color={sortOption === "lastCompleted" ? colors.primary : colors.textSecondary} 
+                  color={sortOption === "lastCompleted" ? themeColors.primary : themeColors.textSecondary} 
                 />
                 <Text style={[
                   styles.popupOptionText,
-                  sortOption === "lastCompleted" && styles.popupOptionTextActive
+                  { color: themeColors.text },
+                  sortOption === "lastCompleted" && { color: themeColors.primary, fontWeight: "600" }
                 ]}>
                   Last completed
                 </Text>
                 {sortOption === "lastCompleted" && (
-                  <MaterialCommunityIcons name="check" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons name="check" size={18} color={themeColors.primary} />
                 )}
               </Pressable>
               
-              <View style={styles.popupDivider} />
+              <View style={[styles.popupDivider, { backgroundColor: themeColors.borderLight }]} />
               
-              <Text style={styles.popupTitle}>Order</Text>
+              <Text style={[styles.popupTitle, { color: themeColors.textTertiary }]}>Order</Text>
               <Pressable
                 style={styles.popupOption}
                 onPress={() => setSortAscending(true)}
@@ -362,16 +372,17 @@ export default function ExercisesScreen() {
                 <MaterialCommunityIcons 
                   name="arrow-up" 
                   size={20} 
-                  color={sortAscending ? colors.primary : colors.textSecondary} 
+                  color={sortAscending ? themeColors.primary : themeColors.textSecondary} 
                 />
                 <Text style={[
                   styles.popupOptionText,
-                  sortAscending && styles.popupOptionTextActive
+                  { color: themeColors.text },
+                  sortAscending && { color: themeColors.primary, fontWeight: "600" }
                 ]}>
                   Ascending
                 </Text>
                 {sortAscending && (
-                  <MaterialCommunityIcons name="check" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons name="check" size={18} color={themeColors.primary} />
                 )}
               </Pressable>
               <Pressable
@@ -381,16 +392,17 @@ export default function ExercisesScreen() {
                 <MaterialCommunityIcons 
                   name="arrow-down" 
                   size={20} 
-                  color={!sortAscending ? colors.primary : colors.textSecondary} 
+                  color={!sortAscending ? themeColors.primary : themeColors.textSecondary} 
                 />
                 <Text style={[
                   styles.popupOptionText,
-                  !sortAscending && styles.popupOptionTextActive
+                  { color: themeColors.text },
+                  !sortAscending && { color: themeColors.primary, fontWeight: "600" }
                 ]}>
                   Descending
                 </Text>
                 {!sortAscending && (
-                  <MaterialCommunityIcons name="check" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons name="check" size={18} color={themeColors.primary} />
                 )}
               </Pressable>
             </Pressable>
@@ -410,21 +422,21 @@ export default function ExercisesScreen() {
           onPress={() => setShowSearchPopup(false)}
         >
           <View style={[styles.popupContainerLeft, { top: insets.top + 125, left: 64 }]}>
-            <View style={styles.popupArrowLeft} />
-            <Pressable style={styles.popup} onPress={() => {}}>
+            <View style={[styles.popupArrowLeft, { borderBottomColor: themeColors.surface }]} />
+            <Pressable style={[styles.popup, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]} onPress={() => {}}>
               <View style={styles.searchInputContainer}>
-                <MaterialCommunityIcons name="magnify" size={20} color={colors.textTertiary} />
+                <MaterialCommunityIcons name="magnify" size={20} color={themeColors.textTertiary} />
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { color: themeColors.text }]}
                   placeholder="Search exercises..."
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={themeColors.textPlaceholder}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   autoFocus
                 />
                 {searchQuery.length > 0 && (
                   <Pressable onPress={() => setSearchQuery("")}>
-                    <MaterialCommunityIcons name="close-circle" size={18} color={colors.textTertiary} />
+                    <MaterialCommunityIcons name="close-circle" size={18} color={themeColors.textTertiary} />
                   </Pressable>
                 )}
               </View>
@@ -439,7 +451,6 @@ export default function ExercisesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   headerContainer: {
     position: "absolute",
@@ -447,7 +458,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: colors.background,
   },
   headerContent: {
     paddingHorizontal: 16,
@@ -466,11 +476,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: "700",
-    color: colors.text,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: colors.textSecondary,
     marginTop: 4,
   },
   headerFade: {
@@ -478,19 +486,15 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 10,
     padding: 12,
-    backgroundColor: colors.surface,
   },
   exerciseName: {
     fontWeight: "600",
     marginBottom: 4,
-    color: colors.text,
   },
   exerciseDate: {
     fontSize: 12,
-    color: colors.textSecondary,
   },
   fab: {
     position: "absolute",
@@ -499,11 +503,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.surface,
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -514,21 +516,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 12,
-    color: colors.text,
   },
   modalMessage: {
-    color: colors.textSecondary,
     marginBottom: 12,
   },
   modalOption: {
     paddingVertical: 10,
   },
   modalOptionText: {
-    color: colors.primary,
     fontWeight: "600",
   },
   modalOptionTextDestructive: {
-    color: colors.destructive,
     fontWeight: "600",
   },
   modalCancelRow: {
@@ -537,9 +535,7 @@ const styles = StyleSheet.create({
   modalCancelButton: {
     padding: 10,
   },
-  modalCancelText: {
-    color: colors.textSecondary,
-  },
+  modalCancelText: {},
   modalButtonRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -547,26 +543,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   modalPrimaryButton: {
-    backgroundColor: colors.primary,
     padding: 10,
     borderRadius: 8,
   },
   modalPrimaryButtonText: {
-    color: colors.surface,
     fontWeight: "600",
   },
   modalDestructiveButton: {
-    backgroundColor: colors.destructive,
     padding: 10,
     borderRadius: 8,
   },
   modalDestructiveButtonText: {
-    color: colors.surface,
     fontWeight: "600",
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 8,
     padding: 10,
     marginBottom: 12,
@@ -589,19 +580,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderBottomColor: colors.surface,
     marginLeft: 12,
-    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
   popup: {
-    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingVertical: 8,
     minWidth: 200,
-    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -610,7 +597,6 @@ const styles = StyleSheet.create({
   popupTitle: {
     fontSize: 13,
     fontWeight: "600",
-    color: colors.textTertiary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     textTransform: "uppercase",
@@ -618,7 +604,6 @@ const styles = StyleSheet.create({
   },
   popupDivider: {
     height: 1,
-    backgroundColor: colors.borderLight,
     marginVertical: 8,
   },
   popupOption: {
@@ -631,10 +616,8 @@ const styles = StyleSheet.create({
   popupOptionText: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
   },
   popupOptionTextActive: {
-    color: colors.primary,
     fontWeight: "600",
   },
   searchInputContainer: {
@@ -647,7 +630,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
     paddingVertical: 4,
   },
 });

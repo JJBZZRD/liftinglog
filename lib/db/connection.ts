@@ -25,7 +25,8 @@ sqlite.execSync(`
   CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY NOT NULL,
     e1rm_formula TEXT NOT NULL,
-    unit_preference TEXT NOT NULL
+    unit_preference TEXT NOT NULL,
+    theme_preference TEXT NOT NULL DEFAULT 'system'
   );
 
   CREATE TABLE IF NOT EXISTS exercises (
@@ -215,6 +216,13 @@ try {
 // Add is_pinned column to exercises table if it doesn't exist
 try {
   sqlite.execSync(`ALTER TABLE exercises ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;`);
+} catch {
+  // Column already exists, ignore
+}
+
+// Add theme_preference column to settings table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE settings ADD COLUMN theme_preference TEXT NOT NULL DEFAULT 'system';`);
 } catch {
   // Column already exists, ignore
 }

@@ -21,10 +21,12 @@ import {
   type SetRow,
 } from "../../../lib/db/workouts";
 import { colors } from "../../../lib/theme/colors";
+import { useTheme } from "../../../lib/theme/ThemeContext";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 
 export default function RecordTab() {
+  const { themeColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -254,7 +256,7 @@ export default function RecordTab() {
   );
 
   return (
-    <View style={styles.recordContainer}>
+    <View style={[styles.recordContainer, { backgroundColor: themeColors.surface }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -263,60 +265,63 @@ export default function RecordTab() {
         {/* Date Picker */}
         <View style={styles.dateSection}>
           <Pressable
-            style={styles.dateButton}
+            style={[styles.dateButton, { backgroundColor: themeColors.primaryLight }]}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
-            <Text style={styles.dateButtonText}>{formatRelativeDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textSecondary} />
+            <MaterialCommunityIcons name="calendar" size={20} color={themeColors.primary} />
+            <Text style={[styles.dateButtonText, { color: themeColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color={themeColors.textSecondary} />
           </Pressable>
         </View>
 
         {/* Input Section */}
         <View style={styles.inputSection}>
-          <Text style={styles.sectionTitle}>Add Set</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Add Set</Text>
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Weight (kg)</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Weight (kg)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Reps</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Reps</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="number-pad"
               />
             </View>
           </View>
           <View style={styles.noteInputGroup}>
-            <Text style={styles.inputLabel}>Note (optional)</Text>
+            <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput]}
+              style={[styles.input, styles.noteInput, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
+              placeholderTextColor={themeColors.textPlaceholder}
               multiline
             />
           </View>
-          <Pressable style={styles.addButton} onPress={handleAddSet}>
-            <Text style={styles.addButtonText}>Add Set</Text>
+          <Pressable style={[styles.addButton, { backgroundColor: themeColors.primary }]} onPress={handleAddSet}>
+            <Text style={[styles.addButtonText, { color: themeColors.surface }]}>Add Set</Text>
           </Pressable>
         </View>
 
         {/* Sets List */}
         <View style={styles.setsSection}>
-          <Text style={styles.sectionTitle}>Recorded Sets</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recorded Sets</Text>
           {sets.length === 0 ? (
-            <Text style={styles.emptyText}>No sets recorded yet. Add your first set above.</Text>
+            <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>No sets recorded yet. Add your first set above.</Text>
           ) : (
             <FlatList
               data={sets}
@@ -330,12 +335,13 @@ export default function RecordTab() {
       </ScrollView>
 
       {/* Action Buttons */}
-      <View style={styles.actionButtons}>
+      <View style={[styles.actionButtons, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
         <Pressable
           style={[
             styles.actionButton,
             styles.timerButton,
-            currentTimer?.isRunning && styles.timerButtonActive,
+            { backgroundColor: themeColors.surfaceSecondary },
+            currentTimer?.isRunning && { backgroundColor: themeColors.primary },
           ]}
           onPress={handleTimerPress}
           onLongPress={handleTimerLongPress}
@@ -344,13 +350,13 @@ export default function RecordTab() {
           <MaterialCommunityIcons
             name={currentTimer?.isRunning ? "pause" : "timer"}
             size={20}
-            color={currentTimer?.isRunning ? colors.surface : colors.primary}
+            color={currentTimer?.isRunning ? themeColors.surface : themeColors.primary}
           />
           <Text
             style={[
               styles.actionButtonText,
-              styles.timerButtonText,
-              currentTimer?.isRunning && styles.timerButtonTextActive,
+              { color: themeColors.primary },
+              currentTimer?.isRunning && { color: themeColors.surface },
             ]}
           >
             {currentTimer
@@ -359,12 +365,12 @@ export default function RecordTab() {
           </Text>
         </Pressable>
         <Pressable 
-          style={[styles.actionButton, styles.completeButton, sets.length === 0 && styles.completeButtonDisabled]} 
+          style={[styles.actionButton, { backgroundColor: themeColors.primary }, sets.length === 0 && { backgroundColor: themeColors.surfaceSecondary }]} 
           onPress={handleCompleteWorkout}
           disabled={sets.length === 0}
         >
-          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? colors.textTertiary : colors.surface} />
-          <Text style={[styles.actionButtonText, styles.completeButtonText, sets.length === 0 && styles.completeButtonTextDisabled]}>
+          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? themeColors.textTertiary : themeColors.surface} />
+          <Text style={[styles.actionButtonText, { color: themeColors.surface }, sets.length === 0 && { color: themeColors.textTertiary }]}>
             Complete Workout
           </Text>
         </Pressable>

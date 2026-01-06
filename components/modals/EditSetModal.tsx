@@ -8,6 +8,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../../lib/theme/colors';
+import { useTheme } from '../../lib/theme/ThemeContext';
 import { formatRelativeDate } from '../../lib/utils/formatters';
 import BaseModal from './BaseModal';
 import DatePickerModal from './DatePickerModal';
@@ -51,6 +52,7 @@ export default function EditSetModal({
   onDelete,
   showDatePicker = false,
 }: EditSetModalProps) {
+  const { themeColors } = useTheme();
   const [weight, setWeight] = useState('');
   const [reps, setReps] = useState('');
   const [note, setNote] = useState('');
@@ -108,65 +110,68 @@ export default function EditSetModal({
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>Edit Set</Text>
+          <Text style={[styles.title, { color: themeColors.text }]}>Edit Set</Text>
           
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Weight (kg)</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Weight (kg)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Reps</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Reps</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="number-pad"
               />
             </View>
           </View>
 
           <View style={styles.noteInputGroup}>
-            <Text style={styles.inputLabel}>Note (optional)</Text>
+            <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput]}
+              style={[styles.input, styles.noteInput, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
+              placeholderTextColor={themeColors.textPlaceholder}
               multiline
             />
           </View>
 
           {showDatePicker && (
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Date</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Date</Text>
               <Pressable
-                style={styles.dateButton}
+                style={[styles.dateButton, { backgroundColor: themeColors.primaryLight }]}
                 onPress={() => setShowDatePickerModal(true)}
               >
-                <MaterialCommunityIcons name="calendar" size={18} color={colors.primary} />
-                <Text style={styles.dateButtonText}>{formatRelativeDate(date)}</Text>
+                <MaterialCommunityIcons name="calendar" size={18} color={themeColors.primary} />
+                <Text style={[styles.dateButtonText, { color: themeColors.primary }]}>{formatRelativeDate(date)}</Text>
               </Pressable>
             </View>
           )}
 
           <View style={styles.buttonRow}>
-            <Pressable style={[styles.button, styles.deleteButton]} onPress={onDelete}>
-              <MaterialCommunityIcons name="delete" size={20} color={colors.surface} />
-              <Text style={styles.deleteButtonText}>Delete</Text>
+            <Pressable style={[styles.button, { backgroundColor: themeColors.destructive }]} onPress={onDelete}>
+              <MaterialCommunityIcons name="delete" size={20} color={themeColors.surface} />
+              <Text style={[styles.deleteButtonText, { color: themeColors.surface }]}>Delete</Text>
             </Pressable>
-            <Pressable style={[styles.button, styles.cancelButton]} onPress={handleClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Pressable style={[styles.button, { backgroundColor: themeColors.surfaceSecondary }]} onPress={handleClose}>
+              <Text style={[styles.cancelButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
             </Pressable>
-            <Pressable style={[styles.button, styles.saveButton]} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save</Text>
+            <Pressable style={[styles.button, { backgroundColor: themeColors.primary }]} onPress={handleSave}>
+              <Text style={[styles.saveButtonText, { color: themeColors.surface }]}>Save</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -284,5 +289,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+
+
 
 

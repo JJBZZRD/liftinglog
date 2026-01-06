@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SceneMap, TabBar, TabView } from "react-native-tab-view";
 import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
+import { useTheme } from "../../lib/theme/ThemeContext";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 import VisualisationTab from "./tabs/VisualisationTab";
@@ -15,6 +16,7 @@ const renderScene = SceneMap({
 });
 
 export default function ExerciseModalScreen() {
+  const { themeColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const title = typeof params.name === "string" ? params.name : "Exercise";
@@ -64,7 +66,7 @@ export default function ExerciseModalScreen() {
   }, [exerciseId, isPinned]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: themeColors.surface }}>
       {/* Pin limit tooltip overlay */}
       <Modal
         visible={showPinLimitTooltip}
@@ -77,9 +79,9 @@ export default function ExerciseModalScreen() {
           onPress={() => setShowPinLimitTooltip(false)}
         >
           <View style={styles.tooltipContainer}>
-            <View style={styles.tooltipArrow} />
-            <View style={styles.tooltip}>
-              <Text style={styles.tooltipText}>
+            <View style={[styles.tooltipArrow, { borderBottomColor: themeColors.surfaceSecondary }]} />
+            <View style={[styles.tooltip, { backgroundColor: themeColors.surfaceSecondary }]}>
+              <Text style={[styles.tooltipText, { color: themeColors.text }]}>
                 Max {MAX_PINNED_EXERCISES} pins! Unpin one first 📌
               </Text>
             </View>
@@ -91,6 +93,8 @@ export default function ExerciseModalScreen() {
         options={{
           presentation: "modal",
           title,
+          headerStyle: { backgroundColor: themeColors.surface },
+          headerTitleStyle: { color: themeColors.text },
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"
@@ -98,7 +102,7 @@ export default function ExerciseModalScreen() {
               onPress={() => router.back()}
               style={{ paddingHorizontal: 12, paddingVertical: 6 }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={24} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
             </Pressable>
           ),
           headerRight: () => (
@@ -111,7 +115,7 @@ export default function ExerciseModalScreen() {
               <MaterialCommunityIcons 
                 name={isPinned ? "pin" : "pin-outline"} 
                 size={24} 
-                color={isPinned ? "#007AFF" : "#666"} 
+                color={isPinned ? themeColors.primary : themeColors.textSecondary} 
               />
             </Pressable>
           ),
@@ -126,11 +130,11 @@ export default function ExerciseModalScreen() {
         renderTabBar={(props) => (
           <TabBar
             {...props}
-            indicatorStyle={{ backgroundColor: "#007AFF" }}
-            style={{ backgroundColor: "#fff" }}
-            activeColor="#007AFF"
-            inactiveColor="#666"
-            pressColor="#e5e5ea"
+            indicatorStyle={{ backgroundColor: themeColors.primary }}
+            style={{ backgroundColor: themeColors.surface }}
+            activeColor={themeColors.primary}
+            inactiveColor={themeColors.textSecondary}
+            pressColor={themeColors.pressed}
           />
         )}
       />
@@ -157,23 +161,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderBottomColor: "#333",
     marginRight: 20,
   },
   tooltip: {
-    backgroundColor: "#333",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
     maxWidth: 200,
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 6,
   },
   tooltipText: {
-    color: "#fff",
     fontSize: 14,
     fontWeight: "500",
     textAlign: "center",

@@ -77,3 +77,27 @@ export function setExerciseFormulaOverride(
   }
 }
 
+export type ThemePreference = "system" | "light" | "dark";
+
+export function getThemePreference(): ThemePreference {
+  const stmt = sqlite.prepareSync(
+    "SELECT theme_preference FROM settings WHERE id = 1"
+  );
+  try {
+    const res = stmt.executeSync();
+    const row = res.getFirstSync() as { theme_preference: ThemePreference } | null;
+    return row?.theme_preference ?? "system";
+  } finally {
+    stmt.finalizeSync();
+  }
+}
+
+export function setThemePreference(preference: ThemePreference): void {
+  sqlite.runSync(
+    `INSERT INTO settings (id, e1rm_formula, unit_preference, theme_preference)
+     VALUES (1, 'epley', 'kg', ?)
+     ON CONFLICT(id) DO UPDATE SET theme_preference=excluded.theme_preference;`,
+    [preference]
+  );
+}
+

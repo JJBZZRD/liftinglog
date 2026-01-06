@@ -2,10 +2,12 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { View } from "react-native";
 import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
+import { useTheme } from "../../lib/theme/ThemeContext";
 
 const _layout = () => {
+  const { themeColors } = useTheme();
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: themeColors.background }}>
       <Tabs
         screenOptions={{
           tabBarStyle: {
@@ -17,14 +19,16 @@ const _layout = () => {
             height: 64,
             paddingBottom: 8,
             paddingTop: 8,
-            backgroundColor: "#fff",
+            backgroundColor: themeColors.surface,
             borderTopWidth: 0,
             elevation: 8,
-            shadowColor: "#000",
+            shadowColor: themeColors.shadow,
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.12,
             shadowRadius: 10,
           },
+          tabBarActiveTintColor: themeColors.primary,
+          tabBarInactiveTintColor: themeColors.textSecondary,
         }}
       >
         <Tabs.Screen 

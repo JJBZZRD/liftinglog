@@ -3,8 +3,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { deleteWorkout, getExerciseHistory, type WorkoutHistoryEntry } from "../../../lib/db/workouts";
+import { useTheme } from "../../../lib/theme/ThemeContext";
 
 export default function HistoryTab() {
+  const { themeColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const [history, setHistory] = useState<WorkoutHistoryEntry[]>([]);
@@ -105,31 +107,31 @@ export default function HistoryTab() {
 
   if (!exerciseId) {
     return (
-      <View style={styles.tabContainer}>
-        <Text style={styles.errorText}>Invalid exercise ID</Text>
+      <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
+        <Text style={[styles.errorText, { color: themeColors.error }]}>Invalid exercise ID</Text>
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.tabContainer}>
-        <Text style={styles.loadingText}>Loading history...</Text>
+      <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
+        <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>Loading history...</Text>
       </View>
     );
   }
 
   if (history.length === 0) {
     return (
-      <View style={styles.tabContainer}>
-        <Text style={styles.emptyText}>No workout history found</Text>
-        <Text style={styles.emptySubtext}>Start recording sets to see your history here</Text>
+      <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
+        <Text style={[styles.emptyText, { color: themeColors.text }]}>No workout history found</Text>
+        <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>Start recording sets to see your history here</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
       <FlatList
         data={history}
         keyExtractor={(item) => String(item.workout.id)}
@@ -141,35 +143,35 @@ export default function HistoryTab() {
           return (
             <Pressable
               onLongPress={() => handleLongPress(item)}
-              style={styles.workoutCard}
+              style={[styles.workoutCard, { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border }]}
             >
-              <View style={styles.workoutHeader}>
+              <View style={[styles.workoutHeader, { borderBottomColor: themeColors.border }]}>
                 <View style={styles.workoutDateContainer}>
-                  <Text style={styles.workoutDate}>{formatDate(workoutDate)}</Text>
-                  <Text style={styles.workoutTime}>{formatTime(workoutDate)}</Text>
+                  <Text style={[styles.workoutDate, { color: themeColors.text }]}>{formatDate(workoutDate)}</Text>
+                  <Text style={[styles.workoutTime, { color: themeColors.textSecondary }]}>{formatTime(workoutDate)}</Text>
                 </View>
                 {!isCompleted && (
-                  <View style={styles.inProgressBadge}>
-                    <Text style={styles.inProgressText}>In Progress</Text>
+                  <View style={[styles.inProgressBadge, { backgroundColor: themeColors.primary }]}>
+                    <Text style={[styles.inProgressText, { color: themeColors.surface }]}>In Progress</Text>
                   </View>
                 )}
               </View>
 
               <View style={styles.setsContainer}>
                 {item.sets.map((set, index) => (
-                  <View key={set.id} style={styles.setRow}>
-                    <View style={styles.setNumber}>
-                      <Text style={styles.setNumberText}>{index + 1}</Text>
+                  <View key={set.id} style={[styles.setRow, { backgroundColor: themeColors.surface }]}>
+                    <View style={[styles.setNumber, { backgroundColor: themeColors.primary }]}>
+                      <Text style={[styles.setNumberText, { color: themeColors.surface }]}>{index + 1}</Text>
                     </View>
                     <View style={styles.setInfo}>
                       {set.weightKg !== null && (
-                        <Text style={styles.setDetail}>{set.weightKg} kg</Text>
+                        <Text style={[styles.setDetail, { color: themeColors.text }]}>{set.weightKg} kg</Text>
                       )}
                       {set.reps !== null && (
-                        <Text style={styles.setDetail}>{set.reps} reps</Text>
+                        <Text style={[styles.setDetail, { color: themeColors.text }]}>{set.reps} reps</Text>
                       )}
                       {set.note && (
-                        <Text style={styles.setNote} numberOfLines={1}>
+                        <Text style={[styles.setNote, { color: themeColors.textSecondary }]} numberOfLines={1}>
                           {set.note}
                         </Text>
                       )}
@@ -200,15 +202,15 @@ export default function HistoryTab() {
             setSelectedWorkout(null);
           }}
         >
-          <View style={styles.actionModalContent}>
+          <View style={[styles.actionModalContent, { backgroundColor: themeColors.surface }]}>
             <Pressable
-              style={styles.actionButton}
+              style={[styles.actionButton, { borderBottomColor: themeColors.border }]}
               onPress={(e) => {
                 e.stopPropagation();
                 handleEdit();
               }}
             >
-              <Text style={styles.actionButtonText}>Edit</Text>
+              <Text style={[styles.actionButtonText, { color: themeColors.primary }]}>Edit</Text>
             </Pressable>
             <Pressable
               style={[styles.actionButton, styles.deleteActionButton]}
@@ -217,17 +219,17 @@ export default function HistoryTab() {
                 handleDelete();
               }}
             >
-              <Text style={[styles.actionButtonText, styles.deleteActionButtonText]}>Delete</Text>
+              <Text style={[styles.actionButtonText, { color: themeColors.error }]}>Delete</Text>
             </Pressable>
             <Pressable
-              style={[styles.actionButton, styles.cancelActionButton]}
+              style={[styles.actionButton, styles.cancelActionButton, { backgroundColor: themeColors.surfaceSecondary }]}
               onPress={(e) => {
                 e.stopPropagation();
                 setActionModalVisible(false);
                 setSelectedWorkout(null);
               }}
             >
-              <Text style={styles.cancelActionButtonText}>Cancel</Text>
+              <Text style={[styles.cancelActionButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
             </Pressable>
           </View>
         </Pressable>

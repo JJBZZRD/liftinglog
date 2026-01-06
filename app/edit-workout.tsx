@@ -15,10 +15,11 @@ import {
   updateWorkoutDate,
   type SetRow,
 } from "../lib/db/workouts";
-import { colors } from "../lib/theme/colors";
+import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
 
 export default function EditWorkoutScreen() {
+  const { themeColors } = useTheme();
   const params = useLocalSearchParams<{ exerciseId?: string; workoutId?: string; exerciseName?: string }>();
   const exerciseId = typeof params.exerciseId === "string" ? parseInt(params.exerciseId, 10) : null;
   const workoutId = typeof params.workoutId === "string" ? parseInt(params.workoutId, 10) : null;
@@ -151,18 +152,20 @@ export default function EditWorkoutScreen() {
 
   if (!exerciseId || !workoutId) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Invalid exercise or workout ID</Text>
+      <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+        <Text style={[styles.errorText, { color: themeColors.error }]}>Invalid exercise or workout ID</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
       <Stack.Screen
         options={{
           presentation: "modal",
           title: `Edit ${exerciseName}`,
+          headerStyle: { backgroundColor: themeColors.surface },
+          headerTitleStyle: { color: themeColors.text },
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"
@@ -170,7 +173,7 @@ export default function EditWorkoutScreen() {
               onPress={() => router.back()}
               style={styles.headerButton}
             >
-              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
             </Pressable>
           ),
         }}
@@ -180,63 +183,66 @@ export default function EditWorkoutScreen() {
         {/* Date Picker */}
         <View style={styles.dateSection}>
           <Pressable
-            style={styles.dateButton}
+            style={[styles.dateButton, { backgroundColor: themeColors.primaryLight }]}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
-            <Text style={styles.dateButtonText}>{formatRelativeDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textSecondary} />
+            <MaterialCommunityIcons name="calendar" size={20} color={themeColors.primary} />
+            <Text style={[styles.dateButtonText, { color: themeColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color={themeColors.textSecondary} />
           </Pressable>
         </View>
 
         {/* Input Section */}
         <View style={styles.inputSection}>
-          <Text style={styles.sectionTitle}>Add Set</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Add Set</Text>
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Weight (kg)</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Weight (kg)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0.0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Reps</Text>
+              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Reps</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="number-pad"
                 returnKeyType="next"
               />
             </View>
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Note (optional)</Text>
+            <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput]}
+              style={[styles.input, styles.noteInput, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
+              placeholderTextColor={themeColors.textPlaceholder}
               multiline
               returnKeyType="done"
             />
           </View>
-          <Pressable style={styles.addButton} onPress={handleAddSet}>
-            <Text style={styles.addButtonText}>Add Set</Text>
+          <Pressable style={[styles.addButton, { backgroundColor: themeColors.primary }]} onPress={handleAddSet}>
+            <Text style={[styles.addButtonText, { color: themeColors.surface }]}>Add Set</Text>
           </Pressable>
         </View>
 
         {/* Sets List */}
         <View style={styles.setsSection}>
-          <Text style={styles.sectionTitle}>Recorded Sets ({sets.length})</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recorded Sets ({sets.length})</Text>
           {sets.length === 0 ? (
-            <Text style={styles.emptyText}>No sets recorded yet</Text>
+            <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>No sets recorded yet</Text>
           ) : (
             <FlatList
               data={sets}
@@ -257,10 +263,10 @@ export default function EditWorkoutScreen() {
       </ScrollView>
 
       {/* Action Button */}
-      <View style={styles.actionButtons}>
-        <Pressable style={styles.saveButton} onPress={handleSaveEdits}>
-          <MaterialCommunityIcons name="check-circle" size={20} color={colors.surface} />
-          <Text style={styles.saveButtonText}>Save Edits</Text>
+      <View style={[styles.actionButtons, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+        <Pressable style={[styles.saveButton, { backgroundColor: themeColors.primary }]} onPress={handleSaveEdits}>
+          <MaterialCommunityIcons name="check-circle" size={20} color={themeColors.surface} />
+          <Text style={[styles.saveButtonText, { color: themeColors.surface }]}>Save Edits</Text>
         </Pressable>
       </View>
 
@@ -291,7 +297,6 @@ export default function EditWorkoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
   },
   headerButton: {
     paddingHorizontal: 12,
@@ -299,7 +304,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: colors.error,
     textAlign: "center",
     marginTop: 50,
   },
@@ -316,7 +320,6 @@ const styles = StyleSheet.create({
   dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primaryLight,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
@@ -326,7 +329,6 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: colors.primary,
   },
   inputSection: {
     marginBottom: 24,
@@ -335,7 +337,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 16,
-    color: colors.text,
   },
   inputRow: {
     flexDirection: "row",
@@ -348,16 +349,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: colors.textSecondary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: colors.surface,
   },
   noteInput: {
     minHeight: 80,
@@ -365,13 +363,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   addButton: {
-    backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: "center",
   },
   addButtonText: {
-    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -380,7 +376,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: colors.textTertiary,
     textAlign: "center",
     paddingVertical: 24,
   },
@@ -390,21 +385,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 16,
-    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   saveButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary,
     padding: 14,
     borderRadius: 8,
     gap: 8,
   },
   saveButtonText: {
-    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
   },

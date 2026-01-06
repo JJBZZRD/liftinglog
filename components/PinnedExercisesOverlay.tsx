@@ -12,10 +12,12 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { getPinnedExercises, togglePinExercise, type Exercise } from "../lib/db/exercises";
+import { useTheme } from "../lib/theme/ThemeContext";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function PinnedExercisesOverlay() {
+  const { themeColors, isDark } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [pinnedExercises, setPinnedExercises] = useState<Exercise[]>([]);
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
@@ -119,16 +121,16 @@ export default function PinnedExercisesOverlay() {
           style={[styles.swipeAction, { transform: [{ translateX }] }]}
         >
           <Pressable
-            style={styles.removeButton}
+            style={[styles.removeButton, { backgroundColor: themeColors.destructive }]}
             onPress={() => handleUnpinExercise(exerciseId)}
           >
-            <MaterialCommunityIcons name="pin-off" size={22} color="#fff" />
-            <Text style={styles.removeButtonText}>Unpin</Text>
+            <MaterialCommunityIcons name="pin-off" size={22} color={themeColors.surface} />
+            <Text style={[styles.removeButtonText, { color: themeColors.surface }]}>Unpin</Text>
           </Pressable>
         </Animated.View>
       );
     },
-    [handleUnpinExercise]
+    [handleUnpinExercise, themeColors]
   );
 
   const rotateInterpolation = buttonRotation.interpolate({
@@ -145,7 +147,7 @@ export default function PinnedExercisesOverlay() {
           pointerEvents={isOpen ? "auto" : "none"}
         >
           <Pressable style={styles.backdropPressable} onPress={closeDropdown}>
-            <BlurView intensity={20} tint="dark" style={styles.blurView} />
+            <BlurView intensity={20} tint={isDark ? "dark" : "light"} style={styles.blurView} />
           </Pressable>
         </Animated.View>
       )}
@@ -158,10 +160,10 @@ export default function PinnedExercisesOverlay() {
         ]}
         pointerEvents={isOpen ? "auto" : "none"}
       >
-        <View style={styles.dropdown}>
-          <View style={styles.dropdownHeader}>
-            <MaterialCommunityIcons name="pin" size={20} color="#007AFF" />
-            <Text style={styles.dropdownTitle}>Pinned Exercises</Text>
+        <View style={[styles.dropdown, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
+          <View style={[styles.dropdownHeader, { borderBottomColor: themeColors.borderLight }]}>
+            <MaterialCommunityIcons name="pin" size={20} color={themeColors.primary} />
+            <Text style={[styles.dropdownTitle, { color: themeColors.text }]}>Pinned Exercises</Text>
           </View>
 
           {pinnedExercises.length === 0 ? (
@@ -169,10 +171,10 @@ export default function PinnedExercisesOverlay() {
               <MaterialCommunityIcons
                 name="pin-off-outline"
                 size={48}
-                color="#ccc"
+                color={themeColors.textLight}
               />
-              <Text style={styles.emptyText}>No pinned exercises</Text>
-              <Text style={styles.emptySubtext}>
+              <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>No pinned exercises</Text>
+              <Text style={[styles.emptySubtext, { color: themeColors.textTertiary }]}>
                 Pin exercises from their detail page for quick access
               </Text>
             </View>
@@ -190,20 +192,20 @@ export default function PinnedExercisesOverlay() {
                   onSwipeableOpen={() => handleUnpinExercise(exercise.id)}
                 >
                   <Pressable
-                    style={styles.exerciseItem}
+                    style={[styles.exerciseItem, { backgroundColor: themeColors.surface }]}
                     onPress={() => handleExercisePress(exercise)}
                   >
-                    <View style={styles.exerciseIcon}>
+                    <View style={[styles.exerciseIcon, { backgroundColor: themeColors.primaryLight }]}>
                       <MaterialCommunityIcons
                         name="dumbbell"
                         size={20}
-                        color="#007AFF"
+                        color={themeColors.primary}
                       />
                     </View>
                     <View style={styles.exerciseInfo}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
+                      <Text style={[styles.exerciseName, { color: themeColors.text }]}>{exercise.name}</Text>
                       {exercise.muscleGroup && (
-                        <Text style={styles.exerciseMuscle}>
+                        <Text style={[styles.exerciseMuscle, { color: themeColors.textSecondary }]}>
                           {exercise.muscleGroup}
                         </Text>
                       )}
@@ -211,7 +213,7 @@ export default function PinnedExercisesOverlay() {
                     <MaterialCommunityIcons
                       name="chevron-right"
                       size={24}
-                      color="#ccc"
+                      color={themeColors.textLight}
                     />
                   </Pressable>
                 </Swipeable>
@@ -222,12 +224,12 @@ export default function PinnedExercisesOverlay() {
       </Animated.View>
 
       {/* Floating Action Button */}
-      <Pressable style={styles.fab} onPress={handleToggle}>
+      <Pressable style={[styles.fab, { backgroundColor: themeColors.primary, shadowColor: themeColors.primary }]} onPress={handleToggle}>
         <Animated.View style={{ transform: [{ rotate: rotateInterpolation }] }}>
           <MaterialCommunityIcons
             name={isOpen ? "close" : "pin"}
             size={24}
-            color="#fff"
+            color={themeColors.surface}
           />
         </Animated.View>
       </Pressable>
@@ -257,9 +259,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   dropdown: {
-    backgroundColor: "#fff",
     borderRadius: 16,
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -272,12 +272,10 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
   },
   dropdownTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#000",
   },
   emptyState: {
     alignItems: "center",
@@ -287,12 +285,10 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#666",
     marginTop: 12,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#999",
     textAlign: "center",
     marginTop: 4,
   },
@@ -304,14 +300,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#fff",
   },
   swipeAction: {
     justifyContent: "center",
     alignItems: "flex-end",
   },
   removeButton: {
-    backgroundColor: "#FF3B30",
     justifyContent: "center",
     alignItems: "center",
     width: 140,
@@ -320,7 +314,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   removeButtonText: {
-    color: "#fff",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -328,7 +321,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#f0f8ff",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -339,11 +331,9 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#000",
   },
   exerciseMuscle: {
     fontSize: 13,
-    color: "#666",
     marginTop: 2,
   },
   fab: {
@@ -353,10 +343,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#007AFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#007AFF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

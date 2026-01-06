@@ -1,78 +1,68 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useTheme } from "../../lib/theme/ThemeContext";
 
 export default function OverviewScreen() {
+  const { themeColors } = useTheme();
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
-        <View style={{ marginBottom: 24, marginTop: 48 }}>
-          <Text style={{ fontSize: 32, fontWeight: "700", color: "#000" }}>
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>
             WorkoutLog
           </Text>
-          <Text style={{ fontSize: 16, color: "#666", marginTop: 4 }}>
+          <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]}>
             Track your fitness journey
           </Text>
         </View>
 
-        {/* Quick Stats Placeholder */}
+        {/* Quick Stats */}
         <View
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 16,
-            padding: 20,
-            marginBottom: 16,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 4,
-          }}
+          style={[
+            styles.card,
+            { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }
+          ]}
         >
-          <Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 16 }}>
+          <Text style={[styles.cardTitle, { color: themeColors.text }]}>
             Quick Stats
           </Text>
-          <View style={{ flexDirection: "row", justifyContent: "space-around" }}>
-            <View style={{ alignItems: "center" }}>
-              <MaterialCommunityIcons name="dumbbell" size={32} color="#007AFF" />
-              <Text style={{ fontSize: 24, fontWeight: "700", marginTop: 8 }}>0</Text>
-              <Text style={{ fontSize: 12, color: "#666" }}>Workouts</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <MaterialCommunityIcons name="dumbbell" size={32} color={themeColors.primary} />
+              <Text style={[styles.statValue, { color: themeColors.text }]}>0</Text>
+              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Workouts</Text>
             </View>
-            <View style={{ alignItems: "center" }}>
-              <MaterialCommunityIcons name="fire" size={32} color="#FF9500" />
-              <Text style={{ fontSize: 24, fontWeight: "700", marginTop: 8 }}>0</Text>
-              <Text style={{ fontSize: 12, color: "#666" }}>Day Streak</Text>
+            <View style={styles.statItem}>
+              <MaterialCommunityIcons name="fire" size={32} color={themeColors.warning} />
+              <Text style={[styles.statValue, { color: themeColors.text }]}>0</Text>
+              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Day Streak</Text>
             </View>
-            <View style={{ alignItems: "center" }}>
-              <MaterialCommunityIcons name="trophy" size={32} color="#34C759" />
-              <Text style={{ fontSize: 24, fontWeight: "700", marginTop: 8 }}>0</Text>
-              <Text style={{ fontSize: 12, color: "#666" }}>PRs</Text>
+            <View style={styles.statItem}>
+              <MaterialCommunityIcons name="trophy" size={32} color={themeColors.success} />
+              <Text style={[styles.statValue, { color: themeColors.text }]}>0</Text>
+              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>PRs</Text>
             </View>
           </View>
         </View>
 
-        {/* Recent Activity Placeholder */}
+        {/* Recent Activity */}
         <View
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 16,
-            padding: 20,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 4,
-          }}
+          style={[
+            styles.card,
+            { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }
+          ]}
         >
-          <Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 16 }}>
+          <Text style={[styles.cardTitle, { color: themeColors.text }]}>
             Recent Activity
           </Text>
-          <View style={{ alignItems: "center", paddingVertical: 32 }}>
-            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color="#ccc" />
-            <Text style={{ fontSize: 16, color: "#999", marginTop: 12 }}>
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={themeColors.textLight} />
+            <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>
               No recent workouts
             </Text>
-            <Text style={{ fontSize: 14, color: "#ccc", marginTop: 4 }}>
+            <Text style={[styles.emptySubtext, { color: themeColors.textLight }]}>
               Start recording to see your activity here
             </Text>
           </View>
@@ -81,3 +71,66 @@ export default function OverviewScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  header: {
+    marginBottom: 24,
+    marginTop: 48,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: "700",
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    marginTop: 4,
+  },
+  card: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  statItem: {
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 32,
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+});

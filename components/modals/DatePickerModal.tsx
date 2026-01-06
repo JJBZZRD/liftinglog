@@ -6,7 +6,7 @@
  */
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../../lib/theme/colors';
+import { useTheme } from '../../lib/theme/ThemeContext';
 import BaseModal from './BaseModal';
 
 interface DatePickerModalProps {
@@ -41,6 +41,8 @@ export default function DatePickerModal({
   minimumDate,
   title = 'Select Date',
 }: DatePickerModalProps) {
+  const { themeColors } = useTheme();
+
   const handleChange = (_event: any, selectedDate?: Date) => {
     // On Android, the native picker handles its own dismissal
     // Just update the value if a date was selected
@@ -81,10 +83,10 @@ export default function DatePickerModal({
       maxWidth={360}
       contentStyle={styles.container}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
+      <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
+        <Text style={[styles.title, { color: themeColors.text }]}>{title}</Text>
         <Pressable onPress={handleDone}>
-          <Text style={styles.doneButton}>Done</Text>
+          <Text style={[styles.doneButton, { color: themeColors.primary }]}>Done</Text>
         </Pressable>
       </View>
       <DateTimePicker
@@ -94,7 +96,7 @@ export default function DatePickerModal({
         onChange={handleChange}
         maximumDate={maximumDate}
         minimumDate={minimumDate}
-        style={styles.picker}
+        style={[styles.picker, { backgroundColor: themeColors.surface }]}
       />
     </BaseModal>
   );
@@ -112,21 +114,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 17,
     fontWeight: '600',
-    color: colors.text,
   },
   doneButton: {
     fontSize: 17,
     fontWeight: '600',
-    color: colors.primary,
   },
   picker: {
     height: 200,
-    backgroundColor: colors.surface,
   },
 });
 

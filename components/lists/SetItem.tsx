@@ -8,7 +8,7 @@
  * - edit-workout.tsx
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../../lib/theme/colors';
+import { useTheme } from '../../lib/theme/ThemeContext';
 
 interface SetItemProps {
   /** Set index (1-based for display) */
@@ -43,24 +43,30 @@ export default function SetItem({
   delayLongPress = 400,
   variant = 'default',
 }: SetItemProps) {
+  const { themeColors } = useTheme();
+
   const content = (
-    <View style={[styles.container, variant === 'compact' && styles.containerCompact]}>
-      <View style={[styles.badge, variant === 'compact' && styles.badgeCompact]}>
-        <Text style={[styles.badgeText, variant === 'compact' && styles.badgeTextCompact]}>
+    <View style={[
+      styles.container, 
+      { backgroundColor: themeColors.surfaceSecondary },
+      variant === 'compact' && [styles.containerCompact, { backgroundColor: themeColors.surface }]
+    ]}>
+      <View style={[styles.badge, { backgroundColor: themeColors.primary }, variant === 'compact' && styles.badgeCompact]}>
+        <Text style={[styles.badgeText, { color: themeColors.surface }, variant === 'compact' && styles.badgeTextCompact]}>
           {index}
         </Text>
       </View>
       <View style={styles.details}>
         <View style={styles.infoRow}>
-          <Text style={styles.info}>
+          <Text style={[styles.info, { color: themeColors.text }]}>
             {weightKg !== null ? `${weightKg} kg` : '—'}
           </Text>
-          <Text style={styles.info}>
+          <Text style={[styles.info, { color: themeColors.text }]}>
             {reps !== null ? `${reps} reps` : '—'}
           </Text>
         </View>
         {note && (
-          <Text style={styles.note} numberOfLines={variant === 'compact' ? 1 : undefined}>
+          <Text style={[styles.note, { color: themeColors.textSecondary }]} numberOfLines={variant === 'compact' ? 1 : undefined}>
             {note}
           </Text>
         )}
@@ -85,7 +91,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: colors.surfaceSecondary,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -93,13 +98,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginBottom: 4,
-    backgroundColor: colors.surface,
   },
   badge: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -110,7 +113,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   badgeText: {
-    color: colors.surface,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -128,11 +130,9 @@ const styles = StyleSheet.create({
   info: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
   },
   note: {
     fontSize: 14,
-    color: colors.textSecondary,
     fontStyle: 'italic',
   },
 });
@@ -160,10 +160,12 @@ export function SetItemList({
   variant = 'default',
   emptyText = 'No sets recorded',
 }: SetItemListProps) {
+  const { themeColors } = useTheme();
+
   if (sets.length === 0) {
     return (
       <View style={emptyStyles.container}>
-        <Text style={emptyStyles.text}>{emptyText}</Text>
+        <Text style={[emptyStyles.text, { color: themeColors.textTertiary }]}>{emptyText}</Text>
       </View>
     );
   }
@@ -192,9 +194,11 @@ const emptyStyles = StyleSheet.create({
   },
   text: {
     fontSize: 14,
-    color: colors.textTertiary,
     textAlign: 'center',
   },
 });
+
+
+
 
 

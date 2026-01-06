@@ -4,14 +4,16 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import "./global.css";
 import { useNotificationHandler } from "../lib/notificationHandler";
+import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
 
-export default function RootLayout() {
+function RootLayoutContent() {
   // Set up notification tap handling for deep linking
   useNotificationHandler();
+  const { isDark } = useTheme();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <Stack>
         <Stack.Screen 
           name="(tabs)" 
@@ -30,5 +32,13 @@ export default function RootLayout() {
         />
       </Stack>
     </GestureHandlerRootView>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
   );
 }

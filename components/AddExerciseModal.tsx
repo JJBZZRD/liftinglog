@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { createExercise } from "../lib/db/exercises";
+import { useTheme } from "../lib/theme/ThemeContext";
 
 type AddExerciseModalProps = {
   visible: boolean;
@@ -9,6 +10,7 @@ type AddExerciseModalProps = {
 };
 
 export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExerciseModalProps) {
+  const { themeColors } = useTheme();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [muscle, setMuscle] = useState("");
@@ -52,7 +54,7 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
         onPress={onDismiss}
         style={{
           flex: 1,
-          backgroundColor: "rgba(0,0,0,0.3)",
+          backgroundColor: themeColors.overlay,
           justifyContent: "center",
           alignItems: "center",
           padding: 16,
@@ -63,49 +65,53 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
           style={{
             width: "100%",
             maxWidth: 520,
-            backgroundColor: "#fff",
+            backgroundColor: themeColors.surface,
             borderRadius: 12,
             padding: 16,
             gap: 12,
           }}
         >
-          <Text style={{ fontSize: 18, fontWeight: "600" }}>Add Exercise</Text>
-          {error ? <Text style={{ color: "#cc0000" }}>{error}</Text> : null}
+          <Text style={{ fontSize: 18, fontWeight: "600", color: themeColors.text }}>Add Exercise</Text>
+          {error ? <Text style={{ color: themeColors.error }}>{error}</Text> : null}
 
           <TextInput
             placeholder="Name"
             value={name}
             onChangeText={setName}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }}
+            placeholderTextColor={themeColors.textPlaceholder}
+            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
           />
           <TextInput
             placeholder="Description"
             value={description}
             onChangeText={setDescription}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }}
+            placeholderTextColor={themeColors.textPlaceholder}
+            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
           />
           <TextInput
             placeholder="Muscle group"
             value={muscle}
             onChangeText={setMuscle}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }}
+            placeholderTextColor={themeColors.textPlaceholder}
+            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
           />
           <TextInput
             placeholder="Equipment"
             value={equipment}
             onChangeText={setEquipment}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }}
+            placeholderTextColor={themeColors.textPlaceholder}
+            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
           />
 
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
             <Pressable onPress={onDismiss} style={{ padding: 10 }}>
-              <Text style={{ color: "#555" }}>Cancel</Text>
+              <Text style={{ color: themeColors.textSecondary }}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={onSave}
-              style={{ backgroundColor: "#007AFF", padding: 10, borderRadius: 8 }}
+              style={{ backgroundColor: themeColors.primary, padding: 10, borderRadius: 8 }}
             >
-              <Text style={{ color: "#fff", fontWeight: "600" }}>Save</Text>
+              <Text style={{ color: themeColors.surface, fontWeight: "600" }}>Save</Text>
             </Pressable>
           </View>
         </Pressable>

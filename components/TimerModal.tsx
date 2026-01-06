@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { timerStore, type Timer } from "../lib/timerStore";
+import { useTheme } from "../lib/theme/ThemeContext";
 
 // Helper function to format seconds as MM:SS
 const formatTime = (seconds: number): string => {
@@ -43,6 +44,7 @@ export default function TimerModal({
   onSecondsChange,
   onSaveRestTime,
 }: TimerModalProps) {
+  const { themeColors } = useTheme();
   const handleStartTimer = async () => {
     const mins = parseInt(minutes, 10) || 0;
     const secs = parseInt(seconds, 10) || 0;
@@ -93,17 +95,17 @@ export default function TimerModal({
       presentationStyle="overFullScreen"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={styles.timerModalContent} onStartShouldSetResponder={() => true}>
-          <Text style={styles.modalTitle}>Rest Timer</Text>
+      <Pressable style={[styles.modalOverlay, { backgroundColor: themeColors.overlayDark }]} onPress={onClose}>
+        <View style={[styles.timerModalContent, { backgroundColor: themeColors.surface }]} onStartShouldSetResponder={() => true}>
+          <Text style={[styles.modalTitle, { color: themeColors.text }]}>Rest Timer</Text>
 
           {/* Current timer status if exists */}
           {currentTimer && (
-            <View style={styles.currentTimerStatus}>
-              <Text style={styles.currentTimerLabel}>
+            <View style={[styles.currentTimerStatus, { backgroundColor: themeColors.surfaceSecondary }]}>
+              <Text style={[styles.currentTimerLabel, { color: themeColors.textSecondary }]}>
                 {currentTimer.isRunning ? "Running" : "Paused"}
               </Text>
-              <Text style={styles.currentTimerTime}>
+              <Text style={[styles.currentTimerTime, { color: themeColors.primary }]}>
                 {formatTime(currentTimer.remainingSeconds)}
               </Text>
             </View>
@@ -112,24 +114,26 @@ export default function TimerModal({
           {/* Time input */}
           <View style={styles.timerInputContainer}>
             <View style={styles.timerInputGroup}>
-              <Text style={styles.timerInputLabel}>Minutes</Text>
+              <Text style={[styles.timerInputLabel, { color: themeColors.textSecondary }]}>Minutes</Text>
               <TextInput
-                style={styles.timerInput}
+                style={[styles.timerInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
                 value={minutes}
                 onChangeText={onMinutesChange}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="number-pad"
                 maxLength={2}
               />
             </View>
-            <Text style={styles.timerSeparator}>:</Text>
+            <Text style={[styles.timerSeparator, { color: themeColors.text }]}>:</Text>
             <View style={styles.timerInputGroup}>
-              <Text style={styles.timerInputLabel}>Seconds</Text>
+              <Text style={[styles.timerInputLabel, { color: themeColors.textSecondary }]}>Seconds</Text>
               <TextInput
-                style={styles.timerInput}
+                style={[styles.timerInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
                 value={seconds}
                 onChangeText={onSecondsChange}
                 placeholder="0"
+                placeholderTextColor={themeColors.textPlaceholder}
                 keyboardType="number-pad"
                 maxLength={2}
               />
@@ -141,10 +145,10 @@ export default function TimerModal({
             {PRESETS.map((preset) => (
               <Pressable
                 key={preset.label}
-                style={styles.timerPreset}
+                style={[styles.timerPreset, { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border }]}
                 onPress={() => applyPreset(preset.minutes, preset.seconds)}
               >
-                <Text style={styles.timerPresetText}>{preset.label}</Text>
+                <Text style={[styles.timerPresetText, { color: themeColors.primary }]}>{preset.label}</Text>
               </Pressable>
             ))}
           </View>
@@ -154,25 +158,25 @@ export default function TimerModal({
             {currentTimer && (
               <>
                 <Pressable
-                  style={[styles.modalButton, styles.deleteTimerButton]}
+                  style={[styles.modalButton, styles.deleteTimerButton, { backgroundColor: themeColors.surface, borderColor: themeColors.error }]}
                   onPress={handleDeleteTimer}
                 >
-                  <MaterialCommunityIcons name="delete" size={20} color="#FF3B30" />
+                  <MaterialCommunityIcons name="delete" size={20} color={themeColors.error} />
                 </Pressable>
                 <Pressable
-                  style={[styles.modalButton, styles.resetTimerButton]}
+                  style={[styles.modalButton, styles.resetTimerButton, { backgroundColor: themeColors.surfaceSecondary }]}
                   onPress={handleResetTimer}
                 >
-                  <MaterialCommunityIcons name="refresh" size={20} color="#666" />
+                  <MaterialCommunityIcons name="refresh" size={20} color={themeColors.textSecondary} />
                 </Pressable>
               </>
             )}
-            <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Pressable style={[styles.modalButton, styles.cancelButton, { backgroundColor: themeColors.surfaceSecondary }]} onPress={onClose}>
+              <Text style={[styles.cancelButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
             </Pressable>
-            <Pressable style={[styles.modalButton, styles.startTimerButton]} onPress={handleStartTimer}>
-              <MaterialCommunityIcons name="play" size={20} color="#fff" />
-              <Text style={styles.startTimerButtonText}>
+            <Pressable style={[styles.modalButton, styles.startTimerButton, { backgroundColor: themeColors.primary }]} onPress={handleStartTimer}>
+              <MaterialCommunityIcons name="play" size={20} color={themeColors.surface} />
+              <Text style={[styles.startTimerButtonText, { color: themeColors.surface }]}>
                 {currentTimer ? "Update" : "Start"}
               </Text>
             </Pressable>
@@ -186,12 +190,10 @@ export default function TimerModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
   },
   timerModalContent: {
-    backgroundColor: "#fff",
     borderRadius: 16,
     padding: 24,
     width: "85%",
@@ -200,12 +202,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#000",
     marginBottom: 20,
     textAlign: "center",
   },
   currentTimerStatus: {
-    backgroundColor: "#f8f8f8",
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -213,13 +213,11 @@ const styles = StyleSheet.create({
   },
   currentTimerLabel: {
     fontSize: 14,
-    color: "#666",
     marginBottom: 4,
   },
   currentTimerTime: {
     fontSize: 32,
     fontWeight: "700",
-    color: "#007AFF",
   },
   timerInputContainer: {
     flexDirection: "row",
@@ -233,11 +231,9 @@ const styles = StyleSheet.create({
   },
   timerInputLabel: {
     fontSize: 12,
-    color: "#666",
     marginBottom: 4,
   },
   timerInput: {
-    backgroundColor: "#f5f5f5",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -249,7 +245,6 @@ const styles = StyleSheet.create({
   timerSeparator: {
     fontSize: 32,
     fontWeight: "600",
-    color: "#000",
     marginTop: 16,
   },
   timerPresetsContainer: {
@@ -260,17 +255,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   timerPreset: {
-    backgroundColor: "#f5f5f5",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#e5e5ea",
   },
   timerPresetText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#007AFF",
   },
   timerModalButtons: {
     flexDirection: "row",
@@ -287,30 +279,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   deleteTimerButton: {
-    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#FF3B30",
   },
-  resetTimerButton: {
-    backgroundColor: "#f5f5f5",
-  },
-  cancelButton: {
-    backgroundColor: "#f5f5f5",
-  },
+  resetTimerButton: {},
+  cancelButton: {},
   cancelButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#666",
   },
   startTimerButton: {
-    backgroundColor: "#007AFF",
     flex: 1,
     maxWidth: 120,
   },
   startTimerButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#fff",
   },
 });
 

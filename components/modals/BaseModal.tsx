@@ -11,7 +11,7 @@
  */
 import { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
-import { colors } from '../../lib/theme/colors';
+import { useTheme } from '../../lib/theme/ThemeContext';
 
 interface BaseModalProps {
   /** Whether the modal is visible */
@@ -46,6 +46,8 @@ export default function BaseModal({
   maxWidth = 420,
   centerContent = true,
 }: BaseModalProps) {
+  const { themeColors } = useTheme();
+
   return (
     <Modal
       visible={visible}
@@ -57,6 +59,7 @@ export default function BaseModal({
       <Pressable
         style={[
           styles.overlay,
+          { backgroundColor: themeColors.overlay },
           centerContent && styles.overlayCenter,
         ]}
         onPress={onClose}
@@ -64,7 +67,7 @@ export default function BaseModal({
         <Pressable
           style={[
             styles.content,
-            { maxWidth },
+            { maxWidth, backgroundColor: themeColors.surface },
             contentStyle,
           ]}
           // Prevent closing when pressing on content
@@ -80,7 +83,6 @@ export default function BaseModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: colors.overlay,
     padding: 16,
   },
   overlayCenter: {
@@ -89,7 +91,6 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
   },
@@ -110,5 +111,8 @@ interface ConfirmModalProps {
 }
 
 export { BaseModal };
+
+
+
 
 
