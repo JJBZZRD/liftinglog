@@ -9,8 +9,8 @@ import DateRangeSelector, {
   type DateRange,
 } from "../../../components/charts/DateRangeSelector";
 import FullscreenChart from "../../../components/charts/FullscreenChart";
+import { TabSwipeContext } from "../../../lib/contexts/TabSwipeContext";
 import { useTheme } from "../../../lib/theme/ThemeContext";
-import { TabSwipeContext } from "../[id]";
 import {
   computeTrendLine,
   filterByDateRange,

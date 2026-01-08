@@ -1,22 +1,14 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SceneMap, TabBar, TabView } from "react-native-tab-view";
+import { TabSwipeContext } from "../../lib/contexts/TabSwipeContext";
 import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 import VisualisationTab from "./tabs/VisualisationTab";
-
-// Context to allow child components (chart) to disable tab swiping during gestures
-interface TabSwipeContextType {
-  setSwipeEnabled: (enabled: boolean) => void;
-}
-
-export const TabSwipeContext = createContext<TabSwipeContextType>({
-  setSwipeEnabled: () => {},
-});
 
 const renderScene = SceneMap({
   record: RecordTab,
