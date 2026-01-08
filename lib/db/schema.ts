@@ -46,9 +46,19 @@ export const sets = sqliteTable("sets", {
   performedAt: integer("performed_at"),
 });
 
+export const prEvents = sqliteTable("pr_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  setId: integer("set_id").notNull(),
+  exerciseId: integer("exercise_id").notNull(),
+  type: text("type").notNull(), // "1rm", "2rm", "3rm", etc.
+  metricValue: real("metric_value").notNull(), // the weight achieved
+  occurredAt: integer("occurred_at").notNull(),
+});
+
 export type ExerciseRow = typeof exercises.$inferSelect;
 export type WorkoutRow = typeof workouts.$inferSelect;
 export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
 export type SetRow = typeof sets.$inferSelect;
+export type PREventRow = typeof prEvents.$inferSelect;
 
 

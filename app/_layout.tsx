@@ -1,8 +1,11 @@
 import { Stack } from "expo-router";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import "./global.css";
+import { seedTestDataExercise } from "../lib/db/seedTestData";
 import { useNotificationHandler } from "../lib/notificationHandler";
 import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
 
@@ -10,6 +13,17 @@ function RootLayoutContent() {
   // Set up notification tap handling for deep linking
   useNotificationHandler();
   const { isDark } = useTheme();
+
+  // Lock app to portrait orientation on mount
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+      .catch((error) => console.warn("Failed to lock portrait orientation:", error));
+  }, []);
+
+  // Seed test data in development mode
+  useEffect(() => {
+    seedTestDataExercise().catch(console.error);
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

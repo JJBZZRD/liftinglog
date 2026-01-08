@@ -141,14 +141,15 @@ sqlite.execSync(`
     FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
   );
 
-  CREATE TABLE IF NOT EXISTS best_lifts (
-    exercise_id INTEGER PRIMARY KEY NOT NULL,
-    best_1rm_kg REAL,
-    best_volume_in_session_kg REAL,
-    best_reps INTEGER,
-    updated_at INTEGER,
-    FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
-  );
+  -- Reserved for future optimization if needed:
+  -- CREATE TABLE IF NOT EXISTS best_lifts (
+  --   exercise_id INTEGER PRIMARY KEY NOT NULL,
+  --   best_1rm_kg REAL,
+  --   best_volume_in_session_kg REAL,
+  --   best_reps INTEGER,
+  --   updated_at INTEGER,
+  --   FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+  -- );
 
   -- Tags & media (optional)
   CREATE TABLE IF NOT EXISTS tags (
@@ -188,6 +189,7 @@ sqlite.execSync(`
   CREATE INDEX IF NOT EXISTS idx_sets_exercise_id ON sets(exercise_id);
   CREATE INDEX IF NOT EXISTS idx_sets_performed_at ON sets(performed_at);
   CREATE INDEX IF NOT EXISTS idx_sets_group ON sets(set_group_id);
+  CREATE INDEX IF NOT EXISTS idx_sets_exercise_reps ON sets(exercise_id, reps);
   CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(workout_id, order_index);
   CREATE INDEX IF NOT EXISTS idx_pr_events_exercise_time ON pr_events(exercise_id, occurred_at);
   CREATE INDEX IF NOT EXISTS idx_planned_workouts_date ON planned_workouts(planned_for);

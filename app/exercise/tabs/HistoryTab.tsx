@@ -2,14 +2,19 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { deleteWorkout, getExerciseHistory, type WorkoutHistoryEntry } from "../../../lib/db/workouts";
+import { deleteWorkout, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
+import { getPREventsBySetIds } from "../../../lib/db/prEvents";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import SetItem from "../../../components/lists/SetItem";
+
+// Extended set row with PR badge
+type SetWithPR = SetRow & { prBadge?: string };
 
 export default function HistoryTab() {
   const { themeColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
-  const [history, setHistory] = useState<WorkoutHistoryEntry[]>([]);
+  const [history, setHistory] = useState<(WorkoutHistoryEntry & { sets: SetWithPR[] })[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryEntry | null>(null);
@@ -22,7 +27,21 @@ export default function HistoryTab() {
 
     try {
       const exerciseHistory = await getExerciseHistory(exerciseId);
-      setHistory(exerciseHistory);
+      
+      // Get all set IDs to fetch PR events
+      const allSetIds = exerciseHistory.flatMap(entry => entry.sets.map(set => set.id));
+      const prEventsMap = await getPREventsBySetIds(allSetIds);
+      
+      // Map PR events to sets
+      const historyWithPRs = exerciseHistory.map(entry => ({
+        ...entry,
+        sets: entry.sets.map(set => ({
+          ...set,
+          prBadge: prEventsMap.get(set.id)?.type.toUpperCase() || undefined,
+        })),
+      }));
+      
+      setHistory(historyWithPRs);
     } catch (error) {
       console.error("Error loading exercise history:", error);
     } finally {
@@ -159,24 +178,15 @@ export default function HistoryTab() {
 
               <View style={styles.setsContainer}>
                 {item.sets.map((set, index) => (
-                  <View key={set.id} style={[styles.setRow, { backgroundColor: themeColors.surface }]}>
-                    <View style={[styles.setNumber, { backgroundColor: themeColors.primary }]}>
-                      <Text style={[styles.setNumberText, { color: themeColors.surface }]}>{index + 1}</Text>
-                    </View>
-                    <View style={styles.setInfo}>
-                      {set.weightKg !== null && (
-                        <Text style={[styles.setDetail, { color: themeColors.text }]}>{set.weightKg} kg</Text>
-                      )}
-                      {set.reps !== null && (
-                        <Text style={[styles.setDetail, { color: themeColors.text }]}>{set.reps} reps</Text>
-                      )}
-                      {set.note && (
-                        <Text style={[styles.setNote, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                          {set.note}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
+                  <SetItem
+                    key={set.id}
+                    index={index + 1}
+                    weightKg={set.weightKg}
+                    reps={set.reps}
+                    note={set.note}
+                    variant="compact"
+                    prBadge={set.prBadge}
+                  />
                 ))}
               </View>
             </Pressable>
@@ -314,48 +324,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   setsContainer: {
-    gap: 8,
-  },
-  setRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  setNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#007AFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  setNumberText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  setInfo: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  setDetail: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#000",
-  },
-  setNote: {
-    fontSize: 13,
-    color: "#666",
-    fontStyle: "italic",
-    flex: 1,
+    gap: 4,
   },
   // Modal Styles
   modalOverlay: {

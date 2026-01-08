@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SceneMap, TabBar, TabView } from "react-native-tab-view";
 import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
@@ -8,6 +8,15 @@ import { useTheme } from "../../lib/theme/ThemeContext";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 import VisualisationTab from "./tabs/VisualisationTab";
+
+// Context to allow child components (chart) to disable tab swiping during gestures
+interface TabSwipeContextType {
+  setSwipeEnabled: (enabled: boolean) => void;
+}
+
+export const TabSwipeContext = createContext<TabSwipeContextType>({
+  setSwipeEnabled: () => {},
+});
 
 const renderScene = SceneMap({
   record: RecordTab,
@@ -29,6 +38,9 @@ export default function ExerciseModalScreen() {
   ]);
   const [isPinned, setIsPinned] = useState(false);
   const [showPinLimitTooltip, setShowPinLimitTooltip] = useState(false);
+  
+  // State to control tab swiping (disabled during chart interactions)
+  const [swipeEnabled, setSwipeEnabled] = useState(true);
 
   // Load pin state on mount
   useEffect(() => {
@@ -122,22 +134,25 @@ export default function ExerciseModalScreen() {
         }}
       />
 
-      <TabView
-        navigationState={{ index, routes }}
-        renderScene={renderScene}
-        onIndexChange={setIndex}
-        initialLayout={{ width: layout.width }}
-        renderTabBar={(props) => (
-          <TabBar
-            {...props}
-            indicatorStyle={{ backgroundColor: themeColors.primary }}
-            style={{ backgroundColor: themeColors.surface }}
-            activeColor={themeColors.primary}
-            inactiveColor={themeColors.textSecondary}
-            pressColor={themeColors.pressed}
-          />
-        )}
-      />
+      <TabSwipeContext.Provider value={{ setSwipeEnabled }}>
+        <TabView
+          navigationState={{ index, routes }}
+          renderScene={renderScene}
+          onIndexChange={setIndex}
+          initialLayout={{ width: layout.width }}
+          swipeEnabled={swipeEnabled}
+          renderTabBar={(props) => (
+            <TabBar
+              {...props}
+              indicatorStyle={{ backgroundColor: themeColors.primary }}
+              style={{ backgroundColor: themeColors.surface }}
+              activeColor={themeColors.primary}
+              inactiveColor={themeColors.textSecondary}
+              pressColor={themeColors.pressed}
+            />
+          )}
+        />
+      </TabSwipeContext.Provider>
     </View>
   );
 }

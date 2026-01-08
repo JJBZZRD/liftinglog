@@ -25,6 +25,8 @@ interface SetItemProps {
   delayLongPress?: number;
   /** Variant styling */
   variant?: 'default' | 'compact';
+  /** PR badge text (e.g., "1RM", "5RM") */
+  prBadge?: string | null;
 }
 
 /**
@@ -42,6 +44,7 @@ export default function SetItem({
   onLongPress,
   delayLongPress = 400,
   variant = 'default',
+  prBadge,
 }: SetItemProps) {
   const { themeColors } = useTheme();
 
@@ -71,6 +74,13 @@ export default function SetItem({
           </Text>
         )}
       </View>
+      {prBadge && (
+        <View style={[styles.prBadge, { backgroundColor: themeColors.prGold }]}>
+          <Text style={[styles.prBadgeText, { color: themeColors.surface }]}>
+            {prBadge}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -134,6 +144,17 @@ const styles = StyleSheet.create({
   note: {
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  prBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  prBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });
 

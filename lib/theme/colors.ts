@@ -42,6 +42,9 @@ export const lightColors = {
   
   // Shadows (for shadow color property)
   shadow: '#000',
+  
+  // PR badges
+  prGold: '#FFD700',
 } as const;
 
 // Dark theme colors
@@ -81,6 +84,9 @@ export const darkColors = {
   
   // Shadows (for shadow color property)
   shadow: '#000',
+  
+  // PR badges
+  prGold: '#B8860B',
 } as const;
 
 // Default export for backward compatibility (light theme)
