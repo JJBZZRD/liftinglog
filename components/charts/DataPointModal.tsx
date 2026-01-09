@@ -2,13 +2,30 @@
  * Data Point Modal Component
  * 
  * Displays detailed session information when a data point is pressed on the chart.
+ * Layout: Header → Date/Time → Summary (fixed) → Sets (scrollable)
  * Styled to match the History/Record UI patterns.
+ * 
+ * Layout strategy (measurement-based):
+ * - Container: maxHeight cap with base minHeight: 200
+ * - fixedSection: flexShrink: 0, overflow: hidden (NEVER shrinks, children clipped)
+ * - Measure fixedSection height via onLayout
+ * - Compute remaining height for sets: cardMaxHeight - fixedHeight
+ * - Apply explicit height to setsContainer to guarantee visible sets area
+ * 
+ * Gesture handling:
+ * - Overlay is a View (not Pressable) containing a sibling backdrop Pressable
+ * - Card is a View (not Pressable) so ScrollView receives pan gestures
+ * - Backdrop Pressable (StyleSheet.absoluteFill) catches taps outside card to close
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
 import SetItem from "../lists/SetItem";
+
+// Minimum height for the sets region (ensures 2-3 rows visible)
+const MIN_SETS_HEIGHT = 160;
 
 interface DataPointModalProps {
   visible: boolean;
@@ -28,12 +45,51 @@ export default function DataPointModal({
   const { themeColors } = useTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 
-  // Responsive card dimensions (matches History modal pattern)
+  // Track measured height of the fixed section
+  const [fixedHeight, setFixedHeight] = useState(0);
+
+  // Responsive card dimensions (pixel-based)
   const cardMaxHeight = Math.min(windowHeight * 0.8, 600);
   const cardMaxWidth = Math.min(windowWidth - 40, 380);
 
+  // Compute available height for sets region
+  // Ensure at least MIN_SETS_HEIGHT even if fixedSection is tall
+  const availableForSets = fixedHeight > 0 
+    ? Math.max(MIN_SETS_HEIGHT, cardMaxHeight - fixedHeight)
+    : MIN_SETS_HEIGHT;
+
   // Determine which branch will be rendered
   const hasDetailsWithSets = !!(sessionDetails && sessionDetails.sets && sessionDetails.sets.length > 0);
+
+  // onLayout handlers
+  const handleCardLayout = (event: LayoutChangeEvent) => {
+    if (__DEV__) {
+      const { width, height } = event.nativeEvent.layout;
+      console.log("[DataPointModal] Card layout:", { width, height });
+    }
+  };
+
+  const handleFixedSectionLayout = (event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    setFixedHeight(height);
+    if (__DEV__) {
+      console.log("[DataPointModal] FixedSection layout:", { height, availableForSets: Math.max(MIN_SETS_HEIGHT, cardMaxHeight - height) });
+    }
+  };
+
+  const handleSetsContainerLayout = (event: LayoutChangeEvent) => {
+    if (__DEV__) {
+      const { width, height } = event.nativeEvent.layout;
+      console.log("[DataPointModal] SetsContainer layout:", { width, height });
+    }
+  };
+
+  const handleScrollViewLayout = (event: LayoutChangeEvent) => {
+    if (__DEV__) {
+      const { width, height } = event.nativeEvent.layout;
+      console.log("[DataPointModal] ScrollView layout:", { width, height });
+    }
+  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString("en-US", {
@@ -57,9 +113,15 @@ export default function DataPointModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        {/* Inner Pressable consumes touches to prevent closing when tapping inside card */}
-        <Pressable
+      {/* View-based overlay with sibling backdrop Pressable */}
+      {/* This structure allows ScrollView to receive pan gestures */}
+      <View style={styles.overlay}>
+        {/* Backdrop - catches taps outside the card to close modal */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        
+        {/* Card container - View (not Pressable) so gestures pass through to ScrollView */}
+        <View
+          onLayout={handleCardLayout}
           style={[
             styles.container,
             {
@@ -68,7 +130,6 @@ export default function DataPointModal({
               maxWidth: cardMaxWidth,
             }
           ]}
-          onPress={() => {/* Consume touch - do not close */}}
         >
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -77,49 +138,124 @@ export default function DataPointModal({
               </Text>
             </View>
           ) : hasDetailsWithSets ? (
-            <ScrollView 
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Header - matches History workoutHeader pattern */}
-              <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-                <View style={styles.headerLeft}>
-                  <Text style={[styles.title, { color: themeColors.text }]}>
-                    Session
-                  </Text>
-                  {exerciseName && (
-                    <Text style={[styles.subtitle, { color: themeColors.textSecondary }]}>
-                      {exerciseName}
+            <>
+              {/* ===== FIXED SECTION (Header + Date + Summary) ===== */}
+              {/* flexShrink: 0, overflow: hidden - maintains natural height, clips children */}
+              <View 
+                style={styles.fixedSection}
+                onLayout={handleFixedSectionLayout}
+              >
+                {/* Header */}
+                <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
+                  <View style={styles.headerLeft}>
+                    <Text style={[styles.title, { color: themeColors.text }]}>
+                      Session
                     </Text>
+                    {exerciseName && (
+                      <Text style={[styles.subtitle, { color: themeColors.textSecondary }]}>
+                        {exerciseName}
+                      </Text>
+                    )}
+                  </View>
+                  <Pressable 
+                    onPress={onClose} 
+                    hitSlop={12}
+                    style={[styles.closeButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                  >
+                    <MaterialCommunityIcons name="close" size={20} color={themeColors.textSecondary} />
+                  </Pressable>
+                </View>
+
+                {/* Date/Time Meta Row */}
+                <View style={styles.metaRow}>
+                  <MaterialCommunityIcons name="calendar-outline" size={16} color={themeColors.textSecondary} />
+                  <Text style={[styles.metaDate, { color: themeColors.text }]}>
+                    {formatDate(sessionDetails.date)}
+                  </Text>
+                  <Text style={[styles.metaTime, { color: themeColors.textSecondary }]}>
+                    {formatTime(sessionDetails.date)}
+                  </Text>
+                </View>
+
+                {/* Summary Section */}
+                <View style={styles.summarySection}>
+                  <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+                    Summary
+                  </Text>
+                  
+                  {/* Stat Tiles Row */}
+                  <View style={styles.statRow}>
+                    <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
+                      <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                        Volume
+                      </Text>
+                      <Text style={[styles.statValue, { color: themeColors.text }]}>
+                        {sessionDetails.totalVolume.toFixed(0)}
+                      </Text>
+                      <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>kg</Text>
+                    </View>
+                    <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
+                      <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                        Reps
+                      </Text>
+                      <Text style={[styles.statValue, { color: themeColors.text }]}>
+                        {sessionDetails.totalReps}
+                      </Text>
+                      <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>total</Text>
+                    </View>
+                    {sessionDetails.estimatedE1RM && (
+                      <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
+                        <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                          Est. 1RM
+                        </Text>
+                        <Text style={[styles.statValue, { color: themeColors.primary }]}>
+                          {sessionDetails.estimatedE1RM.toFixed(0)}
+                        </Text>
+                        <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>kg</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Best Set Row */}
+                  {sessionDetails.bestSet && (
+                    <View style={[styles.bestSetRow, { borderColor: themeColors.border }]}>
+                      <Text style={[styles.bestSetLabel, { color: themeColors.textSecondary }]}>
+                        Best Set
+                      </Text>
+                      <Text style={[styles.bestSetValue, { color: themeColors.text }]}>
+                        {sessionDetails.bestSet.weight} kg × {sessionDetails.bestSet.reps} reps
+                      </Text>
+                    </View>
                   )}
                 </View>
-                <Pressable 
-                  onPress={onClose} 
-                  hitSlop={12}
-                  style={[styles.closeButton, { backgroundColor: themeColors.surfaceSecondary }]}
-                >
-                  <MaterialCommunityIcons name="close" size={20} color={themeColors.textSecondary} />
-                </Pressable>
+
+                {/* Divider */}
+                <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
               </View>
 
-              {/* Date/Time Meta Row - matches History workoutDateContainer pattern */}
-              <View style={styles.metaRow}>
-                <MaterialCommunityIcons name="calendar-outline" size={16} color={themeColors.textSecondary} />
-                <Text style={[styles.metaDate, { color: themeColors.text }]}>
-                  {formatDate(sessionDetails.date)}
-                </Text>
-                <Text style={[styles.metaTime, { color: themeColors.textSecondary }]}>
-                  {formatTime(sessionDetails.date)}
-                </Text>
-              </View>
-
-              {/* Sets Section - matches History setsContainer pattern */}
-              <View style={styles.setsSection}>
-                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+              {/* ===== SETS SECTION (Title + Scrollable List) ===== */}
+              {/* Explicit height computed from cardMaxHeight - fixedHeight */}
+              <View 
+                style={[
+                  styles.setsContainer,
+                  { height: availableForSets, minHeight: MIN_SETS_HEIGHT }
+                ]}
+                onLayout={handleSetsContainerLayout}
+              >
+                {/* Sets Title */}
+                <Text style={[styles.sectionTitle, styles.setsSectionTitle, { color: themeColors.text }]}>
                   Sets ({sessionDetails.totalSets})
                 </Text>
-                <View style={styles.setsList}>
+                
+                {/* ScrollView - flex: 1 fills remaining space in setsContainer */}
+                <ScrollView 
+                  onLayout={handleScrollViewLayout}
+                  style={styles.setsScrollView}
+                  contentContainerStyle={styles.setsScrollContent}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                  bounces={false}
+                >
                   {sessionDetails.sets.map((set, index) => (
                     <SetItem
                       key={index}
@@ -130,61 +266,9 @@ export default function DataPointModal({
                       variant="compact"
                     />
                   ))}
-                </View>
+                </ScrollView>
               </View>
-
-              {/* Summary Section - compact stat tiles */}
-              <View style={styles.summarySection}>
-                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-                  Summary
-                </Text>
-                
-                {/* Stat Tiles Row */}
-                <View style={styles.statRow}>
-                  <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
-                    <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
-                      Volume
-                    </Text>
-                    <Text style={[styles.statValue, { color: themeColors.text }]}>
-                      {sessionDetails.totalVolume.toFixed(0)}
-                    </Text>
-                    <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>kg</Text>
-                  </View>
-                  <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
-                    <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
-                      Reps
-                    </Text>
-                    <Text style={[styles.statValue, { color: themeColors.text }]}>
-                      {sessionDetails.totalReps}
-                    </Text>
-                    <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>total</Text>
-                  </View>
-                  {sessionDetails.estimatedE1RM && (
-                    <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
-                      <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
-                        Est. 1RM
-                      </Text>
-                      <Text style={[styles.statValue, { color: themeColors.primary }]}>
-                        {sessionDetails.estimatedE1RM.toFixed(0)}
-                      </Text>
-                      <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>kg</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Best Set Row */}
-                {sessionDetails.bestSet && (
-                  <View style={[styles.bestSetRow, { borderColor: themeColors.border }]}>
-                    <Text style={[styles.bestSetLabel, { color: themeColors.textSecondary }]}>
-                      Best Set
-                    </Text>
-                    <Text style={[styles.bestSetValue, { color: themeColors.text }]}>
-                      {sessionDetails.bestSet.weight} kg × {sessionDetails.bestSet.reps} reps
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
+            </>
           ) : (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons 
@@ -200,14 +284,14 @@ export default function DataPointModal({
               </Text>
             </View>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  // Overlay - matches History modalOverlay
+  // Overlay - centered flex container
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -216,12 +300,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   
-  // Container - matches History card style (borderRadius: 12)
+  // Container - content-sized card with maxHeight cap
   container: {
     borderRadius: 16,
     width: "100%",
-    minHeight: 150,
-    flexShrink: 1,
+    minHeight: 200,
     overflow: "hidden",
     // Subtle shadow for elevation
     shadowColor: "#000",
@@ -231,22 +314,24 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   
-  // ScrollView
-  scrollView: {
-    flexGrow: 1,
-    flexShrink: 1,
-  },
-  scrollContent: {
-    padding: 16,
+  // Fixed section - header, date, summary
+  // flexShrink: 0 - maintains natural height, never shrinks
+  // overflow: hidden - prevents children from painting outside bounds (no visual overlap)
+  fixedSection: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 0,
+    flexShrink: 0,
+    overflow: "hidden",
   },
   
-  // Header - matches History workoutHeader pattern
+  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingBottom: 12,
-    marginBottom: 12,
+    paddingBottom: 8,
+    marginBottom: 8,
     borderBottomWidth: 1,
   },
   headerLeft: {
@@ -269,12 +354,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   
-  // Meta Row - matches History workoutDateContainer
+  // Meta Row
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   metaDate: {
     fontSize: 15,
@@ -284,65 +369,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   
-  // Sets Section - matches History setsContainer
-  setsSection: {
-    marginBottom: 16,
+  // Summary Section
+  summarySection: {
+    gap: 8,
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 6,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  setsList: {
-    gap: 4,
-  },
-  
-  // Summary Section
-  summarySection: {
-    gap: 10,
+  setsSectionTitle: {
+    marginBottom: 8,
   },
   statRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   statTile: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
     alignItems: "center",
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "500",
     marginBottom: 2,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
   },
   statUnit: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "500",
   },
   bestSetRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderRadius: 8,
   },
   bestSetLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
   },
   bestSetValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
+  },
+  
+  // Divider
+  divider: {
+    height: 1,
+    marginTop: 8,
+  },
+  
+  // Sets Container - explicit height computed from measurement
+  // Height is set dynamically: cardMaxHeight - fixedHeight
+  setsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  
+  // ScrollView - fills setsContainer
+  setsScrollView: {
+    flex: 1,
+  },
+  setsScrollContent: {
+    paddingBottom: 24,
+    gap: 4,
   },
   
   // Loading State
@@ -355,7 +459,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   
-  // Empty State - matches History empty pattern
+  // Empty State
   emptyContainer: {
     paddingVertical: 40,
     paddingHorizontal: 24,
