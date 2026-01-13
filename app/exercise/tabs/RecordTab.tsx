@@ -23,8 +23,8 @@ import {
 import { detectAndRecordPRs } from "../../../lib/pr/detection";
 import { colors } from "../../../lib/theme/colors";
 import { useTheme } from "../../../lib/theme/ThemeContext";
-import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 import { timerStore, type Timer } from "../../../lib/timerStore";
+import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 
 export default function RecordTab() {
   const { themeColors } = useTheme();

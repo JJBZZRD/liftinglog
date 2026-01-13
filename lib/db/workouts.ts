@@ -1,8 +1,8 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { computeE1rm } from "../pr";
 import { db } from "./connection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
 import { getGlobalFormula } from "./settings";
-import { computeE1rm } from "../pr";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
