@@ -190,7 +190,10 @@ sqlite.execSync(`
   CREATE INDEX IF NOT EXISTS idx_sets_performed_at ON sets(performed_at);
   CREATE INDEX IF NOT EXISTS idx_sets_group ON sets(set_group_id);
   CREATE INDEX IF NOT EXISTS idx_sets_exercise_reps ON sets(exercise_id, reps);
+  CREATE INDEX IF NOT EXISTS idx_sets_workout_exercise_id ON sets(workout_exercise_id);
   CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(workout_id, order_index);
+  CREATE INDEX IF NOT EXISTS idx_workout_exercises_performed_at ON workout_exercises(performed_at);
+  CREATE INDEX IF NOT EXISTS idx_workout_exercises_completed_at ON workout_exercises(completed_at);
   CREATE INDEX IF NOT EXISTS idx_pr_events_exercise_time ON pr_events(exercise_id, occurred_at);
   CREATE INDEX IF NOT EXISTS idx_planned_workouts_date ON planned_workouts(planned_for);
 `);

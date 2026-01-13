@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeE1rm } from "../pr";
-import { db } from "./connection";
+import { db, sqlite } from "./connection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
 import { getGlobalFormula } from "./settings";
 
@@ -462,4 +462,424 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
   };
 }
 
+// ============================================================================
+// Workout History Types and Functions
+// ============================================================================
+
+/**
+ * dayKey format: "YYYY-MM-DD" (derived from SQLite strftime for DST safety)
+ */
+export type WorkoutDaySummary = {
+  dayKey: string;               // stable identifier, e.g. "2025-01-13"
+  displayDate: number;          // timestamp for JS date formatting
+  totalExercises: number;       // count of completed exercise entries
+  totalSets: number;            // total sets across entries
+  notesPreview: string | null;  // merged preview if notes exist
+};
+
+export type WorkoutDayExerciseDetail = {
+  workoutExerciseId: number;
+  exerciseId: number;
+  exerciseName: string;
+  note: string | null;
+  bestSet: { weightKg: number; reps: number; e1rm: number } | null;
+};
+
+export type WorkoutDayDetails = {
+  dayKey: string;
+  exercises: WorkoutDayExerciseDetail[];
+  hasMoreExercises: boolean;
+  totalVolumeKg: number;
+  bestE1rmKg: number | null;
+};
+
+/**
+ * Convert a dayKey (YYYY-MM-DD) to a local timestamp for display formatting
+ */
+export function dayKeyToTimestamp(dayKey: string): number {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Date(year, month - 1, day).getTime();
+}
+
+/**
+ * List workout days with pagination.
+ * Groups completed exercise entries by local calendar day using SQLite strftime.
+ */
+export async function listWorkoutDays(params: {
+  limit: number;
+  offset: number;
+}): Promise<WorkoutDaySummary[]> {
+  const { limit, offset } = params;
+
+  const stmt = sqlite.prepareSync(`
+    SELECT 
+      strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
+      MIN(we.performed_at) AS displayDate,
+      COUNT(DISTINCT we.id) AS totalExercises,
+      (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id IN (
+        SELECT we2.id FROM workout_exercises we2 
+        WHERE we2.completed_at IS NOT NULL 
+          AND strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+      )) AS totalSets,
+      GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
+    FROM workout_exercises we
+    WHERE we.completed_at IS NOT NULL
+    GROUP BY dayKey
+    ORDER BY dayKey DESC
+    LIMIT ? OFFSET ?
+  `);
+
+  try {
+    const result = stmt.executeSync([limit, offset]);
+    const rows = result.getAllSync() as Array<{
+      dayKey: string;
+      displayDate: number;
+      totalExercises: number;
+      totalSets: number;
+      notesPreview: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      dayKey: row.dayKey,
+      displayDate: row.displayDate,
+      totalExercises: row.totalExercises,
+      totalSets: row.totalSets,
+      notesPreview: row.notesPreview,
+    }));
+  } finally {
+    stmt.finalizeSync();
+  }
+}
+
+/**
+ * Get detailed exercise information for a specific workout day.
+ * Returns exercises (limited to 26 for A-Z labeling) with best set E1RM computed in JS.
+ */
+export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDetails> {
+  // Get all completed exercise entries for this dayKey (limit 27 to detect hasMore)
+  const stmt = sqlite.prepareSync(`
+    SELECT 
+      we.id AS workoutExerciseId,
+      we.exercise_id AS exerciseId,
+      e.name AS exerciseName,
+      we.note
+    FROM workout_exercises we
+    INNER JOIN exercises e ON we.exercise_id = e.id
+    WHERE we.completed_at IS NOT NULL
+      AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+    ORDER BY we.performed_at
+    LIMIT 27
+  `);
+
+  let entries: Array<{
+    workoutExerciseId: number;
+    exerciseId: number;
+    exerciseName: string;
+    note: string | null;
+  }>;
+
+  try {
+    const result = stmt.executeSync([dayKey]);
+    entries = result.getAllSync() as typeof entries;
+  } finally {
+    stmt.finalizeSync();
+  }
+
+  const hasMoreExercises = entries.length > 26;
+  const entriesToProcess = entries.slice(0, 26);
+
+  // Get global E1RM formula
+  const formula = getGlobalFormula();
+
+  const exercisesResult: WorkoutDayExerciseDetail[] = [];
+  let totalVolumeKg = 0;
+  let bestE1rmKg: number | null = null;
+
+  for (const entry of entriesToProcess) {
+    // Get all sets for this workout_exercise
+    const entrySets = await listSetsForWorkoutExercise(entry.workoutExerciseId);
+
+    let bestSet: WorkoutDayExerciseDetail["bestSet"] = null;
+    let maxE1rm = 0;
+
+    for (const set of entrySets) {
+      if (set.weightKg !== null && set.reps !== null && set.reps > 0 && set.weightKg > 0) {
+        // Accumulate volume
+        totalVolumeKg += set.weightKg * set.reps;
+
+        // Compute E1RM
+        const e1rm = computeE1rm(formula, set.weightKg, set.reps);
+
+        // Track best E1RM for this exercise
+        if (
+          e1rm > maxE1rm ||
+          (e1rm === maxE1rm && bestSet && set.weightKg > bestSet.weightKg) ||
+          (e1rm === maxE1rm && bestSet && set.weightKg === bestSet.weightKg && set.reps > bestSet.reps)
+        ) {
+          maxE1rm = e1rm;
+          bestSet = {
+            weightKg: set.weightKg,
+            reps: set.reps,
+            e1rm: Math.round(e1rm),
+          };
+        }
+
+        // Track best E1RM for the entire day
+        if (bestE1rmKg === null || e1rm > bestE1rmKg) {
+          bestE1rmKg = Math.round(e1rm);
+        }
+      }
+    }
+
+    exercisesResult.push({
+      workoutExerciseId: entry.workoutExerciseId,
+      exerciseId: entry.exerciseId,
+      exerciseName: entry.exerciseName,
+      note: entry.note,
+      bestSet,
+    });
+  }
+
+  return {
+    dayKey,
+    exercises: exercisesResult,
+    hasMoreExercises,
+    totalVolumeKg: Math.round(totalVolumeKg),
+    bestE1rmKg,
+  };
+}
+
+/**
+ * Parse search query into alpha and numeric tokens.
+ * Handles patterns like "100", "100kg", "100lb", "100.5"
+ */
+function parseSearchTokens(query: string): { alpha: string[]; numeric: number[] } {
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  const alpha: string[] = [];
+  const numeric: number[] = [];
+
+  for (const token of tokens) {
+    // Match "100", "100kg", "100lb", "100.5"
+    const numMatch = token.match(/^(\d+(?:\.\d+)?)(kg|lb)?$/i);
+    if (numMatch) {
+      numeric.push(parseFloat(numMatch[1]));
+    } else {
+      alpha.push(token);
+    }
+  }
+  return { alpha, numeric };
+}
+
+/**
+ * Helper to intersect two sets of strings
+ */
+function intersectSets(setA: Set<string>, setB: Set<string>): Set<string> {
+  const result = new Set<string>();
+  for (const item of setA) {
+    if (setB.has(item)) {
+      result.add(item);
+    }
+  }
+  return result;
+}
+
+export interface SearchWorkoutDaysParams {
+  query: string;
+  startDate?: number | null;  // inclusive, local day start timestamp
+  endDate?: number | null;    // inclusive, local day end timestamp
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Search workout days based on query string and optional date range.
+ * Two-step approach: find matching dayKeys, then fetch summaries.
+ */
+export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promise<WorkoutDaySummary[]> {
+  const { query, startDate, endDate, limit, offset } = params;
+
+  // If no query and no date filter, just return regular list
+  if (!query.trim() && !startDate && !endDate) {
+    return listWorkoutDays({ limit, offset });
+  }
+
+  const { alpha, numeric } = parseSearchTokens(query);
+
+  // Build date filter clause
+  let dateFilterClause = "";
+  const dateParams: number[] = [];
+  if (startDate) {
+    dateFilterClause += " AND we.performed_at >= ?";
+    dateParams.push(startDate);
+  }
+  if (endDate) {
+    dateFilterClause += " AND we.performed_at <= ?";
+    dateParams.push(endDate);
+  }
+
+  // Step A: Find matching dayKeys
+  let matchingDayKeys: Set<string> | null = null;
+
+  // Search for alpha tokens (LIKE match on exercise name, notes)
+  for (const token of alpha) {
+    const likePattern = `%${token}%`;
+    const stmt = sqlite.prepareSync(`
+      SELECT DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey
+      FROM workout_exercises we
+      LEFT JOIN exercises e ON we.exercise_id = e.id
+      LEFT JOIN sets s ON s.workout_exercise_id = we.id
+      WHERE we.completed_at IS NOT NULL
+        ${dateFilterClause}
+        AND (
+          e.name LIKE ?
+          OR we.note LIKE ?
+          OR s.note LIKE ?
+        )
+    `);
+
+    try {
+      const result = stmt.executeSync([...dateParams, likePattern, likePattern, likePattern]);
+      const rows = result.getAllSync() as Array<{ dayKey: string }>;
+      const dayKeys = new Set(rows.map((r) => r.dayKey));
+
+      // Intersect with previous results
+      if (matchingDayKeys === null) {
+        matchingDayKeys = dayKeys;
+      } else {
+        matchingDayKeys = intersectSets(matchingDayKeys, dayKeys);
+      }
+    } finally {
+      stmt.finalizeSync();
+    }
+  }
+
+  // Search for numeric tokens (weight or reps)
+  for (const num of numeric) {
+    const stmt = sqlite.prepareSync(`
+      SELECT DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey
+      FROM workout_exercises we
+      INNER JOIN sets s ON s.workout_exercise_id = we.id
+      WHERE we.completed_at IS NOT NULL
+        ${dateFilterClause}
+        AND (s.reps = ? OR (s.weight_kg >= ? AND s.weight_kg <= ?))
+    `);
+
+    try {
+      const result = stmt.executeSync([...dateParams, num, num - 0.5, num + 0.5]);
+      const rows = result.getAllSync() as Array<{ dayKey: string }>;
+      const dayKeys = new Set(rows.map((r) => r.dayKey));
+
+      // Intersect with previous results
+      if (matchingDayKeys === null) {
+        matchingDayKeys = dayKeys;
+      } else {
+        matchingDayKeys = intersectSets(matchingDayKeys, dayKeys);
+      }
+    } finally {
+      stmt.finalizeSync();
+    }
+  }
+
+  // If we have search tokens but no matches, return empty
+  if ((alpha.length > 0 || numeric.length > 0) && (matchingDayKeys === null || matchingDayKeys.size === 0)) {
+    return [];
+  }
+
+  // If only date filter (no search tokens), query all days in range
+  if (alpha.length === 0 && numeric.length === 0) {
+    const stmt = sqlite.prepareSync(`
+      SELECT 
+        strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
+        MIN(we.performed_at) AS displayDate,
+        COUNT(DISTINCT we.id) AS totalExercises,
+        (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id IN (
+          SELECT we2.id FROM workout_exercises we2 
+          WHERE we2.completed_at IS NOT NULL 
+            AND strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+        )) AS totalSets,
+        GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
+      FROM workout_exercises we
+      WHERE we.completed_at IS NOT NULL
+        ${dateFilterClause}
+      GROUP BY dayKey
+      ORDER BY dayKey DESC
+      LIMIT ? OFFSET ?
+    `);
+
+    try {
+      const result = stmt.executeSync([...dateParams, limit, offset]);
+      const rows = result.getAllSync() as Array<{
+        dayKey: string;
+        displayDate: number;
+        totalExercises: number;
+        totalSets: number;
+        notesPreview: string | null;
+      }>;
+
+      return rows.map((row) => ({
+        dayKey: row.dayKey,
+        displayDate: row.displayDate,
+        totalExercises: row.totalExercises,
+        totalSets: row.totalSets,
+        notesPreview: row.notesPreview,
+      }));
+    } finally {
+      stmt.finalizeSync();
+    }
+  }
+
+  // Step B: Fetch summaries for matching dayKeys
+  const dayKeysArray = Array.from(matchingDayKeys!);
+  
+  // Sort by dayKey DESC for pagination
+  dayKeysArray.sort((a, b) => b.localeCompare(a));
+  
+  // Apply pagination to dayKeys
+  const paginatedDayKeys = dayKeysArray.slice(offset, offset + limit);
+  
+  if (paginatedDayKeys.length === 0) {
+    return [];
+  }
+
+  // Build IN clause with placeholders
+  const placeholders = paginatedDayKeys.map(() => '?').join(', ');
+  const stmt = sqlite.prepareSync(`
+    SELECT 
+      strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
+      MIN(we.performed_at) AS displayDate,
+      COUNT(DISTINCT we.id) AS totalExercises,
+      (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id IN (
+        SELECT we2.id FROM workout_exercises we2 
+        WHERE we2.completed_at IS NOT NULL 
+          AND strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+      )) AS totalSets,
+      GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
+    FROM workout_exercises we
+    WHERE we.completed_at IS NOT NULL
+      AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') IN (${placeholders})
+    GROUP BY dayKey
+    ORDER BY dayKey DESC
+  `);
+
+  try {
+    const result = stmt.executeSync(paginatedDayKeys);
+    const rows = result.getAllSync() as Array<{
+      dayKey: string;
+      displayDate: number;
+      totalExercises: number;
+      totalSets: number;
+      notesPreview: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      dayKey: row.dayKey,
+      displayDate: row.displayDate,
+      totalExercises: row.totalExercises,
+      totalSets: row.totalSets,
+      notesPreview: row.notesPreview,
+    }));
+  } finally {
+    stmt.finalizeSync();
+  }
+}
 

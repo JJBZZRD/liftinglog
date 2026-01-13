@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getLastWorkoutDay, type LastWorkoutDayResult } from "../../lib/db/workouts";
@@ -52,8 +53,7 @@ export default function OverviewScreen() {
   };
 
   const handleWorkoutHistoryPress = () => {
-    // TODO: Navigate to full workout history screen
-    console.log("Navigate to workout history");
+    router.push("/workout-history");
   };
 
   return (

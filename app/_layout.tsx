@@ -44,6 +44,10 @@ function RootLayoutContent() {
           name="edit-workout"
           options={{ presentation: "modal" }}
         />
+        <Stack.Screen
+          name="workout-history"
+          options={{ presentation: "card" }}
+        />
       </Stack>
     </GestureHandlerRootView>
   );
