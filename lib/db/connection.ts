@@ -229,6 +229,20 @@ try {
   // Column already exists, ignore
 }
 
+// Add completed_at column to workout_exercises table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE workout_exercises ADD COLUMN completed_at INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+
+// Add performed_at column to workout_exercises table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE workout_exercises ADD COLUMN performed_at INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+
 export const db = drizzle(sqlite);
 
 

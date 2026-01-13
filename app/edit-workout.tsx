@@ -11,9 +11,10 @@ import {
   deleteSet,
   listSetsForExercise,
   listWorkoutExercises,
+  updateExerciseEntryDate,
   updateSet,
-  updateWorkoutDate,
   type SetRow,
+  type WorkoutExercise,
 } from "../lib/db/workouts";
 import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
@@ -43,22 +44,25 @@ export default function EditWorkoutScreen() {
     setSelectedDate(date);
     setShowDatePicker(false);
     
-    // Update workout and sets in background
-    if (workoutId) {
-      updateWorkoutDate(workoutId, date.getTime());
+    // Update exercise entry date and sets in background
+    if (workoutExerciseId) {
+      updateExerciseEntryDate(workoutExerciseId, date.getTime());
       sets.forEach((set) => {
         updateSet(set.id, { performed_at: date.getTime() });
       });
     }
-  }, [workoutId, sets]);
+  }, [workoutExerciseId, sets]);
 
   const loadWorkout = useCallback(async () => {
     if (!exerciseId || !workoutId) return;
 
-    const workoutExercises = await listWorkoutExercises(workoutId);
-    const existingWorkoutExercise = workoutExercises.find((we) => we.exerciseId === exerciseId);
+    const workoutExercisesList = await listWorkoutExercises(workoutId);
+    const existingWorkoutExercise = workoutExercisesList.find((we) => we.exerciseId === exerciseId);
+    let currentWorkoutExercise: WorkoutExercise | null = null;
+    
     if (existingWorkoutExercise) {
       setWorkoutExerciseId(existingWorkoutExercise.id);
+      currentWorkoutExercise = existingWorkoutExercise;
     } else {
       const newWorkoutExerciseId = await addWorkoutExercise({
         workout_id: workoutId,
@@ -71,7 +75,10 @@ export default function EditWorkoutScreen() {
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
     
-    if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
+    // Load date from workout_exercise.performed_at, fallback to first set's date
+    if (currentWorkoutExercise?.performedAt) {
+      setSelectedDate(new Date(currentWorkoutExercise.performedAt));
+    } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
       setSelectedDate(new Date(exerciseSets[0].performedAt));
     }
   }, [exerciseId, workoutId]);

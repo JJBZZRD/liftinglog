@@ -27,6 +27,8 @@ export const workoutExercises = sqliteTable("workout_exercises", {
   note: text("note"),
   currentWeight: real("current_weight"),
   currentReps: integer("current_reps"),
+  completedAt: integer("completed_at"),
+  performedAt: integer("performed_at"),
 });
 
 export const sets = sqliteTable("sets", {

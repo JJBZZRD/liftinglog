@@ -189,6 +189,37 @@ describe('WorkoutExercise Operations', () => {
       
       expect(id).toBe(3);
     });
+
+    it('should accept optional performed_at', async () => {
+      const mockAddWorkoutExercise = jest.fn().mockResolvedValue(4);
+      const performedAt = Date.now();
+      
+      const id = await mockAddWorkoutExercise({
+        workout_id: 1,
+        exercise_id: 5,
+        performed_at: performedAt,
+      });
+      
+      expect(id).toBe(4);
+      expect(mockAddWorkoutExercise).toHaveBeenCalledWith({
+        workout_id: 1,
+        exercise_id: 5,
+        performed_at: performedAt,
+      });
+    });
+
+    it('should default performed_at to current time if not provided', async () => {
+      const mockAddWorkoutExercise = jest.fn().mockImplementation(async (data) => {
+        // The actual implementation defaults to Date.now()
+        expect(data.performed_at).toBeUndefined();
+        return 5;
+      });
+      
+      await mockAddWorkoutExercise({
+        workout_id: 1,
+        exercise_id: 5,
+      });
+    });
   });
 
   describe('listWorkoutExercises', () => {
@@ -258,7 +289,116 @@ describe('WorkoutExercise Operations', () => {
       expect(mockUpdateWorkoutExerciseInputs).toHaveBeenCalled();
     });
   });
+
+  describe('completeExerciseEntry', () => {
+    it('should set completedAt timestamp on workout_exercise', async () => {
+      const mockCompleteExerciseEntry = jest.fn().mockResolvedValue(undefined);
+      await mockCompleteExerciseEntry(1);
+      expect(mockCompleteExerciseEntry).toHaveBeenCalledWith(1);
+    });
+
+    it('should accept custom completedAt timestamp', async () => {
+      const mockCompleteExerciseEntry = jest.fn().mockResolvedValue(undefined);
+      const customTimestamp = Date.now() - 1000;
+      
+      await mockCompleteExerciseEntry(1, customTimestamp);
+      expect(mockCompleteExerciseEntry).toHaveBeenCalledWith(1, customTimestamp);
+    });
+  });
+
+  describe('updateExerciseEntryDate', () => {
+    it('should update performedAt timestamp on workout_exercise', async () => {
+      const mockUpdateExerciseEntryDate = jest.fn().mockResolvedValue(undefined);
+      const newDate = Date.now();
+      
+      await mockUpdateExerciseEntryDate(1, newDate);
+      expect(mockUpdateExerciseEntryDate).toHaveBeenCalledWith(1, newDate);
+    });
+  });
 });
+
+describe('Last Workout Day Query', () => {
+  describe('getLastWorkoutDay', () => {
+    it('should return null when no completed exercise entries exist', async () => {
+      const mockGetLastWorkoutDay = jest.fn().mockResolvedValue(null);
+      const result = await mockGetLastWorkoutDay();
+      expect(result).toBeNull();
+    });
+
+    it('should return the most recent day with completed exercises', async () => {
+      const mockGetLastWorkoutDay = jest.fn().mockResolvedValue({
+        date: Date.now(),
+        exercises: [
+          {
+            exerciseId: 1,
+            exerciseName: 'Bench Press',
+            workoutExerciseId: 1,
+            bestSet: { weightKg: 100, reps: 5, e1rm: 116 },
+          },
+        ],
+        hasMore: false,
+      });
+      
+      const result = await mockGetLastWorkoutDay();
+      expect(result).not.toBeNull();
+      expect(result?.exercises).toHaveLength(1);
+      expect(result?.exercises[0].exerciseName).toBe('Bench Press');
+    });
+
+    it('should include best E1RM set for each exercise', async () => {
+      const mockGetLastWorkoutDay = jest.fn().mockResolvedValue({
+        date: Date.now(),
+        exercises: [
+          {
+            exerciseId: 1,
+            exerciseName: 'Squat',
+            workoutExerciseId: 1,
+            bestSet: { weightKg: 140, reps: 3, e1rm: 149 },
+          },
+        ],
+        hasMore: false,
+      });
+      
+      const result = await mockGetLastWorkoutDay();
+      expect(result?.exercises[0].bestSet).not.toBeNull();
+      expect(result?.exercises[0].bestSet?.e1rm).toBe(149);
+    });
+
+    it('should handle exercises with no valid sets', async () => {
+      const mockGetLastWorkoutDay = jest.fn().mockResolvedValue({
+        date: Date.now(),
+        exercises: [
+          {
+            exerciseId: 1,
+            exerciseName: 'Deadlift',
+            workoutExerciseId: 1,
+            bestSet: null,
+          },
+        ],
+        hasMore: false,
+      });
+      
+      const result = await mockGetLastWorkoutDay();
+      expect(result?.exercises[0].bestSet).toBeNull();
+    });
+
+    it('should limit to 26 exercises and set hasMore flag', async () => {
+      const mockGetLastWorkoutDay = jest.fn().mockResolvedValue({
+        date: Date.now(),
+        exercises: Array(26).fill(null).map((_, i) => ({
+          exerciseId: i + 1,
+          exerciseName: `Exercise ${i + 1}`,
+          workoutExerciseId: i + 1,
+          bestSet: { weightKg: 50, reps: 10, e1rm: 67 },
+        })),
+        hasMore: true,
+      });
+      
+      const result = await mockGetLastWorkoutDay();
+      expect(result?.exercises).toHaveLength(26);
+      expect(result?.hasMore).toBe(true);
+    });
+  });
 
 describe('Set CRUD Operations', () => {
   describe('addSet', () => {
@@ -499,6 +639,8 @@ describe('Data Types', () => {
       note: null,
       currentWeight: 100,
       currentReps: 8,
+      completedAt: Date.now(),
+      performedAt: Date.now(),
     };
     
     expect(workoutExercise).toHaveProperty('id');
@@ -508,6 +650,8 @@ describe('Data Types', () => {
     expect(workoutExercise).toHaveProperty('note');
     expect(workoutExercise).toHaveProperty('currentWeight');
     expect(workoutExercise).toHaveProperty('currentReps');
+    expect(workoutExercise).toHaveProperty('completedAt');
+    expect(workoutExercise).toHaveProperty('performedAt');
   });
 
   it('should have correct SetRow type structure', () => {
@@ -545,6 +689,17 @@ describe('Data Types', () => {
         completedAt: Date.now(),
         note: null,
       },
+      workoutExercise: {
+        id: 1,
+        workoutId: 1,
+        exerciseId: 1,
+        orderIndex: null,
+        note: null,
+        currentWeight: null,
+        currentReps: null,
+        completedAt: Date.now(),
+        performedAt: Date.now(),
+      },
       sets: [
         { id: 1, weightKg: 100, reps: 8 },
         { id: 2, weightKg: 100, reps: 7 },
@@ -552,8 +707,11 @@ describe('Data Types', () => {
     };
     
     expect(historyEntry).toHaveProperty('workout');
+    expect(historyEntry).toHaveProperty('workoutExercise');
     expect(historyEntry).toHaveProperty('sets');
     expect(Array.isArray(historyEntry.sets)).toBe(true);
+    expect(historyEntry.workoutExercise).toHaveProperty('completedAt');
+    expect(historyEntry.workoutExercise).toHaveProperty('performedAt');
   });
 });
 

@@ -10,13 +10,13 @@ import { getLastRestSeconds, setLastRestSeconds } from "../../../lib/db/exercise
 import {
   addSet,
   addWorkoutExercise,
-  completeWorkout,
+  completeExerciseEntry,
   deleteSet,
+  getOpenWorkoutExercise,
   getOrCreateActiveWorkout,
-  listSetsForExercise,
-  listWorkoutExercises,
+  listSetsForWorkoutExercise,
+  updateExerciseEntryDate,
   updateSet,
-  updateWorkoutDate,
   updateWorkoutExerciseInputs,
   type SetRow,
 } from "../../../lib/db/workouts";
@@ -57,11 +57,11 @@ export default function RecordTab() {
     setSelectedDate(date);
     setShowDatePicker(false);
     
-    // Update workout date in background
-    if (workoutId) {
-      updateWorkoutDate(workoutId, date.getTime());
+    // Update exercise entry date in background
+    if (workoutExerciseId) {
+      updateExerciseEntryDate(workoutExerciseId, date.getTime());
     }
-  }, [workoutId]);
+  }, [workoutExerciseId]);
 
   const loadWorkout = useCallback(async () => {
     if (!exerciseId) return;
@@ -69,31 +69,36 @@ export default function RecordTab() {
     const activeWorkoutId = await getOrCreateActiveWorkout();
     setWorkoutId(activeWorkoutId);
 
-    const workoutExercisesList = await listWorkoutExercises(activeWorkoutId);
-    const existingWorkoutExercise = workoutExercisesList.find(
-      (we) => we.exerciseId === exerciseId
-    );
+    // Find an OPEN (not completed) workout_exercise entry for this exercise
+    const openWorkoutExercise = await getOpenWorkoutExercise(activeWorkoutId, exerciseId);
 
     let weId: number;
-    if (existingWorkoutExercise) {
-      weId = existingWorkoutExercise.id;
+    if (openWorkoutExercise) {
+      // Reuse existing open entry
+      weId = openWorkoutExercise.id;
       setWorkoutExerciseId(weId);
       
-      if (existingWorkoutExercise.currentWeight !== null) {
-        setWeightState(String(existingWorkoutExercise.currentWeight));
+      if (openWorkoutExercise.currentWeight !== null) {
+        setWeightState(String(openWorkoutExercise.currentWeight));
       }
-      if (existingWorkoutExercise.currentReps !== null) {
-        setRepsState(String(existingWorkoutExercise.currentReps));
+      if (openWorkoutExercise.currentReps !== null) {
+        setRepsState(String(openWorkoutExercise.currentReps));
       }
     } else {
+      // No open entry exists - create a new one
       weId = await addWorkoutExercise({
         workout_id: activeWorkoutId,
         exercise_id: exerciseId,
+        performed_at: selectedDate.getTime(),
       });
       setWorkoutExerciseId(weId);
+      // Reset input fields for new entry
+      setWeightState("");
+      setRepsState("");
     }
 
-    const exerciseSets = await listSetsForExercise(activeWorkoutId, exerciseId);
+    // List sets for THIS workout_exercise entry only (not all sets for the exercise)
+    const exerciseSets = await listSetsForWorkoutExercise(weId);
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
 
@@ -167,17 +172,17 @@ export default function RecordTab() {
     await loadWorkout();
   }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
 
-  const handleCompleteWorkout = useCallback(async () => {
-    if (!workoutId) return;
+  const handleCompleteExercise = useCallback(async () => {
+    if (!workoutExerciseId) return;
     
     if (currentTimer) {
       await timerStore.deleteTimer(currentTimer.id);
     }
     
-    // Complete workout with the selected date
-    await completeWorkout(workoutId, selectedDate.getTime());
+    // Complete exercise entry with the selected date
+    await completeExerciseEntry(workoutExerciseId, selectedDate.getTime());
     router.back();
-  }, [workoutId, currentTimer, selectedDate]);
+  }, [workoutExerciseId, currentTimer, selectedDate]);
 
   const handleTimerPress = useCallback(async () => {
     if (!exerciseId) return;
@@ -372,12 +377,12 @@ export default function RecordTab() {
         </Pressable>
         <Pressable 
           style={[styles.actionButton, { backgroundColor: themeColors.primary }, sets.length === 0 && { backgroundColor: themeColors.surfaceSecondary }]} 
-          onPress={handleCompleteWorkout}
+          onPress={handleCompleteExercise}
           disabled={sets.length === 0}
         >
           <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? themeColors.textTertiary : themeColors.surface} />
           <Text style={[styles.actionButtonText, { color: themeColors.surface }, sets.length === 0 && { color: themeColors.textTertiary }]}>
-            Complete Workout
+            Complete Exercise
           </Text>
         </Pressable>
       </View>

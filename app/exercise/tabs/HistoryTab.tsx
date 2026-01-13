@@ -87,8 +87,8 @@ export default function HistoryTab() {
   };
 
   const handleLongPress = useCallback((entry: WorkoutHistoryEntry) => {
-    // Only show edit/delete modal for completed workouts
-    const isCompleted = entry.workout.completedAt !== null;
+    // Only show edit/delete modal for completed exercise entries
+    const isCompleted = entry.workoutExercise?.completedAt !== null;
     if (!isCompleted) return;
     
     setSelectedWorkout(entry);
@@ -156,8 +156,9 @@ export default function HistoryTab() {
         keyExtractor={(item) => String(item.workout.id)}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
-          const workoutDate = item.workout.completedAt ?? item.workout.startedAt;
-          const isCompleted = item.workout.completedAt !== null;
+          // Use workoutExercise dates for display, fall back to workout dates
+          const workoutDate = item.workoutExercise?.performedAt ?? item.workoutExercise?.completedAt ?? item.workout.startedAt;
+          const isCompleted = item.workoutExercise?.completedAt !== null;
 
           return (
             <Pressable
