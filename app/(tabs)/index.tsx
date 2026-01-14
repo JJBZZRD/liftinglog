@@ -56,6 +56,21 @@ export default function OverviewScreen() {
     router.push("/workout-history");
   };
 
+  // Convert timestamp to dayKey format (YYYY-MM-DD) for navigation
+  const timestampToDayKey = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleLastWorkoutPress = () => {
+    if (!lastWorkout) return;
+    const dayKey = timestampToDayKey(lastWorkout.date);
+    router.push({ pathname: "/workout/[dayKey]", params: { dayKey } });
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -140,7 +155,7 @@ export default function OverviewScreen() {
               </Text>
             </View>
           ) : (
-            <View style={styles.lastWorkoutContent}>
+            <Pressable style={styles.lastWorkoutContent} onPress={handleLastWorkoutPress}>
               {/* Last Workout Header */}
               <View style={styles.lastWorkoutHeader}>
                 <Text style={[styles.lastWorkoutLabel, { color: themeColors.textSecondary }]}>
@@ -152,11 +167,7 @@ export default function OverviewScreen() {
               </View>
 
               {/* Exercise List */}
-              <ScrollView
-                style={styles.exerciseList}
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-              >
+              <View style={styles.exerciseList}>
                 {lastWorkout.exercises.map((exercise, index) => (
                   <View key={exercise.workoutExerciseId} style={styles.exerciseItem}>
                     {/* Alphabet Circle */}
@@ -189,8 +200,8 @@ export default function OverviewScreen() {
                     Showing first 26 exercises
                   </Text>
                 )}
-              </ScrollView>
-            </View>
+              </View>
+            </Pressable>
           )}
         </View>
       </ScrollView>
