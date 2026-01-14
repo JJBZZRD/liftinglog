@@ -59,6 +59,16 @@ export async function deleteWorkout(id: number): Promise<void> {
   await db.delete(workouts).where(eq(workouts.id, id)).run();
 }
 
+/**
+ * Delete a workout_exercise entry and its associated sets.
+ */
+export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<void> {
+  // Delete associated sets first
+  await db.delete(sets).where(eq(sets.workoutExerciseId, workoutExerciseId)).run();
+  // Then delete the workout_exercise entry
+  await db.delete(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId)).run();
+}
+
 export async function addWorkoutExercise(args: {
   workout_id: number;
   exercise_id: number;

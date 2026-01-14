@@ -4,6 +4,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
 import SetItem from "../../components/lists/SetItem";
 import {
   dayKeyToTimestamp,
+  deleteWorkoutExercise,
   getWorkoutDayPage,
   type WorkoutDayExerciseEntry,
   type WorkoutDayPageData,
@@ -29,6 +31,10 @@ export default function WorkoutDayScreen() {
 
   const [data, setData] = useState<WorkoutDayPageData | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Action modal state
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<WorkoutDayExerciseEntry | null>(null);
 
   // Compute display title from dayKey
   const displayDate = dayKey ? new Date(dayKeyToTimestamp(dayKey)) : new Date();
@@ -62,8 +68,18 @@ export default function WorkoutDayScreen() {
     }, [loadData])
   );
 
-  // Handle long press on exercise card - navigate to edit
+  // Handle long press on exercise card - show action modal
   const handleLongPressExercise = useCallback((entry: WorkoutDayExerciseEntry) => {
+    setSelectedEntry(entry);
+    setActionModalVisible(true);
+  }, []);
+
+  // Handle edit action - navigate to edit page
+  const handleEdit = useCallback(() => {
+    if (!selectedEntry) return;
+    setActionModalVisible(false);
+    const entry = selectedEntry;
+    setSelectedEntry(null);
     router.push({
       pathname: "/edit-workout",
       params: {
@@ -71,7 +87,21 @@ export default function WorkoutDayScreen() {
         exerciseName: entry.exerciseName,
       },
     });
-  }, []);
+  }, [selectedEntry]);
+
+  // Handle delete action - delete the workout exercise entry
+  const handleDelete = useCallback(async () => {
+    if (!selectedEntry) return;
+    
+    try {
+      await deleteWorkoutExercise(selectedEntry.workoutExerciseId);
+      setActionModalVisible(false);
+      setSelectedEntry(null);
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting workout exercise:", error);
+    }
+  }, [selectedEntry, loadData]);
 
   if (!dayKey) {
     return (
@@ -231,6 +261,57 @@ export default function WorkoutDayScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Action Modal */}
+      <Modal
+        visible={actionModalVisible}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {
+          setActionModalVisible(false);
+          setSelectedEntry(null);
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            setActionModalVisible(false);
+            setSelectedEntry(null);
+          }}
+        >
+          <View style={[styles.actionModalContent, { backgroundColor: themeColors.surface }]}>
+            <Pressable
+              style={[styles.actionButton, { borderBottomColor: themeColors.border }]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleEdit();
+              }}
+            >
+              <Text style={[styles.actionButtonText, { color: themeColors.primary }]}>Edit</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, styles.deleteActionButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDelete();
+              }}
+            >
+              <Text style={[styles.actionButtonText, { color: themeColors.error }]}>Delete</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, styles.cancelActionButton, { backgroundColor: themeColors.surfaceSecondary }]}
+              onPress={(e) => {
+                e.stopPropagation();
+                setActionModalVisible(false);
+                setSelectedEntry(null);
+              }}
+            >
+              <Text style={[styles.cancelActionButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -360,5 +441,39 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 12,
     fontStyle: "italic",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  actionModalContent: {
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 300,
+    padding: 0,
+    overflow: "hidden",
+  },
+  actionButton: {
+    padding: 16,
+    borderBottomWidth: 1,
+    alignItems: "center",
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  deleteActionButton: {
+    borderBottomWidth: 0,
+  },
+  cancelActionButton: {
+    borderBottomWidth: 0,
+  },
+  cancelActionButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
