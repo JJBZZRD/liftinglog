@@ -511,6 +511,58 @@ export function dayKeyToTimestamp(dayKey: string): number {
   return new Date(year, month - 1, day).getTime();
 }
 
+// ============================================================================
+// Quick Stats Functions
+// ============================================================================
+
+export type QuickStats = {
+  totalWorkoutDays: number;
+  totalVolumeKg: number;
+};
+
+/**
+ * Get quick stats for the home page.
+ * Returns total workout days and total volume.
+ */
+export async function getQuickStats(): Promise<QuickStats> {
+  // Count distinct workout days (days with completed exercises)
+  const daysStmt = sqlite.prepareSync(`
+    SELECT COUNT(DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')) AS totalDays
+    FROM workout_exercises we
+    WHERE we.completed_at IS NOT NULL
+  `);
+
+  let totalWorkoutDays = 0;
+  try {
+    const result = daysStmt.executeSync([]);
+    const rows = result.getAllSync() as Array<{ totalDays: number }>;
+    totalWorkoutDays = rows[0]?.totalDays ?? 0;
+  } finally {
+    daysStmt.finalizeSync();
+  }
+
+  // Calculate total volume (sum of weight_kg * reps for all sets)
+  const volumeStmt = sqlite.prepareSync(`
+    SELECT COALESCE(SUM(s.weight_kg * s.reps), 0) AS totalVolume
+    FROM sets s
+    WHERE s.weight_kg IS NOT NULL AND s.reps IS NOT NULL
+  `);
+
+  let totalVolumeKg = 0;
+  try {
+    const result = volumeStmt.executeSync([]);
+    const rows = result.getAllSync() as Array<{ totalVolume: number }>;
+    totalVolumeKg = Math.round(rows[0]?.totalVolume ?? 0);
+  } finally {
+    volumeStmt.finalizeSync();
+  }
+
+  return {
+    totalWorkoutDays,
+    totalVolumeKg,
+  };
+}
+
 /**
  * List workout days with pagination.
  * Groups completed exercise entries by local calendar day using SQLite strftime.

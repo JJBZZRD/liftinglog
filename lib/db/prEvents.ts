@@ -66,3 +66,11 @@ export async function getPREventsBySetIds(setIds: number[]): Promise<Map<number,
 export async function deletePREventsForSet(setId: number): Promise<void> {
   await db.delete(prEvents).where(eq(prEvents.setId, setId)).run();
 }
+
+/**
+ * Get total count of all PR events
+ */
+export async function getTotalPRCount(): Promise<number> {
+  const rows = await db.select().from(prEvents);
+  return rows.length;
+}

@@ -3,20 +3,29 @@ import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { getLastWorkoutDay, type LastWorkoutDayResult } from "../../lib/db/workouts";
+import { getTotalPRCount } from "../../lib/db/prEvents";
+import { getLastWorkoutDay, getQuickStats, type LastWorkoutDayResult, type QuickStats } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 export default function OverviewScreen() {
   const { themeColors } = useTheme();
   const [lastWorkout, setLastWorkout] = useState<LastWorkoutDayResult | null>(null);
+  const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
+  const [totalPRs, setTotalPRs] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const loadLastWorkout = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const result = await getLastWorkoutDay();
-      setLastWorkout(result);
+      const [workoutResult, statsResult, prCount] = await Promise.all([
+        getLastWorkoutDay(),
+        getQuickStats(),
+        getTotalPRCount(),
+      ]);
+      setLastWorkout(workoutResult);
+      setQuickStats(statsResult);
+      setTotalPRs(prCount);
     } catch (error) {
-      console.error("Error loading last workout:", error);
+      console.error("Error loading home data:", error);
     } finally {
       setLoading(false);
     }
@@ -25,8 +34,8 @@ export default function OverviewScreen() {
   // Refresh on screen focus
   useFocusEffect(
     useCallback(() => {
-      loadLastWorkout();
-    }, [loadLastWorkout])
+      loadData();
+    }, [loadData])
   );
 
   const formatDate = (timestamp: number) => {
@@ -94,17 +103,23 @@ export default function OverviewScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <MaterialCommunityIcons name="dumbbell" size={32} color={themeColors.primary} />
-              <Text style={[styles.statValue, { color: themeColors.text }]}>0</Text>
+              <Text style={[styles.statValue, { color: themeColors.text }]}>
+                {quickStats?.totalWorkoutDays ?? 0}
+              </Text>
               <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Workouts</Text>
             </View>
             <View style={styles.statItem}>
-              <MaterialCommunityIcons name="fire" size={32} color={themeColors.warning} />
-              <Text style={[styles.statValue, { color: themeColors.text }]}>0</Text>
-              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Day Streak</Text>
+              <MaterialCommunityIcons name="weight-kilogram" size={32} color={themeColors.warning} />
+              <Text style={[styles.statValue, { color: themeColors.text }]}>
+                {quickStats ? (quickStats.totalVolumeKg >= 1000 
+                  ? `${(quickStats.totalVolumeKg / 1000).toFixed(1)}k` 
+                  : quickStats.totalVolumeKg) : 0}
+              </Text>
+              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Volume (kg)</Text>
             </View>
             <View style={styles.statItem}>
               <MaterialCommunityIcons name="trophy" size={32} color={themeColors.success} />
-              <Text style={[styles.statValue, { color: themeColors.text }]}>0</Text>
+              <Text style={[styles.statValue, { color: themeColors.text }]}>{totalPRs}</Text>
               <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>PRs</Text>
             </View>
           </View>
