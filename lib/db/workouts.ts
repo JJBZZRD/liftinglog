@@ -883,3 +883,198 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   }
 }
 
+// ============================================================================
+// Workout Day Page Types and Functions
+// ============================================================================
+
+export type WorkoutDayExerciseEntry = {
+  workoutExerciseId: number;
+  exerciseId: number;
+  exerciseName: string;
+  performedAt: number;
+  note: string | null;
+  totalSets: number;
+  totalReps: number;
+  totalVolumeKg: number;
+  bestSet: { weightKg: number; reps: number; e1rm: number } | null;
+};
+
+export type WorkoutDayPageData = {
+  dayKey: string;
+  displayDate: number;
+  totals: {
+    totalExercises: number;
+    totalSets: number;
+    totalReps: number;
+    totalVolumeKg: number;
+    bestE1rmKg: number | null;
+  };
+  entries: WorkoutDayExerciseEntry[];
+  hasMore: boolean;
+};
+
+/**
+ * Get complete workout day page data for a specific dayKey.
+ * Optimized with bulk sets query to avoid N+1.
+ */
+export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageData | null> {
+  // Step 1: Query completed workout_exercises for the dayKey (limit 27 to detect overflow)
+  const entriesStmt = sqlite.prepareSync(`
+    SELECT 
+      we.id AS workoutExerciseId,
+      we.exercise_id AS exerciseId,
+      e.name AS exerciseName,
+      we.performed_at AS performedAt,
+      we.note
+    FROM workout_exercises we
+    INNER JOIN exercises e ON we.exercise_id = e.id
+    WHERE we.completed_at IS NOT NULL
+      AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+    ORDER BY COALESCE(we.order_index, 999999), e.name ASC
+    LIMIT 27
+  `);
+
+  let rawEntries: Array<{
+    workoutExerciseId: number;
+    exerciseId: number;
+    exerciseName: string;
+    performedAt: number;
+    note: string | null;
+  }>;
+
+  try {
+    const result = entriesStmt.executeSync([dayKey]);
+    rawEntries = result.getAllSync() as typeof rawEntries;
+  } finally {
+    entriesStmt.finalizeSync();
+  }
+
+  // No entries for this day
+  if (rawEntries.length === 0) {
+    return null;
+  }
+
+  // Check for overflow
+  const hasMore = rawEntries.length > 26;
+  const entriesToProcess = rawEntries.slice(0, 26);
+
+  // Get display date from first entry
+  const displayDate = entriesToProcess[0].performedAt;
+
+  // Step 2: Extract all workoutExerciseIds for bulk query
+  const workoutExerciseIds = entriesToProcess.map((e) => e.workoutExerciseId);
+
+  // Step 3: Single bulk query for all sets
+  const placeholders = workoutExerciseIds.map(() => "?").join(", ");
+  const setsStmt = sqlite.prepareSync(`
+    SELECT 
+      s.workout_exercise_id AS workoutExerciseId,
+      s.weight_kg AS weightKg,
+      s.reps
+    FROM sets s
+    WHERE s.workout_exercise_id IN (${placeholders})
+    ORDER BY s.workout_exercise_id, s.set_index, s.performed_at
+  `);
+
+  let allSets: Array<{
+    workoutExerciseId: number;
+    weightKg: number | null;
+    reps: number | null;
+  }>;
+
+  try {
+    const result = setsStmt.executeSync(workoutExerciseIds);
+    allSets = result.getAllSync() as typeof allSets;
+  } finally {
+    setsStmt.finalizeSync();
+  }
+
+  // Step 4: Group sets by workoutExerciseId
+  const setsByExercise = new Map<number, typeof allSets>();
+  for (const set of allSets) {
+    if (!setsByExercise.has(set.workoutExerciseId)) {
+      setsByExercise.set(set.workoutExerciseId, []);
+    }
+    setsByExercise.get(set.workoutExerciseId)!.push(set);
+  }
+
+  // Get global E1RM formula
+  const formula = getGlobalFormula();
+
+  // Step 5: Compute per-entry stats
+  let pageTotalSets = 0;
+  let pageTotalReps = 0;
+  let pageTotalVolumeKg = 0;
+  let pageBestE1rmKg: number | null = null;
+
+  const entries: WorkoutDayExerciseEntry[] = entriesToProcess.map((entry) => {
+    const entrySets = setsByExercise.get(entry.workoutExerciseId) ?? [];
+
+    let totalSets = 0;
+    let totalReps = 0;
+    let totalVolumeKg = 0;
+    let bestSet: WorkoutDayExerciseEntry["bestSet"] = null;
+    let maxE1rm = 0;
+
+    for (const set of entrySets) {
+      if (set.weightKg !== null && set.reps !== null && set.reps > 0 && set.weightKg > 0) {
+        totalSets++;
+        totalReps += set.reps;
+        totalVolumeKg += set.weightKg * set.reps;
+
+        const e1rm = computeE1rm(formula, set.weightKg, set.reps);
+
+        // Track best set by E1RM (with tie-breakers)
+        if (
+          e1rm > maxE1rm ||
+          (e1rm === maxE1rm && bestSet && set.weightKg > bestSet.weightKg) ||
+          (e1rm === maxE1rm && bestSet && set.weightKg === bestSet.weightKg && set.reps > bestSet.reps)
+        ) {
+          maxE1rm = e1rm;
+          bestSet = {
+            weightKg: set.weightKg,
+            reps: set.reps,
+            e1rm: Math.round(e1rm),
+          };
+        }
+
+        // Track page-level best E1RM
+        if (pageBestE1rmKg === null || e1rm > pageBestE1rmKg) {
+          pageBestE1rmKg = Math.round(e1rm);
+        }
+      }
+    }
+
+    // Aggregate page totals
+    pageTotalSets += totalSets;
+    pageTotalReps += totalReps;
+    pageTotalVolumeKg += totalVolumeKg;
+
+    return {
+      workoutExerciseId: entry.workoutExerciseId,
+      exerciseId: entry.exerciseId,
+      exerciseName: entry.exerciseName,
+      performedAt: entry.performedAt,
+      note: entry.note,
+      totalSets,
+      totalReps,
+      totalVolumeKg: Math.round(totalVolumeKg),
+      bestSet,
+    };
+  });
+
+  return {
+    dayKey,
+    displayDate,
+    totals: {
+      totalExercises: entries.length,
+      totalSets: pageTotalSets,
+      totalReps: pageTotalReps,
+      totalVolumeKg: Math.round(pageTotalVolumeKg),
+      bestE1rmKg: pageBestE1rmKg,
+    },
+    entries,
+    hasMore,
+  };
+}
+

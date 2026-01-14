@@ -9,7 +9,9 @@ import {
   addSet,
   addWorkoutExercise,
   deleteSet,
+  getWorkoutExerciseById,
   listSetsForExercise,
+  listSetsForWorkoutExercise,
   listWorkoutExercises,
   updateExerciseEntryDate,
   updateSet,
@@ -21,12 +23,26 @@ import { formatRelativeDate } from "../lib/utils/formatters";
 
 export default function EditWorkoutScreen() {
   const { themeColors } = useTheme();
-  const params = useLocalSearchParams<{ exerciseId?: string; workoutId?: string; exerciseName?: string }>();
-  const exerciseId = typeof params.exerciseId === "string" ? parseInt(params.exerciseId, 10) : null;
-  const workoutId = typeof params.workoutId === "string" ? parseInt(params.workoutId, 10) : null;
-  const exerciseName = typeof params.exerciseName === "string" ? params.exerciseName : "Exercise";
+  const params = useLocalSearchParams<{ 
+    exerciseId?: string; 
+    workoutId?: string; 
+    exerciseName?: string;
+    workoutExerciseId?: string;
+  }>();
+  
+  // Parse params - workoutExerciseId is the direct route, exerciseId+workoutId is the legacy route
+  const workoutExerciseIdParam = typeof params.workoutExerciseId === "string" 
+    ? parseInt(params.workoutExerciseId, 10) 
+    : null;
+  const exerciseIdParam = typeof params.exerciseId === "string" ? parseInt(params.exerciseId, 10) : null;
+  const workoutIdParam = typeof params.workoutId === "string" ? parseInt(params.workoutId, 10) : null;
+  const exerciseNameParam = typeof params.exerciseName === "string" ? params.exerciseName : "Exercise";
 
-  const [workoutExerciseId, setWorkoutExerciseId] = useState<number | null>(null);
+  // State for resolved IDs (may be derived from workoutExerciseId lookup)
+  const [workoutExerciseId, setWorkoutExerciseId] = useState<number | null>(workoutExerciseIdParam);
+  const [exerciseId, setExerciseId] = useState<number | null>(exerciseIdParam);
+  const [workoutId, setWorkoutId] = useState<number | null>(workoutIdParam);
+  const [exerciseName, setExerciseName] = useState(exerciseNameParam);
   const [sets, setSets] = useState<SetRow[]>([]);
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
@@ -54,24 +70,60 @@ export default function EditWorkoutScreen() {
   }, [workoutExerciseId, sets]);
 
   const loadWorkout = useCallback(async () => {
-    if (!exerciseId || !workoutId) return;
-
-    const workoutExercisesList = await listWorkoutExercises(workoutId);
-    const existingWorkoutExercise = workoutExercisesList.find((we) => we.exerciseId === exerciseId);
+    let resolvedWorkoutExerciseId = workoutExerciseIdParam;
+    let resolvedExerciseId = exerciseIdParam;
+    let resolvedWorkoutId = workoutIdParam;
     let currentWorkoutExercise: WorkoutExercise | null = null;
+
+    // Route A: Direct workoutExerciseId provided (from workout day detail page)
+    if (workoutExerciseIdParam) {
+      const we = await getWorkoutExerciseById(workoutExerciseIdParam);
+      if (!we) {
+        console.error("Workout exercise not found:", workoutExerciseIdParam);
+        return;
+      }
+      currentWorkoutExercise = we;
+      resolvedWorkoutExerciseId = we.id;
+      resolvedExerciseId = we.exerciseId;
+      resolvedWorkoutId = we.workoutId;
+      
+      // Update state with resolved IDs
+      setWorkoutExerciseId(we.id);
+      setExerciseId(we.exerciseId);
+      setWorkoutId(we.workoutId);
+      
+      // Load sets for this specific workout_exercise
+      const exerciseSets = await listSetsForWorkoutExercise(we.id);
+      setSets(exerciseSets);
+      setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+      
+      // Load date from workout_exercise.performed_at
+      if (we.performedAt) {
+        setSelectedDate(new Date(we.performedAt));
+      } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
+        setSelectedDate(new Date(exerciseSets[0].performedAt));
+      }
+      return;
+    }
+
+    // Route B: Legacy route with exerciseId + workoutId
+    if (!resolvedExerciseId || !resolvedWorkoutId) return;
+
+    const workoutExercisesList = await listWorkoutExercises(resolvedWorkoutId);
+    const existingWorkoutExercise = workoutExercisesList.find((we) => we.exerciseId === resolvedExerciseId);
     
     if (existingWorkoutExercise) {
       setWorkoutExerciseId(existingWorkoutExercise.id);
       currentWorkoutExercise = existingWorkoutExercise;
     } else {
       const newWorkoutExerciseId = await addWorkoutExercise({
-        workout_id: workoutId,
-        exercise_id: exerciseId,
+        workout_id: resolvedWorkoutId,
+        exercise_id: resolvedExerciseId,
       });
       setWorkoutExerciseId(newWorkoutExerciseId);
     }
 
-    const exerciseSets = await listSetsForExercise(workoutId, exerciseId);
+    const exerciseSets = await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId);
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
     
@@ -81,7 +133,7 @@ export default function EditWorkoutScreen() {
     } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
       setSelectedDate(new Date(exerciseSets[0].performedAt));
     }
-  }, [exerciseId, workoutId]);
+  }, [workoutExerciseIdParam, exerciseIdParam, workoutIdParam]);
 
   useEffect(() => {
     loadWorkout();
@@ -114,6 +166,13 @@ export default function EditWorkoutScreen() {
   }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
 
   const handleSaveEdits = useCallback(() => {
+    // If we came from workout day detail page (direct workoutExerciseId), just go back
+    if (workoutExerciseIdParam) {
+      router.back();
+      return;
+    }
+    
+    // Legacy route: navigate back to exercise page with refresh trigger
     if (exerciseId) {
       router.replace({
         pathname: "/exercise/[id]",
@@ -126,7 +185,7 @@ export default function EditWorkoutScreen() {
     } else {
       router.back();
     }
-  }, [exerciseId, exerciseName]);
+  }, [workoutExerciseIdParam, exerciseId, exerciseName]);
 
   const handleLongPressSet = useCallback((set: SetRow) => {
     setSelectedSet(set);
@@ -157,9 +216,29 @@ export default function EditWorkoutScreen() {
     await loadWorkout();
   }, [selectedSet, loadWorkout]);
 
-  if (!exerciseId || !workoutId) {
+  // Show error only if we don't have valid params (neither direct workoutExerciseId nor legacy exerciseId+workoutId)
+  const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);
+  if (!hasValidParams) {
     return (
       <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+        <Stack.Screen
+          options={{
+            presentation: "modal",
+            title: `Edit ${exerciseName}`,
+            headerStyle: { backgroundColor: themeColors.surface },
+            headerTitleStyle: { color: themeColors.text },
+            headerLeft: () => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={() => router.back()}
+                style={styles.headerButton}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+              </Pressable>
+            ),
+          }}
+        />
         <Text style={[styles.errorText, { color: themeColors.error }]}>Invalid exercise or workout ID</Text>
       </View>
     );

@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,18 +13,16 @@ import {
   TextInput,
   UIManager,
   View,
-  type ViewToken,
 } from "react-native";
 import DatePickerModal from "../components/modals/DatePickerModal";
 import {
-  dayKeyToTimestamp,
   getWorkoutDayDetails,
   listWorkoutDays,
   searchWorkoutDays,
   type WorkoutDayDetails,
   type WorkoutDaySummary,
 } from "../lib/db/workouts";
-import { useTheme } from "../lib/theme/ThemeContext";
+import { useTheme, type ThemeColors } from "../lib/theme/ThemeContext";
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -32,6 +30,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const PAGE_SIZE = 20;
+const COLLAPSED_ITEM_HEIGHT = 88; // Approximate height of collapsed card + margin
 
 // Date range presets
 type DateRangePreset = "1w" | "1m" | "3m" | "6m" | "1y" | "all" | "custom";
@@ -50,6 +49,193 @@ const presets: { id: DateRangePreset; label: string; days: number | null }[] = [
   { id: "1y", label: "1Y", days: 365 },
   { id: "all", label: "All", days: null },
 ];
+
+// Precomputed display item with formatted labels
+interface WorkoutDayDisplayItem extends WorkoutDaySummary {
+  formattedDate: string;
+  formattedFullDate: string;
+  exerciseCountLabel: string;
+}
+
+// Precompute date labels to avoid formatting during render
+function computeDisplayItem(item: WorkoutDaySummary): WorkoutDayDisplayItem {
+  const date = new Date(item.displayDate);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  let formattedDate: string;
+  if (date.toDateString() === today.toDateString()) {
+    formattedDate = "Today";
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    formattedDate = "Yesterday";
+  } else {
+    formattedDate = date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  return {
+    ...item,
+    formattedDate,
+    formattedFullDate: date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+    exerciseCountLabel: `${item.totalExercises} exercise${item.totalExercises !== 1 ? "s" : ""}`,
+  };
+}
+
+// Helper to get alphabet letter
+const getAlphabetLetter = (index: number) => String.fromCharCode(65 + index);
+
+// =============================================================================
+// WorkoutDayCard - Memoized list item component
+// =============================================================================
+
+interface WorkoutDayCardProps {
+  item: WorkoutDayDisplayItem;
+  isExpanded: boolean;
+  details: WorkoutDayDetails | undefined;
+  isLoadingDetails: boolean;
+  onToggle: () => void;
+  onContentPress: () => void;
+  themeColors: ThemeColors;
+}
+
+const WorkoutDayCard = React.memo(function WorkoutDayCard({
+  item,
+  isExpanded,
+  details,
+  isLoadingDetails,
+  onToggle,
+  onContentPress,
+  themeColors,
+}: WorkoutDayCardProps) {
+  return (
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow },
+      ]}
+    >
+      {/* Summary Header - Pressable for expand/collapse */}
+      <Pressable onPress={onToggle} style={styles.cardHeader}>
+        <View style={styles.cardHeaderLeft}>
+          <Text style={[styles.cardDate, { color: themeColors.text }]}>
+            {item.formattedDate}
+          </Text>
+          <Text style={[styles.cardFullDate, { color: themeColors.textSecondary }]}>
+            {item.formattedFullDate}
+          </Text>
+        </View>
+        <View style={styles.cardHeaderRight}>
+          <View style={styles.statBadge}>
+            <Text style={[styles.statBadgeText, { color: themeColors.textSecondary }]}>
+              {item.exerciseCountLabel}
+            </Text>
+          </View>
+          <MaterialCommunityIcons
+            name={isExpanded ? "chevron-up" : "chevron-down"}
+            size={24}
+            color={themeColors.textSecondary}
+          />
+        </View>
+
+        {/* Notes Preview (collapsed only) */}
+        {!isExpanded && item.notesPreview && (
+          <Text
+            style={[styles.notesPreview, { color: themeColors.textTertiary }]}
+            numberOfLines={1}
+          >
+            {item.notesPreview}
+          </Text>
+        )}
+      </Pressable>
+
+      {/* Expanded Content - Pressable for navigation to detail page */}
+      {isExpanded && (
+        <Pressable onPress={onContentPress} style={styles.expandedContent}>
+          {isLoadingDetails ? (
+            <View style={styles.cardLoadingContainer}>
+              <ActivityIndicator size="small" color={themeColors.primary} />
+            </View>
+          ) : details ? (
+            <>
+              {/* Stats Row */}
+              <View style={[styles.statsRow, { borderColor: themeColors.border }]}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: themeColors.text }]}>
+                    {details.exercises.length}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                    Exercises
+                  </Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: themeColors.text }]}>
+                    {details.totalVolumeKg.toLocaleString()}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                    Volume (kg)
+                  </Text>
+                </View>
+                {details.bestE1rmKg && (
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: themeColors.text }]}>
+                      {details.bestE1rmKg}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                      Best e1RM
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Exercise List */}
+              <View style={styles.exerciseList}>
+                {details.exercises.map((exercise, index) => (
+                  <View key={exercise.workoutExerciseId} style={styles.exerciseItem}>
+                    <View style={[styles.alphabetCircle, { backgroundColor: themeColors.primary }]}>
+                      <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                    </View>
+                    <View style={styles.exerciseDetails}>
+                      <Text
+                        style={[styles.exerciseName, { color: themeColors.text }]}
+                        numberOfLines={1}
+                      >
+                        {exercise.exerciseName}
+                      </Text>
+                      <Text style={[styles.bestSetText, { color: themeColors.textSecondary }]}>
+                        {exercise.bestSet
+                          ? `Best: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
+                          : "No sets recorded"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+
+                {details.hasMoreExercises && (
+                  <Text style={[styles.showMoreText, { color: themeColors.textTertiary }]}>
+                    Showing first 26 exercises
+                  </Text>
+                )}
+              </View>
+            </>
+          ) : null}
+        </Pressable>
+      )}
+    </View>
+  );
+});
+
+// =============================================================================
+// Main Screen Component
+// =============================================================================
 
 export default function WorkoutHistoryScreen() {
   const { themeColors } = useTheme();
@@ -84,9 +270,9 @@ export default function WorkoutHistoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  // Fast scroll tooltip
-  const [topVisibleDayKey, setTopVisibleDayKey] = useState<string | null>(null);
-  const [isScrolling, setIsScrolling] = useState(false);
+  // Pagination guard to prevent concurrent fetches
+  const isFetchingRef = useRef(false);
+  const flatListRef = useRef<FlatList>(null);
 
   // Debounce search query
   useEffect(() => {
@@ -125,11 +311,42 @@ export default function WorkoutHistoryScreen() {
     return { startDate: startTs, endDate: endTs };
   }, [dateRange]);
 
+  // Precompute display items with formatted labels
+  const displayItems = useMemo(
+    () => workoutDays.map(computeDisplayItem),
+    [workoutDays]
+  );
+
+  // Dedupe helper: merge new days into existing list by unique key
+  const mergeWorkoutDays = useCallback(
+    (existing: WorkoutDaySummary[], incoming: WorkoutDaySummary[]): WorkoutDaySummary[] => {
+      const map = new Map<string, WorkoutDaySummary>();
+      // Add existing items first
+      for (const item of existing) {
+        const key = `${item.dayKey}-${item.displayDate}`;
+        map.set(key, item);
+      }
+      // Merge incoming items (overwrites if duplicate key)
+      for (const item of incoming) {
+        const key = `${item.dayKey}-${item.displayDate}`;
+        map.set(key, item);
+      }
+      // Convert back to array and sort by dayKey descending
+      return Array.from(map.values()).sort((a, b) => b.dayKey.localeCompare(a.dayKey));
+    },
+    []
+  );
+
   // Load workout days
   const loadWorkoutDays = useCallback(async (reset = true) => {
+    // Guard against concurrent fetches
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     if (reset) {
       setLoading(true);
       setHasMore(true);
+      setWorkoutDays([]); // Clear list on reset
     } else {
       setLoadingMore(true);
     }
@@ -152,17 +369,29 @@ export default function WorkoutHistoryScreen() {
       if (reset) {
         setWorkoutDays(days);
       } else {
-        setWorkoutDays((prev) => [...prev, ...days]);
+        // Dedupe merge to prevent duplicate keys
+        setWorkoutDays((prev) => mergeWorkoutDays(prev, days));
       }
 
       setHasMore(days.length === PAGE_SIZE);
+
+      // DEV: Check for duplicates
+      if (__DEV__) {
+        const allDays = reset ? days : mergeWorkoutDays(workoutDays, days);
+        const keys = allDays.map((d) => `${d.dayKey}-${d.displayDate}`);
+        const uniqueKeys = new Set(keys);
+        if (uniqueKeys.size !== keys.length) {
+          console.warn("[WorkoutHistory] Duplicate keys detected:", keys.filter((k, i) => keys.indexOf(k) !== i));
+        }
+      }
     } catch (error) {
       console.error("Error loading workout days:", error);
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      isFetchingRef.current = false;
     }
-  }, [debouncedQuery, dateRangeTimestamps, workoutDays.length]);
+  }, [debouncedQuery, dateRangeTimestamps, workoutDays, mergeWorkoutDays]);
 
   // Refresh on focus
   useFocusEffect(
@@ -205,19 +434,14 @@ export default function WorkoutHistoryScreen() {
     }
   }, [loadingMore, hasMore, loading, loadWorkoutDays]);
 
-  // Handle viewable items changed for fast scroll tooltip
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
-  const handleViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].item) {
-        setTopVisibleDayKey((viewableItems[0].item as WorkoutDaySummary).dayKey);
-      }
-    },
+  // Stable keyExtractor - use composite key to ensure uniqueness
+  const keyExtractor = useCallback(
+    (item: WorkoutDayDisplayItem) => `${item.dayKey}-${item.displayDate}`,
     []
   );
 
   // Handle preset selection
-  const handlePresetPress = (preset: DateRangePreset) => {
+  const handlePresetPress = useCallback((preset: DateRangePreset) => {
     if (preset === "custom") {
       setTempStartDate(dateRange.startDate ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
       setTempEndDate(dateRange.endDate ?? new Date());
@@ -225,191 +449,40 @@ export default function WorkoutHistoryScreen() {
       return;
     }
     setDateRange({ preset, startDate: null, endDate: null });
-  };
-
-  // Format date for display
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return "Today";
-    }
-    if (date.toDateString() === yesterday.toDateString()) {
-      return "Yesterday";
-    }
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const formatFullDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const formatMonthYear = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const formatDateShort = (date: Date) => {
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
-
-  const getAlphabetLetter = (index: number) => {
-    return String.fromCharCode(65 + index); // A = 65
-  };
+  }, [dateRange.startDate, dateRange.endDate]);
 
   // Check if filters are active
   const hasActiveFilters = debouncedQuery || dateRange.preset !== "all";
 
   // Clear all filters
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchQuery("");
     setDateRange({ preset: "all", startDate: null, endDate: null });
-  };
+  }, []);
 
-  // Render workout day card
-  const renderWorkoutDayCard = ({ item }: { item: WorkoutDaySummary }) => {
-    const isExpanded = expandedDayKey === item.dayKey;
-    const details = detailsCache.get(item.dayKey);
-    const isLoadingThis = loadingDetails === item.dayKey;
+  // Handle content press - navigate to workout day detail page
+  const handleContentPress = useCallback((dayKey: string) => {
+    router.push({ pathname: "/workout/[dayKey]", params: { dayKey } });
+  }, []);
 
-    return (
-      <Pressable
-        style={[
-          styles.card,
-          { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow },
-        ]}
-        onPress={() => handleCardPress(item.dayKey)}
-      >
-        {/* Summary Header */}
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <Text style={[styles.cardDate, { color: themeColors.text }]}>
-              {formatDate(item.displayDate)}
-            </Text>
-            <Text style={[styles.cardFullDate, { color: themeColors.textSecondary }]}>
-              {formatFullDate(item.displayDate)}
-            </Text>
-          </View>
-          <View style={styles.cardHeaderRight}>
-            <View style={styles.statBadge}>
-              <Text style={[styles.statBadgeText, { color: themeColors.textSecondary }]}>
-                {item.totalExercises} exercise{item.totalExercises !== 1 ? "s" : ""}
-              </Text>
-            </View>
-            <MaterialCommunityIcons
-              name={isExpanded ? "chevron-up" : "chevron-down"}
-              size={24}
-              color={themeColors.textSecondary}
-            />
-          </View>
-        </View>
-
-        {/* Notes Preview (collapsed only) */}
-        {!isExpanded && item.notesPreview && (
-          <Text
-            style={[styles.notesPreview, { color: themeColors.textTertiary }]}
-            numberOfLines={1}
-          >
-            {item.notesPreview}
-          </Text>
-        )}
-
-        {/* Expanded Content */}
-        {isExpanded && (
-          <View style={styles.expandedContent}>
-            {isLoadingThis ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={themeColors.primary} />
-              </View>
-            ) : details ? (
-              <>
-                {/* Stats Row */}
-                <View style={[styles.statsRow, { borderColor: themeColors.border }]}>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statValue, { color: themeColors.text }]}>
-                      {details.exercises.length}
-                    </Text>
-                    <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
-                      Exercises
-                    </Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statValue, { color: themeColors.text }]}>
-                      {details.totalVolumeKg.toLocaleString()}
-                    </Text>
-                    <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
-                      Volume (kg)
-                    </Text>
-                  </View>
-                  {details.bestE1rmKg && (
-                    <View style={styles.statItem}>
-                      <Text style={[styles.statValue, { color: themeColors.text }]}>
-                        {details.bestE1rmKg}
-                      </Text>
-                      <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
-                        Best e1RM
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Exercise List */}
-                <View style={styles.exerciseList}>
-                  {details.exercises.map((exercise, index) => (
-                    <View key={exercise.workoutExerciseId} style={styles.exerciseItem}>
-                      {/* Alphabet Circle */}
-                      <View style={[styles.alphabetCircle, { backgroundColor: themeColors.primary }]}>
-                        <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
-                      </View>
-
-                      {/* Exercise Details */}
-                      <View style={styles.exerciseDetails}>
-                        <Text
-                          style={[styles.exerciseName, { color: themeColors.text }]}
-                          numberOfLines={1}
-                        >
-                          {exercise.exerciseName}
-                        </Text>
-                        <Text style={[styles.bestSetText, { color: themeColors.textSecondary }]}>
-                          {exercise.bestSet
-                            ? `Best: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
-                            : "No sets recorded"}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-
-                  {/* Show more indicator */}
-                  {details.hasMoreExercises && (
-                    <Text style={[styles.showMoreText, { color: themeColors.textTertiary }]}>
-                      Showing first 26 exercises
-                    </Text>
-                  )}
-                </View>
-              </>
-            ) : null}
-          </View>
-        )}
-      </Pressable>
-    );
-  };
+  // Render workout day card - stable callback
+  const renderItem = useCallback(
+    ({ item }: { item: WorkoutDayDisplayItem }) => (
+      <WorkoutDayCard
+        item={item}
+        isExpanded={expandedDayKey === item.dayKey}
+        details={detailsCache.get(item.dayKey)}
+        isLoadingDetails={loadingDetails === item.dayKey}
+        onToggle={() => handleCardPress(item.dayKey)}
+        onContentPress={() => handleContentPress(item.dayKey)}
+        themeColors={themeColors}
+      />
+    ),
+    [expandedDayKey, detailsCache, loadingDetails, handleCardPress, handleContentPress, themeColors]
+  );
 
   // Render empty state
-  const renderEmptyState = () => {
+  const renderEmptyState = useCallback(() => {
     if (loading) return null;
 
     return (
@@ -439,16 +512,31 @@ export default function WorkoutHistoryScreen() {
         )}
       </View>
     );
-  };
+  }, [loading, hasActiveFilters, themeColors, clearFilters]);
 
   // Render footer (loading more indicator)
-  const renderFooter = () => {
+  const renderFooter = useCallback(() => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={themeColors.primary} />
       </View>
     );
+  }, [loadingMore, themeColors.primary]);
+
+  // Get item layout for performance (only works well for collapsed items)
+  const getItemLayout = useCallback(
+    (_data: ArrayLike<WorkoutDayDisplayItem> | null | undefined, index: number) => ({
+      length: COLLAPSED_ITEM_HEIGHT,
+      offset: COLLAPSED_ITEM_HEIGHT * index,
+      index,
+    }),
+    []
+  );
+
+  // Format date for custom range display
+  const formatDateShort = (date: Date) => {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   return (
@@ -561,30 +649,24 @@ export default function WorkoutHistoryScreen() {
       ) : (
         <View style={styles.listContainer}>
           <FlatList
-            data={workoutDays}
-            keyExtractor={(item) => item.dayKey}
-            renderItem={renderWorkoutDayCard}
+            ref={flatListRef}
+            data={displayItems}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
             ListEmptyComponent={renderEmptyState}
             ListFooterComponent={renderFooter}
-            onViewableItemsChanged={handleViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
-            onScrollBeginDrag={() => setIsScrolling(true)}
-            onScrollEndDrag={() => setIsScrolling(false)}
-            onMomentumScrollEnd={() => setIsScrolling(false)}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            // Performance tuning
+            initialNumToRender={8}
+            maxToRenderPerBatch={5}
+            windowSize={7}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={Platform.OS === "android"}
+            getItemLayout={expandedDayKey ? undefined : getItemLayout}
           />
-
-          {/* Fast Scroll Date Tooltip */}
-          {isScrolling && topVisibleDayKey && (
-            <View style={[styles.dateTooltip, { backgroundColor: themeColors.primary }]}>
-              <Text style={[styles.dateTooltipText, { color: themeColors.surface }]}>
-                {formatMonthYear(dayKeyToTimestamp(topVisibleDayKey))}
-              </Text>
-            </View>
-          )}
         </View>
       )}
 
@@ -738,6 +820,10 @@ const styles = StyleSheet.create({
   expandedContent: {
     marginTop: 16,
   },
+  cardLoadingContainer: {
+    paddingVertical: 24,
+    alignItems: "center",
+  },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -828,18 +914,5 @@ const styles = StyleSheet.create({
   },
   footerLoader: {
     paddingVertical: 20,
-  },
-  dateTooltip: {
-    position: "absolute",
-    right: 16,
-    top: "50%",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    transform: [{ translateY: -16 }],
-  },
-  dateTooltipText: {
-    fontSize: 13,
-    fontWeight: "600",
   },
 });

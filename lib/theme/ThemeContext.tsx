@@ -3,9 +3,11 @@ import { useColorScheme } from "react-native";
 import { getThemePreference, setThemePreference, type ThemePreference } from "../db/settings";
 import { getThemeColors, type lightColors } from "./colors";
 
+export type ThemeColors = typeof lightColors;
+
 type ThemeContextType = {
   isDark: boolean;
-  themeColors: typeof lightColors;
+  themeColors: ThemeColors;
   themePreference: ThemePreference;
   setThemePreference: (preference: ThemePreference) => void;
 };
