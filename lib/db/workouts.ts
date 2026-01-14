@@ -887,12 +887,20 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
 // Workout Day Page Types and Functions
 // ============================================================================
 
+export type WorkoutDaySetEntry = {
+  id: number;
+  weightKg: number | null;
+  reps: number | null;
+  note: string | null;
+};
+
 export type WorkoutDayExerciseEntry = {
   workoutExerciseId: number;
   exerciseId: number;
   exerciseName: string;
   performedAt: number;
   note: string | null;
+  sets: WorkoutDaySetEntry[];
   totalSets: number;
   totalReps: number;
   totalVolumeKg: number;
@@ -964,22 +972,26 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
   // Step 2: Extract all workoutExerciseIds for bulk query
   const workoutExerciseIds = entriesToProcess.map((e) => e.workoutExerciseId);
 
-  // Step 3: Single bulk query for all sets
+  // Step 3: Single bulk query for all sets (include id and note for display)
   const placeholders = workoutExerciseIds.map(() => "?").join(", ");
   const setsStmt = sqlite.prepareSync(`
     SELECT 
+      s.id,
       s.workout_exercise_id AS workoutExerciseId,
       s.weight_kg AS weightKg,
-      s.reps
+      s.reps,
+      s.note
     FROM sets s
     WHERE s.workout_exercise_id IN (${placeholders})
     ORDER BY s.workout_exercise_id, s.set_index, s.performed_at
   `);
 
   let allSets: Array<{
+    id: number;
     workoutExerciseId: number;
     weightKg: number | null;
     reps: number | null;
+    note: string | null;
   }>;
 
   try {
@@ -1050,12 +1062,21 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
     pageTotalReps += totalReps;
     pageTotalVolumeKg += totalVolumeKg;
 
+    // Build sets array for display
+    const setsForDisplay: WorkoutDaySetEntry[] = entrySets.map((set) => ({
+      id: set.id,
+      weightKg: set.weightKg,
+      reps: set.reps,
+      note: set.note,
+    }));
+
     return {
       workoutExerciseId: entry.workoutExerciseId,
       exerciseId: entry.exerciseId,
       exerciseName: entry.exerciseName,
       performedAt: entry.performedAt,
       note: entry.note,
+      sets: setsForDisplay,
       totalSets,
       totalReps,
       totalVolumeKg: Math.round(totalVolumeKg),

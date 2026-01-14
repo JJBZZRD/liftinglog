@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
+import SetItem from "../../components/lists/SetItem";
 import {
   dayKeyToTimestamp,
   getWorkoutDayPage,
@@ -189,8 +190,8 @@ export default function WorkoutDayScreen() {
                 onLongPress={() => handleLongPressExercise(entry)}
                 delayLongPress={400}
               >
-                {/* Header Row */}
-                <View style={styles.exerciseHeader}>
+                {/* Header Row - A-Z badge + exercise name */}
+                <View style={[styles.exerciseHeader, { borderBottomColor: themeColors.border }]}>
                   <View style={[styles.alphabetCircle, { backgroundColor: themeColors.primary }]}>
                     <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                   </View>
@@ -199,25 +200,23 @@ export default function WorkoutDayScreen() {
                   </Text>
                 </View>
 
-                {/* Body */}
-                <View style={styles.exerciseBody}>
-                  <Text style={[styles.bestSetText, { color: themeColors.textSecondary }]}>
-                    {entry.bestSet
-                      ? `Best: ${entry.bestSet.weightKg} kg × ${entry.bestSet.reps} (e1RM ${entry.bestSet.e1rm} kg)`
-                      : "No sets recorded"}
-                  </Text>
-                  <Text style={[styles.exerciseStats, { color: themeColors.textTertiary }]}>
-                    {entry.totalSets} set{entry.totalSets !== 1 ? "s" : ""} • {entry.totalReps} rep{entry.totalReps !== 1 ? "s" : ""} • {entry.totalVolumeKg.toLocaleString()} kg
-                  </Text>
-
-                  {/* Note preview if present */}
-                  {entry.note && (
-                    <Text
-                      style={[styles.notePreview, { color: themeColors.textTertiary }]}
-                      numberOfLines={1}
-                    >
-                      {entry.note}
+                {/* Sets List */}
+                <View style={styles.setsContainer}>
+                  {entry.sets.length === 0 ? (
+                    <Text style={[styles.noSetsText, { color: themeColors.textTertiary }]}>
+                      No sets recorded
                     </Text>
+                  ) : (
+                    entry.sets.map((set, setIndex) => (
+                      <SetItem
+                        key={set.id}
+                        index={setIndex + 1}
+                        weightKg={set.weightKg}
+                        reps={set.reps}
+                        note={set.note}
+                        variant="compact"
+                      />
+                    ))
                   )}
                 </View>
               </Pressable>
@@ -314,10 +313,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 4,
   },
-  // Exercise Card
+  // Exercise Card (similar to HistoryTab.tsx)
   exerciseCard: {
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -326,7 +325,9 @@ const styles = StyleSheet.create({
   exerciseHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
   },
   alphabetCircle: {
     width: 32,
@@ -346,20 +347,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  exerciseBody: {
-    paddingLeft: 44, // align with exercise name (32 + 12)
+  setsContainer: {
+    gap: 4,
   },
-  bestSetText: {
+  noSetsText: {
     fontSize: 14,
-    marginBottom: 4,
-  },
-  exerciseStats: {
-    fontSize: 13,
-  },
-  notePreview: {
-    fontSize: 12,
-    fontStyle: "italic",
-    marginTop: 6,
+    textAlign: "center",
+    paddingVertical: 8,
   },
   showMoreText: {
     fontSize: 12,
