@@ -1,12 +1,38 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeE1rm } from "../pr";
-import { db, sqlite } from "./connection";
+import { db, sqlite, hasColumn } from "./connection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
 import { getGlobalFormula } from "./settings";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
 export type SetRow = SetRowT;
+
+const missingWorkoutExerciseColumnLogs = new Set<string>();
+
+function getWorkoutExerciseColumnStatus(context: string): { hasPerformedAt: boolean; hasCompletedAt: boolean } {
+  const hasPerformedAt = hasColumn("workout_exercises", "performed_at");
+  const hasCompletedAt = hasColumn("workout_exercises", "completed_at");
+
+  if ((!hasPerformedAt || !hasCompletedAt) && __DEV__) {
+    const key = `${context}:${hasPerformedAt}:${hasCompletedAt}`;
+    if (!missingWorkoutExerciseColumnLogs.has(key)) {
+      missingWorkoutExerciseColumnLogs.add(key);
+      console.warn("[db] Missing workout_exercises columns; skipping query:", {
+        context,
+        performed_at: hasPerformedAt,
+        completed_at: hasCompletedAt,
+      });
+    }
+  }
+
+  return { hasPerformedAt, hasCompletedAt };
+}
+
+function canQueryWorkoutExercises(context: string): boolean {
+  const { hasPerformedAt, hasCompletedAt } = getWorkoutExerciseColumnStatus(context);
+  return hasPerformedAt && hasCompletedAt;
+}
 
 export async function createWorkout(data?: { started_at?: number; note?: string | null }): Promise<number> {
   const res = await db
@@ -76,6 +102,7 @@ export async function addWorkoutExercise(args: {
   note?: string | null;
   performed_at?: number | null;
 }): Promise<number> {
+  const { hasPerformedAt } = getWorkoutExerciseColumnStatus("addWorkoutExercise");
   const res = await db
     .insert(workoutExercises)
     .values({
@@ -83,13 +110,16 @@ export async function addWorkoutExercise(args: {
       exerciseId: args.exercise_id,
       orderIndex: args.order_index ?? null,
       note: args.note ?? null,
-      performedAt: args.performed_at ?? Date.now(),
+      ...(hasPerformedAt ? { performedAt: args.performed_at ?? Date.now() } : {}),
     })
     .run();
   return (res.lastInsertRowId as number) ?? 0;
 }
 
 export async function listWorkoutExercises(workoutId: number): Promise<WorkoutExercise[]> {
+  if (!canQueryWorkoutExercises("listWorkoutExercises")) {
+    return [];
+  }
   const rows = await db
     .select()
     .from(workoutExercises)
@@ -103,6 +133,9 @@ export async function listWorkoutExercises(workoutId: number): Promise<WorkoutEx
  * Returns null if no open entry exists.
  */
 export async function getOpenWorkoutExercise(workoutId: number, exerciseId: number): Promise<WorkoutExercise | null> {
+  if (!canQueryWorkoutExercises("getOpenWorkoutExercise")) {
+    return null;
+  }
   const rows = await db
     .select()
     .from(workoutExercises)
@@ -212,6 +245,9 @@ export type WorkoutHistoryEntry = {
 };
 
 export async function getExerciseHistory(exerciseId: number): Promise<WorkoutHistoryEntry[]> {
+  if (!canQueryWorkoutExercises("getExerciseHistory")) {
+    return [];
+  }
   // Get all workout_exercises for this exercise
   const allWorkoutExercises = await db
     .select()
@@ -281,6 +317,9 @@ export async function getExerciseHistory(exerciseId: number): Promise<WorkoutHis
 }
 
 export async function getWorkoutExerciseById(id: number): Promise<WorkoutExercise | null> {
+  if (!canQueryWorkoutExercises("getWorkoutExerciseById")) {
+    return null;
+  }
   const rows = await db.select().from(workoutExercises).where(eq(workoutExercises.id, id));
   return rows[0] ?? null;
 }
@@ -301,6 +340,9 @@ export async function updateWorkoutExerciseInputs(
  * This is the semantic "Complete Exercise" action.
  */
 export async function completeExerciseEntry(workoutExerciseId: number, performedAt?: number): Promise<void> {
+  if (!canQueryWorkoutExercises("completeExerciseEntry")) {
+    return;
+  }
   const timestamp = performedAt ?? Date.now();
   
   if (__DEV__) {
@@ -339,6 +381,9 @@ export async function completeExerciseEntry(workoutExerciseId: number, performed
  * This is the user-editable date shown in the UI.
  */
 export async function updateExerciseEntryDate(workoutExerciseId: number, performedAt: number): Promise<void> {
+  if (!canQueryWorkoutExercises("updateExerciseEntryDate")) {
+    return;
+  }
   await db
     .update(workoutExercises)
     .set({ performedAt })
@@ -371,6 +416,9 @@ export type LastWorkoutDayResult = {
  * Groups by day (using performed_at), returns exercise list with best E1RM sets.
  */
 export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> {
+  if (!canQueryWorkoutExercises("getLastWorkoutDay")) {
+    return null;
+  }
   // Find the most recent day with completed exercise entries
   const recentEntry = await db
     .select({
@@ -525,6 +573,9 @@ export type QuickStats = {
  * Returns total workout days and total volume.
  */
 export async function getQuickStats(): Promise<QuickStats> {
+  if (!canQueryWorkoutExercises("getQuickStats")) {
+    return { totalWorkoutDays: 0, totalVolumeKg: 0 };
+  }
   // Count distinct workout days (days with completed exercises)
   const daysStmt = sqlite.prepareSync(`
     SELECT COUNT(DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')) AS totalDays
@@ -571,6 +622,9 @@ export async function listWorkoutDays(params: {
   limit: number;
   offset: number;
 }): Promise<WorkoutDaySummary[]> {
+  if (!canQueryWorkoutExercises("listWorkoutDays")) {
+    return [];
+  }
   const { limit, offset } = params;
 
   const stmt = sqlite.prepareSync(`
@@ -618,6 +672,15 @@ export async function listWorkoutDays(params: {
  * Returns exercises (limited to 26 for A-Z labeling) with best set E1RM computed in JS.
  */
 export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDetails> {
+  if (!canQueryWorkoutExercises("getWorkoutDayDetails")) {
+    return {
+      dayKey,
+      exercises: [],
+      hasMoreExercises: false,
+      totalVolumeKg: 0,
+      bestE1rmKg: null,
+    };
+  }
   // Get all completed exercise entries for this dayKey (limit 27 to detect hasMore)
   const stmt = sqlite.prepareSync(`
     SELECT 
@@ -759,6 +822,10 @@ export interface SearchWorkoutDaysParams {
  */
 export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promise<WorkoutDaySummary[]> {
   const { query, startDate, endDate, limit, offset } = params;
+
+  if (!canQueryWorkoutExercises("searchWorkoutDays")) {
+    return [];
+  }
 
   // If no query and no date filter, just return regular list
   if (!query.trim() && !startDate && !endDate) {
@@ -988,6 +1055,9 @@ export type WorkoutDayPageData = {
  * Optimized with bulk sets query to avoid N+1.
  */
 export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageData | null> {
+  if (!canQueryWorkoutExercises("getWorkoutDayPage")) {
+    return null;
+  }
   // Step 1: Query completed workout_exercises for the dayKey (limit 27 to detect overflow)
   const entriesStmt = sqlite.prepareSync(`
     SELECT 
