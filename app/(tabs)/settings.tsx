@@ -1,15 +1,18 @@
 import { Picker } from "@react-native-picker/picker";
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId } from "../../lib/db/index";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { getThemePreference, type ThemePreference } from "../../lib/db/settings";
+import { exportTrainingCsv } from "../../lib/utils/exportCsv";
+import * as Sharing from "expo-sharing";
 
 export default function SettingsScreen() {
   const { themeColors, setThemePreference: updateThemePreference } = useTheme();
   const [selected, setSelected] = useState<E1RMFormulaId>("epley");
   const [selectedTheme, setSelectedTheme] = useState<ThemePreference>("system");
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const current = getGlobalFormula();
@@ -38,6 +41,26 @@ export default function SettingsScreen() {
   function onThemeSelect(preference: ThemePreference) {
     setSelectedTheme(preference);
     updateThemePreference(preference);
+  }
+
+  async function onExportCsv() {
+    if (isExporting) {
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const { path } = await exportTrainingCsv();
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert("Sharing unavailable", "Sharing is not available on this device.");
+        return;
+      }
+      await Sharing.shareAsync(path);
+    } catch (error) {
+      Alert.alert("Export failed", "Unable to export CSV. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   const themeOptions = useMemo(
@@ -112,6 +135,37 @@ export default function SettingsScreen() {
             The formula used to calculate your estimated one-rep max from your workout data.
           </Text>
         </View>
+
+        {/* Data Export Section */}
+        <View style={[styles.section, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.textSecondary }]}>DATA</Text>
+          <Pressable
+            onPress={onExportCsv}
+            disabled={isExporting}
+            style={({ pressed }) => [
+              styles.exportButton,
+              {
+                backgroundColor: pressed && !isExporting ? themeColors.pressed : themeColors.surfaceSecondary,
+                borderColor: themeColors.border,
+                opacity: isExporting ? 0.7 : 1,
+              },
+            ]}
+          >
+            <View style={styles.exportButtonContent}>
+              <View style={styles.exportButtonText}>
+                <Text style={[styles.exportButtonTitle, { color: themeColors.text }]}>Export CSV</Text>
+                <Text style={[styles.exportButtonSubtitle, { color: themeColors.textTertiary }]}>
+                  Download all recorded sets as a single CSV file.
+                </Text>
+              </View>
+              {isExporting ? (
+                <ActivityIndicator size="small" color={themeColors.primary} />
+              ) : (
+                <Text style={[styles.exportButtonAction, { color: themeColors.primary }]}>Export</Text>
+              )}
+            </View>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -166,6 +220,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 12,
     lineHeight: 18,
+  },
+  exportButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  exportButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  exportButtonText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  exportButtonTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  exportButtonSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  exportButtonAction: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 
