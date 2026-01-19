@@ -5,7 +5,11 @@ import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId } from "../../li
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { getThemePreference, type ThemePreference } from "../../lib/db/settings";
-import { exportTrainingCsv } from "../../lib/utils/exportCsv";
+import {
+  exportTrainingCsvToUserSaveLocation,
+  ExportCancelledError,
+  FileSystemUnavailableError,
+} from "../../lib/utils/exportCsv";
 import * as Sharing from "expo-sharing";
 
 export default function SettingsScreen() {
@@ -48,16 +52,52 @@ export default function SettingsScreen() {
       return;
     }
     setIsExporting(true);
+    console.log("[exportCsv] Export requested from Settings.");
     try {
-      const { path } = await exportTrainingCsv();
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert("Sharing unavailable", "Sharing is not available on this device.");
+      const { uri, method } = await exportTrainingCsvToUserSaveLocation();
+      console.log("[exportCsv] CSV prepared", { uri, method });
+
+      if (method === "android_saf") {
+        Alert.alert("Export complete", "Saved to the selected folder.");
         return;
       }
-      await Sharing.shareAsync(path);
+
+      let canShare = false;
+      try {
+        canShare = await Sharing.isAvailableAsync();
+      } catch (error) {
+        console.warn("[exportCsv] Sharing availability check failed", error);
+      }
+      if (!canShare) {
+        Alert.alert("Export complete", "CSV saved. Sharing is not available on this device.");
+        return;
+      }
+      try {
+        await Sharing.shareAsync(uri, {
+          mimeType: "text/csv",
+          dialogTitle: "Save CSV",
+          UTI: "public.comma-separated-values-text",
+        });
+        console.log("[exportCsv] Share sheet opened.");
+      } catch (error) {
+        console.warn("[exportCsv] Share failed", error);
+        throw error;
+      }
+      Alert.alert("Export complete", 'Choose "Save to Files" to store the CSV.');
     } catch (error) {
-      Alert.alert("Export failed", "Unable to export CSV. Please try again.");
+      console.warn("[exportCsv] Export failed", error);
+      if (error instanceof ExportCancelledError) {
+        Alert.alert("Export cancelled", "No file was saved.");
+        return;
+      }
+      if (error instanceof FileSystemUnavailableError) {
+        Alert.alert(
+          "Export unavailable",
+          "CSV export requires a development build or production APK. It is not available in Expo Go or this runtime."
+        );
+      } else {
+        Alert.alert("Export failed", "Unable to export CSV. Please try again.");
+      }
     } finally {
       setIsExporting(false);
     }
