@@ -1,16 +1,16 @@
 import { Picker } from "@react-native-picker/picker";
+import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId } from "../../lib/db/index";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../lib/theme/ThemeContext";
+import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId } from "../../lib/db/index";
 import { getThemePreference, type ThemePreference } from "../../lib/db/settings";
+import { useTheme } from "../../lib/theme/ThemeContext";
 import {
-  exportTrainingCsvToUserSaveLocation,
   ExportCancelledError,
+  exportTrainingCsvToUserSaveLocation,
   FileSystemUnavailableError,
 } from "../../lib/utils/exportCsv";
-import * as Sharing from "expo-sharing";
 
 export default function SettingsScreen() {
   const { themeColors, setThemePreference: updateThemePreference } = useTheme();

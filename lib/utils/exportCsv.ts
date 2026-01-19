@@ -1,7 +1,7 @@
 import { File, Paths } from "expo-file-system";
 import * as LegacyFileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
-import { sqlite, hasColumn } from "../db/connection";
+import { hasColumn, sqlite } from "../db/connection";
 
 type ExportRow = {
   setPerformedAt: number | null;
