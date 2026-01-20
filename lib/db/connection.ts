@@ -246,6 +246,111 @@ try {
   // Column already exists, ignore
 }
 
+// ============================================================
+// UID column migrations for merge-based backup import
+// ============================================================
+
+// Add uid columns to core tables
+const uidTables = ["exercises", "workouts", "workout_exercises", "sets", "pr_events"];
+for (const table of uidTables) {
+  try {
+    sqlite.execSync(`ALTER TABLE ${table} ADD COLUMN uid TEXT;`);
+    if (__DEV__) {
+      console.log(`[db] Added uid column to ${table}`);
+    }
+  } catch {
+    // Column already exists, ignore
+  }
+}
+
+// Backfill uid for existing rows (batched to avoid UI freezes)
+function backfillUids() {
+  const BATCH_SIZE = 300;
+
+  // Simple uid generator for backfill (avoid import cycles at module init)
+  function generateUid(): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    const timestamp = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).substring(2, 10);
+    const randomPart2 = Math.random().toString(36).substring(2, 6);
+    return `${timestamp}-${randomPart}-${randomPart2}`;
+  }
+
+  for (const table of uidTables) {
+    try {
+      // Count rows needing backfill
+      const countStmt = sqlite.prepareSync(`SELECT COUNT(*) as cnt FROM ${table} WHERE uid IS NULL;`);
+      let totalNull = 0;
+      try {
+        const result = countStmt.executeSync([]);
+        const rows = result.getAllSync() as Array<{ cnt: number }>;
+        totalNull = rows[0]?.cnt ?? 0;
+      } finally {
+        countStmt.finalizeSync();
+      }
+
+      if (totalNull === 0) {
+        continue;
+      }
+
+      if (__DEV__) {
+        console.log(`[db] Backfilling ${totalNull} uid values for ${table}`);
+      }
+
+      // Backfill in batches
+      let processed = 0;
+      while (processed < totalNull) {
+        const selectStmt = sqlite.prepareSync(`SELECT id FROM ${table} WHERE uid IS NULL LIMIT ${BATCH_SIZE};`);
+        let ids: number[] = [];
+        try {
+          const result = selectStmt.executeSync([]);
+          const rows = result.getAllSync() as Array<{ id: number }>;
+          ids = rows.map((r) => r.id);
+        } finally {
+          selectStmt.finalizeSync();
+        }
+
+        if (ids.length === 0) {
+          break;
+        }
+
+        for (const id of ids) {
+          const uid = generateUid();
+          sqlite.execSync(`UPDATE ${table} SET uid = '${uid}' WHERE id = ${id};`);
+        }
+
+        processed += ids.length;
+      }
+
+      if (__DEV__) {
+        console.log(`[db] Backfilled ${processed} uid values for ${table}`);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(`[db] Failed to backfill uid for ${table}:`, error);
+      }
+    }
+  }
+}
+
+backfillUids();
+
+// Create unique indexes on uid columns (after backfill)
+for (const table of uidTables) {
+  try {
+    sqlite.execSync(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${table}_uid ON ${table}(uid);`);
+    if (__DEV__) {
+      console.log(`[db] Created unique index idx_${table}_uid`);
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn(`[db] Failed to create unique index for ${table}.uid:`, error);
+    }
+  }
+}
+
 const columnCache = new Map<string, Set<string>>();
 
 function loadTableColumns(table: string): Set<string> | null {

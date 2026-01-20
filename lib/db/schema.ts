@@ -2,6 +2,7 @@ import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const exercises = sqliteTable("exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  uid: text("uid"),
   name: text("name").notNull().unique(),
   description: text("description"),
   muscleGroup: text("muscle_group"),
@@ -14,6 +15,7 @@ export const exercises = sqliteTable("exercises", {
 
 export const workouts = sqliteTable("workouts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  uid: text("uid"),
   startedAt: integer("started_at").notNull(),
   completedAt: integer("completed_at"),
   note: text("note"),
@@ -21,6 +23,7 @@ export const workouts = sqliteTable("workouts", {
 
 export const workoutExercises = sqliteTable("workout_exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  uid: text("uid"),
   workoutId: integer("workout_id").notNull(),
   exerciseId: integer("exercise_id").notNull(),
   orderIndex: integer("order_index"),
@@ -33,6 +36,7 @@ export const workoutExercises = sqliteTable("workout_exercises", {
 
 export const sets = sqliteTable("sets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  uid: text("uid"),
   workoutId: integer("workout_id").notNull(),
   exerciseId: integer("exercise_id").notNull(),
   workoutExerciseId: integer("workout_exercise_id"),
@@ -50,6 +54,7 @@ export const sets = sqliteTable("sets", {
 
 export const prEvents = sqliteTable("pr_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  uid: text("uid"),
   setId: integer("set_id").notNull(),
   exerciseId: integer("exercise_id").notNull(),
   type: text("type").notNull(), // "1rm", "2rm", "3rm", etc.

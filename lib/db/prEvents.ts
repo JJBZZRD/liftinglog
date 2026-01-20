@@ -1,6 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "./connection";
 import { prEvents, type PREventRow } from "./schema";
+import { newUid } from "../utils/uid";
 
 export type PREvent = PREventRow;
 
@@ -17,6 +18,7 @@ export async function recordPREvent(
   const res = await db
     .insert(prEvents)
     .values({
+      uid: newUid(),
       setId,
       exerciseId,
       type,

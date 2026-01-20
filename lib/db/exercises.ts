@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "./connection";
 import { exercises, type ExerciseRow, sets, workoutExercises } from "./schema";
+import { newUid } from "../utils/uid";
 
 export type Exercise = ExerciseRow;
 
@@ -14,6 +15,7 @@ export async function createExercise(data: {
   const res = await db
     .insert(exercises)
     .values({
+      uid: newUid(),
       name: data.name,
       description: data.description ?? null,
       muscleGroup: data.muscle_group ?? null,

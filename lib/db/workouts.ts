@@ -3,6 +3,7 @@ import { computeE1rm } from "../pr";
 import { db, sqlite, hasColumn } from "./connection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
 import { getGlobalFormula } from "./settings";
+import { newUid } from "../utils/uid";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
@@ -37,7 +38,7 @@ function canQueryWorkoutExercises(context: string): boolean {
 export async function createWorkout(data?: { started_at?: number; note?: string | null }): Promise<number> {
   const res = await db
     .insert(workouts)
-    .values({ startedAt: data?.started_at ?? Date.now(), note: data?.note ?? null })
+    .values({ uid: newUid(), startedAt: data?.started_at ?? Date.now(), note: data?.note ?? null })
     .run();
   return (res.lastInsertRowId as number) ?? 0;
 }
@@ -106,6 +107,7 @@ export async function addWorkoutExercise(args: {
   const res = await db
     .insert(workoutExercises)
     .values({
+      uid: newUid(),
       workoutId: args.workout_id,
       exerciseId: args.exercise_id,
       orderIndex: args.order_index ?? null,
@@ -168,6 +170,7 @@ export async function addSet(args: {
   const res = await db
     .insert(sets)
     .values({
+      uid: newUid(),
       workoutId: args.workout_id,
       exerciseId: args.exercise_id,
       workoutExerciseId: args.workout_exercise_id ?? null,
