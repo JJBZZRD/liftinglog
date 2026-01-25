@@ -38,6 +38,13 @@ interface AnalyticsChartProps {
   selectedPoint?: SessionDataPoint | null;
 }
 
+type RenderDataPoint = SessionDataPoint & {
+  x: number;
+  y: number;
+  index: number;
+  isInVisibleRange: boolean;
+};
+
 // Layout constants
 const Y_AXIS_WIDTH = 25;
 const X_AXIS_HEIGHT = 30;
@@ -97,6 +104,8 @@ export default function AnalyticsChart({
   // Domain state - visible date range
   const [visibleStart, setVisibleStart] = useState(minDate);
   const [visibleEnd, setVisibleEnd] = useState(maxDate);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubbedPoint, setScrubbedPoint] = useState<RenderDataPoint | null>(null);
 
   // Reset visible range when data changes
   useEffect(() => {
@@ -170,7 +179,7 @@ export default function AnalyticsChart({
 
   // Points for rendering AND hit testing - single source of truth
   // Each point stores its computed x,y for both rendering and tap detection
-  const renderDataPoints = useMemo(() => {
+  const renderDataPoints = useMemo<RenderDataPoint[]>(() => {
     const buffer = (visibleEnd - visibleStart) * 0.1;
     return sortedData
       .filter((p) => p.date >= visibleStart - buffer && p.date <= visibleEnd + buffer)
@@ -243,14 +252,57 @@ export default function AnalyticsChart({
     return new Date(timestamp).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
     });
   };
+
+  const getClosestVisiblePointByX = useCallback(
+    (tapX: number) => {
+      const visiblePoints = renderDataPoints.filter((p) => p.isInVisibleRange);
+      if (visiblePoints.length === 0) return null;
+
+      let closestPoint: typeof visiblePoints[0] = visiblePoints[0];
+      let closestDistance = Math.abs(closestPoint.x - tapX);
+
+      for (const point of visiblePoints) {
+        const distance = Math.abs(point.x - tapX);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPoint = point;
+        }
+      }
+
+      return closestPoint;
+    },
+    [renderDataPoints]
+  );
+
+  const updateScrubbedPoint = useCallback(
+    (x: number) => {
+      const closestPoint = getClosestVisiblePointByX(x);
+      setScrubbedPoint(closestPoint);
+    },
+    [getClosestVisiblePointByX]
+  );
+
+  const handleScrubEnd = useCallback(
+    (endX: number) => {
+      const closestPoint = getClosestVisiblePointByX(endX);
+      if (closestPoint && onDataPointPress) {
+        onDataPointPress(closestPoint);
+      }
+      setIsScrubbing(false);
+      setScrubbedPoint(null);
+    },
+    [getClosestVisiblePointByX, onDataPointPress]
+  );
 
   // Handle data point tap - uses the SAME renderDataPoints array used for rendering
   // Only considers points within visible range (isInVisibleRange === true)
   const handleTap = useCallback(
     (tapX: number, tapY: number, tapTime: number) => {
       if (!onDataPointPress || renderDataPoints.length === 0) return;
+      if (isScrubbing) return;
 
       // Check gesture guards
       if (isPinching.value || isPanning.value) return;
@@ -303,7 +355,7 @@ export default function AnalyticsChart({
         });
       }
     },
-    [renderDataPoints, onDataPointPress, isPinching, isPanning, lastGestureEndTime]
+    [renderDataPoints, onDataPointPress, isScrubbing, isPinching, isPanning, lastGestureEndTime]
   );
 
   // Update visible range (called from gesture handlers via runOnJS)
@@ -456,9 +508,26 @@ export default function AnalyticsChart({
       if (onGestureEnd) runOnJS(onGestureEnd)();
     });
 
+  // Scrub gesture - long press then slide across points
+  const scrubGesture = Gesture.Pan()
+    .activateAfterLongPress(250)
+    .onBegin((event) => {
+      if (onGestureStart) runOnJS(onGestureStart)();
+      runOnJS(setIsScrubbing)(true);
+      runOnJS(updateScrubbedPoint)(event.x);
+    })
+    .onUpdate((event) => {
+      runOnJS(updateScrubbedPoint)(event.x);
+    })
+    .onFinalize((event) => {
+      if (onGestureEnd) runOnJS(onGestureEnd)();
+      runOnJS(handleScrubEnd)(event.x);
+    });
+
   // Compose gestures: horizontal capture runs simultaneously to prevent tab navigation
-  // Double tap has priority, then pinch/pan, then single tap
+  // Scrub has priority, then double tap, then pinch/pan, then single tap
   const mainGestures = Gesture.Exclusive(
+    scrubGesture,
     doubleTapGesture,
     Gesture.Simultaneous(pinchGesture, panGesture),
     tapGesture
@@ -503,6 +572,14 @@ export default function AnalyticsChart({
           <View style={[styles.zoomIndicator, { backgroundColor: themeColors.surface }]}>
             <Text style={[styles.zoomText, { color: themeColors.textSecondary }]}>
               {zoomPercentage}%
+            </Text>
+          </View>
+        )}
+
+        {isScrubbing && scrubbedPoint && (
+          <View style={[styles.scrubDatePill, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Text style={[styles.scrubDateText, { color: themeColors.text }]}>
+              {formatDate(scrubbedPoint.date)}
             </Text>
           </View>
         )}
@@ -595,11 +672,11 @@ export default function AnalyticsChart({
                     />
                   ))}
 
-                  {/* Highlight ring for selected point */}
-                  {selectedPoint && (
+                  {/* Highlight ring for selected/scrubbed point */}
+                  {(isScrubbing ? scrubbedPoint : selectedPoint) && (
                     <Circle
-                      cx={dateToX(selectedPoint.date)}
-                      cy={valueToY(selectedPoint.value) + PADDING_TOP}
+                      cx={dateToX((isScrubbing ? scrubbedPoint : selectedPoint)!.date)}
+                      cy={valueToY((isScrubbing ? scrubbedPoint : selectedPoint)!.value) + PADDING_TOP}
                       r={DATA_POINT_RADIUS + 4}
                       fill="none"
                       stroke={themeColors.primary}
@@ -675,6 +752,23 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     zIndex: 10,
+  },
+  scrubDatePill: {
+    position: "absolute",
+    top: 8,
+    left: "50%",
+    transform: [{ translateX: -60 }],
+    minWidth: 120,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    zIndex: 10,
+  },
+  scrubDateText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   zoomText: {
     fontSize: 11,
