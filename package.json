@@ -28,6 +28,7 @@
     "expo": "~54.0.31",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.8",
+    "expo-document-picker": "^14.0.8",
     "expo-font": "~14.0.7",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
