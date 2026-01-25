@@ -51,7 +51,7 @@ const MIN_VISIBLE_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // Interaction constants
-const DATA_POINT_RADIUS = 6;
+const DATA_POINT_RADIUS = 4;
 const DATA_POINT_HIT_RADIUS = 30; // Increased for better edge-point tapping
 const GESTURE_COOLDOWN_MS = 200;
 
@@ -600,7 +600,7 @@ export default function AnalyticsChart({
                     <Circle
                       cx={dateToX(selectedPoint.date)}
                       cy={valueToY(selectedPoint.value) + PADDING_TOP}
-                      r={DATA_POINT_RADIUS + 6}
+                      r={DATA_POINT_RADIUS + 4}
                       fill="none"
                       stroke={themeColors.primary}
                       strokeWidth={3}
