@@ -39,7 +39,7 @@ interface AnalyticsChartProps {
 }
 
 // Layout constants
-const Y_AXIS_WIDTH = 50;
+const Y_AXIS_WIDTH = 25;
 const X_AXIS_HEIGHT = 30;
 const PADDING_TOP = 20;
 const PADDING_BOTTOM = 12; // Space for bottom Y-axis label
@@ -514,7 +514,7 @@ export default function AnalyticsChart({
               {yAxisLabels.map((label, i) => (
                 <SvgText
                   key={i}
-                  x={Y_AXIS_WIDTH - 8}
+                  x={Y_AXIS_WIDTH - 4}
                   y={label.y + PADDING_TOP + 4}
                   fontSize={10}
                   fill={themeColors.textSecondary}
@@ -651,8 +651,10 @@ const styles = StyleSheet.create({
   },
   container: {
     borderRadius: 16,
-    padding: 12,
+    paddingLeft: 0,
+    paddingRight: 12,
     paddingTop: 16,
+    paddingBottom: 12,
   },
   fullscreenButton: {
     position: "absolute",
