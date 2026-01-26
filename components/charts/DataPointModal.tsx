@@ -18,8 +18,10 @@
  * - Backdrop Pressable (StyleSheet.absoluteFill) catches taps outside card to close
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { deleteExerciseSession } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
 import SetItem from "../lists/SetItem";
@@ -32,7 +34,10 @@ interface DataPointModalProps {
   onClose: () => void;
   sessionDetails: SessionDetails | null;
   exerciseName?: string;
+  exerciseId?: number | null;
   loading?: boolean;
+  /** Called after a successful deletion to refresh data */
+  onDeleted?: () => void;
 }
 
 export default function DataPointModal({
@@ -40,7 +45,9 @@ export default function DataPointModal({
   onClose,
   sessionDetails,
   exerciseName,
+  exerciseId,
   loading = false,
+  onDeleted,
 }: DataPointModalProps) {
   const { themeColors } = useTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -106,6 +113,35 @@ export default function DataPointModal({
     });
   };
 
+  const handleDelete = () => {
+    if (!sessionDetails || !exerciseId) return;
+    
+    Alert.alert(
+      "Delete Session",
+      `Are you sure you want to delete this ${exerciseName || "exercise"} session? This will remove all ${sessionDetails.totalSets} sets and cannot be undone.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteExerciseSession(sessionDetails.workoutId, exerciseId);
+              onClose();
+              onDeleted?.();
+            } catch (error) {
+              if (__DEV__) console.error("[DataPointModal] Error deleting session:", error);
+              Alert.alert("Error", "Failed to delete session. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -168,13 +204,43 @@ export default function DataPointModal({
 
                 {/* Date/Time Meta Row */}
                 <View style={styles.metaRow}>
-                  <MaterialCommunityIcons name="calendar-outline" size={16} color={themeColors.textSecondary} />
-                  <Text style={[styles.metaDate, { color: themeColors.text }]}>
-                    {formatDate(sessionDetails.date)}
-                  </Text>
-                  <Text style={[styles.metaTime, { color: themeColors.textSecondary }]}>
-                    {formatTime(sessionDetails.date)}
-                  </Text>
+                  <View style={styles.metaLeft}>
+                    <MaterialCommunityIcons name="calendar-outline" size={16} color={themeColors.textSecondary} />
+                    <Text style={[styles.metaDate, { color: themeColors.text }]}>
+                      {formatDate(sessionDetails.date)}
+                    </Text>
+                    <Text style={[styles.metaTime, { color: themeColors.textSecondary }]}>
+                      {formatTime(sessionDetails.date)}
+                    </Text>
+                  </View>
+                  {exerciseId && (
+                    <View style={styles.metaActions}>
+                      <Pressable
+                        onPress={() => {
+                          onClose();
+                          router.push({
+                            pathname: "/edit-workout",
+                            params: {
+                              exerciseId: String(exerciseId),
+                              workoutId: String(sessionDetails.workoutId),
+                              exerciseName: exerciseName || "Exercise",
+                            },
+                          });
+                        }}
+                        hitSlop={8}
+                        style={[styles.actionButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={16} color={themeColors.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={handleDelete}
+                        hitSlop={8}
+                        style={[styles.actionButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={themeColors.error} />
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
 
                 {/* Summary Section */}
@@ -358,8 +424,13 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
     marginBottom: 12,
+  },
+  metaLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   metaDate: {
     fontSize: 15,
@@ -367,6 +438,18 @@ const styles = StyleSheet.create({
   },
   metaTime: {
     fontSize: 14,
+  },
+  metaActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   
   // Summary Section

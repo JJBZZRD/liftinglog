@@ -96,6 +96,22 @@ export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<
   await db.delete(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId)).run();
 }
 
+/**
+ * Delete an exercise session (all sets for an exercise within a workout).
+ * Also removes the workout_exercise entry if it exists.
+ */
+export async function deleteExerciseSession(workoutId: number, exerciseId: number): Promise<void> {
+  // Delete sets for this exercise in this workout
+  await db.delete(sets).where(
+    and(eq(sets.workoutId, workoutId), eq(sets.exerciseId, exerciseId))
+  ).run();
+  
+  // Delete the workout_exercise entry if it exists
+  await db.delete(workoutExercises).where(
+    and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId))
+  ).run();
+}
+
 export async function addWorkoutExercise(args: {
   workout_id: number;
   exercise_id: number;

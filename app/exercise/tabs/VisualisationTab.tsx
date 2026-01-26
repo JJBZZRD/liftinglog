@@ -345,6 +345,8 @@ export default function VisualisationTab() {
         }}
         sessionDetails={selectedSessionDetails}
         exerciseName={exerciseName}
+        exerciseId={exerciseId}
+        onDeleted={fetchData}
       />
 
       {/* Fullscreen Chart Modal */}
