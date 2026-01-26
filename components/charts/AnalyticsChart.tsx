@@ -311,128 +311,150 @@ export default function AnalyticsChart({
     setVisibleEnd(end);
   }, []);
 
-  // Track if pinching is active (to disable pan during pinch)
-  const isPinching = useSharedValue(false);
-  const lastFocalX = useSharedValue(0);
+  // Track touch positions for direction detection and cumulative movement
+  const touch1StartX = useSharedValue(0);
+  const touch2StartX = useSharedValue(0);
+  const touch1PrevX = useSharedValue(0);
+  const touch2PrevX = useSharedValue(0);
+  const initialDistance = useSharedValue(0);
+  const initialFocalX = useSharedValue(0);
+  const gestureMode = useSharedValue<'undecided' | 'zoom' | 'pan'>('undecided');
 
-  // Pinch gesture - modifies visible date range
-  // Also handles focal point movement for pan-like behavior during pinch
-  const pinchGesture = Gesture.Pinch()
-    .onBegin(() => {
-      // Block scrub SYNCHRONOUSLY on UI thread before any runOnJS calls
-      scrubBlocked.value = true;
-      isPinching.value = true;
-      // Immediately notify parent to disable tab swiping BEFORE gesture activates
-      if (onGestureStart) runOnJS(onGestureStart)();
-      runOnJS(endScrubCancelled)();
-    })
-    .onStart((event) => {
-      initialRangeMs.value = visibleEnd - visibleStart;
-      pinchStartStart.value = visibleStart;
-      pinchStartEnd.value = visibleEnd;
-      lastFocalX.value = event.focalX;
-
-      // Calculate anchor date from focal point
-      // event.focalX is relative to chartArea (same as tap events)
-      const focalX = event.focalX;
-      const focalRatio = Math.max(0, Math.min(1, (focalX - PLOT_PADDING_X) / plotWidth));
-      anchorDateMs.value = visibleStart + focalRatio * (visibleEnd - visibleStart);
-    })
-    .onUpdate((event) => {
-      // Calculate new range based on pinch scale
-      const newRangeMs = initialRangeMs.value / event.scale;
-
-      // Clamp to constraints
-      const minRangeMs = MIN_VISIBLE_DAYS * MS_PER_DAY;
-      const clampedRange = Math.max(minRangeMs, Math.min(fullRangeMs, newRangeMs));
-
-      // Calculate anchor position ratio in the original range
-      const anchorRatioInOriginal =
-        (anchorDateMs.value - pinchStartStart.value) /
-        (pinchStartEnd.value - pinchStartStart.value);
-
-      // Calculate new start/end centered on anchor
-      let newStart = anchorDateMs.value - anchorRatioInOriginal * clampedRange;
-      let newEnd = newStart + clampedRange;
-
-      // Also handle focal point movement (pan during pinch)
-      const focalDeltaX = event.focalX - lastFocalX.value;
-      if (Math.abs(focalDeltaX) > 0) {
-        const pixelsPerMs = plotWidth / clampedRange;
-        const panDeltaMs = -focalDeltaX / pixelsPerMs;
-        newStart += panDeltaMs;
-        newEnd += panDeltaMs;
-        lastFocalX.value = event.focalX;
-      }
-
-      // Clamp to data bounds
-      if (newStart < minDate) {
-        newStart = minDate;
-        newEnd = minDate + clampedRange;
-      }
-      if (newEnd > maxDate) {
-        newEnd = maxDate;
-        newStart = maxDate - clampedRange;
-      }
-
-      runOnJS(updateVisibleRange)(newStart, newEnd);
-    })
-    .onFinalize(() => {
-      isPinching.value = false;
-      // Notify parent to re-enable tab swiping
-      if (onGestureEnd) runOnJS(onGestureEnd)();
-    });
-
-  // Two-finger pan gesture - shifts visible date range when zoomed
-  // Uses activeOffsetX to require significant horizontal movement before activating
-  // Disabled during pinching to prevent conflicts
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-10, 10]) // Must move 10px horizontally to activate
+  // Combined two-finger gesture - handles both zoom and pan based on finger directions
+  const twoFingerGesture = Gesture.Pan()
     .minPointers(2)
     .maxPointers(2)
+    .minDistance(0)
     .onBegin(() => {
-      // Block scrub SYNCHRONOUSLY on UI thread before any runOnJS calls
+      // Block scrub SYNCHRONOUSLY on UI thread
       scrubBlocked.value = true;
-      // Immediately notify parent to disable tab swiping BEFORE gesture activates
+      gestureMode.value = 'undecided';
       if (onGestureStart) runOnJS(onGestureStart)();
       runOnJS(endScrubCancelled)();
     })
-    .onStart(() => {
-      // Don't activate pan if pinching - pinch handles its own panning
-      if (isPinching.value) return;
-      // Only allow panning when zoomed
-      if (visibleEnd - visibleStart >= fullRangeMs * 0.99) return;
-      isPanning.value = true;
-      panStartStart.value = visibleStart;
-      panStartEnd.value = visibleEnd;
+    .onTouchesDown((event: any, _state: any) => {
+      // Initialize tracking when we have 2 touches
+      if (event.allTouches && event.allTouches.length >= 2) {
+        const t1 = event.allTouches[0];
+        const t2 = event.allTouches[1];
+        
+        // Store start positions for cumulative tracking
+        touch1StartX.value = t1.x;
+        touch2StartX.value = t2.x;
+        touch1PrevX.value = t1.x;
+        touch2PrevX.value = t2.x;
+        initialDistance.value = Math.abs(t1.x - t2.x);
+        initialFocalX.value = (t1.x + t2.x) / 2;
+        
+        // Store initial state for both zoom and pan
+        initialRangeMs.value = visibleEnd - visibleStart;
+        pinchStartStart.value = visibleStart;
+        pinchStartEnd.value = visibleEnd;
+        panStartStart.value = visibleStart;
+        panStartEnd.value = visibleEnd;
+        
+        // Calculate anchor for zoom (midpoint between fingers)
+        const focalX = (t1.x + t2.x) / 2;
+        const focalRatio = Math.max(0, Math.min(1, (focalX - PLOT_PADDING_X) / plotWidth));
+        anchorDateMs.value = visibleStart + focalRatio * (visibleEnd - visibleStart);
+      }
     })
-    .onUpdate((event) => {
-      // Skip pan updates if pinching or not in pan mode
-      if (isPinching.value || !isPanning.value) return;
-
-      // Convert pixel delta to time delta
-      const currentRange = panStartEnd.value - panStartStart.value;
-      const pixelsPerMs = plotWidth / currentRange;
-      const deltaMs = -event.translationX / pixelsPerMs;
-
-      let newStart = panStartStart.value + deltaMs;
-      let newEnd = panStartEnd.value + deltaMs;
-
-      // Clamp to data bounds
-      if (newStart < minDate) {
-        newStart = minDate;
-        newEnd = minDate + currentRange;
+    .onTouchesMove((event: any, _state: any) => {
+      if (!event.allTouches || event.allTouches.length < 2) return;
+      
+      const t1 = event.allTouches[0];
+      const t2 = event.allTouches[1];
+      
+      // Calculate frame-to-frame movement for direction detection
+      const delta1 = t1.x - touch1PrevX.value;
+      const delta2 = t2.x - touch2PrevX.value;
+      
+      // Update previous positions for next frame
+      touch1PrevX.value = t1.x;
+      touch2PrevX.value = t2.x;
+      
+      // Decide gesture mode if undecided (only need small movement to decide)
+      if (gestureMode.value === 'undecided') {
+        const minMovement = 3;
+        const hasMovement1 = Math.abs(delta1) > minMovement;
+        const hasMovement2 = Math.abs(delta2) > minMovement;
+        
+        if (hasMovement1 && hasMovement2) {
+          // Both fingers moving - check direction
+          const sameDirection = (delta1 > 0 && delta2 > 0) || (delta1 < 0 && delta2 < 0);
+          gestureMode.value = sameDirection ? 'pan' : 'zoom';
+        } else if (hasMovement1 || hasMovement2) {
+          // One finger moved - check distance change
+          const currentDistance = Math.abs(t1.x - t2.x);
+          const distanceChange = Math.abs(currentDistance - initialDistance.value);
+          gestureMode.value = distanceChange > 8 ? 'zoom' : 'pan';
+        }
       }
-      if (newEnd > maxDate) {
-        newEnd = maxDate;
-        newStart = maxDate - currentRange;
+      
+      // Apply gesture based on mode
+      if (gestureMode.value === 'pan') {
+        // Only allow panning when zoomed
+        const currentRange = panStartEnd.value - panStartStart.value;
+        if (currentRange >= fullRangeMs * 0.99) return;
+        
+        // Calculate cumulative translation from start position (smoother than delta-by-delta)
+        const currentFocalX = (t1.x + t2.x) / 2;
+        const totalTranslation = currentFocalX - initialFocalX.value;
+        
+        // Convert pixels to time
+        const pixelsPerMs = plotWidth / currentRange;
+        const panOffsetMs = -totalTranslation / pixelsPerMs;
+        
+        // Apply from original start position (cumulative, not additive)
+        let newStart = panStartStart.value + panOffsetMs;
+        let newEnd = panStartEnd.value + panOffsetMs;
+        
+        // Clamp to data bounds
+        if (newStart < minDate) {
+          newStart = minDate;
+          newEnd = minDate + currentRange;
+        }
+        if (newEnd > maxDate) {
+          newEnd = maxDate;
+          newStart = maxDate - currentRange;
+        }
+        
+        runOnJS(updateVisibleRange)(newStart, newEnd);
+      } else if (gestureMode.value === 'zoom') {
+        // Calculate zoom based on distance change
+        const currentDistance = Math.abs(t1.x - t2.x);
+        const scale = currentDistance / Math.max(initialDistance.value, 1);
+        
+        const newRangeMs = initialRangeMs.value / scale;
+        
+        // Clamp to constraints
+        const minRangeMs = MIN_VISIBLE_DAYS * MS_PER_DAY;
+        const clampedRange = Math.max(minRangeMs, Math.min(fullRangeMs, newRangeMs));
+        
+        // Calculate anchor position ratio
+        const anchorRatioInOriginal =
+          (anchorDateMs.value - pinchStartStart.value) /
+          (pinchStartEnd.value - pinchStartStart.value);
+        
+        let newStart = anchorDateMs.value - anchorRatioInOriginal * clampedRange;
+        let newEnd = newStart + clampedRange;
+        
+        // Clamp to data bounds
+        if (newStart < minDate) {
+          newStart = minDate;
+          newEnd = minDate + clampedRange;
+        }
+        if (newEnd > maxDate) {
+          newEnd = maxDate;
+          newStart = maxDate - clampedRange;
+        }
+        
+        runOnJS(updateVisibleRange)(newStart, newEnd);
       }
-
-      runOnJS(updateVisibleRange)(newStart, newEnd);
     })
     .onFinalize(() => {
+      gestureMode.value = 'undecided';
       isPanning.value = false;
-      // Notify parent to re-enable tab swiping
       if (onGestureEnd) runOnJS(onGestureEnd)();
     });
 
@@ -491,8 +513,7 @@ export default function AnalyticsChart({
   // Combine horizontal capture with main gestures
   const composedGesture = Gesture.Simultaneous(
     horizontalCapture,
-    pinchGesture,
-    panGesture,
+    twoFingerGesture,
     scrubGesture
   );
 
