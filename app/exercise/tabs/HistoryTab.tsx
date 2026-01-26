@@ -1,12 +1,92 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View,
+} from "react-native";
 import SetItem from "../../../components/lists/SetItem";
+import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { getPREventsBySetIds } from "../../../lib/db/prEvents";
 import { deleteExerciseSession, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Date range presets
+type DateRangePreset = "1w" | "1m" | "3m" | "6m" | "1y" | "all" | "custom";
+
+interface DateRangeState {
+  preset: DateRangePreset;
+  startDate: Date | null;
+  endDate: Date | null;
+}
+
+const DATE_PRESETS: { id: DateRangePreset; label: string; days: number | null }[] = [
+  { id: "1w", label: "1W", days: 7 },
+  { id: "1m", label: "1M", days: 30 },
+  { id: "3m", label: "3M", days: 90 },
+  { id: "6m", label: "6M", days: 180 },
+  { id: "1y", label: "1Y", days: 365 },
+  { id: "all", label: "All", days: null },
+];
+
+// Filter state for weight and reps
+interface NumericFilter {
+  min: string;
+  max: string;
+}
+
+// Parsed search result
+interface ParsedSearch {
+  notesQuery: string;
+  weightValue: number | null;
+  repsValue: number | null;
+}
+
+/**
+ * Parse search query to extract weight, reps, and notes text.
+ * Supports patterns like:
+ * - Weight: "100kg", "100 kg", "100KG"
+ * - Reps: "10 reps", "10reps", "10 rep"
+ * - Remaining text is treated as notes search
+ */
+function parseSearchQuery(query: string): ParsedSearch {
+  let notesQuery = query.trim();
+  let weightValue: number | null = null;
+  let repsValue: number | null = null;
+
+  // Extract weight pattern: 100kg, 100 kg, 100KG
+  const weightMatch = notesQuery.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  if (weightMatch) {
+    weightValue = parseFloat(weightMatch[1]);
+    notesQuery = notesQuery.replace(weightMatch[0], "").trim();
+  }
+
+  // Extract reps pattern: 10 reps, 10reps, 10 rep
+  const repsMatch = notesQuery.match(/(\d+)\s*reps?/i);
+  if (repsMatch) {
+    repsValue = parseInt(repsMatch[1], 10);
+    notesQuery = notesQuery.replace(repsMatch[0], "").trim();
+  }
+
+  // Clean up multiple spaces
+  notesQuery = notesQuery.replace(/\s+/g, " ").trim();
+
+  return { notesQuery, weightValue, repsValue };
+}
 
 // Extended set row with PR badge
 type SetWithPR = SetRow & { prBadge?: string };
@@ -16,8 +96,137 @@ export default function HistoryTab() {
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
-  const [history, setHistory] = useState<(WorkoutHistoryEntry & { sets: SetWithPR[] })[]>([]);
+  const [rawHistory, setRawHistory] = useState<(WorkoutHistoryEntry & { sets: SetWithPR[] })[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangeState>({
+    preset: "all",
+    startDate: null,
+    endDate: null,
+  });
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [weightFilter, setWeightFilter] = useState<NumericFilter>({ min: "", max: "" });
+  const [repsFilter, setRepsFilter] = useState<NumericFilter>({ min: "", max: "" });
+
+  // Date picker modal states
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState<Date>(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+  const [tempEndDate, setTempEndDate] = useState<Date>(new Date());
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Compute date range timestamps
+  const dateRangeTimestamps = useMemo(() => {
+    let startTs: number | null = null;
+    let endTs: number | null = null;
+
+    if (dateRange.preset === "custom") {
+      if (dateRange.startDate) {
+        const d = new Date(dateRange.startDate);
+        d.setHours(0, 0, 0, 0);
+        startTs = d.getTime();
+      }
+      if (dateRange.endDate) {
+        const d = new Date(dateRange.endDate);
+        d.setHours(23, 59, 59, 999);
+        endTs = d.getTime();
+      }
+    } else if (dateRange.preset !== "all") {
+      const presetConfig = DATE_PRESETS.find((p) => p.id === dateRange.preset);
+      if (presetConfig?.days) {
+        const now = new Date();
+        now.setHours(23, 59, 59, 999);
+        endTs = now.getTime();
+        startTs = now.getTime() - presetConfig.days * 24 * 60 * 60 * 1000;
+      }
+    }
+
+    return { startDate: startTs, endDate: endTs };
+  }, [dateRange]);
+
+  // Parse search query for weight, reps, and notes
+  const parsedSearch = useMemo(() => parseSearchQuery(debouncedQuery), [debouncedQuery]);
+
+  // Compute effective filter values (explicit filters take precedence over parsed search)
+  const effectiveFilters = useMemo(() => {
+    const weightMin = weightFilter.min ? parseFloat(weightFilter.min) : parsedSearch.weightValue;
+    const weightMax = weightFilter.max ? parseFloat(weightFilter.max) : null;
+    const repsMin = repsFilter.min ? parseInt(repsFilter.min, 10) : parsedSearch.repsValue;
+    const repsMax = repsFilter.max ? parseInt(repsFilter.max, 10) : null;
+
+    return {
+      weightMin: !isNaN(weightMin as number) ? weightMin : null,
+      weightMax: !isNaN(weightMax as number) ? weightMax : null,
+      repsMin: !isNaN(repsMin as number) ? repsMin : null,
+      repsMax: !isNaN(repsMax as number) ? repsMax : null,
+      notesQuery: parsedSearch.notesQuery.toLowerCase(),
+    };
+  }, [weightFilter, repsFilter, parsedSearch]);
+
+  // Filter history based on all filter criteria
+  const filteredHistory = useMemo(() => {
+    const { startDate, endDate } = dateRangeTimestamps;
+    const { weightMin, weightMax, repsMin, repsMax, notesQuery } = effectiveFilters;
+
+    return rawHistory
+      .filter((entry) => {
+        // Date filter
+        const workoutDate = entry.workoutExercise?.performedAt ?? entry.workoutExercise?.completedAt ?? entry.workout.startedAt;
+        if (startDate && workoutDate < startDate) return false;
+        if (endDate && workoutDate > endDate) return false;
+        return true;
+      })
+      .map((entry) => {
+        // Filter sets by weight, reps, and notes
+        const filteredSets = entry.sets.filter((set) => {
+          // Weight filter
+          if (weightMin !== null && set.weightKg < weightMin) return false;
+          if (weightMax !== null && set.weightKg > weightMax) return false;
+
+          // Reps filter
+          if (repsMin !== null && set.reps < repsMin) return false;
+          if (repsMax !== null && set.reps > repsMax) return false;
+
+          // Notes filter
+          if (notesQuery && !(set.note?.toLowerCase().includes(notesQuery))) return false;
+
+          return true;
+        });
+
+        return { ...entry, sets: filteredSets };
+      })
+      .filter((entry) => entry.sets.length > 0); // Remove entries with no matching sets
+  }, [rawHistory, dateRangeTimestamps, effectiveFilters]);
+
+  // Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return (
+      debouncedQuery.length > 0 ||
+      dateRange.preset !== "all" ||
+      weightFilter.min !== "" ||
+      weightFilter.max !== "" ||
+      repsFilter.min !== "" ||
+      repsFilter.max !== ""
+    );
+  }, [debouncedQuery, dateRange.preset, weightFilter, repsFilter]);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setDateRange({ preset: "all", startDate: null, endDate: null });
+    setWeightFilter({ min: "", max: "" });
+    setRepsFilter({ min: "", max: "" });
+  }, []);
 
   const loadHistory = useCallback(async () => {
     if (!exerciseId) {
@@ -41,7 +250,7 @@ export default function HistoryTab() {
         })),
       }));
       
-      setHistory(historyWithPRs);
+      setRawHistory(historyWithPRs);
     } catch (error) {
       console.error("Error loading exercise history:", error);
     } finally {
@@ -98,6 +307,28 @@ export default function HistoryTab() {
     });
   }, [exerciseId, exerciseName]);
 
+  // Handle date preset selection
+  const handlePresetPress = useCallback((preset: DateRangePreset) => {
+    if (preset === "custom") {
+      setTempStartDate(dateRange.startDate ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+      setTempEndDate(dateRange.endDate ?? new Date());
+      setShowStartPicker(true);
+      return;
+    }
+    setDateRange({ preset, startDate: null, endDate: null });
+  }, [dateRange.startDate, dateRange.endDate]);
+
+  // Toggle filter section with animation
+  const toggleFilters = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setFiltersExpanded((prev) => !prev);
+  }, []);
+
+  // Format date for custom range display
+  const formatDateShort = (date: Date) => {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
   const handleDelete = useCallback((entry: WorkoutHistoryEntry) => {
     if (!exerciseId) return;
     
@@ -143,7 +374,8 @@ export default function HistoryTab() {
     );
   }
 
-  if (history.length === 0) {
+  // Show empty state only if there's no raw data at all
+  if (rawHistory.length === 0) {
     return (
       <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
         <Text style={[styles.emptyText, { color: themeColors.text }]}>No workout history found</Text>
@@ -154,8 +386,222 @@ export default function HistoryTab() {
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+      {/* Search and Filter Section */}
+      <View style={[styles.filterSection, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
+        {/* Search Bar */}
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border },
+          ]}
+        >
+          <MaterialCommunityIcons name="magnify" size={20} color={themeColors.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, { color: themeColors.text }]}
+            placeholder="Search notes, 100kg, 8 reps..."
+            placeholderTextColor={themeColors.textPlaceholder}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery("")}>
+              <MaterialCommunityIcons name="close-circle" size={20} color={themeColors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Date Range Presets */}
+        <View style={styles.presetsRow}>
+          {DATE_PRESETS.map((preset) => (
+            <Pressable
+              key={preset.id}
+              style={[
+                styles.presetButton,
+                { borderColor: themeColors.border },
+                dateRange.preset === preset.id && {
+                  backgroundColor: themeColors.primary,
+                  borderColor: themeColors.primary,
+                },
+              ]}
+              onPress={() => handlePresetPress(preset.id)}
+            >
+              <Text
+                style={[
+                  styles.presetText,
+                  { color: themeColors.text },
+                  dateRange.preset === preset.id && { color: themeColors.surface },
+                ]}
+              >
+                {preset.label}
+              </Text>
+            </Pressable>
+          ))}
+
+          {/* Custom Date Button */}
+          <Pressable
+            style={[
+              styles.presetButton,
+              { borderColor: themeColors.border },
+              dateRange.preset === "custom" && {
+                backgroundColor: themeColors.primary,
+                borderColor: themeColors.primary,
+              },
+            ]}
+            onPress={() => handlePresetPress("custom")}
+          >
+            <MaterialCommunityIcons
+              name="calendar-range"
+              size={16}
+              color={dateRange.preset === "custom" ? themeColors.surface : themeColors.textSecondary}
+            />
+          </Pressable>
+        </View>
+
+        {/* Custom Range Display */}
+        {dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate && (
+          <Pressable
+            style={[styles.customRangeDisplay, { backgroundColor: themeColors.surfaceSecondary }]}
+            onPress={() => setShowStartPicker(true)}
+          >
+            <Text style={[styles.customRangeText, { color: themeColors.text }]}>
+              {formatDateShort(dateRange.startDate)} - {formatDateShort(dateRange.endDate)}
+            </Text>
+            <MaterialCommunityIcons name="pencil" size={14} color={themeColors.textSecondary} />
+          </Pressable>
+        )}
+
+        {/* Expandable Filters Toggle */}
+        <Pressable
+          style={[styles.filterToggle, { borderColor: themeColors.border }]}
+          onPress={toggleFilters}
+        >
+          <View style={styles.filterToggleLeft}>
+            <MaterialCommunityIcons name="filter-variant" size={18} color={themeColors.textSecondary} />
+            <Text style={[styles.filterToggleText, { color: themeColors.text }]}>Filters</Text>
+          </View>
+          <MaterialCommunityIcons
+            name={filtersExpanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={themeColors.textSecondary}
+          />
+        </Pressable>
+
+        {/* Expanded Filter Inputs */}
+        {filtersExpanded && (
+          <View style={styles.filterInputsContainer}>
+            {/* Weight Filter */}
+            <View style={styles.filterInputRow}>
+              <Text style={[styles.filterInputLabel, { color: themeColors.text }]}>Weight (kg)</Text>
+              <View style={styles.filterInputs}>
+                <TextInput
+                  style={[
+                    styles.filterInput,
+                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                  ]}
+                  placeholder="Min"
+                  placeholderTextColor={themeColors.textPlaceholder}
+                  value={weightFilter.min}
+                  onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, min: text }))}
+                  keyboardType="numeric"
+                />
+                <Text style={[styles.filterInputDash, { color: themeColors.textSecondary }]}>-</Text>
+                <TextInput
+                  style={[
+                    styles.filterInput,
+                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                  ]}
+                  placeholder="Max"
+                  placeholderTextColor={themeColors.textPlaceholder}
+                  value={weightFilter.max}
+                  onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, max: text }))}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            {/* Reps Filter */}
+            <View style={styles.filterInputRow}>
+              <Text style={[styles.filterInputLabel, { color: themeColors.text }]}>Reps</Text>
+              <View style={styles.filterInputs}>
+                <TextInput
+                  style={[
+                    styles.filterInput,
+                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                  ]}
+                  placeholder="Min"
+                  placeholderTextColor={themeColors.textPlaceholder}
+                  value={repsFilter.min}
+                  onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, min: text }))}
+                  keyboardType="numeric"
+                />
+                <Text style={[styles.filterInputDash, { color: themeColors.textSecondary }]}>-</Text>
+                <TextInput
+                  style={[
+                    styles.filterInput,
+                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                  ]}
+                  placeholder="Max"
+                  placeholderTextColor={themeColors.textPlaceholder}
+                  value={repsFilter.max}
+                  onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, max: text }))}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Active Filters Summary */}
+        {hasActiveFilters && (
+          <View style={styles.activeFiltersRow}>
+            <Text style={[styles.activeFiltersText, { color: themeColors.textSecondary }]}>
+              {filteredHistory.length} of {rawHistory.length} sessions
+            </Text>
+            <Pressable onPress={clearFilters}>
+              <Text style={[styles.clearFiltersLink, { color: themeColors.primary }]}>Clear</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
+      {/* Date Pickers */}
+      <DatePickerModal
+        visible={showStartPicker}
+        onClose={() => {
+          setShowStartPicker(false);
+          setShowEndPicker(true);
+        }}
+        value={tempStartDate}
+        onChange={(date) => setTempStartDate(date)}
+        title="Start Date"
+      />
+      <DatePickerModal
+        visible={showEndPicker}
+        onClose={() => {
+          setShowEndPicker(false);
+          // Auto-correct if start > end
+          let start = tempStartDate;
+          let end = tempEndDate;
+          if (start.getTime() > end.getTime()) {
+            const temp = start;
+            start = end;
+            end = temp;
+          }
+          setDateRange({
+            preset: "custom",
+            startDate: start,
+            endDate: end,
+          });
+        }}
+        value={tempEndDate}
+        onChange={(date) => setTempEndDate(date)}
+        title="End Date"
+      />
+
       <FlatList
-        data={history}
+        data={filteredHistory}
         keyExtractor={(item) => String(item.workout.id)}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
@@ -215,6 +661,23 @@ export default function HistoryTab() {
             </View>
           );
         }}
+        ListEmptyComponent={
+          hasActiveFilters ? (
+            <View style={styles.emptyFilterState}>
+              <MaterialCommunityIcons name="filter-off-outline" size={48} color={themeColors.textTertiary} />
+              <Text style={[styles.emptyText, { color: themeColors.text }]}>No matching sessions</Text>
+              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+                Try adjusting your search or filters
+              </Text>
+              <Pressable
+                style={[styles.clearFiltersButton, { backgroundColor: themeColors.primary }]}
+                onPress={clearFilters}
+              >
+                <Text style={[styles.clearFiltersText, { color: themeColors.surface }]}>Clear Filters</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -227,6 +690,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingTop: 8,
   },
   tabContainer: {
     flex: 1,
@@ -254,6 +718,135 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
+  emptyFilterState: {
+    alignItems: "center",
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  clearFiltersButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  clearFiltersText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  // Filter Section
+  filterSection: {
+    padding: 16,
+    paddingTop: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
+  },
+  presetsRow: {
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+  },
+  presetButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  presetText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  customRangeDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  customRangeText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  filterToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  filterToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filterToggleText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  filterInputsContainer: {
+    gap: 12,
+    paddingTop: 4,
+  },
+  filterInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  filterInputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+  },
+  filterInputs: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filterInput: {
+    width: 70,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  filterInputDash: {
+    fontSize: 14,
+  },
+  activeFiltersRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 4,
+  },
+  activeFiltersText: {
+    fontSize: 13,
+  },
+  clearFiltersLink: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  // Workout Cards
   workoutCard: {
     backgroundColor: "#f9f9f9",
     borderRadius: 12,
