@@ -5,7 +5,7 @@
  * - Pinch to zoom (horizontal domain-based, not scale transform)
  * - Pan when zoomed (shifts visible date range)
  * - Fixed Y-axis during pan
- * - Data point tap interaction with gesture guards
+ * - Touch-and-drag scrubbing to open details
  * - Optional trend line overlay
  * - Fullscreen button
  */
@@ -13,11 +13,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import { runOnJS, useSharedValue } from "react-native-reanimated";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDataPoint } from "../../lib/utils/analytics";
@@ -59,8 +55,6 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // Interaction constants
 const DATA_POINT_RADIUS = 4;
-const DATA_POINT_HIT_RADIUS = 30; // Increased for better edge-point tapping
-const GESTURE_COOLDOWN_MS = 200;
 
 export default function AnalyticsChart({
   data,
@@ -106,6 +100,8 @@ export default function AnalyticsChart({
   const [visibleEnd, setVisibleEnd] = useState(maxDate);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubbedPoint, setScrubbedPoint] = useState<RenderDataPoint | null>(null);
+  // Use shared value for blocking - set synchronously on UI thread before runOnJS
+  const scrubBlocked = useSharedValue(false);
 
   // Reset visible range when data changes
   useEffect(() => {
@@ -114,9 +110,7 @@ export default function AnalyticsChart({
   }, [minDate, maxDate]);
 
   // Gesture state for guards
-  const isPinching = useSharedValue(false);
   const isPanning = useSharedValue(false);
-  const lastGestureEndTime = useSharedValue(0);
 
   // Pinch state
   const initialRangeMs = useSharedValue(fullRangeMs);
@@ -277,6 +271,15 @@ export default function AnalyticsChart({
     [renderDataPoints]
   );
 
+  const beginScrub = useCallback(
+    (x: number) => {
+      setIsScrubbing(true);
+      const closestPoint = getClosestVisiblePointByX(x);
+      setScrubbedPoint(closestPoint);
+    },
+    [getClosestVisiblePointByX]
+  );
+
   const updateScrubbedPoint = useCallback(
     (x: number) => {
       const closestPoint = getClosestVisiblePointByX(x);
@@ -285,7 +288,12 @@ export default function AnalyticsChart({
     [getClosestVisiblePointByX]
   );
 
-  const handleScrubEnd = useCallback(
+  const endScrubCancelled = useCallback(() => {
+    setIsScrubbing(false);
+    setScrubbedPoint(null);
+  }, []);
+
+  const endScrubWithModal = useCallback(
     (endX: number) => {
       const closestPoint = getClosestVisiblePointByX(endX);
       if (closestPoint && onDataPointPress) {
@@ -297,90 +305,32 @@ export default function AnalyticsChart({
     [getClosestVisiblePointByX, onDataPointPress]
   );
 
-  // Handle data point tap - uses the SAME renderDataPoints array used for rendering
-  // Only considers points within visible range (isInVisibleRange === true)
-  const handleTap = useCallback(
-    (tapX: number, tapY: number, tapTime: number) => {
-      if (!onDataPointPress || renderDataPoints.length === 0) return;
-      if (isScrubbing) return;
-
-      // Check gesture guards
-      if (isPinching.value || isPanning.value) return;
-      if (tapTime - lastGestureEndTime.value < GESTURE_COOLDOWN_MS) return;
-
-      // Find closest data point using 2D Euclidean distance
-      // Only consider points within visible range (not buffer zone points)
-      let closestPoint: typeof renderDataPoints[0] | null = null;
-      let closestDistance = Infinity;
-
-      for (const point of renderDataPoints) {
-        // Skip buffer zone points - only tappable points are those in visible range
-        if (!point.isInVisibleRange) continue;
-
-        // Calculate 2D Euclidean distance using the SAME x,y used for rendering
-        // Point is rendered at (point.x, point.y + PADDING_TOP) in SVG coordinates
-        // Tap coordinates are in chartArea-local space (same as SVG space)
-        const pointScreenX = point.x;
-        const pointScreenY = point.y + PADDING_TOP;
-        
-        const distX = pointScreenX - tapX;
-        const distY = pointScreenY - tapY;
-        const distance = Math.sqrt(distX * distX + distY * distY);
-        
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestPoint = point;
-        }
-      }
-
-      // Only trigger if we found a point within hit radius
-      if (closestPoint && closestDistance <= DATA_POINT_HIT_RADIUS) {
-        if (__DEV__) {
-          console.log('[Chart] Tap detected:', {
-            tapX: tapX.toFixed(1),
-            tapY: tapY.toFixed(1),
-            selectedPointX: closestPoint.x.toFixed(1),
-            selectedPointY: (closestPoint.y + PADDING_TOP).toFixed(1),
-            selectedDate: new Date(closestPoint.date).toLocaleDateString(),
-            workoutId: closestPoint.workoutId,
-            distance: closestDistance.toFixed(1),
-          });
-        }
-        onDataPointPress(closestPoint);
-      } else if (__DEV__) {
-        console.log('[Chart] Tap missed - no point within hit radius:', {
-          tapX: tapX.toFixed(1),
-          tapY: tapY.toFixed(1),
-          closestDistance: closestDistance === Infinity ? 'none' : closestDistance.toFixed(1),
-        });
-      }
-    },
-    [renderDataPoints, onDataPointPress, isScrubbing, isPinching, isPanning, lastGestureEndTime]
-  );
-
   // Update visible range (called from gesture handlers via runOnJS)
   const updateVisibleRange = useCallback((start: number, end: number) => {
     setVisibleStart(start);
     setVisibleEnd(end);
   }, []);
 
-  // Reset zoom
-  const resetZoom = useCallback(() => {
-    setVisibleStart(minDate);
-    setVisibleEnd(maxDate);
-  }, [minDate, maxDate]);
+  // Track if pinching is active (to disable pan during pinch)
+  const isPinching = useSharedValue(false);
+  const lastFocalX = useSharedValue(0);
 
   // Pinch gesture - modifies visible date range
+  // Also handles focal point movement for pan-like behavior during pinch
   const pinchGesture = Gesture.Pinch()
     .onBegin(() => {
+      // Block scrub SYNCHRONOUSLY on UI thread before any runOnJS calls
+      scrubBlocked.value = true;
+      isPinching.value = true;
       // Immediately notify parent to disable tab swiping BEFORE gesture activates
       if (onGestureStart) runOnJS(onGestureStart)();
+      runOnJS(endScrubCancelled)();
     })
     .onStart((event) => {
-      isPinching.value = true;
       initialRangeMs.value = visibleEnd - visibleStart;
       pinchStartStart.value = visibleStart;
       pinchStartEnd.value = visibleEnd;
+      lastFocalX.value = event.focalX;
 
       // Calculate anchor date from focal point
       // event.focalX is relative to chartArea (same as tap events)
@@ -405,6 +355,16 @@ export default function AnalyticsChart({
       let newStart = anchorDateMs.value - anchorRatioInOriginal * clampedRange;
       let newEnd = newStart + clampedRange;
 
+      // Also handle focal point movement (pan during pinch)
+      const focalDeltaX = event.focalX - lastFocalX.value;
+      if (Math.abs(focalDeltaX) > 0) {
+        const pixelsPerMs = plotWidth / clampedRange;
+        const panDeltaMs = -focalDeltaX / pixelsPerMs;
+        newStart += panDeltaMs;
+        newEnd += panDeltaMs;
+        lastFocalX.value = event.focalX;
+      }
+
       // Clamp to data bounds
       if (newStart < minDate) {
         newStart = minDate;
@@ -419,22 +379,27 @@ export default function AnalyticsChart({
     })
     .onFinalize(() => {
       isPinching.value = false;
-      lastGestureEndTime.value = Date.now();
       // Notify parent to re-enable tab swiping
       if (onGestureEnd) runOnJS(onGestureEnd)();
     });
 
-  // Pan gesture - shifts visible date range when zoomed
+  // Two-finger pan gesture - shifts visible date range when zoomed
   // Uses activeOffsetX to require significant horizontal movement before activating
+  // Disabled during pinching to prevent conflicts
   const panGesture = Gesture.Pan()
     .activeOffsetX([-10, 10]) // Must move 10px horizontally to activate
-    .minPointers(1)
-    .maxPointers(1)
+    .minPointers(2)
+    .maxPointers(2)
     .onBegin(() => {
+      // Block scrub SYNCHRONOUSLY on UI thread before any runOnJS calls
+      scrubBlocked.value = true;
       // Immediately notify parent to disable tab swiping BEFORE gesture activates
       if (onGestureStart) runOnJS(onGestureStart)();
+      runOnJS(endScrubCancelled)();
     })
     .onStart(() => {
+      // Don't activate pan if pinching - pinch handles its own panning
+      if (isPinching.value) return;
       // Only allow panning when zoomed
       if (visibleEnd - visibleStart >= fullRangeMs * 0.99) return;
       isPanning.value = true;
@@ -442,7 +407,8 @@ export default function AnalyticsChart({
       panStartEnd.value = visibleEnd;
     })
     .onUpdate((event) => {
-      if (!isPanning.value) return;
+      // Skip pan updates if pinching or not in pan mode
+      if (isPinching.value || !isPanning.value) return;
 
       // Convert pixel delta to time delta
       const currentRange = panStartEnd.value - panStartStart.value;
@@ -466,33 +432,8 @@ export default function AnalyticsChart({
     })
     .onFinalize(() => {
       isPanning.value = false;
-      lastGestureEndTime.value = Date.now();
       // Notify parent to re-enable tab swiping
       if (onGestureEnd) runOnJS(onGestureEnd)();
-    });
-
-  // Tap gesture - triggers data point selection
-  // NOTE: event.x/y are relative to the GestureDetector's view (chartArea),
-  // NOT the container. No offset adjustment needed.
-  const tapGesture = Gesture.Tap()
-    .maxDuration(250)
-    .numberOfTaps(1)
-    .onEnd((event) => {
-      // event.x is already in chartArea-local coordinates (same as SVG coordinates)
-      const tapX = event.x;
-      const tapY = event.y;
-      
-      // Only process taps within the chart drawing area
-      if (tapX >= 0 && tapX <= chartWidth && tapY >= 0 && tapY <= chartHeight + PADDING_TOP + PADDING_BOTTOM) {
-        runOnJS(handleTap)(tapX, tapY, Date.now());
-      }
-    });
-
-  // Double tap gesture - resets zoom
-  const doubleTapGesture = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      runOnJS(resetZoom)();
     });
 
   // Horizontal capture gesture - captures horizontal movement to prevent tab pager from swiping
@@ -508,35 +449,51 @@ export default function AnalyticsChart({
       if (onGestureEnd) runOnJS(onGestureEnd)();
     });
 
-  // Scrub gesture - long press then slide across points
+  // Scrub gesture - touch and slide across points
+  // Handles its own multi-touch detection to avoid race conditions
   const scrubGesture = Gesture.Pan()
-    .activateAfterLongPress(250)
-    .onBegin((event) => {
+    .minPointers(1)
+    .minDistance(0)
+    .onBegin((event: any) => {
+      // Unblock scrub SYNCHRONOUSLY on UI thread
+      scrubBlocked.value = false;
       if (onGestureStart) runOnJS(onGestureStart)();
-      runOnJS(setIsScrubbing)(true);
-      runOnJS(updateScrubbedPoint)(event.x);
+      runOnJS(beginScrub)(event.x);
     })
-    .onUpdate((event) => {
-      runOnJS(updateScrubbedPoint)(event.x);
+    .onTouchesDown((event: any, _state: any) => {
+      // Called when touches are added - check if this is a SECOND finger
+      // allTouches contains all active touches including the new one
+      if (event.allTouches && event.allTouches.length > 1) {
+        // Block scrub immediately when second finger touches
+        scrubBlocked.value = true;
+        runOnJS(endScrubCancelled)();
+      }
     })
-    .onFinalize((event) => {
+    .onUpdate((event: any) => {
+      // Only update if not blocked and single pointer
+      if (!scrubBlocked.value && event.numberOfPointers === 1) {
+        runOnJS(updateScrubbedPoint)(event.x);
+      } else if (event.numberOfPointers > 1) {
+        // Block if we somehow get here with multiple pointers
+        scrubBlocked.value = true;
+      }
+    })
+    .onFinalize((event: any) => {
       if (onGestureEnd) runOnJS(onGestureEnd)();
-      runOnJS(handleScrubEnd)(event.x);
+      // Check blocked state SYNCHRONOUSLY before deciding which JS function to call
+      if (scrubBlocked.value) {
+        runOnJS(endScrubCancelled)();
+      } else {
+        runOnJS(endScrubWithModal)(event.x);
+      }
     });
-
-  // Compose gestures: horizontal capture runs simultaneously to prevent tab navigation
-  // Scrub has priority, then double tap, then pinch/pan, then single tap
-  const mainGestures = Gesture.Exclusive(
-    scrubGesture,
-    doubleTapGesture,
-    Gesture.Simultaneous(pinchGesture, panGesture),
-    tapGesture
-  );
 
   // Combine horizontal capture with main gestures
   const composedGesture = Gesture.Simultaneous(
     horizontalCapture,
-    mainGestures
+    pinchGesture,
+    panGesture,
+    scrubGesture
   );
 
   // Calculate zoom percentage for display
@@ -715,7 +672,7 @@ export default function AnalyticsChart({
 
         {/* Instructions */}
         <Text style={[styles.instructions, { color: themeColors.textTertiary }]}>
-          Pinch to zoom • Double-tap to reset • Tap point for details
+          Pinch to zoom • Touch & drag to scrub • Release for details
         </Text>
       </View>
     </GestureHandlerRootView>
