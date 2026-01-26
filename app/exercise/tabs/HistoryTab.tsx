@@ -1,11 +1,12 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { deleteWorkout, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
-import { getPREventsBySetIds } from "../../../lib/db/prEvents";
-import { useTheme } from "../../../lib/theme/ThemeContext";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import SetItem from "../../../components/lists/SetItem";
+import { getPREventsBySetIds } from "../../../lib/db/prEvents";
+import { deleteExerciseSession, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
+import { useTheme } from "../../../lib/theme/ThemeContext";
 
 // Extended set row with PR badge
 type SetWithPR = SetRow & { prBadge?: string };
@@ -14,10 +15,9 @@ export default function HistoryTab() {
   const { themeColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
+  const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
   const [history, setHistory] = useState<(WorkoutHistoryEntry & { sets: SetWithPR[] })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionModalVisible, setActionModalVisible] = useState(false);
-  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryEntry | null>(null);
 
   const loadHistory = useCallback(async () => {
     if (!exerciseId) {
@@ -86,43 +86,46 @@ export default function HistoryTab() {
     });
   };
 
-  const handleLongPress = useCallback((entry: WorkoutHistoryEntry) => {
-    // Only show edit/delete modal for completed exercise entries
-    const isCompleted = entry.workoutExercise?.completedAt !== null;
-    if (!isCompleted) return;
-    
-    setSelectedWorkout(entry);
-    setActionModalVisible(true);
-  }, []);
-
-  const handleDelete = useCallback(async () => {
-    if (!selectedWorkout) return;
-    
-    try {
-      await deleteWorkout(selectedWorkout.workout.id);
-      setActionModalVisible(false);
-      setSelectedWorkout(null);
-      await loadHistory();
-    } catch (error) {
-      console.error("Error deleting workout:", error);
-    }
-  }, [selectedWorkout, loadHistory]);
-
-  const handleEdit = useCallback(() => {
-    if (!selectedWorkout || !exerciseId) return;
-    setActionModalVisible(false);
-    const workout = selectedWorkout.workout;
-    setSelectedWorkout(null);
-    // Navigate to edit-workout page
+  const handleEdit = useCallback((entry: WorkoutHistoryEntry) => {
+    if (!exerciseId) return;
     router.push({
       pathname: "/edit-workout",
       params: {
         exerciseId: String(exerciseId),
-        workoutId: String(workout.id),
-        exerciseName: typeof params.name === "string" ? params.name : "Exercise",
+        workoutId: String(entry.workout.id),
+        exerciseName,
       },
     });
-  }, [selectedWorkout, exerciseId, params.name]);
+  }, [exerciseId, exerciseName]);
+
+  const handleDelete = useCallback((entry: WorkoutHistoryEntry) => {
+    if (!exerciseId) return;
+    
+    const setCount = entry.sets.length;
+    Alert.alert(
+      "Delete Session",
+      `Are you sure you want to delete this ${exerciseName} session? This will remove ${setCount} set${setCount !== 1 ? "s" : ""} and cannot be undone.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteExerciseSession(entry.workout.id, exerciseId);
+              await loadHistory();
+            } catch (error) {
+              if (__DEV__) console.error("[HistoryTab] Error deleting session:", error);
+              Alert.alert("Error", "Failed to delete session. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  }, [exerciseId, exerciseName, loadHistory]);
 
   if (!exerciseId) {
     return (
@@ -161,8 +164,7 @@ export default function HistoryTab() {
           const isCompleted = item.workoutExercise?.completedAt !== null;
 
           return (
-            <Pressable
-              onLongPress={() => handleLongPress(item)}
+            <View
               style={[styles.workoutCard, { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border }]}
             >
               <View style={[styles.workoutHeader, { borderBottomColor: themeColors.border }]}>
@@ -170,11 +172,31 @@ export default function HistoryTab() {
                   <Text style={[styles.workoutDate, { color: themeColors.text }]}>{formatDate(workoutDate)}</Text>
                   <Text style={[styles.workoutTime, { color: themeColors.textSecondary }]}>{formatTime(workoutDate)}</Text>
                 </View>
-                {!isCompleted && (
-                  <View style={[styles.inProgressBadge, { backgroundColor: themeColors.primary }]}>
-                    <Text style={[styles.inProgressText, { color: themeColors.surface }]}>In Progress</Text>
-                  </View>
-                )}
+                <View style={styles.headerActions}>
+                  {!isCompleted && (
+                    <View style={[styles.inProgressBadge, { backgroundColor: themeColors.primary }]}>
+                      <Text style={[styles.inProgressText, { color: themeColors.surface }]}>In Progress</Text>
+                    </View>
+                  )}
+                  {isCompleted && (
+                    <>
+                      <Pressable
+                        onPress={() => handleEdit(item)}
+                        hitSlop={8}
+                        style={[styles.actionIconButton, { backgroundColor: themeColors.background }]}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={16} color={themeColors.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDelete(item)}
+                        hitSlop={8}
+                        style={[styles.actionIconButton, { backgroundColor: themeColors.background }]}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={themeColors.error} />
+                      </Pressable>
+                    </>
+                  )}
+                </View>
               </View>
 
               <View style={styles.setsContainer}>
@@ -190,61 +212,10 @@ export default function HistoryTab() {
                   />
                 ))}
               </View>
-            </Pressable>
+            </View>
           );
         }}
       />
-
-      {/* Action Modal */}
-      <Modal
-        visible={actionModalVisible}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => {
-          setActionModalVisible(false);
-          setSelectedWorkout(null);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            setActionModalVisible(false);
-            setSelectedWorkout(null);
-          }}
-        >
-          <View style={[styles.actionModalContent, { backgroundColor: themeColors.surface }]}>
-            <Pressable
-              style={[styles.actionButton, { borderBottomColor: themeColors.border }]}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleEdit();
-              }}
-            >
-              <Text style={[styles.actionButtonText, { color: themeColors.primary }]}>Edit</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionButton, styles.deleteActionButton]}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleDelete();
-              }}
-            >
-              <Text style={[styles.actionButtonText, { color: themeColors.error }]}>Delete</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionButton, styles.cancelActionButton, { backgroundColor: themeColors.surfaceSecondary }]}
-              onPress={(e) => {
-                e.stopPropagation();
-                setActionModalVisible(false);
-                setSelectedWorkout(null);
-              }}
-            >
-              <Text style={[styles.cancelActionButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -303,6 +274,18 @@ const styles = StyleSheet.create({
   workoutDateContainer: {
     flex: 1,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   workoutDate: {
     fontSize: 16,
     fontWeight: "600",
@@ -326,48 +309,6 @@ const styles = StyleSheet.create({
   },
   setsContainer: {
     gap: 4,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  actionModalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 300,
-    padding: 0,
-    overflow: "hidden",
-  },
-  actionButton: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e5ea",
-    alignItems: "center",
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#007AFF",
-  },
-  deleteActionButton: {
-    borderBottomWidth: 0,
-  },
-  deleteActionButtonText: {
-    color: "#ff3b30",
-  },
-  cancelActionButton: {
-    borderBottomWidth: 0,
-    backgroundColor: "#f9f9f9",
-  },
-  cancelActionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#666",
   },
 });
 
