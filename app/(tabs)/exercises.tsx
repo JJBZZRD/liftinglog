@@ -197,6 +197,11 @@ export default function ExercisesScreen() {
                 padding: 12,
                 backgroundColor: themeColors.surface,
                 borderColor: themeColors.border,
+                shadowColor: themeColors.shadow,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 4,
               }}
             >
               <Text style={{ fontWeight: "600", marginBottom: 4, color: themeColors.text }}>{item.name}</Text>
