@@ -1,8 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
     ExportCancelledError as BackupCancelledError,
@@ -30,6 +29,8 @@ export default function SettingsScreen() {
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [showFormulaPicker, setShowFormulaPicker] = useState(false);
 
   useEffect(() => {
     const current = getGlobalFormula();
@@ -250,24 +251,18 @@ export default function SettingsScreen() {
           
           {/* Light/Dark Mode */}
           <Text className="text-base font-semibold mb-3 text-foreground">Display Mode</Text>
-          <View className="border border-border rounded-xl overflow-hidden bg-surface-secondary">
-            <Picker
-              selectedValue={selectedTheme}
-              onValueChange={(value) => onThemeSelect(value as ThemePreference)}
-              style={{ color: rawColors.foreground }}
-              itemStyle={{ color: rawColors.foreground }}
-              dropdownIconColor={rawColors.foregroundSecondary}
-            >
-              {themeOptions.map((opt) => (
-                <Picker.Item 
-                  key={opt.id} 
-                  label={opt.label} 
-                  value={opt.id}
-                  color={rawColors.foreground}
-                />
-              ))}
-            </Picker>
-          </View>
+          <Pressable
+            style={[
+              styles.pickerButton,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
+            ]}
+            onPress={() => setShowThemePicker(true)}
+          >
+            <Text style={[styles.pickerButtonText, { color: rawColors.foreground }]}>
+              {themeOptions.find((opt) => opt.id === selectedTheme)?.label || "Select"}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
+          </Pressable>
           <Text className="text-[13px] mt-3 leading-[18px] text-foreground-muted">
             Choose how the app looks. System Default follows your device settings.
           </Text>
@@ -322,24 +317,18 @@ export default function SettingsScreen() {
         >
           <Text className="text-[13px] font-semibold tracking-wide mb-4 text-foreground-secondary">CALCULATIONS</Text>
           <Text className="text-base font-semibold mb-3 text-foreground">Estimated 1RM Formula</Text>
-          <View className="border border-border rounded-xl overflow-hidden bg-surface-secondary">
-            <Picker
-              selectedValue={selected}
-              onValueChange={(value) => onSelect(value as E1RMFormulaId)}
-              style={{ color: rawColors.foreground }}
-              itemStyle={{ color: rawColors.foreground }}
-              dropdownIconColor={rawColors.foregroundSecondary}
-            >
-              {options.map((opt) => (
-                <Picker.Item 
-                  key={opt.id} 
-                  label={opt.label} 
-                  value={opt.id}
-                  color={rawColors.foreground}
-                />
-              ))}
-            </Picker>
-          </View>
+          <Pressable
+            style={[
+              styles.pickerButton,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
+            ]}
+            onPress={() => setShowFormulaPicker(true)}
+          >
+            <Text style={[styles.pickerButtonText, { color: rawColors.foreground }]}>
+              {options.find((opt) => opt.id === selected)?.label || "Select"}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
+          </Pressable>
           <Text className="text-[13px] mt-3 leading-[18px] text-foreground-muted">
             The formula used to calculate your estimated one-rep max from your workout data.
           </Text>
@@ -425,6 +414,123 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* Theme Picker Modal */}
+      <Modal visible={showThemePicker} transparent animationType="fade" onRequestClose={() => setShowThemePicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowThemePicker(false)}>
+          <View style={[styles.pickerContainer, { backgroundColor: rawColors.surface }]}>
+            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Display Mode</Text>
+            {themeOptions.map((option) => (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.pickerOption,
+                  { borderBottomColor: rawColors.border },
+                  selectedTheme === option.id && { backgroundColor: rawColors.primaryLight },
+                ]}
+                onPress={() => {
+                  onThemeSelect(option.id);
+                  setShowThemePicker(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.pickerOptionText,
+                    { color: rawColors.foreground },
+                    selectedTheme === option.id && { color: rawColors.primary, fontWeight: "600" },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {selectedTheme === option.id && (
+                  <MaterialCommunityIcons name="check" size={20} color={rawColors.primary} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Formula Picker Modal */}
+      <Modal visible={showFormulaPicker} transparent animationType="fade" onRequestClose={() => setShowFormulaPicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowFormulaPicker(false)}>
+          <View style={[styles.pickerContainer, { backgroundColor: rawColors.surface }]}>
+            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Estimated 1RM Formula</Text>
+            {options.map((option) => (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.pickerOption,
+                  { borderBottomColor: rawColors.border },
+                  selected === option.id && { backgroundColor: rawColors.primaryLight },
+                ]}
+                onPress={() => {
+                  onSelect(option.id);
+                  setShowFormulaPicker(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.pickerOptionText,
+                    { color: rawColors.foreground },
+                    selected === option.id && { color: rawColors.primary, fontWeight: "600" },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {selected === option.id && (
+                  <MaterialCommunityIcons name="check" size={20} color={rawColors.primary} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  pickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  pickerContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingBottom: 12,
+    marginBottom: 8,
+  },
+  pickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  pickerOptionText: {
+    fontSize: 16,
+  },
+});
