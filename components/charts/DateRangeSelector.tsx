@@ -6,7 +6,7 @@
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import DatePickerModal from "../modals/DatePickerModal";
 
@@ -58,7 +58,7 @@ export function getDefaultDateRange(): DateRange {
 }
 
 export default function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   
   // Custom range picker state
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -111,25 +111,23 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
   };
 
   return (
-    <View style={styles.container}>
+    <View className="mb-4">
       {/* Preset Buttons */}
-      <View style={styles.presetsRow}>
+      <View className="flex-row gap-1.5 items-center">
         {presets.map((preset) => (
           <Pressable
             key={preset.id}
-            style={[
-              styles.presetButton,
-              { borderColor: themeColors.border },
-              value.preset === preset.id && { backgroundColor: themeColors.primary, borderColor: themeColors.primary },
-            ]}
+            className={`px-3 py-2 rounded-lg border ${
+              value.preset === preset.id
+                ? "bg-primary border-primary"
+                : "border-border"
+            }`}
             onPress={() => handlePresetPress(preset.id)}
           >
             <Text
-              style={[
-                styles.presetText,
-                { color: themeColors.text },
-                value.preset === preset.id && { color: themeColors.surface },
-              ]}
+              className={`text-[13px] font-semibold ${
+                value.preset === preset.id ? "text-primary-foreground" : "text-foreground"
+              }`}
             >
               {preset.label}
             </Text>
@@ -138,18 +136,17 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
         
         {/* Custom Button */}
         <Pressable
-          style={[
-            styles.presetButton,
-            styles.customButton,
-            { borderColor: themeColors.border },
-            value.preset === "custom" && { backgroundColor: themeColors.primary, borderColor: themeColors.primary },
-          ]}
+          className={`px-2.5 py-2 rounded-lg border ${
+            value.preset === "custom"
+              ? "bg-primary border-primary"
+              : "border-border"
+          }`}
           onPress={() => handlePresetPress("custom")}
         >
           <MaterialCommunityIcons
             name="calendar-range"
             size={16}
-            color={value.preset === "custom" ? themeColors.surface : themeColors.textSecondary}
+            color={value.preset === "custom" ? rawColors.surface : rawColors.foregroundSecondary}
           />
         </Pressable>
       </View>
@@ -157,17 +154,17 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
       {/* Custom Range Display */}
       {value.preset === "custom" && value.startDate && (
         <Pressable
-          style={[styles.customRangeDisplay, { backgroundColor: themeColors.surfaceSecondary }]}
+          className="flex-row items-center justify-center gap-2 py-2 px-3 rounded-lg mt-2 bg-surface-secondary"
           onPress={() => {
             setTempStartDate(value.startDate ?? new Date());
             setTempEndDate(value.endDate);
             setShowCustomModal(true);
           }}
         >
-          <Text style={[styles.customRangeText, { color: themeColors.text }]}>
+          <Text className="text-[13px] font-medium text-foreground">
             {formatDateDisplay(value.startDate)} - {formatDateDisplay(value.endDate)}
           </Text>
-          <MaterialCommunityIcons name="pencil" size={14} color={themeColors.textSecondary} />
+          <MaterialCommunityIcons name="pencil" size={14} color={rawColors.foregroundSecondary} />
         </Pressable>
       )}
 
@@ -179,55 +176,49 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
         onRequestClose={() => setShowCustomModal(false)}
       >
         <Pressable 
-          style={styles.modalOverlay}
+          className="flex-1 justify-center items-center p-5 bg-overlay-dark"
           onPress={() => setShowCustomModal(false)}
         >
           <View 
-            style={[styles.customPickerContainer, { backgroundColor: themeColors.surface }]}
+            className="rounded-2xl p-5 w-full max-w-[320px] bg-surface"
             onStartShouldSetResponder={() => true}
           >
-            <Text style={[styles.customPickerTitle, { color: themeColors.text }]}>
+            <Text className="text-lg font-semibold text-center mb-5 text-foreground">
               Select Date Range
             </Text>
             
             {/* Start Date Row */}
-            <View style={styles.dateInputRow}>
-              <Text style={[styles.dateInputLabel, { color: themeColors.textSecondary }]}>
+            <View className="flex-row items-center gap-3">
+              <Text className="text-sm font-medium w-10 text-foreground-secondary">
                 Start
               </Text>
               <Pressable
-                style={[styles.dateInputButton, { 
-                  backgroundColor: themeColors.surfaceSecondary, 
-                  borderColor: themeColors.border 
-                }]}
+                className="flex-1 flex-row items-center gap-2.5 py-3 px-3.5 rounded-xl border border-border bg-surface-secondary"
                 onPress={() => setShowStartPicker(true)}
               >
-                <MaterialCommunityIcons name="calendar" size={18} color={themeColors.primary} />
-                <Text style={[styles.dateInputText, { color: themeColors.text }]}>
+                <MaterialCommunityIcons name="calendar" size={18} color={rawColors.primary} />
+                <Text className="text-[15px] font-medium text-foreground">
                   {formatDateShort(tempStartDate)}
                 </Text>
               </Pressable>
             </View>
 
             {/* Arrow */}
-            <View style={styles.arrowContainer}>
-              <MaterialCommunityIcons name="arrow-down" size={20} color={themeColors.textSecondary} />
+            <View className="items-center py-2 ml-[52px]">
+              <MaterialCommunityIcons name="arrow-down" size={20} color={rawColors.foregroundSecondary} />
             </View>
 
             {/* End Date Row */}
-            <View style={styles.dateInputRow}>
-              <Text style={[styles.dateInputLabel, { color: themeColors.textSecondary }]}>
+            <View className="flex-row items-center gap-3">
+              <Text className="text-sm font-medium w-10 text-foreground-secondary">
                 End
               </Text>
               <Pressable
-                style={[styles.dateInputButton, { 
-                  backgroundColor: themeColors.surfaceSecondary, 
-                  borderColor: themeColors.border 
-                }]}
+                className="flex-1 flex-row items-center gap-2.5 py-3 px-3.5 rounded-xl border border-border bg-surface-secondary"
                 onPress={() => setShowEndPicker(true)}
               >
-                <MaterialCommunityIcons name="calendar" size={18} color={themeColors.primary} />
-                <Text style={[styles.dateInputText, { color: themeColors.text }]}>
+                <MaterialCommunityIcons name="calendar" size={18} color={rawColors.primary} />
+                <Text className="text-[15px] font-medium text-foreground">
                   {formatDateShort(tempEndDate)}
                 </Text>
               </Pressable>
@@ -235,29 +226,32 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
 
             {/* Validation Warning */}
             {tempStartDate.getTime() > tempEndDate.getTime() && (
-              <View style={[styles.warningContainer, { backgroundColor: themeColors.warning + '20' }]}>
-                <MaterialCommunityIcons name="alert-circle" size={16} color={themeColors.warning} />
-                <Text style={[styles.warningText, { color: themeColors.warning }]}>
+              <View 
+                className="flex-row items-center gap-2 py-2.5 px-3 rounded-lg mt-3"
+                style={{ backgroundColor: rawColors.warning + "20" }}
+              >
+                <MaterialCommunityIcons name="alert-circle" size={16} color={rawColors.warning} />
+                <Text style={{ color: rawColors.warning }} className="text-[13px] font-medium">
                   Dates will be swapped (start &gt; end)
                 </Text>
               </View>
             )}
 
             {/* Action Buttons */}
-            <View style={styles.actionButtons}>
+            <View className="flex-row gap-3 mt-5">
               <Pressable
-                style={[styles.cancelButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                className="flex-1 py-3.5 rounded-xl items-center bg-surface-secondary"
                 onPress={() => setShowCustomModal(false)}
               >
-                <Text style={[styles.cancelButtonText, { color: themeColors.textSecondary }]}>
+                <Text className="text-base font-semibold text-foreground-secondary">
                   Cancel
                 </Text>
               </Pressable>
               <Pressable
-                style={[styles.saveButton, { backgroundColor: themeColors.primary }]}
+                className="flex-1 py-3.5 rounded-xl items-center bg-primary"
                 onPress={handleCustomRangeSave}
               >
-                <Text style={[styles.saveButtonText, { color: themeColors.surface }]}>
+                <Text className="text-base font-semibold text-primary-foreground">
                   Apply Range
                 </Text>
               </Pressable>
@@ -290,127 +284,3 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
-  },
-  presetsRow: {
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-  },
-  presetButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  presetText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  customButton: {
-    paddingHorizontal: 10,
-  },
-  customRangeDisplay: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  customRangeText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  customPickerContainer: {
-    borderRadius: 16,
-    padding: 20,
-    width: "100%",
-    maxWidth: 320,
-  },
-  customPickerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  dateInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  dateInputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    width: 40,
-  },
-  dateInputButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  dateInputText: {
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  arrowContainer: {
-    alignItems: "center",
-    paddingVertical: 8,
-    marginLeft: 52,
-  },
-  warningContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  warningText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 20,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

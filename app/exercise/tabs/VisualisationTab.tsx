@@ -51,7 +51,7 @@ const getMetricUnit = (metric: MetricType): string => {
 };
 
 export default function VisualisationTab() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -214,7 +214,7 @@ export default function VisualisationTab() {
   const maxValue = hasData ? Math.max(...filteredData.map((d) => d.value)) : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -222,35 +222,35 @@ export default function VisualisationTab() {
       >
         {/* Metric Selector */}
         <View style={styles.metricSelector}>
-          <Text style={[styles.label, { color: themeColors.textSecondary }]}>Metric</Text>
+          <Text style={[styles.label, { color: rawColors.foregroundSecondary }]}>Metric</Text>
           <Pressable
             style={[
               styles.metricButton,
-              { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border },
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
             ]}
             onPress={() => setShowMetricPicker(true)}
           >
-            <Text style={[styles.metricButtonText, { color: themeColors.text }]}>{selectedMetricLabel}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={20} color={themeColors.textSecondary} />
+            <Text style={[styles.metricButtonText, { color: rawColors.foreground }]}>{selectedMetricLabel}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
           </Pressable>
         </View>
 
         {/* Date Range Selector */}
         <View style={styles.dateRangeSection}>
-          <Text style={[styles.label, { color: themeColors.textSecondary }]}>Date Range</Text>
+          <Text style={[styles.label, { color: rawColors.foregroundSecondary }]}>Date Range</Text>
           <DateRangeSelector value={dateRange} onChange={setDateRange} />
         </View>
 
         {/* Chart Section */}
         {loading ? (
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>Loading...</Text>
+            <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>Loading...</Text>
           </View>
         ) : !hasData ? (
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="chart-line" size={64} color={themeColors.textLight} />
-            <Text style={[styles.emptyText, { color: themeColors.text }]}>No data available</Text>
-            <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+            <MaterialCommunityIcons name="chart-line" size={64} color={rawColors.foregroundMuted} />
+            <Text style={[styles.emptyText, { color: rawColors.foreground }]}>No data available</Text>
+            <Text style={[styles.emptySubtext, { color: rawColors.foregroundSecondary }]}>
               {allData.length > 0
                 ? "No data in selected date range. Try a different range."
                 : "Record some sets to see your progress"}
@@ -259,7 +259,7 @@ export default function VisualisationTab() {
         ) : (
           <>
             {/* Chart Title */}
-            <Text style={[styles.chartTitle, { color: themeColors.text }]}>
+            <Text style={[styles.chartTitle, { color: rawColors.foreground }]}>
               {selectedMetricLabel}
             </Text>
 
@@ -278,21 +278,21 @@ export default function VisualisationTab() {
 
             {/* Stats Summary */}
             <View style={styles.statsContainer}>
-              <View style={[styles.statBox, { backgroundColor: themeColors.surfaceSecondary }]}>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Latest</Text>
-                <Text style={[styles.statValue, { color: themeColors.text }]}>
+              <View style={[styles.statBox, { backgroundColor: rawColors.surfaceSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>Latest</Text>
+                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                   {filteredData[filteredData.length - 1]?.value.toFixed(1)} {unit}
                 </Text>
               </View>
-              <View style={[styles.statBox, { backgroundColor: themeColors.surfaceSecondary }]}>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Best</Text>
-                <Text style={[styles.statValue, { color: themeColors.primary }]}>
+              <View style={[styles.statBox, { backgroundColor: rawColors.surfaceSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>Best</Text>
+                <Text style={[styles.statValue, { color: rawColors.primary }]}>
                   {maxValue.toFixed(1)} {unit}
                 </Text>
               </View>
-              <View style={[styles.statBox, { backgroundColor: themeColors.surfaceSecondary }]}>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Sessions</Text>
-                <Text style={[styles.statValue, { color: themeColors.text }]}>{filteredData.length}</Text>
+              <View style={[styles.statBox, { backgroundColor: rawColors.surfaceSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>Sessions</Text>
+                <Text style={[styles.statValue, { color: rawColors.foreground }]}>{filteredData.length}</Text>
               </View>
             </View>
           </>
@@ -302,15 +302,15 @@ export default function VisualisationTab() {
       {/* Metric Picker Modal */}
       <Modal visible={showMetricPicker} transparent animationType="fade" onRequestClose={() => setShowMetricPicker(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowMetricPicker(false)}>
-          <View style={[styles.pickerContainer, { backgroundColor: themeColors.surface }]}>
-            <Text style={[styles.pickerTitle, { color: themeColors.text }]}>Select Metric</Text>
+          <View style={[styles.pickerContainer, { backgroundColor: rawColors.surface }]}>
+            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Select Metric</Text>
             {metricOptions.map((option) => (
               <Pressable
                 key={option.value}
                 style={[
                   styles.pickerOption,
-                  { borderBottomColor: themeColors.border },
-                  selectedMetric === option.value && { backgroundColor: themeColors.primaryLight },
+                  { borderBottomColor: rawColors.border },
+                  selectedMetric === option.value && { backgroundColor: rawColors.primaryLight },
                 ]}
                 onPress={() => {
                   setSelectedMetric(option.value);
@@ -320,14 +320,14 @@ export default function VisualisationTab() {
                 <Text
                   style={[
                     styles.pickerOptionText,
-                    { color: themeColors.text },
-                    selectedMetric === option.value && { color: themeColors.primary, fontWeight: "600" },
+                    { color: rawColors.foreground },
+                    selectedMetric === option.value && { color: rawColors.primary, fontWeight: "600" },
                   ]}
                 >
                   {option.label}
                 </Text>
                 {selectedMetric === option.value && (
-                  <MaterialCommunityIcons name="check" size={20} color={themeColors.primary} />
+                  <MaterialCommunityIcons name="check" size={20} color={rawColors.primary} />
                 )}
               </Pressable>
             ))}

@@ -10,7 +10,7 @@ type AddExerciseModalProps = {
 };
 
 export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExerciseModalProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [muscle, setMuscle] = useState("");
@@ -52,66 +52,53 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
     >
       <Pressable
         onPress={onDismiss}
-        style={{
-          flex: 1,
-          backgroundColor: themeColors.overlay,
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 16,
-        }}
+        className="flex-1 bg-overlay justify-center items-center p-4"
       >
         <Pressable
           onPress={() => {}}
-          style={{
-            width: "100%",
-            maxWidth: 520,
-            backgroundColor: themeColors.surface,
-            borderRadius: 12,
-            padding: 16,
-            gap: 12,
-          }}
+          className="w-full max-w-[520px] bg-surface rounded-xl p-4 gap-3"
         >
-          <Text style={{ fontSize: 18, fontWeight: "600", color: themeColors.text }}>Add Exercise</Text>
-          {error ? <Text style={{ color: themeColors.error }}>{error}</Text> : null}
+          <Text className="text-lg font-semibold text-foreground">Add Exercise</Text>
+          {error ? <Text className="text-destructive">{error}</Text> : null}
 
           <TextInput
             placeholder="Name"
             value={name}
             onChangeText={setName}
-            placeholderTextColor={themeColors.textPlaceholder}
-            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
+            placeholderTextColor={rawColors.foregroundMuted}
+            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
           />
           <TextInput
             placeholder="Description"
             value={description}
             onChangeText={setDescription}
-            placeholderTextColor={themeColors.textPlaceholder}
-            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
+            placeholderTextColor={rawColors.foregroundMuted}
+            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
           />
           <TextInput
             placeholder="Muscle group"
             value={muscle}
             onChangeText={setMuscle}
-            placeholderTextColor={themeColors.textPlaceholder}
-            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
+            placeholderTextColor={rawColors.foregroundMuted}
+            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
           />
           <TextInput
             placeholder="Equipment"
             value={equipment}
             onChangeText={setEquipment}
-            placeholderTextColor={themeColors.textPlaceholder}
-            style={{ borderWidth: 1, borderColor: themeColors.border, borderRadius: 8, padding: 10, color: themeColors.text, backgroundColor: themeColors.surface }}
+            placeholderTextColor={rawColors.foregroundMuted}
+            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
           />
 
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
-            <Pressable onPress={onDismiss} style={{ padding: 10 }}>
-              <Text style={{ color: themeColors.textSecondary }}>Cancel</Text>
+          <View className="flex-row justify-end gap-3">
+            <Pressable onPress={onDismiss} className="p-2.5">
+              <Text className="text-foreground-secondary">Cancel</Text>
             </Pressable>
             <Pressable
               onPress={onSave}
-              style={{ backgroundColor: themeColors.primary, padding: 10, borderRadius: 8 }}
+              className="bg-primary p-2.5 rounded-lg"
             >
-              <Text style={{ color: themeColors.surface, fontWeight: "600" }}>Save</Text>
+              <Text className="text-primary-foreground font-semibold">Save</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -119,5 +106,3 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
     </Modal>
   );
 }
-
-

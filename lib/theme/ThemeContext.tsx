@@ -1,55 +1,106 @@
+import { useColorScheme } from "nativewind";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { useColorScheme } from "react-native";
-import { getThemePreference, setThemePreference, type ThemePreference } from "../db/settings";
-import { getThemeColors, type lightColors } from "./colors";
+import { View } from "react-native";
+import { 
+  getThemePreference, 
+  setThemePreference, 
+  getColorTheme, 
+  setColorTheme as setColorThemeDB,
+  type ThemePreference,
+  type ColorThemeId 
+} from "../db/settings";
+import { themes, getRawThemeColors, type RawThemeColors, type ColorScheme } from "./themes";
 
-export type ThemeColors = typeof lightColors;
+// Re-export types for convenience
+export type { ColorThemeId, ColorScheme, RawThemeColors };
 
 type ThemeContextType = {
+  /** Whether dark mode is active */
   isDark: boolean;
-  themeColors: ThemeColors;
+  /** Current color scheme ('light' or 'dark') */
+  colorScheme: ColorScheme;
+  /** Current color theme ID */
+  colorTheme: ColorThemeId;
+  /** User's theme preference ('system', 'light', or 'dark') */
   themePreference: ThemePreference;
+  /** Raw color values for non-Tailwind use cases (SVG, charts, etc.) */
+  rawColors: RawThemeColors;
+  /** Set the light/dark mode preference */
   setThemePreference: (preference: ThemePreference) => void;
+  /** Set the color theme */
+  setColorTheme: (theme: ColorThemeId) => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemColorScheme = useColorScheme();
+  const { colorScheme: nativewindColorScheme, setColorScheme } = useColorScheme();
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>("system");
+  const [colorTheme, setColorThemeState] = useState<ColorThemeId>("default");
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load theme preference from database on mount
+  // Load theme preferences from database on mount
   useEffect(() => {
-    const loadThemePreference = () => {
+    const loadThemePreferences = () => {
       try {
         const preference = getThemePreference();
         setThemePreferenceState(preference);
+        
+        // Apply the preference to NativeWind
+        if (preference === "light" || preference === "dark") {
+          setColorScheme(preference);
+        } else {
+          setColorScheme("system");
+        }
+        
+        const theme = getColorTheme();
+        setColorThemeState(theme);
       } catch (error) {
-        console.error("Error loading theme preference:", error);
+        console.error("Error loading theme preferences:", error);
         setThemePreferenceState("system");
+        setColorThemeState("default");
       } finally {
         setIsInitialized(true);
       }
     };
-    loadThemePreference();
-  }, []);
+    loadThemePreferences();
+  }, [setColorScheme]);
 
-  // Determine if dark mode should be active
-  const isDark =
-    themePreference === "dark" ||
-    (themePreference === "system" && systemColorScheme === "dark");
+  // Determine the effective color scheme
+  const effectiveColorScheme: ColorScheme = nativewindColorScheme === "dark" ? "dark" : "light";
+  const isDark = effectiveColorScheme === "dark";
 
-  // Get theme colors based on dark mode state
-  const themeColors = getThemeColors(isDark);
+  // Get theme vars for the current theme and color scheme
+  const themeVars = themes[colorTheme]?.[effectiveColorScheme] ?? themes.default[effectiveColorScheme];
+
+  // Get raw colors for non-Tailwind use cases
+  const rawColors = getRawThemeColors(colorTheme, effectiveColorScheme);
 
   // Update theme preference (both state and database)
   const updateThemePreference = (preference: ThemePreference) => {
     setThemePreferenceState(preference);
+    
+    // Apply to NativeWind
+    if (preference === "light" || preference === "dark") {
+      setColorScheme(preference);
+    } else {
+      setColorScheme("system");
+    }
+    
     try {
       setThemePreference(preference);
     } catch (error) {
       console.error("Error saving theme preference:", error);
+    }
+  };
+
+  // Update color theme (both state and database)
+  const updateColorTheme = (theme: ColorThemeId) => {
+    setColorThemeState(theme);
+    try {
+      setColorThemeDB(theme);
+    } catch (error) {
+      console.error("Error saving color theme:", error);
     }
   };
 
@@ -62,12 +113,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     <ThemeContext.Provider
       value={{
         isDark,
-        themeColors,
+        colorScheme: effectiveColorScheme,
         themePreference,
+        colorTheme,
+        rawColors,
         setThemePreference: updateThemePreference,
+        setColorTheme: updateColorTheme,
       }}
     >
-      {children}
+      <View style={themeVars} className="flex-1">
+        {children}
+      </View>
     </ThemeContext.Provider>
   );
 }
@@ -80,3 +136,11 @@ export function useTheme() {
   return context;
 }
 
+/**
+ * Hook to get raw color values for non-Tailwind use cases
+ * (SVG fills, chart colors, third-party components, etc.)
+ */
+export function useRawColors(): RawThemeColors {
+  const { rawColors } = useTheme();
+  return rawColors;
+}

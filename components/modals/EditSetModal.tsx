@@ -4,14 +4,13 @@
  * A reusable modal for editing workout sets. This consolidates
  * the edit set modal pattern used in RecordTab.tsx and edit-workout.tsx.
  */
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors } from '../../lib/theme/colors';
-import { useTheme } from '../../lib/theme/ThemeContext';
-import { formatRelativeDate } from '../../lib/utils/formatters';
-import BaseModal from './BaseModal';
-import DatePickerModal from './DatePickerModal';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useTheme } from "../../lib/theme/ThemeContext";
+import { formatRelativeDate } from "../../lib/utils/formatters";
+import BaseModal from "./BaseModal";
+import DatePickerModal from "./DatePickerModal";
 
 interface SetData {
   id: number;
@@ -52,19 +51,19 @@ export default function EditSetModal({
   onDelete,
   showDatePicker = false,
 }: EditSetModalProps) {
-  const { themeColors } = useTheme();
-  const [weight, setWeight] = useState('');
-  const [reps, setReps] = useState('');
-  const [note, setNote] = useState('');
+  const { rawColors } = useTheme();
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const [note, setNote] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
 
   // Reset form when set changes
   useEffect(() => {
     if (set) {
-      setWeight(set.weightKg !== null ? String(set.weightKg) : '');
-      setReps(set.reps !== null ? String(set.reps) : '');
-      setNote(set.note || '');
+      setWeight(set.weightKg !== null ? String(set.weightKg) : "");
+      setReps(set.reps !== null ? String(set.reps) : "");
+      setNote(set.note || "");
       setDate(set.performedAt ? new Date(set.performedAt) : new Date());
     }
   }, [set]);
@@ -104,74 +103,84 @@ export default function EditSetModal({
         visible={visible}
         onClose={handleClose}
         maxWidth={400}
-        contentStyle={styles.container}
+        contentStyle={{ padding: 0, maxHeight: "45%" }}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={{ padding: 24 }}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={[styles.title, { color: themeColors.text }]}>Edit Set</Text>
+          <Text className="text-xl font-bold mb-5 text-foreground">Edit Set</Text>
           
-          <View style={styles.inputRow}>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Weight (kg)</Text>
+          <View className="flex-row gap-3 mb-4">
+            <View className="flex-1">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
               <TextInput
-                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
+                className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0"
-                placeholderTextColor={themeColors.textPlaceholder}
+                placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="decimal-pad"
               />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Reps</Text>
+            <View className="flex-1">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Reps</Text>
               <TextInput
-                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
+                className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
-                placeholderTextColor={themeColors.textPlaceholder}
+                placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="number-pad"
               />
             </View>
           </View>
 
-          <View style={styles.noteInputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Note (optional)</Text>
+          <View className="mb-4">
+            <Text className="text-sm font-medium mb-2 text-foreground-secondary">Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary, color: themeColors.text }]}
+              className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground min-h-[80px]"
+              style={{ textAlignVertical: "top" }}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
-              placeholderTextColor={themeColors.textPlaceholder}
+              placeholderTextColor={rawColors.foregroundMuted}
               multiline
             />
           </View>
 
           {showDatePicker && (
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Date</Text>
+            <View className="flex-1 mb-4">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Date</Text>
               <Pressable
-                style={[styles.dateButton, { backgroundColor: themeColors.primaryLight }]}
+                className="flex-row items-center border border-border bg-primary-light px-3 py-3 rounded-lg gap-2"
                 onPress={() => setShowDatePickerModal(true)}
               >
-                <MaterialCommunityIcons name="calendar" size={18} color={themeColors.primary} />
-                <Text style={[styles.dateButtonText, { color: themeColors.primary }]}>{formatRelativeDate(date)}</Text>
+                <MaterialCommunityIcons name="calendar" size={18} color={rawColors.primary} />
+                <Text className="text-base font-medium text-primary">{formatRelativeDate(date)}</Text>
               </Pressable>
             </View>
           )}
 
-          <View style={styles.buttonRow}>
-            <Pressable style={[styles.button, { backgroundColor: themeColors.destructive }]} onPress={onDelete}>
-              <MaterialCommunityIcons name="delete" size={20} color={themeColors.surface} />
-              <Text style={[styles.deleteButtonText, { color: themeColors.surface }]}>Delete</Text>
+          <View className="flex-row gap-3 mt-5">
+            <Pressable 
+              className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
+              onPress={onDelete}
+            >
+              <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
+              <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
             </Pressable>
-            <Pressable style={[styles.button, { backgroundColor: themeColors.surfaceSecondary }]} onPress={handleClose}>
-              <Text style={[styles.cancelButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
+            <Pressable 
+              className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+              onPress={handleClose}
+            >
+              <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
             </Pressable>
-            <Pressable style={[styles.button, { backgroundColor: themeColors.primary }]} onPress={handleSave}>
-              <Text style={[styles.saveButtonText, { color: themeColors.surface }]}>Save</Text>
+            <Pressable 
+              className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+              onPress={handleSave}
+            >
+              <Text className="text-base font-semibold text-primary-foreground">Save</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -188,109 +197,3 @@ export default function EditSetModal({
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 0,
-    maxHeight: '45%',
-  },
-  scrollContent: {
-    padding: 24,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 20,
-    color: colors.text,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  noteInputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: colors.surface,
-  },
-  noteInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  dateButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.primary,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  button: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  deleteButton: {
-    backgroundColor: colors.destructive,
-  },
-  deleteButtonText: {
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: colors.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cancelButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-  },
-  saveButtonText: {
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
-
-
-
-

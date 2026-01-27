@@ -1,65 +1,27 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 export default function ProgramsScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Programs</Text>
-        <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]}>
+    <View className="flex-1 p-4 bg-background">
+      <View className="mt-12 mb-6">
+        <Text className="text-3xl font-bold text-foreground">Programs</Text>
+        <Text className="text-base mt-1 text-foreground-secondary">
           Your workout programs
         </Text>
       </View>
-      <View style={styles.emptyState}>
-        <MaterialCommunityIcons name="book-outline" size={64} color={themeColors.textLight} />
-        <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>
+      <View className="flex-1 justify-center items-center pb-[100px]">
+        <MaterialCommunityIcons name="book-outline" size={64} color={rawColors.foregroundMuted} />
+        <Text className="text-lg font-semibold mt-4 text-foreground-muted">
           No programs yet
         </Text>
-        <Text style={[styles.emptySubtext, { color: themeColors.textLight }]}>
+        <Text className="text-sm mt-2 text-center max-w-[280px] text-foreground-muted">
           Create custom workout programs to structure your training
         </Text>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    marginTop: 48,
-    marginBottom: 24,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "700",
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    marginTop: 4,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingBottom: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: "center",
-    maxWidth: 280,
-  },
-});
-
-

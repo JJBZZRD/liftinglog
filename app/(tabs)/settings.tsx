@@ -1,7 +1,8 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
     ExportCancelledError as BackupCancelledError,
@@ -12,7 +13,8 @@ import {
     type MergeResult,
 } from "../../lib/db/backup";
 import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId } from "../../lib/db/index";
-import { getThemePreference, type ThemePreference } from "../../lib/db/settings";
+import { getColorTheme, getThemePreference, type ThemePreference } from "../../lib/db/settings";
+import { COLOR_THEME_OPTIONS, type ColorThemeId } from "../../lib/theme/themes";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
     ExportCancelledError,
@@ -21,9 +23,10 @@ import {
 } from "../../lib/utils/exportCsv";
 
 export default function SettingsScreen() {
-  const { themeColors, setThemePreference: updateThemePreference } = useTheme();
+  const { rawColors, setThemePreference: updateThemePreference, setColorTheme: updateColorTheme, colorTheme } = useTheme();
   const [selected, setSelected] = useState<E1RMFormulaId>("epley");
   const [selectedTheme, setSelectedTheme] = useState<ThemePreference>("system");
+  const [selectedColorTheme, setSelectedColorTheme] = useState<ColorThemeId>("default");
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isImportingBackup, setIsImportingBackup] = useState(false);
@@ -33,6 +36,8 @@ export default function SettingsScreen() {
     setSelected(current);
     const currentTheme = getThemePreference();
     setSelectedTheme(currentTheme);
+    const currentColorTheme = getColorTheme();
+    setSelectedColorTheme(currentColorTheme);
   }, []);
 
   const options = useMemo(
@@ -55,6 +60,11 @@ export default function SettingsScreen() {
   function onThemeSelect(preference: ThemePreference) {
     setSelectedTheme(preference);
     updateThemePreference(preference);
+  }
+
+  function onColorThemeSelect(theme: ColorThemeId) {
+    setSelectedColorTheme(theme);
+    updateColorTheme(theme);
   }
 
   async function onExportCsv() {
@@ -126,7 +136,6 @@ export default function SettingsScreen() {
         return;
       }
 
-      // iOS: use share sheet
       let canShare = false;
       try {
         canShare = await Sharing.isAvailableAsync();
@@ -174,7 +183,6 @@ export default function SettingsScreen() {
     try {
       const result: MergeResult = await importDatabaseBackup();
 
-      // Build summary message
       const totalInserted =
         result.exercises.inserted +
         result.workouts.inserted +
@@ -196,7 +204,6 @@ export default function SettingsScreen() {
     } catch (error) {
       console.warn("[backup] Import failed", error);
       if (error instanceof BackupCancelledError) {
-        // User cancelled, no alert needed
         return;
       }
       if (error instanceof InvalidBackupError) {
@@ -224,97 +231,147 @@ export default function SettingsScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView className="flex-1 bg-background">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Settings</Text>
-          <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]}>
+        <View className="mb-6 mt-8">
+          <Text className="text-3xl font-bold text-foreground">Settings</Text>
+          <Text className="text-base mt-1 text-foreground-secondary">
             Customize your experience
           </Text>
         </View>
 
         {/* Appearance Section */}
-        <View style={[styles.section, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
-          <Text style={[styles.sectionTitle, { color: themeColors.textSecondary }]}>APPEARANCE</Text>
-          <View style={[styles.pickerContainer, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary }]}>
+        <View 
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <Text className="text-[13px] font-semibold tracking-wide mb-4 text-foreground-secondary">APPEARANCE</Text>
+          
+          {/* Light/Dark Mode */}
+          <Text className="text-base font-semibold mb-3 text-foreground">Display Mode</Text>
+          <View className="border border-border rounded-xl overflow-hidden bg-surface-secondary">
             <Picker
               selectedValue={selectedTheme}
               onValueChange={(value) => onThemeSelect(value as ThemePreference)}
-              style={{ color: themeColors.text }}
-              itemStyle={{ color: themeColors.text }}
-              dropdownIconColor={themeColors.textSecondary}
+              style={{ color: rawColors.foreground }}
+              itemStyle={{ color: rawColors.foreground }}
+              dropdownIconColor={rawColors.foregroundSecondary}
             >
               {themeOptions.map((opt) => (
                 <Picker.Item 
                   key={opt.id} 
                   label={opt.label} 
                   value={opt.id}
-                  color={themeColors.text}
+                  color={rawColors.foreground}
                 />
               ))}
             </Picker>
           </View>
-          <Text style={[styles.settingDescription, { color: themeColors.textTertiary }]}>
+          <Text className="text-[13px] mt-3 leading-[18px] text-foreground-muted">
             Choose how the app looks. System Default follows your device settings.
+          </Text>
+
+          {/* Color Theme */}
+          <Text className="text-base font-semibold mb-3 mt-5 text-foreground">Color Theme</Text>
+          <View className="flex-row flex-wrap gap-2.5 mt-1">
+            {COLOR_THEME_OPTIONS.map((theme) => (
+              <Pressable
+                key={theme.id}
+                onPress={() => onColorThemeSelect(theme.id)}
+                className={`flex-row items-center py-2.5 px-3 rounded-xl min-w-[100px] ${
+                  selectedColorTheme === theme.id ? "" : "bg-surface-secondary"
+                }`}
+                style={[
+                  selectedColorTheme === theme.id && { backgroundColor: rawColors.pressed },
+                  { 
+                    borderWidth: selectedColorTheme === theme.id ? 2 : 1, 
+                    borderColor: selectedColorTheme === theme.id ? theme.previewColor : rawColors.border 
+                  }
+                ]}
+              >
+                <View 
+                  className="w-6 h-6 rounded-full mr-2 items-center justify-center"
+                  style={{ backgroundColor: theme.previewColor }}
+                >
+                  {selectedColorTheme === theme.id && (
+                    <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text 
+                  className="text-sm"
+                  style={{ 
+                    color: selectedColorTheme === theme.id ? theme.previewColor : rawColors.foreground,
+                    fontWeight: selectedColorTheme === theme.id ? "600" : "400",
+                  }}
+                >
+                  {theme.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text className="text-[13px] mt-3 leading-[18px] text-foreground-muted">
+            Choose a color theme for the app. Each theme works in both light and dark modes.
           </Text>
         </View>
 
         {/* Formula Section */}
-        <View style={[styles.section, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
-          <Text style={[styles.sectionTitle, { color: themeColors.textSecondary }]}>CALCULATIONS</Text>
-          <Text style={[styles.settingLabel, { color: themeColors.text }]}>Estimated 1RM Formula</Text>
-          <View style={[styles.pickerContainer, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceSecondary }]}>
+        <View 
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <Text className="text-[13px] font-semibold tracking-wide mb-4 text-foreground-secondary">CALCULATIONS</Text>
+          <Text className="text-base font-semibold mb-3 text-foreground">Estimated 1RM Formula</Text>
+          <View className="border border-border rounded-xl overflow-hidden bg-surface-secondary">
             <Picker
               selectedValue={selected}
               onValueChange={(value) => onSelect(value as E1RMFormulaId)}
-              style={{ color: themeColors.text }}
-              itemStyle={{ color: themeColors.text }}
-              dropdownIconColor={themeColors.textSecondary}
+              style={{ color: rawColors.foreground }}
+              itemStyle={{ color: rawColors.foreground }}
+              dropdownIconColor={rawColors.foregroundSecondary}
             >
               {options.map((opt) => (
                 <Picker.Item 
                   key={opt.id} 
                   label={opt.label} 
                   value={opt.id}
-                  color={themeColors.text}
+                  color={rawColors.foreground}
                 />
               ))}
             </Picker>
           </View>
-          <Text style={[styles.settingDescription, { color: themeColors.textTertiary }]}>
+          <Text className="text-[13px] mt-3 leading-[18px] text-foreground-muted">
             The formula used to calculate your estimated one-rep max from your workout data.
           </Text>
         </View>
 
         {/* Data Section */}
-        <View style={[styles.section, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
-          <Text style={[styles.sectionTitle, { color: themeColors.textSecondary }]}>DATA</Text>
+        <View 
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <Text className="text-[13px] font-semibold tracking-wide mb-4 text-foreground-secondary">DATA</Text>
 
           {/* Export Backup */}
           <Pressable
             onPress={onExportBackup}
             disabled={isExportingBackup}
-            style={({ pressed }) => [
-              styles.exportButton,
-              {
-                backgroundColor: pressed && !isExportingBackup ? themeColors.pressed : themeColors.surfaceSecondary,
-                borderColor: themeColors.border,
-                opacity: isExportingBackup ? 0.7 : 1,
-              },
-            ]}
+            className={`border border-border rounded-xl py-3 px-3.5 ${isExportingBackup ? "opacity-70" : ""}`}
+            style={({ pressed }) => ({ 
+              backgroundColor: pressed && !isExportingBackup ? rawColors.pressed : rawColors.surfaceSecondary 
+            })}
           >
-            <View style={styles.exportButtonContent}>
-              <View style={styles.exportButtonText}>
-                <Text style={[styles.exportButtonTitle, { color: themeColors.text }]}>Export backup (.db)</Text>
-                <Text style={[styles.exportButtonSubtitle, { color: themeColors.textTertiary }]}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-semibold text-foreground">Export backup (.db)</Text>
+                <Text className="text-xs mt-1 leading-4 text-foreground-muted">
                   Save a full backup of your workout database.
                 </Text>
               </View>
               {isExportingBackup ? (
-                <ActivityIndicator size="small" color={themeColors.primary} />
+                <ActivityIndicator size="small" color={rawColors.primary} />
               ) : (
-                <Text style={[styles.exportButtonAction, { color: themeColors.primary }]}>Export</Text>
+                <Text className="text-sm font-semibold text-primary">Export</Text>
               )}
             </View>
           </Pressable>
@@ -323,27 +380,22 @@ export default function SettingsScreen() {
           <Pressable
             onPress={onImportBackup}
             disabled={isImportingBackup}
-            style={({ pressed }) => [
-              styles.exportButton,
-              styles.buttonMarginTop,
-              {
-                backgroundColor: pressed && !isImportingBackup ? themeColors.pressed : themeColors.surfaceSecondary,
-                borderColor: themeColors.border,
-                opacity: isImportingBackup ? 0.7 : 1,
-              },
-            ]}
+            className={`border border-border rounded-xl py-3 px-3.5 mt-3 ${isImportingBackup ? "opacity-70" : ""}`}
+            style={({ pressed }) => ({ 
+              backgroundColor: pressed && !isImportingBackup ? rawColors.pressed : rawColors.surfaceSecondary 
+            })}
           >
-            <View style={styles.exportButtonContent}>
-              <View style={styles.exportButtonText}>
-                <Text style={[styles.exportButtonTitle, { color: themeColors.text }]}>Import backup (.db)</Text>
-                <Text style={[styles.exportButtonSubtitle, { color: themeColors.textTertiary }]}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-semibold text-foreground">Import backup (.db)</Text>
+                <Text className="text-xs mt-1 leading-4 text-foreground-muted">
                   Restore your data from a previous backup.
                 </Text>
               </View>
               {isImportingBackup ? (
-                <ActivityIndicator size="small" color={themeColors.primary} />
+                <ActivityIndicator size="small" color={rawColors.primary} />
               ) : (
-                <Text style={[styles.exportButtonAction, { color: themeColors.primary }]}>Import</Text>
+                <Text className="text-sm font-semibold text-primary">Import</Text>
               )}
             </View>
           </Pressable>
@@ -352,27 +404,22 @@ export default function SettingsScreen() {
           <Pressable
             onPress={onExportCsv}
             disabled={isExporting}
-            style={({ pressed }) => [
-              styles.exportButton,
-              styles.buttonMarginTop,
-              {
-                backgroundColor: pressed && !isExporting ? themeColors.pressed : themeColors.surfaceSecondary,
-                borderColor: themeColors.border,
-                opacity: isExporting ? 0.7 : 1,
-              },
-            ]}
+            className={`border border-border rounded-xl py-3 px-3.5 mt-3 ${isExporting ? "opacity-70" : ""}`}
+            style={({ pressed }) => ({ 
+              backgroundColor: pressed && !isExporting ? rawColors.pressed : rawColors.surfaceSecondary 
+            })}
           >
-            <View style={styles.exportButtonContent}>
-              <View style={styles.exportButtonText}>
-                <Text style={[styles.exportButtonTitle, { color: themeColors.text }]}>Export CSV</Text>
-                <Text style={[styles.exportButtonSubtitle, { color: themeColors.textTertiary }]}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-semibold text-foreground">Export CSV</Text>
+                <Text className="text-xs mt-1 leading-4 text-foreground-muted">
                   Download all recorded sets as a single CSV file.
                 </Text>
               </View>
               {isExporting ? (
-                <ActivityIndicator size="small" color={themeColors.primary} />
+                <ActivityIndicator size="small" color={rawColors.primary} />
               ) : (
-                <Text style={[styles.exportButtonAction, { color: themeColors.primary }]}>Export</Text>
+                <Text className="text-sm font-semibold text-primary">Export</Text>
               )}
             </View>
           </Pressable>
@@ -381,89 +428,3 @@ export default function SettingsScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  header: {
-    marginBottom: 24,
-    marginTop: 32,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "700",
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    marginTop: 4,
-  },
-  section: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-    marginBottom: 16,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  settingDescription: {
-    fontSize: 13,
-    marginTop: 12,
-    lineHeight: 18,
-  },
-  exportButton: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  exportButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  exportButtonText: {
-    flex: 1,
-    marginRight: 12,
-  },
-  exportButtonTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  exportButtonSubtitle: {
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  exportButtonAction: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  buttonMarginTop: {
-    marginTop: 12,
-  },
-});
-
-
-

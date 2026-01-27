@@ -2,13 +2,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { getTotalPRCount } from "../../lib/db/prEvents";
 import { getLastWorkoutDay, getQuickStats, type LastWorkoutDayResult, type QuickStats } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 export default function OverviewScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const [lastWorkout, setLastWorkout] = useState<LastWorkoutDayResult | null>(null);
   const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
   const [totalPRs, setTotalPRs] = useState(0);
@@ -81,126 +81,121 @@ export default function OverviewScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <View className="flex-1 bg-background">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: themeColors.text }]}>
+        <View className="mb-6 mt-12">
+          <Text className="text-3xl font-bold text-foreground">
             WorkoutLog
           </Text>
         </View>
 
         {/* Quick Stats */}
         <View
-          style={[
-            styles.card,
-            { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }
-          ]}
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
         >
-          <Text style={[styles.cardTitle, { color: themeColors.text }]}>
+          <Text className="text-lg font-semibold mb-4 text-foreground">
             Quick Stats
           </Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <MaterialCommunityIcons name="dumbbell" size={32} color={themeColors.primary} />
-              <Text style={[styles.statValue, { color: themeColors.text }]}>
+          <View className="flex-row justify-around">
+            <View className="items-center">
+              <MaterialCommunityIcons name="dumbbell" size={32} color={rawColors.primary} />
+              <Text className="text-2xl font-bold mt-2 text-foreground">
                 {quickStats?.totalWorkoutDays ?? 0}
               </Text>
-              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Workouts</Text>
+              <Text className="text-xs text-foreground-secondary">Workouts</Text>
             </View>
-            <View style={styles.statItem}>
-              <MaterialCommunityIcons name="weight-kilogram" size={32} color={themeColors.warning} />
-              <Text style={[styles.statValue, { color: themeColors.text }]}>
+            <View className="items-center">
+              <MaterialCommunityIcons name="weight-kilogram" size={32} color={rawColors.warning} />
+              <Text className="text-2xl font-bold mt-2 text-foreground">
                 {quickStats ? (quickStats.totalVolumeKg >= 1000 
                   ? `${(quickStats.totalVolumeKg / 1000).toFixed(1)}k` 
                   : quickStats.totalVolumeKg) : 0}
               </Text>
-              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>Volume (kg)</Text>
+              <Text className="text-xs text-foreground-secondary">Volume (kg)</Text>
             </View>
-            <View style={styles.statItem}>
-              <MaterialCommunityIcons name="trophy" size={32} color={themeColors.success} />
-              <Text style={[styles.statValue, { color: themeColors.text }]}>{totalPRs}</Text>
-              <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>PRs</Text>
+            <View className="items-center">
+              <MaterialCommunityIcons name="trophy" size={32} color={rawColors.success} />
+              <Text className="text-2xl font-bold mt-2 text-foreground">{totalPRs}</Text>
+              <Text className="text-xs text-foreground-secondary">PRs</Text>
             </View>
           </View>
         </View>
 
         {/* Workout History */}
         <View
-          style={[
-            styles.card,
-            styles.workoutHistoryCard,
-            { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }
-          ]}
+          className="rounded-2xl p-5 mb-4 bg-surface min-h-[400px] max-h-[700px]"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
         >
           {/* Card Header */}
           <Pressable
-            style={styles.cardHeader}
+            className="flex-row justify-between items-center mb-4"
             onPress={handleWorkoutHistoryPress}
           >
-            <Text style={[styles.cardTitle, { color: themeColors.text, marginBottom: 0 }]}>
+            <Text className="text-lg font-semibold text-foreground">
               Workout History
             </Text>
             <MaterialCommunityIcons
               name="chevron-right"
               size={24}
-              color={themeColors.textSecondary}
+              color={rawColors.foregroundSecondary}
             />
           </Pressable>
 
           {/* Content */}
           {loading ? (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>
+            <View className="items-center py-8">
+              <Text className="text-base mt-3 text-foreground-muted">
                 Loading...
               </Text>
             </View>
           ) : lastWorkout === null ? (
-            <View style={styles.emptyState}>
+            <View className="items-center py-8">
               <MaterialCommunityIcons
                 name="clipboard-text-outline"
                 size={48}
-                color={themeColors.textLight}
+                color={rawColors.foregroundMuted}
               />
-              <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>
+              <Text className="text-base mt-3 text-foreground-muted">
                 No workouts yet
               </Text>
-              <Text style={[styles.emptySubtext, { color: themeColors.textLight }]}>
+              <Text className="text-sm mt-1 text-center text-foreground-muted">
                 Complete an exercise to see your activity here
               </Text>
             </View>
           ) : (
-            <Pressable style={styles.lastWorkoutContent} onPress={handleLastWorkoutPress}>
+            <Pressable className="flex-1" onPress={handleLastWorkoutPress}>
               {/* Last Workout Header */}
-              <View style={styles.lastWorkoutHeader}>
-                <Text style={[styles.lastWorkoutLabel, { color: themeColors.textSecondary }]}>
+              <View className="mb-4">
+                <Text className="text-xs font-medium uppercase tracking-wide text-foreground-secondary">
                   Last Workout
                 </Text>
-                <Text style={[styles.lastWorkoutDate, { color: themeColors.text }]}>
+                <Text className="text-xl font-semibold mt-1 text-foreground">
                   {formatDate(lastWorkout.date)}
                 </Text>
               </View>
 
               {/* Exercise List */}
-              <View style={styles.exerciseList}>
+              <View className="flex-1">
                 {lastWorkout.exercises.map((exercise, index) => (
-                  <View key={exercise.workoutExerciseId} style={styles.exerciseItem}>
+                  <View key={exercise.workoutExerciseId} className="flex-row items-center py-2.5">
                     {/* Alphabet Circle */}
-                    <View style={[styles.alphabetCircle, { backgroundColor: themeColors.primary }]}>
-                      <Text style={styles.alphabetText}>
+                    <View className="w-8 h-8 rounded-full items-center justify-center mr-3 bg-primary">
+                      <Text className="text-sm font-semibold text-primary-foreground">
                         {getAlphabetLetter(index)}
                       </Text>
                     </View>
 
                     {/* Exercise Details */}
-                    <View style={styles.exerciseDetails}>
+                    <View className="flex-1">
                       <Text
-                        style={[styles.exerciseName, { color: themeColors.text }]}
+                        className="text-[15px] font-semibold mb-0.5 text-foreground"
                         numberOfLines={1}
                       >
                         {exercise.exerciseName}
                       </Text>
-                      <Text style={[styles.bestSetText, { color: themeColors.textSecondary }]}>
+                      <Text className="text-[13px] text-foreground-secondary">
                         {exercise.bestSet
                           ? `Best set: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
                           : "Best set: —"}
@@ -211,7 +206,7 @@ export default function OverviewScreen() {
 
                 {/* Show more indicator */}
                 {lastWorkout.hasMore && (
-                  <Text style={[styles.showMoreText, { color: themeColors.textTertiary }]}>
+                  <Text className="text-xs text-center py-2 italic text-foreground-muted">
                     Showing first 26 exercises
                   </Text>
                 )}
@@ -223,128 +218,3 @@ export default function OverviewScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  header: {
-    marginBottom: 24,
-    marginTop: 48,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "700",
-  },
-  card: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  workoutHistoryCard: {
-    minHeight: 400,
-    maxHeight: 700,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  statItem: {
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 32,
-  },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: "center",
-  },
-  lastWorkoutContent: {
-    flex: 1,
-  },
-  lastWorkoutHeader: {
-    marginBottom: 16,
-  },
-  lastWorkoutLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  lastWorkoutDate: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  exerciseList: {
-    flex: 1,
-  },
-  exerciseItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  alphabetCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  alphabetText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  exerciseDetails: {
-    flex: 1,
-  },
-  exerciseName: {
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  bestSetText: {
-    fontSize: 13,
-  },
-  showMoreText: {
-    fontSize: 12,
-    textAlign: "center",
-    paddingVertical: 8,
-    fontStyle: "italic",
-  },
-});

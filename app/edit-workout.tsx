@@ -22,7 +22,7 @@ import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
 
 export default function EditWorkoutScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ 
     exerciseId?: string; 
     workoutId?: string; 
@@ -220,13 +220,13 @@ export default function EditWorkoutScreen() {
   const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);
   if (!hasValidParams) {
     return (
-      <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+      <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
         <Stack.Screen
           options={{
             presentation: "modal",
             title: `Edit ${exerciseName}`,
-            headerStyle: { backgroundColor: themeColors.surface },
-            headerTitleStyle: { color: themeColors.text },
+            headerStyle: { backgroundColor: rawColors.surface },
+            headerTitleStyle: { color: rawColors.foreground },
             headerLeft: () => (
               <Pressable
                 accessibilityRole="button"
@@ -234,24 +234,24 @@ export default function EditWorkoutScreen() {
                 onPress={() => router.back()}
                 style={styles.headerButton}
               >
-                <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+                <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
               </Pressable>
             ),
           }}
         />
-        <Text style={[styles.errorText, { color: themeColors.error }]}>Invalid exercise or workout ID</Text>
+        <Text style={[styles.errorText, { color: rawColors.destructive }]}>Invalid exercise or workout ID</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
       <Stack.Screen
         options={{
           presentation: "modal",
           title: `Edit ${exerciseName}`,
-          headerStyle: { backgroundColor: themeColors.surface },
-          headerTitleStyle: { color: themeColors.text },
+          headerStyle: { backgroundColor: rawColors.surface },
+          headerTitleStyle: { color: rawColors.foreground },
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"
@@ -259,7 +259,7 @@ export default function EditWorkoutScreen() {
               onPress={() => router.back()}
               style={styles.headerButton}
             >
-              <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
             </Pressable>
           ),
         }}
@@ -269,66 +269,66 @@ export default function EditWorkoutScreen() {
         {/* Date Picker */}
         <View style={styles.dateSection}>
           <Pressable
-            style={[styles.dateButton, { backgroundColor: themeColors.primaryLight }]}
+            style={[styles.dateButton, { backgroundColor: rawColors.primaryLight }]}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color={themeColors.primary} />
-            <Text style={[styles.dateButtonText, { color: themeColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color={themeColors.textSecondary} />
+            <MaterialCommunityIcons name="calendar" size={20} color={rawColors.primary} />
+            <Text style={[styles.dateButtonText, { color: rawColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color={rawColors.foregroundSecondary} />
           </Pressable>
         </View>
 
         {/* Input Section */}
         <View style={styles.inputSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Add Set</Text>
+          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Add Set</Text>
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Weight (kg)</Text>
+              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Weight (kg)</Text>
               <TextInput
-                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
+                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0.0"
-                placeholderTextColor={themeColors.textPlaceholder}
+                placeholderTextColor={rawColors.foregroundPlaceholder}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Reps</Text>
+              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Reps</Text>
               <TextInput
-                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
+                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
-                placeholderTextColor={themeColors.textPlaceholder}
+                placeholderTextColor={rawColors.foregroundPlaceholder}
                 keyboardType="number-pad"
                 returnKeyType="next"
               />
             </View>
           </View>
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Note (optional)</Text>
+            <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
+              style={[styles.input, styles.noteInput, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
-              placeholderTextColor={themeColors.textPlaceholder}
+              placeholderTextColor={rawColors.foregroundPlaceholder}
               multiline
               returnKeyType="done"
             />
           </View>
-          <Pressable style={[styles.addButton, { backgroundColor: themeColors.primary }]} onPress={handleAddSet}>
-            <Text style={[styles.addButtonText, { color: themeColors.surface }]}>Add Set</Text>
+          <Pressable style={[styles.addButton, { backgroundColor: rawColors.primary }]} onPress={handleAddSet}>
+            <Text style={[styles.addButtonText, { color: rawColors.surface }]}>Add Set</Text>
           </Pressable>
         </View>
 
         {/* Sets List */}
         <View style={styles.setsSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recorded Sets ({sets.length})</Text>
+          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Recorded Sets ({sets.length})</Text>
           {sets.length === 0 ? (
-            <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>No sets recorded yet</Text>
+            <Text style={[styles.emptyText, { color: rawColors.foregroundMuted }]}>No sets recorded yet</Text>
           ) : (
             <FlatList
               data={sets}
@@ -349,10 +349,10 @@ export default function EditWorkoutScreen() {
       </ScrollView>
 
       {/* Action Button */}
-      <View style={[styles.actionButtons, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
-        <Pressable style={[styles.saveButton, { backgroundColor: themeColors.primary }]} onPress={handleSaveEdits}>
-          <MaterialCommunityIcons name="check-circle" size={20} color={themeColors.surface} />
-          <Text style={[styles.saveButtonText, { color: themeColors.surface }]}>Save Edits</Text>
+      <View style={[styles.actionButtons, { backgroundColor: rawColors.surface, borderTopColor: rawColors.border }]}>
+        <Pressable style={[styles.saveButton, { backgroundColor: rawColors.primary }]} onPress={handleSaveEdits}>
+          <MaterialCommunityIcons name="check-circle" size={20} color={rawColors.surface} />
+          <Text style={[styles.saveButtonText, { color: rawColors.surface }]}>Save Edits</Text>
         </Pressable>
       </View>
 

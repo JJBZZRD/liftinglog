@@ -21,13 +21,12 @@ import {
   type SetRow,
 } from "../../../lib/db/workouts";
 import { detectAndRecordPRs } from "../../../lib/pr/detection";
-import { colors } from "../../../lib/theme/colors";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 
 export default function RecordTab() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -251,7 +250,7 @@ export default function RecordTab() {
   if (!exerciseId) {
     return (
       <View style={styles.tabContainer}>
-        <Text style={styles.errorText}>Invalid exercise ID</Text>
+        <Text style={[styles.errorText, { color: rawColors.destructive }]}>Invalid exercise ID</Text>
       </View>
     );
   }
@@ -267,7 +266,7 @@ export default function RecordTab() {
   );
 
   return (
-    <View style={[styles.recordContainer, { backgroundColor: themeColors.surface }]}>
+    <View style={[styles.recordContainer, { backgroundColor: rawColors.surface }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -276,63 +275,63 @@ export default function RecordTab() {
         {/* Date Picker */}
         <View style={styles.dateSection}>
           <Pressable
-            style={[styles.dateButton, { backgroundColor: themeColors.primaryLight }]}
+            style={[styles.dateButton, { backgroundColor: rawColors.primaryLight }]}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color={themeColors.primary} />
-            <Text style={[styles.dateButtonText, { color: themeColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color={themeColors.textSecondary} />
+            <MaterialCommunityIcons name="calendar" size={20} color={rawColors.primary} />
+            <Text style={[styles.dateButtonText, { color: rawColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={18} color={rawColors.foregroundSecondary} />
           </Pressable>
         </View>
 
         {/* Input Section */}
         <View style={styles.inputSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Add Set</Text>
+          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Add Set</Text>
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Weight (kg)</Text>
+              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Weight (kg)</Text>
               <TextInput
-                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
+                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0"
-                placeholderTextColor={themeColors.textPlaceholder}
+                placeholderTextColor={rawColors.foregroundPlaceholder}
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Reps</Text>
+              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Reps</Text>
               <TextInput
-                style={[styles.input, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
+                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
-                placeholderTextColor={themeColors.textPlaceholder}
+                placeholderTextColor={rawColors.foregroundPlaceholder}
                 keyboardType="number-pad"
               />
             </View>
           </View>
           <View style={styles.noteInputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>Note (optional)</Text>
+            <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput, { borderColor: themeColors.border, backgroundColor: themeColors.surface, color: themeColors.text }]}
+              style={[styles.input, styles.noteInput, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
-              placeholderTextColor={themeColors.textPlaceholder}
+              placeholderTextColor={rawColors.foregroundPlaceholder}
               multiline
             />
           </View>
-          <Pressable style={[styles.addButton, { backgroundColor: themeColors.primary }]} onPress={handleAddSet}>
-            <Text style={[styles.addButtonText, { color: themeColors.surface }]}>Add Set</Text>
+          <Pressable style={[styles.addButton, { backgroundColor: rawColors.primary }]} onPress={handleAddSet}>
+            <Text style={[styles.addButtonText, { color: rawColors.surface }]}>Add Set</Text>
           </Pressable>
         </View>
 
         {/* Sets List */}
         <View style={styles.setsSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recorded Sets</Text>
+          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Recorded Sets</Text>
           {sets.length === 0 ? (
-            <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>No sets recorded yet. Add your first set above.</Text>
+            <Text style={[styles.emptyText, { color: rawColors.foregroundMuted }]}>No sets recorded yet. Add your first set above.</Text>
           ) : (
             <FlatList
               data={sets}
@@ -346,13 +345,13 @@ export default function RecordTab() {
       </ScrollView>
 
       {/* Action Buttons */}
-      <View style={[styles.actionButtons, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+      <View style={[styles.actionButtons, { backgroundColor: rawColors.surface, borderTopColor: rawColors.border }]}>
         <Pressable
           style={[
             styles.actionButton,
             styles.timerButton,
-            { backgroundColor: themeColors.surfaceSecondary },
-            currentTimer?.isRunning && { backgroundColor: themeColors.primary },
+            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.primary },
+            currentTimer?.isRunning && { backgroundColor: rawColors.primary },
           ]}
           onPress={handleTimerPress}
           onLongPress={handleTimerLongPress}
@@ -361,13 +360,13 @@ export default function RecordTab() {
           <MaterialCommunityIcons
             name={currentTimer?.isRunning ? "pause" : "timer"}
             size={20}
-            color={currentTimer?.isRunning ? themeColors.surface : themeColors.primary}
+            color={currentTimer?.isRunning ? rawColors.surface : rawColors.primary}
           />
           <Text
             style={[
               styles.actionButtonText,
-              { color: themeColors.primary },
-              currentTimer?.isRunning && { color: themeColors.surface },
+              { color: rawColors.primary },
+              currentTimer?.isRunning && { color: rawColors.surface },
             ]}
           >
             {currentTimer
@@ -376,12 +375,12 @@ export default function RecordTab() {
           </Text>
         </Pressable>
         <Pressable 
-          style={[styles.actionButton, { backgroundColor: themeColors.primary }, sets.length === 0 && { backgroundColor: themeColors.surfaceSecondary }]} 
+          style={[styles.actionButton, { backgroundColor: rawColors.primary }, sets.length === 0 && { backgroundColor: rawColors.surfaceSecondary }]} 
           onPress={handleCompleteExercise}
           disabled={sets.length === 0}
         >
-          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? themeColors.textTertiary : themeColors.surface} />
-          <Text style={[styles.actionButtonText, { color: themeColors.surface }, sets.length === 0 && { color: themeColors.textTertiary }]}>
+          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? rawColors.foregroundMuted : rawColors.surface} />
+          <Text style={[styles.actionButtonText, { color: rawColors.surface }, sets.length === 0 && { color: rawColors.foregroundMuted }]}>
             Complete Exercise
           </Text>
         </Pressable>
@@ -434,11 +433,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: colors.error,
   },
   recordContainer: {
     flex: 1,
-    backgroundColor: colors.surface,
   },
   scrollView: {
     flex: 1,
@@ -453,7 +450,6 @@ const styles = StyleSheet.create({
   dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primaryLight,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
@@ -463,7 +459,6 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: colors.primary,
   },
   inputSection: {
     marginBottom: 24,
@@ -472,7 +467,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 16,
-    color: colors.text,
   },
   inputRow: {
     flexDirection: "row",
@@ -485,16 +479,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: colors.textSecondary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: colors.surface,
   },
   noteInput: {
     minHeight: 80,
@@ -504,14 +495,12 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   addButton: {
-    backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: "center",
     marginTop: 8,
   },
   addButtonText: {
-    color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -520,7 +509,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: colors.textTertiary,
     textAlign: "center",
     paddingVertical: 24,
   },
@@ -531,9 +519,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     padding: 16,
-    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
     gap: 12,
   },
   actionButton: {
@@ -546,35 +532,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timerButton: {
-    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  timerButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  timerButtonText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  timerButtonTextActive: {
-    color: colors.surface,
-  },
-  completeButton: {
-    backgroundColor: colors.primary,
-  },
-  completeButtonDisabled: {
-    backgroundColor: colors.border,
-  },
-  completeButtonText: {
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  completeButtonTextDisabled: {
-    color: colors.textTertiary,
   },
   actionButtonText: {
     fontSize: 16,

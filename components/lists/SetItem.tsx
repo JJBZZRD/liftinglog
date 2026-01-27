@@ -7,8 +7,8 @@
  * - HistoryTab.tsx
  * - edit-workout.tsx
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../lib/theme/ThemeContext';
+import { Pressable, Text, View } from "react-native";
+import { useTheme } from "../../lib/theme/ThemeContext";
 
 interface SetItemProps {
   /** Set index (1-based for display) */
@@ -24,7 +24,7 @@ interface SetItemProps {
   /** Long press delay in ms (default: 400) */
   delayLongPress?: number;
   /** Variant styling */
-  variant?: 'default' | 'compact';
+  variant?: "default" | "compact";
   /** PR badge text (e.g., "1RM", "5RM") */
   prBadge?: string | null;
 }
@@ -43,40 +43,57 @@ export default function SetItem({
   note,
   onLongPress,
   delayLongPress = 400,
-  variant = 'default',
+  variant = "default",
   prBadge,
 }: SetItemProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
+  const isCompact = variant === "compact";
 
   const content = (
-    <View style={[
-      styles.container, 
-      { backgroundColor: themeColors.surfaceSecondary },
-      variant === 'compact' && [styles.containerCompact, { backgroundColor: themeColors.surface }]
-    ]}>
-      <View style={[styles.badge, { backgroundColor: themeColors.primary }, variant === 'compact' && styles.badgeCompact]}>
-        <Text style={[styles.badgeText, { color: themeColors.surface }, variant === 'compact' && styles.badgeTextCompact]}>
+    <View 
+      className={`flex-row items-center rounded-lg mb-2 ${
+        isCompact 
+          ? "py-2 px-3 mb-1 bg-surface" 
+          : "py-3 px-4 bg-surface-secondary"
+      }`}
+    >
+      <View 
+        className={`items-center justify-center mr-3 bg-primary ${
+          isCompact ? "w-7 h-7 rounded-full" : "w-8 h-8 rounded-full"
+        }`}
+      >
+        <Text 
+          className={`font-semibold text-primary-foreground ${
+            isCompact ? "text-xs" : "text-sm"
+          }`}
+        >
           {index}
         </Text>
       </View>
-      <View style={styles.details}>
-        <View style={styles.infoRow}>
-          <Text style={[styles.info, { color: themeColors.text }]}>
-            {weightKg !== null ? `${weightKg} kg` : '—'}
+      <View className="flex-1">
+        <View className="flex-row gap-3 mb-1">
+          <Text className="text-base font-semibold text-foreground">
+            {weightKg !== null ? `${weightKg} kg` : "—"}
           </Text>
-          <Text style={[styles.info, { color: themeColors.text }]}>
-            {reps !== null ? `${reps} reps` : '—'}
+          <Text className="text-base font-semibold text-foreground">
+            {reps !== null ? `${reps} reps` : "—"}
           </Text>
         </View>
         {note && (
-          <Text style={[styles.note, { color: themeColors.textSecondary }]} numberOfLines={variant === 'compact' ? 1 : undefined}>
+          <Text 
+            className="text-sm italic text-foreground-secondary"
+            numberOfLines={isCompact ? 1 : undefined}
+          >
             {note}
           </Text>
         )}
       </View>
       {prBadge && (
-        <View style={[styles.prBadge, { backgroundColor: themeColors.prGold }]}>
-          <Text style={[styles.prBadgeText, { color: themeColors.surface }]}>
+        <View 
+          className="px-2 py-1 rounded-md ml-2"
+          style={{ backgroundColor: rawColors.prGold }}
+        >
+          <Text className="text-[11px] font-bold uppercase text-primary-foreground">
             {prBadge}
           </Text>
         </View>
@@ -95,69 +112,6 @@ export default function SetItem({
   return content;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  containerCompact: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 4,
-  },
-  badge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  badgeCompact: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  badgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  badgeTextCompact: {
-    fontSize: 12,
-  },
-  details: {
-    flex: 1,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 4,
-  },
-  info: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  note: {
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  prBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  prBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-});
-
 /**
  * SetItemList - Helper component for rendering a list of sets
  */
@@ -171,22 +125,20 @@ interface SetData {
 interface SetItemListProps {
   sets: SetData[];
   onLongPressSet?: (set: SetData) => void;
-  variant?: 'default' | 'compact';
+  variant?: "default" | "compact";
   emptyText?: string;
 }
 
 export function SetItemList({
   sets,
   onLongPressSet,
-  variant = 'default',
-  emptyText = 'No sets recorded',
+  variant = "default",
+  emptyText = "No sets recorded",
 }: SetItemListProps) {
-  const { themeColors } = useTheme();
-
   if (sets.length === 0) {
     return (
-      <View style={emptyStyles.container}>
-        <Text style={[emptyStyles.text, { color: themeColors.textTertiary }]}>{emptyText}</Text>
+      <View className="py-6 items-center">
+        <Text className="text-sm text-center text-foreground-muted">{emptyText}</Text>
       </View>
     );
   }
@@ -207,19 +159,3 @@ export function SetItemList({
     </>
   );
 }
-
-const emptyStyles = StyleSheet.create({
-  container: {
-    paddingVertical: 24,
-    alignItems: 'center',
-  },
-  text: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-});
-
-
-
-
-

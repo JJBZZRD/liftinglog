@@ -17,7 +17,7 @@ const renderScene = SceneMap({
 });
 
 export default function ExerciseModalScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const title = typeof params.name === "string" ? params.name : "Exercise";
@@ -70,7 +70,7 @@ export default function ExerciseModalScreen() {
   }, [exerciseId, isPinned]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: themeColors.surface }}>
+    <View style={{ flex: 1, backgroundColor: rawColors.surface }}>
       {/* Pin limit tooltip overlay */}
       <Modal
         visible={showPinLimitTooltip}
@@ -83,9 +83,9 @@ export default function ExerciseModalScreen() {
           onPress={() => setShowPinLimitTooltip(false)}
         >
           <View style={styles.tooltipContainer}>
-            <View style={[styles.tooltipArrow, { borderBottomColor: themeColors.surfaceSecondary }]} />
-            <View style={[styles.tooltip, { backgroundColor: themeColors.surfaceSecondary }]}>
-              <Text style={[styles.tooltipText, { color: themeColors.text }]}>
+            <View style={[styles.tooltipArrow, { borderBottomColor: rawColors.surfaceSecondary }]} />
+            <View style={[styles.tooltip, { backgroundColor: rawColors.surfaceSecondary }]}>
+              <Text style={[styles.tooltipText, { color: rawColors.foreground }]}>
                 Max {MAX_PINNED_EXERCISES} pins! Unpin one first 📌
               </Text>
             </View>
@@ -97,8 +97,8 @@ export default function ExerciseModalScreen() {
         options={{
           presentation: "modal",
           title,
-          headerStyle: { backgroundColor: themeColors.surface },
-          headerTitleStyle: { color: themeColors.text },
+          headerStyle: { backgroundColor: rawColors.surface },
+          headerTitleStyle: { color: rawColors.foreground },
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"
@@ -106,7 +106,7 @@ export default function ExerciseModalScreen() {
               onPress={() => router.back()}
               style={{ paddingHorizontal: 12, paddingVertical: 6 }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
             </Pressable>
           ),
           headerRight: () => (
@@ -119,7 +119,7 @@ export default function ExerciseModalScreen() {
               <MaterialCommunityIcons 
                 name={isPinned ? "pin" : "pin-outline"} 
                 size={24} 
-                color={isPinned ? themeColors.primary : themeColors.textSecondary} 
+                color={isPinned ? rawColors.primary : rawColors.foregroundSecondary} 
               />
             </Pressable>
           ),
@@ -136,11 +136,11 @@ export default function ExerciseModalScreen() {
           renderTabBar={(props) => (
             <TabBar
               {...props}
-              indicatorStyle={{ backgroundColor: themeColors.primary }}
-              style={{ backgroundColor: themeColors.surface }}
-              activeColor={themeColors.primary}
-              inactiveColor={themeColors.textSecondary}
-              pressColor={themeColors.pressed}
+              indicatorStyle={{ backgroundColor: rawColors.primary }}
+              style={{ backgroundColor: rawColors.surface }}
+              activeColor={rawColors.primary}
+              inactiveColor={rawColors.foregroundSecondary}
+              pressColor={rawColors.pressed}
             />
           )}
         />

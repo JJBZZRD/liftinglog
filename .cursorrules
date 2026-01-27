@@ -2,235 +2,250 @@
 
 ## Theme Implementation
 
-### Required: Use Dynamic Theme Colors
+### NativeWind-Based Theming System
 
-All visual components MUST use the theme system for colors. Never hardcode color values.
+This app uses **NativeWind v4** for styling with CSS variable-based color themes. The theming system supports:
+- 7 color themes (default, ocean, forest, sunset, rose, violet, slate)
+- Light and dark mode variants for each theme
+- CSS variables applied via NativeWind's `vars()` function
+
+### Two Approaches to Theme Colors
+
+**1. Tailwind Classes (Preferred)**
+Use Tailwind classes for most UI elements:
 
 ```typescript
-// CORRECT: Use useTheme hook
+// CORRECT: Use Tailwind classes
+<View className="flex-1 p-4 bg-background">
+  <Text className="text-lg font-bold text-foreground">Title</Text>
+  <Text className="text-sm text-foreground-secondary">Subtitle</Text>
+</View>
+```
+
+**2. Raw Colors for Special Cases**
+Use `rawColors` for SVG, charts, third-party components, or dynamic inline styles:
+
+```typescript
 import { useTheme } from '../lib/theme/ThemeContext';
 
 function MyComponent() {
-  const { themeColors } = useTheme();
-  return (
-    <View style={{ backgroundColor: themeColors.background }}>
-      <Text style={{ color: themeColors.text }}>Content</Text>
-    </View>
-  );
-}
-
-// WRONG: Hardcoded colors
-function BadComponent() {
-  return (
-    <View style={{ backgroundColor: '#f5f5f5' }}>
-      <Text style={{ color: '#000' }}>Content</Text>
-    </View>
-  );
-}
-```
-
-### Available Theme Colors
-
-Use these semantic color tokens from `themeColors`:
-
-**Backgrounds:**
-- `background` - Main page background
-- `surface` - Cards, modals, containers
-- `surfaceSecondary` - Input backgrounds, secondary surfaces
-
-**Text:**
-- `text` - Primary text (titles, body)
-- `textSecondary` - Subtitles, labels
-- `textTertiary` - Hints, disabled text
-- `textPlaceholder` - Input placeholders (use with `placeholderTextColor` prop)
-- `textLight` - Very light/muted text
-
-**Interactive:**
-- `primary` - Primary actions, links, active states
-- `primaryLight` - Light primary for backgrounds (e.g., date picker button bg)
-- `pressed` - Press state color
-
-**Status:**
-- `success` - Success states (green)
-- `warning` - Warning states (orange)
-- `error` / `destructive` - Error states, delete actions (red)
-
-**Borders:**
-- `border` - Standard borders
-- `borderLight` - Subtle borders
-
-**Overlays:**
-- `overlay` - Modal backdrop (semi-transparent)
-- `overlayDark` - Darker overlay
-- `shadow` - Shadow color (use with shadowColor property)
-
-### TextInput Components
-
-Always set `placeholderTextColor` for visibility in both themes:
-
-```typescript
-<TextInput
-  style={[styles.input, { 
-    borderColor: themeColors.border,
-    backgroundColor: themeColors.surface,
-    color: themeColors.text 
-  }]}
-  placeholderTextColor={themeColors.textPlaceholder}
-  placeholder="Enter value..."
-/>
-```
-
-### Icons
-
-Use theme colors for icons:
-
-```typescript
-<MaterialCommunityIcons 
-  name="dumbbell" 
-  size={24} 
-  color={themeColors.primary}  // Active state
-  // or
-  color={themeColors.textSecondary}  // Inactive state
-/>
-```
-
-### Modals
-
-Use BaseModal component or apply theme colors to custom modals:
-
-```typescript
-// Use BaseModal (automatically themed)
-<BaseModal visible={visible} onClose={onClose}>
-  <Text style={{ color: themeColors.text }}>Content</Text>
-</BaseModal>
-
-// Custom modal
-<Modal visible={visible} transparent>
-  <Pressable style={{ backgroundColor: themeColors.overlay }}>
-    <View style={{ backgroundColor: themeColors.surface }}>
-      ...
-    </View>
-  </Pressable>
-</Modal>
-```
-
-### StyleSheet Pattern
-
-Keep non-color styles in StyleSheet, apply colors inline:
-
-```typescript
-function MyComponent() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <Text style={[styles.title, { color: themeColors.text }]}>Title</Text>
-    </View>
+    <>
+      {/* SVG fill colors */}
+      <Circle fill={rawColors.primary} />
+      
+      {/* Dynamic styles */}
+      <View style={{ borderColor: rawColors.border }}>
+        ...
+      </View>
+      
+      {/* Third-party components */}
+      <Picker dropdownIconColor={rawColors.foregroundSecondary} />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-});
 ```
 
-### Stack.Screen Header Styling
+### Available Tailwind Color Classes
 
-When using Expo Router's Stack.Screen, apply theme to header:
+These colors are defined in `tailwind.config.js` and powered by CSS variables:
+
+**Backgrounds:**
+- `bg-background` - Main page background
+- `bg-surface` - Cards, modals, containers
+- `bg-surface-secondary` - Input backgrounds, secondary surfaces
+
+**Text:**
+- `text-foreground` - Primary text
+- `text-foreground-secondary` - Subtitles, labels
+- `text-foreground-muted` - Hints, disabled text
+
+**Interactive:**
+- `bg-primary` / `text-primary` - Primary actions, links
+- `bg-primary-light` - Light primary backgrounds
+- `text-primary-foreground` - Text on primary buttons
+- `bg-pressed` - Press state backgrounds
+
+**Status:**
+- `text-success` / `bg-success` - Success states
+- `text-warning` / `bg-warning` - Warning states
+- `text-destructive` / `bg-destructive` - Error/delete states
+
+**Borders:**
+- `border-border` - Standard borders
+- `border-border-light` - Subtle borders
+
+**Overlays:**
+- `bg-overlay` - Modal backdrop
+- `bg-overlay-dark` - Darker overlay
+
+### Raw Color Properties (for `rawColors`)
+
+When using `rawColors`, these properties are available:
 
 ```typescript
-<Stack.Screen
-  options={{
-    title: "Screen Title",
-    headerStyle: { backgroundColor: themeColors.surface },
-    headerTitleStyle: { color: themeColors.text },
-    headerLeft: () => (
-      <Pressable onPress={() => router.back()}>
-        <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
-      </Pressable>
-    ),
-  }}
-/>
+const { rawColors } = useTheme();
+
+// Backgrounds
+rawColors.background
+rawColors.surface
+rawColors.surfaceSecondary
+
+// Foreground (text/icons)
+rawColors.foreground
+rawColors.foregroundSecondary
+rawColors.foregroundMuted
+
+// Interactive
+rawColors.primary
+rawColors.primaryLight
+rawColors.primaryForeground
+rawColors.pressed
+
+// Status
+rawColors.success
+rawColors.warning
+rawColors.destructive
+
+// Borders
+rawColors.border
+rawColors.borderLight
+
+// Special
+rawColors.overlay
+rawColors.overlayDark
+rawColors.shadow
+rawColors.prGold
 ```
 
-### Tab Bar (Already Configured)
-
-Tab bar colors are set in `app/(tabs)/_layout.tsx`. New tabs automatically inherit theming.
-
-## File Structure Conventions
-
-- **Screens**: `app/` directory (Expo Router)
-- **Components**: `components/` directory
-- **Modals**: `components/modals/` directory
-- **List Items**: `components/lists/` directory
-- **Theme**: `lib/theme/` directory
-- **Database**: `lib/db/` directory
-- **Hooks**: `lib/hooks/` directory
-- **Utilities**: `lib/utils/` directory
-
-## Component Patterns
-
-### New Screen Template
+### Theme State Access
 
 ```typescript
-import { StyleSheet, Text, View } from 'react-native';
+const { 
+  rawColors,        // Raw hex color values
+  colorTheme,       // 'default', 'ocean', etc.
+  colorScheme,      // 'light' or 'dark'
+  isDark,           // boolean
+  setColorTheme,    // Change color theme
+  setThemePreference // Change light/dark mode ('system', 'light', 'dark')
+} = useTheme();
+```
+
+### Color Themes
+
+Available themes defined in `lib/theme/themes.ts`:
+- `default` - iOS-style blue
+- `ocean` - Teal/cyan
+- `forest` - Emerald green
+- `sunset` - Orange/amber
+- `rose` - Pink/rose
+- `violet` - Purple
+- `slate` - Neutral gray
+
+### Component Patterns
+
+#### New Screen Template
+
+```typescript
+import { Text, View } from 'react-native';
 import { useTheme } from '../lib/theme/ThemeContext';
 
 export default function NewScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <Text style={[styles.title, { color: themeColors.text }]}>
+    <View className="flex-1 p-4 bg-background">
+      <Text className="text-2xl font-bold text-foreground">
         Screen Title
+      </Text>
+      <Text className="text-base mt-1 text-foreground-secondary">
+        Subtitle text
       </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-});
 ```
 
-### New Modal Template
+#### Card Component
+
+```typescript
+<View 
+  className="rounded-2xl p-5 mb-4 bg-surface"
+  style={{ 
+    shadowColor: rawColors.shadow, 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 8, 
+    elevation: 4 
+  }}
+>
+  <Text className="text-lg font-semibold text-foreground">Card Title</Text>
+</View>
+```
+
+#### Pressable Button
+
+```typescript
+<Pressable
+  className="py-3 px-4 rounded-lg bg-primary"
+  style={({ pressed }) => ({ 
+    opacity: pressed ? 0.8 : 1 
+  })}
+  onPress={handlePress}
+>
+  <Text className="text-base font-semibold text-center text-primary-foreground">
+    Button
+  </Text>
+</Pressable>
+```
+
+#### TextInput
+
+```typescript
+<TextInput
+  className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
+  placeholder="Enter value..."
+  placeholderTextColor={rawColors.foregroundMuted}
+/>
+```
+
+#### Modal with BaseModal
 
 ```typescript
 import BaseModal from '../components/modals/BaseModal';
-import { useTheme } from '../lib/theme/ThemeContext';
 
-interface MyModalProps {
-  visible: boolean;
-  onClose: () => void;
-}
-
-export default function MyModal({ visible, onClose }: MyModalProps) {
-  const { themeColors } = useTheme();
-
-  return (
-    <BaseModal visible={visible} onClose={onClose}>
-      <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: '600' }}>
-        Modal Title
-      </Text>
-      {/* Modal content */}
-    </BaseModal>
-  );
-}
+<BaseModal visible={visible} onClose={onClose}>
+  <Text className="text-xl font-bold text-foreground">Modal Title</Text>
+  <Text className="text-base mt-2 text-foreground-secondary">Content</Text>
+</BaseModal>
 ```
 
+### Adding New Color Themes
+
+To add a new theme, edit `lib/theme/themes.ts`:
+
+1. Add the theme ID to `ColorThemeId` type
+2. Add preview to `COLOR_THEME_OPTIONS` array
+3. Create light/dark variants in `themes` object
+4. Follow the existing pattern with CSS variable names
+
+### Important Rules
+
+1. **Never hardcode colors** - Always use Tailwind classes or rawColors
+2. **Use rawColors for SVG/charts** - Tailwind classes don't work with SVG fills
+3. **Use rawColors for placeholderTextColor** - React Native requires hex values
+4. **Use rawColors for third-party components** - Like Picker dropdown colors
+5. **Shadow colors need rawColors** - shadowColor only accepts color strings
+
+## File Structure
+
+- **Screens**: `app/` (Expo Router)
+- **Components**: `components/`
+- **Modals**: `components/modals/`
+- **Charts**: `components/charts/`
+- **Theme**: `lib/theme/` (ThemeContext.tsx, themes.ts)
+- **Database**: `lib/db/`
+- **Hooks**: `lib/hooks/`
+- **Utilities**: `lib/utils/`

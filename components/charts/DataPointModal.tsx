@@ -49,7 +49,7 @@ export default function DataPointModal({
   loading = false,
   onDeleted,
 }: DataPointModalProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 
   // Track measured height of the fixed section
@@ -161,7 +161,7 @@ export default function DataPointModal({
           style={[
             styles.container,
             {
-              backgroundColor: themeColors.surface,
+              backgroundColor: rawColors.surface,
               maxHeight: cardMaxHeight,
               maxWidth: cardMaxWidth,
             }
@@ -169,7 +169,7 @@ export default function DataPointModal({
         >
           {loading ? (
             <View style={styles.loadingContainer}>
-              <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+              <Text style={[styles.loadingText, { color: rawColors.foregroundSecondary }]}>
                 Loading...
               </Text>
             </View>
@@ -182,13 +182,13 @@ export default function DataPointModal({
                 onLayout={handleFixedSectionLayout}
               >
                 {/* Header */}
-                <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
+                <View style={[styles.header, { borderBottomColor: rawColors.border }]}>
                   <View style={styles.headerLeft}>
-                    <Text style={[styles.title, { color: themeColors.text }]}>
+                    <Text style={[styles.title, { color: rawColors.foreground }]}>
                       Session
                     </Text>
                     {exerciseName && (
-                      <Text style={[styles.subtitle, { color: themeColors.textSecondary }]}>
+                      <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
                         {exerciseName}
                       </Text>
                     )}
@@ -196,20 +196,20 @@ export default function DataPointModal({
                   <Pressable 
                     onPress={onClose} 
                     hitSlop={12}
-                    style={[styles.closeButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                    style={[styles.closeButton, { backgroundColor: rawColors.surfaceSecondary }]}
                   >
-                    <MaterialCommunityIcons name="close" size={20} color={themeColors.textSecondary} />
+                    <MaterialCommunityIcons name="close" size={20} color={rawColors.foregroundSecondary} />
                   </Pressable>
                 </View>
 
                 {/* Date/Time Meta Row */}
                 <View style={styles.metaRow}>
                   <View style={styles.metaLeft}>
-                    <MaterialCommunityIcons name="calendar-outline" size={16} color={themeColors.textSecondary} />
-                    <Text style={[styles.metaDate, { color: themeColors.text }]}>
+                    <MaterialCommunityIcons name="calendar-outline" size={16} color={rawColors.foregroundSecondary} />
+                    <Text style={[styles.metaDate, { color: rawColors.foreground }]}>
                       {formatDate(sessionDetails.date)}
                     </Text>
-                    <Text style={[styles.metaTime, { color: themeColors.textSecondary }]}>
+                    <Text style={[styles.metaTime, { color: rawColors.foregroundSecondary }]}>
                       {formatTime(sessionDetails.date)}
                     </Text>
                   </View>
@@ -228,16 +228,16 @@ export default function DataPointModal({
                           });
                         }}
                         hitSlop={8}
-                        style={[styles.actionButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                        style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
                       >
-                        <MaterialCommunityIcons name="pencil-outline" size={16} color={themeColors.primary} />
+                        <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
                       </Pressable>
                       <Pressable
                         onPress={handleDelete}
                         hitSlop={8}
-                        style={[styles.actionButton, { backgroundColor: themeColors.surfaceSecondary }]}
+                        style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
                       >
-                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={themeColors.error} />
+                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
                       </Pressable>
                     </View>
                   )}
@@ -245,50 +245,50 @@ export default function DataPointModal({
 
                 {/* Summary Section */}
                 <View style={styles.summarySection}>
-                  <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+                  <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>
                     Summary
                   </Text>
                   
                   {/* Stat Tiles Row */}
                   <View style={styles.statRow}>
-                    <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
-                      <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                    <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
+                      <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                         Volume
                       </Text>
-                      <Text style={[styles.statValue, { color: themeColors.text }]}>
+                      <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                         {sessionDetails.totalVolume.toFixed(0)}
                       </Text>
-                      <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>kg</Text>
+                      <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
                     </View>
-                    <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
-                      <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                    <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
+                      <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                         Reps
                       </Text>
-                      <Text style={[styles.statValue, { color: themeColors.text }]}>
+                      <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                         {sessionDetails.totalReps}
                       </Text>
-                      <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>total</Text>
+                      <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>total</Text>
                     </View>
                     {sessionDetails.estimatedE1RM && (
-                      <View style={[styles.statTile, { backgroundColor: themeColors.surfaceSecondary }]}>
-                        <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                      <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
+                        <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                           Est. 1RM
                         </Text>
-                        <Text style={[styles.statValue, { color: themeColors.primary }]}>
+                        <Text style={[styles.statValue, { color: rawColors.primary }]}>
                           {sessionDetails.estimatedE1RM.toFixed(0)}
                         </Text>
-                        <Text style={[styles.statUnit, { color: themeColors.textSecondary }]}>kg</Text>
+                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
                       </View>
                     )}
                   </View>
 
                   {/* Best Set Row */}
                   {sessionDetails.bestSet && (
-                    <View style={[styles.bestSetRow, { borderColor: themeColors.border }]}>
-                      <Text style={[styles.bestSetLabel, { color: themeColors.textSecondary }]}>
+                    <View style={[styles.bestSetRow, { borderColor: rawColors.border }]}>
+                      <Text style={[styles.bestSetLabel, { color: rawColors.foregroundSecondary }]}>
                         Best Set
                       </Text>
-                      <Text style={[styles.bestSetValue, { color: themeColors.text }]}>
+                      <Text style={[styles.bestSetValue, { color: rawColors.foreground }]}>
                         {sessionDetails.bestSet.weight} kg × {sessionDetails.bestSet.reps} reps
                       </Text>
                     </View>
@@ -296,7 +296,7 @@ export default function DataPointModal({
                 </View>
 
                 {/* Divider */}
-                <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
+                <View style={[styles.divider, { backgroundColor: rawColors.border }]} />
               </View>
 
               {/* ===== SETS SECTION (Title + Scrollable List) ===== */}
@@ -309,7 +309,7 @@ export default function DataPointModal({
                 onLayout={handleSetsContainerLayout}
               >
                 {/* Sets Title */}
-                <Text style={[styles.sectionTitle, styles.setsSectionTitle, { color: themeColors.text }]}>
+                <Text style={[styles.sectionTitle, styles.setsSectionTitle, { color: rawColors.foreground }]}>
                   Sets ({sessionDetails.totalSets})
                 </Text>
                 
@@ -340,12 +340,12 @@ export default function DataPointModal({
               <MaterialCommunityIcons 
                 name="dumbbell" 
                 size={40} 
-                color={themeColors.textTertiary} 
+                color={rawColors.foregroundMuted} 
               />
-              <Text style={[styles.emptyText, { color: themeColors.text }]}>
+              <Text style={[styles.emptyText, { color: rawColors.foreground }]}>
                 No sets found
               </Text>
-              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+              <Text style={[styles.emptySubtext, { color: rawColors.foregroundSecondary }]}>
                 No data available for this session
               </Text>
             </View>

@@ -9,9 +9,8 @@
  * - edit-workout.tsx
  * - HistoryTab.tsx
  */
-import { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
-import { useTheme } from '../../lib/theme/ThemeContext';
+import { ReactNode } from "react";
+import { Modal, Pressable, View, ViewStyle } from "react-native";
 
 interface BaseModalProps {
   /** Whether the modal is visible */
@@ -21,7 +20,7 @@ interface BaseModalProps {
   /** Modal content */
   children: ReactNode;
   /** Animation type (default: 'fade') */
-  animationType?: 'none' | 'slide' | 'fade';
+  animationType?: "none" | "slide" | "fade";
   /** Optional custom styles for the content container */
   contentStyle?: ViewStyle;
   /** Maximum width of the content container (default: 420) */
@@ -41,13 +40,11 @@ export default function BaseModal({
   visible,
   onClose,
   children,
-  animationType = 'fade',
+  animationType = "fade",
   contentStyle,
   maxWidth = 420,
   centerContent = true,
 }: BaseModalProps) {
-  const { themeColors } = useTheme();
-
   return (
     <Modal
       visible={visible}
@@ -57,19 +54,12 @@ export default function BaseModal({
       onRequestClose={onClose}
     >
       <Pressable
-        style={[
-          styles.overlay,
-          { backgroundColor: themeColors.overlay },
-          centerContent && styles.overlayCenter,
-        ]}
+        className={`flex-1 p-4 bg-overlay ${centerContent ? "justify-center items-center" : ""}`}
         onPress={onClose}
       >
         <Pressable
-          style={[
-            styles.content,
-            { maxWidth, backgroundColor: themeColors.surface },
-            contentStyle,
-          ]}
+          className="w-full rounded-xl p-4 bg-surface"
+          style={[{ maxWidth }, contentStyle]}
           // Prevent closing when pressing on content
           onPress={(e) => e.stopPropagation()}
         >
@@ -79,22 +69,6 @@ export default function BaseModal({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    padding: 16,
-  },
-  overlayCenter: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    width: '100%',
-    borderRadius: 12,
-    padding: 16,
-  },
-});
 
 /**
  * ConfirmModal - A specialized modal for confirmation dialogs
@@ -111,8 +85,3 @@ interface ConfirmModalProps {
 }
 
 export { BaseModal };
-
-
-
-
-

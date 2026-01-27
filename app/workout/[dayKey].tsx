@@ -25,7 +25,7 @@ import { useTheme } from "../../lib/theme/ThemeContext";
 const getAlphabetLetter = (index: number) => String.fromCharCode(65 + index);
 
 export default function WorkoutDayScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ dayKey: string }>();
   const dayKey = typeof params.dayKey === "string" ? params.dayKey : "";
 
@@ -105,16 +105,16 @@ export default function WorkoutDayScreen() {
 
   if (!dayKey) {
     return (
-      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <View style={[styles.container, { backgroundColor: rawColors.background }]}>
         <Stack.Screen
           options={{
             title: "Workout",
-            headerStyle: { backgroundColor: themeColors.surface },
-            headerTitleStyle: { color: themeColors.text },
+            headerStyle: { backgroundColor: rawColors.surface },
+            headerTitleStyle: { color: rawColors.foreground },
           }}
         />
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: themeColors.error }]}>
+          <Text style={[styles.errorText, { color: rawColors.destructive }]}>
             Invalid workout day
           </Text>
         </View>
@@ -123,15 +123,15 @@ export default function WorkoutDayScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
       <Stack.Screen
         options={{
           title,
-          headerStyle: { backgroundColor: themeColors.surface },
-          headerTitleStyle: { color: themeColors.text },
+          headerStyle: { backgroundColor: rawColors.surface },
+          headerTitleStyle: { color: rawColors.foreground },
           headerLeft: () => (
             <Pressable onPress={() => router.back()} style={styles.headerButton}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
             </Pressable>
           ),
         }}
@@ -139,16 +139,16 @@ export default function WorkoutDayScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={themeColors.primary} />
+          <ActivityIndicator size="large" color={rawColors.primary} />
         </View>
       ) : !data ? (
         <View style={styles.errorContainer}>
           <MaterialCommunityIcons
             name="clipboard-text-outline"
             size={64}
-            color={themeColors.textLight}
+            color={rawColors.foregroundMuted}
           />
-          <Text style={[styles.emptyText, { color: themeColors.textTertiary }]}>
+          <Text style={[styles.emptyText, { color: rawColors.foregroundMuted }]}>
             No workout data found
           </Text>
         </View>
@@ -159,47 +159,47 @@ export default function WorkoutDayScreen() {
           showsVerticalScrollIndicator={true}
         >
           {/* Stats Card */}
-          <View style={[styles.statsCard, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
-            <Text style={[styles.statsTitle, { color: themeColors.text }]}>Workout Stats</Text>
+          <View style={[styles.statsCard, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]}>
+            <Text style={[styles.statsTitle, { color: rawColors.foreground }]}>Workout Stats</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: themeColors.text }]}>
+                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                   {data.totals.totalExercises}
                 </Text>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                   Exercises
                 </Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: themeColors.text }]}>
+                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                   {data.totals.totalSets}
                 </Text>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                   Sets
                 </Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: themeColors.text }]}>
+                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                   {data.totals.totalReps}
                 </Text>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                   Reps
                 </Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: themeColors.text }]}>
+                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                   {data.totals.totalVolumeKg.toLocaleString()}
                 </Text>
-                <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                   Volume (kg)
                 </Text>
               </View>
               {data.totals.bestE1rmKg && (
                 <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: themeColors.text }]}>
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                     {data.totals.bestE1rmKg}
                   </Text>
-                  <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                     Best e1RM
                   </Text>
                 </View>
@@ -209,23 +209,23 @@ export default function WorkoutDayScreen() {
 
           {/* Exercise List */}
           <View style={styles.exerciseListSection}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>
               Exercises ({data.entries.length})
             </Text>
 
             {data.entries.map((entry, index) => (
               <Pressable
                 key={entry.workoutExerciseId}
-                style={[styles.exerciseCard, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}
+                style={[styles.exerciseCard, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]}
                 onLongPress={() => handleLongPressExercise(entry)}
                 delayLongPress={400}
               >
                 {/* Header Row - A-Z badge + exercise name */}
-                <View style={[styles.exerciseHeader, { borderBottomColor: themeColors.border }]}>
-                  <View style={[styles.alphabetCircle, { backgroundColor: themeColors.primary }]}>
+                <View style={[styles.exerciseHeader, { borderBottomColor: rawColors.border }]}>
+                  <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
                     <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                   </View>
-                  <Text style={[styles.exerciseName, { color: themeColors.text }]} numberOfLines={1}>
+                  <Text style={[styles.exerciseName, { color: rawColors.foreground }]} numberOfLines={1}>
                     {entry.exerciseName}
                   </Text>
                 </View>
@@ -233,7 +233,7 @@ export default function WorkoutDayScreen() {
                 {/* Sets List */}
                 <View style={styles.setsContainer}>
                   {entry.sets.length === 0 ? (
-                    <Text style={[styles.noSetsText, { color: themeColors.textTertiary }]}>
+                    <Text style={[styles.noSetsText, { color: rawColors.foregroundMuted }]}>
                       No sets recorded
                     </Text>
                   ) : (
@@ -254,7 +254,7 @@ export default function WorkoutDayScreen() {
 
             {/* Overflow indicator */}
             {data.hasMore && (
-              <Text style={[styles.showMoreText, { color: themeColors.textTertiary }]}>
+              <Text style={[styles.showMoreText, { color: rawColors.foregroundMuted }]}>
                 Showing first 26 exercises
               </Text>
             )}
@@ -280,15 +280,15 @@ export default function WorkoutDayScreen() {
             setSelectedEntry(null);
           }}
         >
-          <View style={[styles.actionModalContent, { backgroundColor: themeColors.surface }]}>
+          <View style={[styles.actionModalContent, { backgroundColor: rawColors.surface }]}>
             <Pressable
-              style={[styles.actionButton, { borderBottomColor: themeColors.border }]}
+              style={[styles.actionButton, { borderBottomColor: rawColors.border }]}
               onPress={(e) => {
                 e.stopPropagation();
                 handleEdit();
               }}
             >
-              <Text style={[styles.actionButtonText, { color: themeColors.primary }]}>Edit</Text>
+              <Text style={[styles.actionButtonText, { color: rawColors.primary }]}>Edit</Text>
             </Pressable>
             <Pressable
               style={[styles.actionButton, styles.deleteActionButton]}
@@ -297,17 +297,17 @@ export default function WorkoutDayScreen() {
                 handleDelete();
               }}
             >
-              <Text style={[styles.actionButtonText, { color: themeColors.error }]}>Delete</Text>
+              <Text style={[styles.actionButtonText, { color: rawColors.destructive }]}>Delete</Text>
             </Pressable>
             <Pressable
-              style={[styles.actionButton, styles.cancelActionButton, { backgroundColor: themeColors.surfaceSecondary }]}
+              style={[styles.actionButton, styles.cancelActionButton, { backgroundColor: rawColors.surfaceSecondary }]}
               onPress={(e) => {
                 e.stopPropagation();
                 setActionModalVisible(false);
                 setSelectedEntry(null);
               }}
             >
-              <Text style={[styles.cancelActionButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
+              <Text style={[styles.cancelActionButtonText, { color: rawColors.foregroundSecondary }]}>Cancel</Text>
             </Pressable>
           </View>
         </Pressable>

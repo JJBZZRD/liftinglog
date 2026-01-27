@@ -1,3 +1,65 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Default theme - Light mode */
+    --color-primary: 0 122 255;
+    --color-primary-light: 229 241 255;
+    --color-primary-foreground: 255 255 255;
+    
+    --color-success: 52 199 89;
+    --color-warning: 255 149 0;
+    --color-destructive: 255 59 48;
+    
+    --color-background: 242 242 247;
+    --color-surface: 255 255 255;
+    --color-surface-secondary: 249 249 249;
+    
+    --color-border: 229 229 234;
+    --color-border-light: 240 240 240;
+    
+    --color-foreground: 0 0 0;
+    --color-foreground-secondary: 102 102 102;
+    --color-foreground-muted: 153 153 153;
+    
+    --color-pressed: 229 229 234;
+    
+    --color-overlay: rgba(0, 0, 0, 0.3);
+    --color-overlay-dark: rgba(0, 0, 0, 0.5);
+    --color-shadow: 0 0 0;
+    
+    --color-pr-gold: 255 215 0;
+  }
+
+  .dark {
+    /* Default theme - Dark mode */
+    --color-primary: 10 132 255;
+    --color-primary-light: 26 39 68;
+    --color-primary-foreground: 255 255 255;
+    
+    --color-success: 48 209 88;
+    --color-warning: 255 159 10;
+    --color-destructive: 255 69 58;
+    
+    --color-background: 0 0 0;
+    --color-surface: 28 28 30;
+    --color-surface-secondary: 44 44 46;
+    
+    --color-border: 56 56 58;
+    --color-border-light: 44 44 46;
+    
+    --color-foreground: 255 255 255;
+    --color-foreground-secondary: 235 235 245;
+    --color-foreground-muted: 142 142 147;
+    
+    --color-pressed: 44 44 46;
+    
+    --color-overlay: rgba(0, 0, 0, 0.5);
+    --color-overlay-dark: rgba(0, 0, 0, 0.7);
+    --color-shadow: 0 0 0;
+    
+    --color-pr-gold: 184 134 11;
+  }
+}

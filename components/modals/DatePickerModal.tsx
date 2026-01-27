@@ -4,10 +4,10 @@
  * A reusable date picker modal that consolidates the date picker
  * pattern used in RecordTab.tsx and edit-workout.tsx.
  */
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../lib/theme/ThemeContext';
-import BaseModal from './BaseModal';
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { Platform, Pressable, Text, View } from "react-native";
+import { useTheme } from "../../lib/theme/ThemeContext";
+import BaseModal from "./BaseModal";
 
 interface DatePickerModalProps {
   /** Whether the modal is visible */
@@ -39,9 +39,9 @@ export default function DatePickerModal({
   onChange,
   maximumDate = new Date(),
   minimumDate,
-  title = 'Select Date',
+  title = "Select Date",
 }: DatePickerModalProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
 
   const handleChange = (_event: any, selectedDate?: Date) => {
     // On Android, the native picker handles its own dismissal
@@ -50,7 +50,7 @@ export default function DatePickerModal({
       onChange(selectedDate);
     }
     // On Android, close modal after selection (native picker auto-closes)
-    if (Platform.OS === 'android') {
+    if (Platform.OS === "android") {
       onClose();
     }
   };
@@ -61,7 +61,7 @@ export default function DatePickerModal({
 
   // On Android, render DateTimePicker directly without modal wrapper
   // since it shows its own native dialog
-  if (Platform.OS === 'android') {
+  if (Platform.OS === "android") {
     if (!visible) return null;
     return (
       <DateTimePicker
@@ -81,12 +81,12 @@ export default function DatePickerModal({
       visible={visible}
       onClose={onClose}
       maxWidth={360}
-      contentStyle={styles.container}
+      contentStyle={{ padding: 0, overflow: "hidden" }}
     >
-      <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-        <Text style={[styles.title, { color: themeColors.text }]}>{title}</Text>
+      <View className="flex-row justify-between items-center px-5 py-4 border-b border-border">
+        <Text className="text-[17px] font-semibold text-foreground">{title}</Text>
         <Pressable onPress={handleDone}>
-          <Text style={[styles.doneButton, { color: themeColors.primary }]}>Done</Text>
+          <Text className="text-[17px] font-semibold text-primary">Done</Text>
         </Pressable>
       </View>
       <DateTimePicker
@@ -96,36 +96,8 @@ export default function DatePickerModal({
         onChange={handleChange}
         maximumDate={maximumDate}
         minimumDate={minimumDate}
-        style={[styles.picker, { backgroundColor: themeColors.surface }]}
+        style={{ height: 200, backgroundColor: rawColors.surface }}
       />
     </BaseModal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 0,
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  doneButton: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  picker: {
-    height: 200,
-  },
-});
-
-

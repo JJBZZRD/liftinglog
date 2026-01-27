@@ -22,7 +22,7 @@ import {
   type WorkoutDayDetails,
   type WorkoutDaySummary,
 } from "../lib/db/workouts";
-import { useTheme, type ThemeColors } from "../lib/theme/ThemeContext";
+import { useTheme, type RawThemeColors } from "../lib/theme/ThemeContext";
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -104,7 +104,7 @@ interface WorkoutDayCardProps {
   isLoadingDetails: boolean;
   onToggle: () => void;
   onContentPress: () => void;
-  themeColors: ThemeColors;
+  rawColors: RawThemeColors;
 }
 
 const WorkoutDayCard = React.memo(function WorkoutDayCard({
@@ -114,35 +114,35 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
   isLoadingDetails,
   onToggle,
   onContentPress,
-  themeColors,
+  rawColors,
 }: WorkoutDayCardProps) {
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow },
+        { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow },
       ]}
     >
       {/* Summary Header - Pressable for expand/collapse */}
       <Pressable onPress={onToggle} style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <Text style={[styles.cardDate, { color: themeColors.text }]}>
+          <Text style={[styles.cardDate, { color: rawColors.foreground }]}>
             {item.formattedDate}
           </Text>
-          <Text style={[styles.cardFullDate, { color: themeColors.textSecondary }]}>
+          <Text style={[styles.cardFullDate, { color: rawColors.foregroundSecondary }]}>
             {item.formattedFullDate}
           </Text>
         </View>
         <View style={styles.cardHeaderRight}>
           <View style={styles.statBadge}>
-            <Text style={[styles.statBadgeText, { color: themeColors.textSecondary }]}>
+            <Text style={[styles.statBadgeText, { color: rawColors.foregroundSecondary }]}>
               {item.exerciseCountLabel}
             </Text>
           </View>
           <MaterialCommunityIcons
             name={isExpanded ? "chevron-up" : "chevron-down"}
             size={24}
-            color={themeColors.textSecondary}
+            color={rawColors.foregroundSecondary}
           />
         </View>
       </Pressable>
@@ -152,34 +152,34 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
         <Pressable onPress={onContentPress} style={styles.expandedContent}>
           {isLoadingDetails ? (
             <View style={styles.cardLoadingContainer}>
-              <ActivityIndicator size="small" color={themeColors.primary} />
+              <ActivityIndicator size="small" color={rawColors.primary} />
             </View>
           ) : details ? (
             <>
               {/* Stats Row */}
-              <View style={[styles.statsRow, { borderColor: themeColors.border }]}>
+              <View style={[styles.statsRow, { borderColor: rawColors.border }]}>
                 <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: themeColors.text }]}>
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                     {details.exercises.length}
                   </Text>
-                  <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                     Exercises
                   </Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: themeColors.text }]}>
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                     {details.totalVolumeKg.toLocaleString()}
                   </Text>
-                  <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                     Volume (kg)
                   </Text>
                 </View>
                 {details.bestE1rmKg && (
                   <View style={styles.statItem}>
-                    <Text style={[styles.statValue, { color: themeColors.text }]}>
+                    <Text style={[styles.statValue, { color: rawColors.foreground }]}>
                       {details.bestE1rmKg}
                     </Text>
-                    <Text style={[styles.statLabel, { color: themeColors.textSecondary }]}>
+                    <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
                       Best e1RM
                     </Text>
                   </View>
@@ -190,24 +190,24 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
               <View style={styles.exerciseList}>
                 {details.exercises.map((exercise, index) => (
                   <View key={exercise.workoutExerciseId} style={styles.exerciseItem}>
-                    <View style={[styles.alphabetCircle, { backgroundColor: themeColors.primary }]}>
+                    <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
                       <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                     </View>
                     <View style={styles.exerciseDetails}>
                       <Text
-                        style={[styles.exerciseName, { color: themeColors.text }]}
+                        style={[styles.exerciseName, { color: rawColors.foreground }]}
                         numberOfLines={1}
                       >
                         {exercise.exerciseName}
                       </Text>
-                      <Text style={[styles.bestSetText, { color: themeColors.textSecondary }]}>
+                      <Text style={[styles.bestSetText, { color: rawColors.foregroundSecondary }]}>
                         {exercise.bestSet
                           ? `Best: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
                           : "No sets recorded"}
                       </Text>
                       {exercise.note && (
                         <Text
-                          style={[styles.exerciseNote, { color: themeColors.textTertiary }]}
+                          style={[styles.exerciseNote, { color: rawColors.foregroundMuted }]}
                           numberOfLines={2}
                         >
                           {exercise.note}
@@ -218,7 +218,7 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                 ))}
 
                 {details.hasMoreExercises && (
-                  <Text style={[styles.showMoreText, { color: themeColors.textTertiary }]}>
+                  <Text style={[styles.showMoreText, { color: rawColors.foregroundMuted }]}>
                     Showing first 26 exercises
                   </Text>
                 )}
@@ -236,7 +236,7 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
 // =============================================================================
 
 export default function WorkoutHistoryScreen() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
 
   // List data
   const [workoutDays, setWorkoutDays] = useState<WorkoutDaySummary[]>([]);
@@ -473,10 +473,10 @@ export default function WorkoutHistoryScreen() {
         isLoadingDetails={loadingDetails === item.dayKey}
         onToggle={() => handleCardPress(item.dayKey)}
         onContentPress={() => handleContentPress(item.dayKey)}
-        themeColors={themeColors}
+        rawColors={rawColors}
       />
     ),
-    [expandedDayKey, detailsCache, loadingDetails, handleCardPress, handleContentPress, themeColors]
+    [expandedDayKey, detailsCache, loadingDetails, handleCardPress, handleContentPress, rawColors]
   );
 
   // Render empty state
@@ -488,39 +488,39 @@ export default function WorkoutHistoryScreen() {
         <MaterialCommunityIcons
           name="clipboard-text-outline"
           size={64}
-          color={themeColors.textLight}
+          color={rawColors.foregroundMuted}
         />
-        <Text style={[styles.emptyTitle, { color: themeColors.textTertiary }]}>
+        <Text style={[styles.emptyTitle, { color: rawColors.foregroundMuted }]}>
           {hasActiveFilters ? "No matching workouts" : "No workouts yet"}
         </Text>
-        <Text style={[styles.emptySubtext, { color: themeColors.textLight }]}>
+        <Text style={[styles.emptySubtext, { color: rawColors.foregroundMuted }]}>
           {hasActiveFilters
             ? "Try adjusting your search or filters"
             : "Complete an exercise to see your workout history"}
         </Text>
         {hasActiveFilters && (
           <Pressable
-            style={[styles.clearButton, { backgroundColor: themeColors.primary }]}
+            style={[styles.clearButton, { backgroundColor: rawColors.primary }]}
             onPress={clearFilters}
           >
-            <Text style={[styles.clearButtonText, { color: themeColors.surface }]}>
+            <Text style={[styles.clearButtonText, { color: rawColors.surface }]}>
               Clear Filters
             </Text>
           </Pressable>
         )}
       </View>
     );
-  }, [loading, hasActiveFilters, themeColors, clearFilters]);
+  }, [loading, hasActiveFilters, rawColors, clearFilters]);
 
   // Render footer (loading more indicator)
   const renderFooter = useCallback(() => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={themeColors.primary} />
+        <ActivityIndicator size="small" color={rawColors.primary} />
       </View>
     );
-  }, [loadingMore, themeColors.primary]);
+  }, [loadingMore, rawColors.primary]);
 
   // Get item layout for performance (only works well for collapsed items)
   const getItemLayout = useCallback(
@@ -538,34 +538,34 @@ export default function WorkoutHistoryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
       <Stack.Screen
         options={{
           title: "Workout History",
-          headerStyle: { backgroundColor: themeColors.surface },
-          headerTitleStyle: { color: themeColors.text },
+          headerStyle: { backgroundColor: rawColors.surface },
+          headerTitleStyle: { color: rawColors.foreground },
           headerLeft: () => (
             <Pressable onPress={() => router.back()} style={styles.headerButton}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color={themeColors.text} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
             </Pressable>
           ),
         }}
       />
 
       {/* Search and Filter Section */}
-      <View style={[styles.filterSection, { backgroundColor: themeColors.surface }]}>
+      <View style={[styles.filterSection, { backgroundColor: rawColors.surface }]}>
         {/* Search Bar */}
         <View
           style={[
             styles.searchBar,
-            { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border },
+            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
           ]}
         >
-          <MaterialCommunityIcons name="magnify" size={20} color={themeColors.textSecondary} />
+          <MaterialCommunityIcons name="magnify" size={20} color={rawColors.foregroundSecondary} />
           <TextInput
-            style={[styles.searchInput, { color: themeColors.text }]}
+            style={[styles.searchInput, { color: rawColors.foreground }]}
             placeholder="Search exercises, notes, weights..."
-            placeholderTextColor={themeColors.textPlaceholder}
+            placeholderTextColor={rawColors.foregroundPlaceholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -573,7 +573,7 @@ export default function WorkoutHistoryScreen() {
           />
           {searchQuery.length > 0 && (
             <Pressable onPress={() => setSearchQuery("")}>
-              <MaterialCommunityIcons name="close-circle" size={20} color={themeColors.textSecondary} />
+              <MaterialCommunityIcons name="close-circle" size={20} color={rawColors.foregroundSecondary} />
             </Pressable>
           )}
         </View>
@@ -585,10 +585,10 @@ export default function WorkoutHistoryScreen() {
               key={preset.id}
               style={[
                 styles.presetButton,
-                { borderColor: themeColors.border },
+                { borderColor: rawColors.border },
                 dateRange.preset === preset.id && {
-                  backgroundColor: themeColors.primary,
-                  borderColor: themeColors.primary,
+                  backgroundColor: rawColors.primary,
+                  borderColor: rawColors.primary,
                 },
               ]}
               onPress={() => handlePresetPress(preset.id)}
@@ -596,8 +596,8 @@ export default function WorkoutHistoryScreen() {
               <Text
                 style={[
                   styles.presetText,
-                  { color: themeColors.text },
-                  dateRange.preset === preset.id && { color: themeColors.surface },
+                  { color: rawColors.foreground },
+                  dateRange.preset === preset.id && { color: rawColors.surface },
                 ]}
               >
                 {preset.label}
@@ -609,10 +609,10 @@ export default function WorkoutHistoryScreen() {
           <Pressable
             style={[
               styles.presetButton,
-              { borderColor: themeColors.border },
+              { borderColor: rawColors.border },
               dateRange.preset === "custom" && {
-                backgroundColor: themeColors.primary,
-                borderColor: themeColors.primary,
+                backgroundColor: rawColors.primary,
+                borderColor: rawColors.primary,
               },
             ]}
             onPress={() => handlePresetPress("custom")}
@@ -620,7 +620,7 @@ export default function WorkoutHistoryScreen() {
             <MaterialCommunityIcons
               name="calendar-range"
               size={16}
-              color={dateRange.preset === "custom" ? themeColors.surface : themeColors.textSecondary}
+              color={dateRange.preset === "custom" ? rawColors.surface : rawColors.foregroundSecondary}
             />
           </Pressable>
         </View>
@@ -628,13 +628,13 @@ export default function WorkoutHistoryScreen() {
         {/* Custom Range Display */}
         {dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate && (
           <Pressable
-            style={[styles.customRangeDisplay, { backgroundColor: themeColors.surfaceSecondary }]}
+            style={[styles.customRangeDisplay, { backgroundColor: rawColors.surfaceSecondary }]}
             onPress={() => setShowStartPicker(true)}
           >
-            <Text style={[styles.customRangeText, { color: themeColors.text }]}>
+            <Text style={[styles.customRangeText, { color: rawColors.foreground }]}>
               {formatDateShort(dateRange.startDate)} - {formatDateShort(dateRange.endDate)}
             </Text>
-            <MaterialCommunityIcons name="pencil" size={14} color={themeColors.textSecondary} />
+            <MaterialCommunityIcons name="pencil" size={14} color={rawColors.foregroundSecondary} />
           </Pressable>
         )}
       </View>
@@ -642,7 +642,7 @@ export default function WorkoutHistoryScreen() {
       {/* Workout List */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={themeColors.primary} />
+          <ActivityIndicator size="large" color={rawColors.primary} />
         </View>
       ) : (
         <View style={styles.listContainer}>

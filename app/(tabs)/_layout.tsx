@@ -5,9 +5,10 @@ import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 const _layout = () => {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
+  
   return (
-    <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+    <View className="flex-1 bg-background">
       <Tabs
         screenOptions={{
           tabBarStyle: {
@@ -19,16 +20,16 @@ const _layout = () => {
             height: 64,
             paddingBottom: 8,
             paddingTop: 8,
-            backgroundColor: themeColors.surface,
+            backgroundColor: rawColors.surface,
             borderTopWidth: 0,
             elevation: 8,
-            shadowColor: themeColors.shadow,
+            shadowColor: rawColors.shadow,
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.12,
             shadowRadius: 10,
           },
-          tabBarActiveTintColor: themeColors.primary,
-          tabBarInactiveTintColor: themeColors.textSecondary,
+          tabBarActiveTintColor: rawColors.primary,
+          tabBarInactiveTintColor: rawColors.foregroundSecondary,
         }}
       >
         <Tabs.Screen 
@@ -54,7 +55,7 @@ const _layout = () => {
       </Tabs>
       <PinnedExercisesOverlay />
     </View>
-  )
-}
+  );
+};
 
-export default _layout
+export default _layout;

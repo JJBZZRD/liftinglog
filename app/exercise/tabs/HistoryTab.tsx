@@ -92,7 +92,7 @@ function parseSearchQuery(query: string): ParsedSearch {
 type SetWithPR = SetRow & { prBadge?: string };
 
 export default function HistoryTab() {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -360,16 +360,16 @@ export default function HistoryTab() {
 
   if (!exerciseId) {
     return (
-      <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
-        <Text style={[styles.errorText, { color: themeColors.error }]}>Invalid exercise ID</Text>
+      <View style={[styles.tabContainer, { backgroundColor: rawColors.surface }]}>
+        <Text style={[styles.errorText, { color: rawColors.destructive }]}>Invalid exercise ID</Text>
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
-        <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>Loading history...</Text>
+      <View style={[styles.tabContainer, { backgroundColor: rawColors.surface }]}>
+        <Text style={[styles.loadingText, { color: rawColors.foregroundSecondary }]}>Loading history...</Text>
       </View>
     );
   }
@@ -377,29 +377,29 @@ export default function HistoryTab() {
   // Show empty state only if there's no raw data at all
   if (rawHistory.length === 0) {
     return (
-      <View style={[styles.tabContainer, { backgroundColor: themeColors.surface }]}>
-        <Text style={[styles.emptyText, { color: themeColors.text }]}>No workout history found</Text>
-        <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>Start recording sets to see your history here</Text>
+      <View style={[styles.tabContainer, { backgroundColor: rawColors.surface }]}>
+        <Text style={[styles.emptyText, { color: rawColors.foreground }]}>No workout history found</Text>
+        <Text style={[styles.emptySubtext, { color: rawColors.foregroundSecondary }]}>Start recording sets to see your history here</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.surface }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
       {/* Search and Filter Section */}
-      <View style={[styles.filterSection, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
+      <View style={[styles.filterSection, { backgroundColor: rawColors.surface, borderBottomColor: rawColors.border }]}>
         {/* Search Bar */}
         <View
           style={[
             styles.searchBar,
-            { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border },
+            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
           ]}
         >
-          <MaterialCommunityIcons name="magnify" size={20} color={themeColors.textSecondary} />
+          <MaterialCommunityIcons name="magnify" size={20} color={rawColors.foregroundSecondary} />
           <TextInput
-            style={[styles.searchInput, { color: themeColors.text }]}
+            style={[styles.searchInput, { color: rawColors.foreground }]}
             placeholder="Search notes, 100kg, 8 reps..."
-            placeholderTextColor={themeColors.textPlaceholder}
+            placeholderTextColor={rawColors.foregroundPlaceholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -407,7 +407,7 @@ export default function HistoryTab() {
           />
           {searchQuery.length > 0 && (
             <Pressable onPress={() => setSearchQuery("")}>
-              <MaterialCommunityIcons name="close-circle" size={20} color={themeColors.textSecondary} />
+              <MaterialCommunityIcons name="close-circle" size={20} color={rawColors.foregroundSecondary} />
             </Pressable>
           )}
         </View>
@@ -419,10 +419,10 @@ export default function HistoryTab() {
               key={preset.id}
               style={[
                 styles.presetButton,
-                { borderColor: themeColors.border },
+                { borderColor: rawColors.border },
                 dateRange.preset === preset.id && {
-                  backgroundColor: themeColors.primary,
-                  borderColor: themeColors.primary,
+                  backgroundColor: rawColors.primary,
+                  borderColor: rawColors.primary,
                 },
               ]}
               onPress={() => handlePresetPress(preset.id)}
@@ -430,8 +430,8 @@ export default function HistoryTab() {
               <Text
                 style={[
                   styles.presetText,
-                  { color: themeColors.text },
-                  dateRange.preset === preset.id && { color: themeColors.surface },
+                  { color: rawColors.foreground },
+                  dateRange.preset === preset.id && { color: rawColors.surface },
                 ]}
               >
                 {preset.label}
@@ -443,10 +443,10 @@ export default function HistoryTab() {
           <Pressable
             style={[
               styles.presetButton,
-              { borderColor: themeColors.border },
+              { borderColor: rawColors.border },
               dateRange.preset === "custom" && {
-                backgroundColor: themeColors.primary,
-                borderColor: themeColors.primary,
+                backgroundColor: rawColors.primary,
+                borderColor: rawColors.primary,
               },
             ]}
             onPress={() => handlePresetPress("custom")}
@@ -454,7 +454,7 @@ export default function HistoryTab() {
             <MaterialCommunityIcons
               name="calendar-range"
               size={16}
-              color={dateRange.preset === "custom" ? themeColors.surface : themeColors.textSecondary}
+              color={dateRange.preset === "custom" ? rawColors.surface : rawColors.foregroundSecondary}
             />
           </Pressable>
         </View>
@@ -462,29 +462,29 @@ export default function HistoryTab() {
         {/* Custom Range Display */}
         {dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate && (
           <Pressable
-            style={[styles.customRangeDisplay, { backgroundColor: themeColors.surfaceSecondary }]}
+            style={[styles.customRangeDisplay, { backgroundColor: rawColors.surfaceSecondary }]}
             onPress={() => setShowStartPicker(true)}
           >
-            <Text style={[styles.customRangeText, { color: themeColors.text }]}>
+            <Text style={[styles.customRangeText, { color: rawColors.foreground }]}>
               {formatDateShort(dateRange.startDate)} - {formatDateShort(dateRange.endDate)}
             </Text>
-            <MaterialCommunityIcons name="pencil" size={14} color={themeColors.textSecondary} />
+            <MaterialCommunityIcons name="pencil" size={14} color={rawColors.foregroundSecondary} />
           </Pressable>
         )}
 
         {/* Expandable Filters Toggle */}
         <Pressable
-          style={[styles.filterToggle, { borderColor: themeColors.border }]}
+          style={[styles.filterToggle, { borderColor: rawColors.border }]}
           onPress={toggleFilters}
         >
           <View style={styles.filterToggleLeft}>
-            <MaterialCommunityIcons name="filter-variant" size={18} color={themeColors.textSecondary} />
-            <Text style={[styles.filterToggleText, { color: themeColors.text }]}>Filters</Text>
+            <MaterialCommunityIcons name="filter-variant" size={18} color={rawColors.foregroundSecondary} />
+            <Text style={[styles.filterToggleText, { color: rawColors.foreground }]}>Filters</Text>
           </View>
           <MaterialCommunityIcons
             name={filtersExpanded ? "chevron-up" : "chevron-down"}
             size={20}
-            color={themeColors.textSecondary}
+            color={rawColors.foregroundSecondary}
           />
         </Pressable>
 
@@ -493,27 +493,27 @@ export default function HistoryTab() {
           <View style={styles.filterInputsContainer}>
             {/* Weight Filter */}
             <View style={styles.filterInputRow}>
-              <Text style={[styles.filterInputLabel, { color: themeColors.text }]}>Weight (kg)</Text>
+              <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Weight (kg)</Text>
               <View style={styles.filterInputs}>
                 <TextInput
                   style={[
                     styles.filterInput,
-                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
                   ]}
                   placeholder="Min"
-                  placeholderTextColor={themeColors.textPlaceholder}
+                  placeholderTextColor={rawColors.foregroundPlaceholder}
                   value={weightFilter.min}
                   onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, min: text }))}
                   keyboardType="numeric"
                 />
-                <Text style={[styles.filterInputDash, { color: themeColors.textSecondary }]}>-</Text>
+                <Text style={[styles.filterInputDash, { color: rawColors.foregroundSecondary }]}>-</Text>
                 <TextInput
                   style={[
                     styles.filterInput,
-                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
                   ]}
                   placeholder="Max"
-                  placeholderTextColor={themeColors.textPlaceholder}
+                  placeholderTextColor={rawColors.foregroundPlaceholder}
                   value={weightFilter.max}
                   onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, max: text }))}
                   keyboardType="numeric"
@@ -523,27 +523,27 @@ export default function HistoryTab() {
 
             {/* Reps Filter */}
             <View style={styles.filterInputRow}>
-              <Text style={[styles.filterInputLabel, { color: themeColors.text }]}>Reps</Text>
+              <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Reps</Text>
               <View style={styles.filterInputs}>
                 <TextInput
                   style={[
                     styles.filterInput,
-                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
                   ]}
                   placeholder="Min"
-                  placeholderTextColor={themeColors.textPlaceholder}
+                  placeholderTextColor={rawColors.foregroundPlaceholder}
                   value={repsFilter.min}
                   onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, min: text }))}
                   keyboardType="numeric"
                 />
-                <Text style={[styles.filterInputDash, { color: themeColors.textSecondary }]}>-</Text>
+                <Text style={[styles.filterInputDash, { color: rawColors.foregroundSecondary }]}>-</Text>
                 <TextInput
                   style={[
                     styles.filterInput,
-                    { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border },
+                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
                   ]}
                   placeholder="Max"
-                  placeholderTextColor={themeColors.textPlaceholder}
+                  placeholderTextColor={rawColors.foregroundPlaceholder}
                   value={repsFilter.max}
                   onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, max: text }))}
                   keyboardType="numeric"
@@ -556,11 +556,11 @@ export default function HistoryTab() {
         {/* Active Filters Summary */}
         {hasActiveFilters && (
           <View style={styles.activeFiltersRow}>
-            <Text style={[styles.activeFiltersText, { color: themeColors.textSecondary }]}>
+            <Text style={[styles.activeFiltersText, { color: rawColors.foregroundSecondary }]}>
               {filteredHistory.length} of {rawHistory.length} sessions
             </Text>
             <Pressable onPress={clearFilters}>
-              <Text style={[styles.clearFiltersLink, { color: themeColors.primary }]}>Clear</Text>
+              <Text style={[styles.clearFiltersLink, { color: rawColors.primary }]}>Clear</Text>
             </Pressable>
           </View>
         )}
@@ -611,17 +611,17 @@ export default function HistoryTab() {
 
           return (
             <View
-              style={[styles.workoutCard, { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border }]}
+              style={[styles.workoutCard, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border }]}
             >
-              <View style={[styles.workoutHeader, { borderBottomColor: themeColors.border }]}>
+              <View style={[styles.workoutHeader, { borderBottomColor: rawColors.border }]}>
                 <View style={styles.workoutDateContainer}>
-                  <Text style={[styles.workoutDate, { color: themeColors.text }]}>{formatDate(workoutDate)}</Text>
-                  <Text style={[styles.workoutTime, { color: themeColors.textSecondary }]}>{formatTime(workoutDate)}</Text>
+                  <Text style={[styles.workoutDate, { color: rawColors.foreground }]}>{formatDate(workoutDate)}</Text>
+                  <Text style={[styles.workoutTime, { color: rawColors.foregroundSecondary }]}>{formatTime(workoutDate)}</Text>
                 </View>
                 <View style={styles.headerActions}>
                   {!isCompleted && (
-                    <View style={[styles.inProgressBadge, { backgroundColor: themeColors.primary }]}>
-                      <Text style={[styles.inProgressText, { color: themeColors.surface }]}>In Progress</Text>
+                    <View style={[styles.inProgressBadge, { backgroundColor: rawColors.primary }]}>
+                      <Text style={[styles.inProgressText, { color: rawColors.surface }]}>In Progress</Text>
                     </View>
                   )}
                   {isCompleted && (
@@ -629,16 +629,16 @@ export default function HistoryTab() {
                       <Pressable
                         onPress={() => handleEdit(item)}
                         hitSlop={8}
-                        style={[styles.actionIconButton, { backgroundColor: themeColors.background }]}
+                        style={[styles.actionIconButton, { backgroundColor: rawColors.background }]}
                       >
-                        <MaterialCommunityIcons name="pencil-outline" size={16} color={themeColors.primary} />
+                        <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
                       </Pressable>
                       <Pressable
                         onPress={() => handleDelete(item)}
                         hitSlop={8}
-                        style={[styles.actionIconButton, { backgroundColor: themeColors.background }]}
+                        style={[styles.actionIconButton, { backgroundColor: rawColors.background }]}
                       >
-                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={themeColors.error} />
+                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
                       </Pressable>
                     </>
                   )}
@@ -664,16 +664,16 @@ export default function HistoryTab() {
         ListEmptyComponent={
           hasActiveFilters ? (
             <View style={styles.emptyFilterState}>
-              <MaterialCommunityIcons name="filter-off-outline" size={48} color={themeColors.textTertiary} />
-              <Text style={[styles.emptyText, { color: themeColors.text }]}>No matching sessions</Text>
-              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+              <MaterialCommunityIcons name="filter-off-outline" size={48} color={rawColors.foregroundMuted} />
+              <Text style={[styles.emptyText, { color: rawColors.foreground }]}>No matching sessions</Text>
+              <Text style={[styles.emptySubtext, { color: rawColors.foregroundSecondary }]}>
                 Try adjusting your search or filters
               </Text>
               <Pressable
-                style={[styles.clearFiltersButton, { backgroundColor: themeColors.primary }]}
+                style={[styles.clearFiltersButton, { backgroundColor: rawColors.primary }]}
                 onPress={clearFilters}
               >
-                <Text style={[styles.clearFiltersText, { color: themeColors.surface }]}>Clear Filters</Text>
+                <Text style={[styles.clearFiltersText, { color: rawColors.surface }]}>Clear Filters</Text>
               </Pressable>
             </View>
           ) : null

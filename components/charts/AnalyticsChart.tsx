@@ -68,7 +68,7 @@ export default function AnalyticsChart({
   onGestureEnd,
   selectedPoint,
 }: AnalyticsChartProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const screenWidth = Dimensions.get("window").width;
   const containerWidth = propWidth ?? screenWidth - 32;
   const chartWidth = containerWidth - Y_AXIS_WIDTH - PADDING_RIGHT;
@@ -523,8 +523,8 @@ export default function AnalyticsChart({
   if (sortedData.length === 0) {
     return (
       <View style={[styles.emptyContainer, { height }]}>
-        <MaterialCommunityIcons name="chart-line" size={48} color={themeColors.textLight} />
-        <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>
+        <MaterialCommunityIcons name="chart-line" size={48} color={rawColors.foregroundMuted} />
+        <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>
           No data available
         </Text>
       </View>
@@ -533,30 +533,30 @@ export default function AnalyticsChart({
 
   return (
     <GestureHandlerRootView style={styles.wrapper}>
-      <View style={[styles.container, { backgroundColor: themeColors.surfaceSecondary }]}>
+      <View style={[styles.container, { backgroundColor: rawColors.surfaceSecondary }]}>
         {/* Fullscreen Button */}
         {onFullscreenPress && (
           <Pressable
-            style={[styles.fullscreenButton, { backgroundColor: themeColors.surface }]}
+            style={[styles.fullscreenButton, { backgroundColor: rawColors.surface }]}
             onPress={onFullscreenPress}
             hitSlop={10}
           >
-            <MaterialCommunityIcons name="fullscreen" size={20} color={themeColors.textSecondary} />
+            <MaterialCommunityIcons name="fullscreen" size={20} color={rawColors.foregroundSecondary} />
           </Pressable>
         )}
 
         {/* Zoom indicator */}
         {isZoomed && (
-          <View style={[styles.zoomIndicator, { backgroundColor: themeColors.surface }]}>
-            <Text style={[styles.zoomText, { color: themeColors.textSecondary }]}>
+          <View style={[styles.zoomIndicator, { backgroundColor: rawColors.surface }]}>
+            <Text style={[styles.zoomText, { color: rawColors.foregroundSecondary }]}>
               {zoomPercentage}%
             </Text>
           </View>
         )}
 
         {isScrubbing && scrubbedPoint && (
-          <View style={[styles.scrubDatePill, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-            <Text style={[styles.scrubDateText, { color: themeColors.text }]}>
+          <View style={[styles.scrubDatePill, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
+            <Text style={[styles.scrubDateText, { color: rawColors.foreground }]}>
               {formatDate(scrubbedPoint.date)}
             </Text>
           </View>
@@ -572,7 +572,7 @@ export default function AnalyticsChart({
                   x={Y_AXIS_WIDTH - 4}
                   y={label.y + PADDING_TOP + 4}
                   fontSize={10}
-                  fill={themeColors.textSecondary}
+                  fill={rawColors.foregroundSecondary}
                   textAnchor="end"
                 >
                   {label.value.toFixed(0)}
@@ -594,7 +594,7 @@ export default function AnalyticsChart({
                       y1={label.y + PADDING_TOP}
                       x2={chartWidth}
                       y2={label.y + PADDING_TOP}
-                      stroke={themeColors.border}
+                      stroke={rawColors.border}
                       strokeWidth={1}
                       strokeDasharray="4,4"
                     />
@@ -604,7 +604,7 @@ export default function AnalyticsChart({
                   {areaPath && (
                     <Path
                       d={areaPath}
-                      fill={themeColors.primaryLight}
+                      fill={rawColors.primaryLight}
                       opacity={0.4}
                       transform={`translate(0, ${PADDING_TOP})`}
                     />
@@ -615,7 +615,7 @@ export default function AnalyticsChart({
                     <Path
                       d={trendLinePath}
                       fill="none"
-                      stroke={themeColors.textSecondary}
+                      stroke={rawColors.foregroundSecondary}
                       strokeWidth={2}
                       strokeDasharray="6,4"
                       strokeLinecap="round"
@@ -629,7 +629,7 @@ export default function AnalyticsChart({
                     <Path
                       d={linePath}
                       fill="none"
-                      stroke={themeColors.primary}
+                      stroke={rawColors.primary}
                       strokeWidth={2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -644,8 +644,8 @@ export default function AnalyticsChart({
                       cx={point.x}
                       cy={point.y + PADDING_TOP}
                       r={DATA_POINT_RADIUS}
-                      fill={themeColors.primary}
-                      stroke={themeColors.surface}
+                      fill={rawColors.primary}
+                      stroke={rawColors.surface}
                       strokeWidth={2}
                     />
                   ))}
@@ -657,7 +657,7 @@ export default function AnalyticsChart({
                       cy={valueToY((isScrubbing ? scrubbedPoint : selectedPoint)!.value) + PADDING_TOP}
                       r={DATA_POINT_RADIUS + 4}
                       fill="none"
-                      stroke={themeColors.primary}
+                      stroke={rawColors.primary}
                       strokeWidth={3}
                       opacity={0.5}
                     />
@@ -674,7 +674,7 @@ export default function AnalyticsChart({
                       x={point.x}
                       y={18}
                       fontSize={9}
-                      fill={themeColors.textSecondary}
+                      fill={rawColors.foregroundSecondary}
                       textAnchor="middle"
                     >
                       {formatDate(point.date)}
@@ -687,12 +687,12 @@ export default function AnalyticsChart({
         </View>
 
         {/* Unit label */}
-        <Text style={[styles.unitLabel, { color: themeColors.textTertiary }]}>
+        <Text style={[styles.unitLabel, { color: rawColors.foregroundMuted }]}>
           {unit}
         </Text>
 
         {/* Instructions */}
-        <Text style={[styles.instructions, { color: themeColors.textTertiary }]}>
+        <Text style={[styles.instructions, { color: rawColors.foregroundMuted }]}>
           Pinch to zoom • Touch & drag to scrub • Release for details
         </Text>
       </View>

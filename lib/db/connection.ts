@@ -26,7 +26,8 @@ sqlite.execSync(`
     id INTEGER PRIMARY KEY NOT NULL,
     e1rm_formula TEXT NOT NULL,
     unit_preference TEXT NOT NULL,
-    theme_preference TEXT NOT NULL DEFAULT 'system'
+    theme_preference TEXT NOT NULL DEFAULT 'system',
+    color_theme TEXT NOT NULL DEFAULT 'default'
   );
 
   CREATE TABLE IF NOT EXISTS exercises (
@@ -228,6 +229,13 @@ try {
 // Add theme_preference column to settings table if it doesn't exist
 try {
   sqlite.execSync(`ALTER TABLE settings ADD COLUMN theme_preference TEXT NOT NULL DEFAULT 'system';`);
+} catch {
+  // Column already exists, ignore
+}
+
+// Add color_theme column to settings table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE settings ADD COLUMN color_theme TEXT NOT NULL DEFAULT 'default';`);
 } catch {
   // Column already exists, ignore
 }

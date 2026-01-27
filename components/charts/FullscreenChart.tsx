@@ -7,7 +7,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useEffect, useState } from "react";
-import { Dimensions, Modal, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Dimensions, Modal, Pressable, StatusBar, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDataPoint } from "../../lib/utils/analytics";
@@ -32,7 +32,7 @@ export default function FullscreenChart({
   unit,
   onDataPointPress,
 }: FullscreenChartProps) {
-  const { themeColors } = useTheme();
+  const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
   const [dimensions, setDimensions] = useState(Dimensions.get("window"));
 
@@ -103,33 +103,30 @@ export default function FullscreenChart({
     >
       <StatusBar hidden />
       <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: themeColors.background,
-            paddingTop: Math.max(insets.top, 8),
-            paddingBottom: Math.max(insets.bottom, 8),
-            paddingLeft: Math.max(insets.left, 16),
-            paddingRight: Math.max(insets.right, 16),
-          },
-        ]}
+        className="flex-1 bg-background"
+        style={{
+          paddingTop: Math.max(insets.top, 8),
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingLeft: Math.max(insets.left, 16),
+          paddingRight: Math.max(insets.right, 16),
+        }}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
+        <View className="flex-row justify-between items-center h-[52px]">
+          <Text className="text-lg font-bold flex-1 mr-4 text-foreground" numberOfLines={1}>
             {title}
           </Text>
           <Pressable
-            style={[styles.closeButton, { backgroundColor: themeColors.surfaceSecondary }]}
+            className="w-10 h-10 rounded-full items-center justify-center bg-surface-secondary"
             onPress={handleClose}
             hitSlop={12}
           >
-            <MaterialCommunityIcons name="close" size={24} color={themeColors.text} />
+            <MaterialCommunityIcons name="close" size={24} color={rawColors.foreground} />
           </Pressable>
         </View>
 
         {/* Chart - takes up all remaining space */}
-        <View style={styles.chartWrapper}>
+        <View className="flex-1 justify-center items-center">
           <AnalyticsChart
             data={data}
             trendLineData={trendLineData}
@@ -143,33 +140,3 @@ export default function FullscreenChart({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    height: 52,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    flex: 1,
-    marginRight: 16,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chartWrapper: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

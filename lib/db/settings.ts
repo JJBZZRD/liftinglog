@@ -79,6 +79,8 @@ export function setExerciseFormulaOverride(
 
 export type ThemePreference = "system" | "light" | "dark";
 
+export type ColorThemeId = "default" | "ocean" | "forest" | "sunset" | "rose" | "violet" | "slate";
+
 export function getThemePreference(): ThemePreference {
   const stmt = sqlite.prepareSync(
     "SELECT theme_preference FROM settings WHERE id = 1"
@@ -94,10 +96,32 @@ export function getThemePreference(): ThemePreference {
 
 export function setThemePreference(preference: ThemePreference): void {
   sqlite.runSync(
-    `INSERT INTO settings (id, e1rm_formula, unit_preference, theme_preference)
-     VALUES (1, 'epley', 'kg', ?)
+    `INSERT INTO settings (id, e1rm_formula, unit_preference, theme_preference, color_theme)
+     VALUES (1, 'epley', 'kg', ?, 'default')
      ON CONFLICT(id) DO UPDATE SET theme_preference=excluded.theme_preference;`,
     [preference]
+  );
+}
+
+export function getColorTheme(): ColorThemeId {
+  const stmt = sqlite.prepareSync(
+    "SELECT color_theme FROM settings WHERE id = 1"
+  );
+  try {
+    const res = stmt.executeSync();
+    const row = res.getFirstSync() as { color_theme: ColorThemeId } | null;
+    return row?.color_theme ?? "default";
+  } finally {
+    stmt.finalizeSync();
+  }
+}
+
+export function setColorTheme(theme: ColorThemeId): void {
+  sqlite.runSync(
+    `INSERT INTO settings (id, e1rm_formula, unit_preference, theme_preference, color_theme)
+     VALUES (1, 'epley', 'kg', 'system', ?)
+     ON CONFLICT(id) DO UPDATE SET color_theme=excluded.color_theme;`,
+    [theme]
   );
 }
 

@@ -17,7 +17,7 @@ import { useTheme } from "../lib/theme/ThemeContext";
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function PinnedExercisesOverlay() {
-  const { themeColors, isDark } = useTheme();
+  const { rawColors, isDark } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [pinnedExercises, setPinnedExercises] = useState<Exercise[]>([]);
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
@@ -121,16 +121,16 @@ export default function PinnedExercisesOverlay() {
           style={[styles.swipeAction, { transform: [{ translateX }] }]}
         >
           <Pressable
-            style={[styles.removeButton, { backgroundColor: themeColors.destructive }]}
+            style={[styles.removeButton, { backgroundColor: rawColors.destructive }]}
             onPress={() => handleUnpinExercise(exerciseId)}
           >
-            <MaterialCommunityIcons name="pin-off" size={22} color={themeColors.surface} />
-            <Text style={[styles.removeButtonText, { color: themeColors.surface }]}>Unpin</Text>
+            <MaterialCommunityIcons name="pin-off" size={22} color={rawColors.surface} />
+            <Text style={[styles.removeButtonText, { color: rawColors.surface }]}>Unpin</Text>
           </Pressable>
         </Animated.View>
       );
     },
-    [handleUnpinExercise, themeColors]
+    [handleUnpinExercise, rawColors]
   );
 
   const rotateInterpolation = buttonRotation.interpolate({
@@ -160,10 +160,10 @@ export default function PinnedExercisesOverlay() {
         ]}
         pointerEvents={isOpen ? "auto" : "none"}
       >
-        <View style={[styles.dropdown, { backgroundColor: themeColors.surface, shadowColor: themeColors.shadow }]}>
-          <View style={[styles.dropdownHeader, { borderBottomColor: themeColors.borderLight }]}>
-            <MaterialCommunityIcons name="pin" size={20} color={themeColors.primary} />
-            <Text style={[styles.dropdownTitle, { color: themeColors.text }]}>Pinned Exercises</Text>
+        <View style={[styles.dropdown, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]}>
+          <View style={[styles.dropdownHeader, { borderBottomColor: rawColors.borderLight }]}>
+            <MaterialCommunityIcons name="pin" size={20} color={rawColors.primary} />
+            <Text style={[styles.dropdownTitle, { color: rawColors.foreground }]}>Pinned Exercises</Text>
           </View>
 
           {pinnedExercises.length === 0 ? (
@@ -171,10 +171,10 @@ export default function PinnedExercisesOverlay() {
               <MaterialCommunityIcons
                 name="pin-off-outline"
                 size={48}
-                color={themeColors.textLight}
+                color={rawColors.foregroundMuted}
               />
-              <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>No pinned exercises</Text>
-              <Text style={[styles.emptySubtext, { color: themeColors.textTertiary }]}>
+              <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>No pinned exercises</Text>
+              <Text style={[styles.emptySubtext, { color: rawColors.foregroundMuted }]}>
                 Pin exercises from their detail page for quick access
               </Text>
             </View>
@@ -192,20 +192,20 @@ export default function PinnedExercisesOverlay() {
                   onSwipeableOpen={() => handleUnpinExercise(exercise.id)}
                 >
                   <Pressable
-                    style={[styles.exerciseItem, { backgroundColor: themeColors.surface }]}
+                    style={[styles.exerciseItem, { backgroundColor: rawColors.surface }]}
                     onPress={() => handleExercisePress(exercise)}
                   >
-                    <View style={[styles.exerciseIcon, { backgroundColor: themeColors.primaryLight }]}>
+                    <View style={[styles.exerciseIcon, { backgroundColor: rawColors.primaryLight }]}>
                       <MaterialCommunityIcons
                         name="dumbbell"
                         size={20}
-                        color={themeColors.primary}
+                        color={rawColors.primary}
                       />
                     </View>
                     <View style={styles.exerciseInfo}>
-                      <Text style={[styles.exerciseName, { color: themeColors.text }]}>{exercise.name}</Text>
+                      <Text style={[styles.exerciseName, { color: rawColors.foreground }]}>{exercise.name}</Text>
                       {exercise.muscleGroup && (
-                        <Text style={[styles.exerciseMuscle, { color: themeColors.textSecondary }]}>
+                        <Text style={[styles.exerciseMuscle, { color: rawColors.foregroundSecondary }]}>
                           {exercise.muscleGroup}
                         </Text>
                       )}
@@ -213,7 +213,7 @@ export default function PinnedExercisesOverlay() {
                     <MaterialCommunityIcons
                       name="chevron-right"
                       size={24}
-                      color={themeColors.textLight}
+                      color={rawColors.foregroundMuted}
                     />
                   </Pressable>
                 </Swipeable>
@@ -224,12 +224,12 @@ export default function PinnedExercisesOverlay() {
       </Animated.View>
 
       {/* Floating Action Button */}
-      <Pressable style={[styles.fab, { backgroundColor: themeColors.primary, shadowColor: themeColors.primary }]} onPress={handleToggle}>
+      <Pressable style={[styles.fab, { backgroundColor: rawColors.primary, shadowColor: rawColors.primary }]} onPress={handleToggle}>
         <Animated.View style={{ transform: [{ rotate: rotateInterpolation }] }}>
           <MaterialCommunityIcons
             name={isOpen ? "close" : "pin"}
             size={24}
-            color={themeColors.surface}
+            color={rawColors.surface}
           />
         </Animated.View>
       </Pressable>
