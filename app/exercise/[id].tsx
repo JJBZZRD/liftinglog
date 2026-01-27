@@ -70,7 +70,7 @@ export default function ExerciseModalScreen() {
   }, [exerciseId, isPinned]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: rawColors.surface }}>
+    <View style={{ flex: 1, backgroundColor: rawColors.background }}>
       {/* Pin limit tooltip overlay */}
       <Modal
         visible={showPinLimitTooltip}
@@ -97,7 +97,7 @@ export default function ExerciseModalScreen() {
         options={{
           presentation: "modal",
           title,
-          headerStyle: { backgroundColor: rawColors.surface },
+          headerStyle: { backgroundColor: rawColors.background },
           headerTitleStyle: { color: rawColors.foreground },
           headerLeft: () => (
             <Pressable
@@ -137,7 +137,7 @@ export default function ExerciseModalScreen() {
             <TabBar
               {...props}
               indicatorStyle={{ backgroundColor: rawColors.primary }}
-              style={{ backgroundColor: rawColors.surface }}
+              style={{ backgroundColor: rawColors.background }}
               activeColor={rawColors.primary}
               inactiveColor={rawColors.foregroundSecondary}
               pressColor={rawColors.pressed}

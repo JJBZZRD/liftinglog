@@ -214,7 +214,7 @@ export default function VisualisationTab() {
   const maxValue = hasData ? Math.max(...filteredData.map((d) => d.value)) : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}

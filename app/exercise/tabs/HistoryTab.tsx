@@ -360,7 +360,7 @@ export default function HistoryTab() {
 
   if (!exerciseId) {
     return (
-      <View style={[styles.tabContainer, { backgroundColor: rawColors.surface }]}>
+      <View style={[styles.tabContainer, { backgroundColor: rawColors.background }]}>
         <Text style={[styles.errorText, { color: rawColors.destructive }]}>Invalid exercise ID</Text>
       </View>
     );
@@ -368,7 +368,7 @@ export default function HistoryTab() {
 
   if (loading) {
     return (
-      <View style={[styles.tabContainer, { backgroundColor: rawColors.surface }]}>
+      <View style={[styles.tabContainer, { backgroundColor: rawColors.background }]}>
         <Text style={[styles.loadingText, { color: rawColors.foregroundSecondary }]}>Loading history...</Text>
       </View>
     );
@@ -377,7 +377,7 @@ export default function HistoryTab() {
   // Show empty state only if there's no raw data at all
   if (rawHistory.length === 0) {
     return (
-      <View style={[styles.tabContainer, { backgroundColor: rawColors.surface }]}>
+      <View style={[styles.tabContainer, { backgroundColor: rawColors.background }]}>
         <Text style={[styles.emptyText, { color: rawColors.foreground }]}>No workout history found</Text>
         <Text style={[styles.emptySubtext, { color: rawColors.foregroundSecondary }]}>Start recording sets to see your history here</Text>
       </View>
@@ -385,9 +385,9 @@ export default function HistoryTab() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
       {/* Search and Filter Section */}
-      <View style={[styles.filterSection, { backgroundColor: rawColors.surface, borderBottomColor: rawColors.border }]}>
+      <View style={[styles.filterSection, { backgroundColor: rawColors.background, borderBottomColor: rawColors.border }]}>
         {/* Search Bar */}
         <View
           style={[
@@ -611,7 +611,7 @@ export default function HistoryTab() {
 
           return (
             <View
-              style={[styles.workoutCard, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border }]}
+              style={[styles.workoutCard, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
             >
               <View style={[styles.workoutHeader, { borderBottomColor: rawColors.border }]}>
                 <View style={styles.workoutDateContainer}>

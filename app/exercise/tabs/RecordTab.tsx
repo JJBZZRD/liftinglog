@@ -266,7 +266,7 @@ export default function RecordTab() {
   );
 
   return (
-    <View style={[styles.recordContainer, { backgroundColor: rawColors.surface }]}>
+    <View style={[styles.recordContainer, { backgroundColor: rawColors.background }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -345,7 +345,7 @@ export default function RecordTab() {
       </ScrollView>
 
       {/* Action Buttons */}
-      <View style={[styles.actionButtons, { backgroundColor: rawColors.surface, borderTopColor: rawColors.border }]}>
+      <View style={[styles.actionButtons, { backgroundColor: rawColors.background, borderTopColor: rawColors.border }]}>
         <Pressable
           style={[
             styles.actionButton,
