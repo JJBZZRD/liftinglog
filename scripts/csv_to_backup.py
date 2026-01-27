@@ -233,6 +233,7 @@ def convert_csv_to_db(csv_path: Path, db_path: Path):
     exercises: dict[str, int] = {}  # name -> id
     workouts: dict[str, int] = {}   # date_str -> id
     workout_exercises: dict[tuple[int, int], int] = {}  # (workout_id, exercise_id) -> id
+    inserted_sets: list[dict] = []  # set_id, exercise_id, reps, weight_kg, performed_at
     
     # Group rows by date to create workouts
     rows_by_date: dict[str, list[dict]] = defaultdict(list)
@@ -323,7 +324,7 @@ def convert_csv_to_db(csv_path: Path, db_path: Path):
                 reps = int(reps_str) if reps_str else None
                 
                 set_uid = generate_uid()
-                conn.execute(
+                cursor = conn.execute(
                     """INSERT INTO sets 
                        (uid, workout_id, exercise_id, workout_exercise_id, set_index, 
                         weight_kg, reps, note, performed_at, is_warmup) 
@@ -331,8 +332,52 @@ def convert_csv_to_db(csv_path: Path, db_path: Path):
                     (set_uid, workout_id, exercise_id, we_id, set_index,
                      weight, reps, note if note else None, performed_at, 0)
                 )
+                set_id = cursor.lastrowid
+                inserted_sets.append(
+                    {
+                        "set_id": set_id,
+                        "exercise_id": exercise_id,
+                        "reps": reps,
+                        "weight_kg": weight,
+                        "performed_at": performed_at,
+                    }
+                )
                 set_index += 1
                 set_count += 1
+
+    # Calculate and record PR events (rep max PRs) in chronological order
+    pr_count = 0
+    best_by_exercise_rep: dict[tuple[int, int], float] = {}
+
+    inserted_sets.sort(key=lambda s: (s["performed_at"], s["set_id"]))
+
+    for entry in inserted_sets:
+        reps = entry["reps"]
+        weight = entry["weight_kg"]
+        if not reps or not weight or reps <= 0 or weight <= 0:
+            continue
+
+        key = (entry["exercise_id"], reps)
+        current_best = best_by_exercise_rep.get(key)
+
+        if current_best is None or weight > current_best:
+            pr_uid = generate_uid()
+            pr_type = f"{reps}rm"
+            conn.execute(
+                """INSERT INTO pr_events
+                   (uid, set_id, exercise_id, type, metric_value, occurred_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    pr_uid,
+                    entry["set_id"],
+                    entry["exercise_id"],
+                    pr_type,
+                    weight,
+                    entry["performed_at"],
+                )
+            )
+            best_by_exercise_rep[key] = weight
+            pr_count += 1
     
     conn.execute("PRAGMA foreign_keys = ON")
     conn.commit()
@@ -343,6 +388,7 @@ def convert_csv_to_db(csv_path: Path, db_path: Path):
     print(f"  - Workouts: {len(workouts)}")
     print(f"  - Workout exercises: {len(workout_exercises)}")
     print(f"  - Sets: {set_count}")
+    print(f"  - PR events: {pr_count}")
     print(f"\nOutput saved to: {db_path}")
 
 
