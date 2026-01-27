@@ -586,7 +586,7 @@ export default function AnalyticsChart({
             <View style={[styles.chartArea, { width: chartWidth + PADDING_RIGHT }]}>
               <View style={styles.chartClip}>
                 <Svg width={chartWidth} height={chartHeight + PADDING_TOP + PADDING_BOTTOM}>
-                  {/* Grid lines */}
+                  {/* Grid lines - use foregroundMuted for better visibility in dark mode */}
                   {yAxisLabels.map((label, i) => (
                     <Line
                       key={`grid-${i}`}
@@ -594,9 +594,10 @@ export default function AnalyticsChart({
                       y1={label.y + PADDING_TOP}
                       x2={chartWidth}
                       y2={label.y + PADDING_TOP}
-                      stroke={rawColors.border}
+                      stroke={rawColors.foregroundMuted}
                       strokeWidth={1}
                       strokeDasharray="4,4"
+                      opacity={0.3}
                     />
                   ))}
 

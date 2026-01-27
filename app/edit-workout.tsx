@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import SetItem from "../components/lists/SetItem";
 import DatePickerModal from "../components/modals/DatePickerModal";
 import EditSetModal from "../components/modals/EditSetModal";
@@ -220,7 +220,7 @@ export default function EditWorkoutScreen() {
   const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);
   if (!hasValidParams) {
     return (
-      <View style={[styles.container, { backgroundColor: rawColors.background }]}>
+      <View className="flex-1 bg-background">
         <Stack.Screen
           options={{
             presentation: "modal",
@@ -232,20 +232,20 @@ export default function EditWorkoutScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 onPress={() => router.back()}
-                style={styles.headerButton}
+                className="px-3 py-1.5"
               >
                 <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
               </Pressable>
             ),
           }}
         />
-        <Text style={[styles.errorText, { color: rawColors.destructive }]}>Invalid exercise or workout ID</Text>
+        <Text className="text-base text-center mt-12 text-destructive">Invalid exercise or workout ID</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
+    <View className="flex-1 bg-background">
       <Stack.Screen
         options={{
           presentation: "modal",
@@ -257,7 +257,7 @@ export default function EditWorkoutScreen() {
               accessibilityRole="button"
               accessibilityLabel="Go back"
               onPress={() => router.back()}
-              style={styles.headerButton}
+              className="px-3 py-1.5"
             >
               <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
             </Pressable>
@@ -265,70 +265,113 @@ export default function EditWorkoutScreen() {
         }}
       />
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Date Picker */}
-        <View style={styles.dateSection}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Date Selector - Pill style */}
+        <View className="flex-row justify-center mb-4">
           <Pressable
-            style={[styles.dateButton, { backgroundColor: rawColors.primaryLight }]}
+            className="flex-row items-center px-4 py-2.5 rounded-full border border-border bg-surface"
+            style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 }}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color={rawColors.primary} />
-            <Text style={[styles.dateButtonText, { color: rawColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color={rawColors.foregroundSecondary} />
+            <MaterialCommunityIcons name="calendar" size={18} color={rawColors.primary} />
+            <Text className="text-[15px] font-semibold mx-2 text-primary">{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={16} color={rawColors.foregroundSecondary} />
           </Pressable>
         </View>
 
-        {/* Input Section */}
-        <View style={styles.inputSection}>
-          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Add Set</Text>
-          <View style={styles.inputRow}>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Weight (kg)</Text>
+        {/* Add Set Card */}
+        <View
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-lg font-semibold text-foreground">Add Set</Text>
+            <View className="flex-row items-center px-3 py-1.5 rounded-full bg-primary-light">
+              <Text className="text-sm font-medium text-primary">Set #{setIndex}</Text>
+            </View>
+          </View>
+
+          {/* Weight and Reps Inputs - Side by side */}
+          <View className="flex-row gap-3 mb-4">
+            <View className="flex-1">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
               <TextInput
-                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
+                className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
                 value={weight}
                 onChangeText={setWeight}
-                placeholder="0.0"
-                placeholderTextColor={rawColors.foregroundPlaceholder}
+                placeholder="0"
+                placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
               />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Reps</Text>
+            <View className="flex-1">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Reps</Text>
               <TextInput
-                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
+                className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
-                placeholderTextColor={rawColors.foregroundPlaceholder}
+                placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="number-pad"
                 returnKeyType="next"
               />
             </View>
           </View>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Note (optional)</Text>
+
+          {/* Note Input */}
+          <View className="mb-4">
+            <Text className="text-sm font-medium mb-2 text-foreground-secondary">Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
+              className="border border-border rounded-xl p-3.5 text-base min-h-[70px] bg-surface-secondary text-foreground"
+              style={{ textAlignVertical: "top" }}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
-              placeholderTextColor={rawColors.foregroundPlaceholder}
+              placeholderTextColor={rawColors.foregroundMuted}
               multiline
               returnKeyType="done"
             />
           </View>
-          <Pressable style={[styles.addButton, { backgroundColor: rawColors.primary }]} onPress={handleAddSet}>
-            <Text style={[styles.addButtonText, { color: rawColors.surface }]}>Add Set</Text>
+
+          {/* Add Set Button */}
+          <Pressable 
+            className="flex-row items-center justify-center py-3.5 rounded-xl bg-primary"
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            onPress={handleAddSet}
+          >
+            <MaterialCommunityIcons name="plus" size={20} color={rawColors.primaryForeground} />
+            <Text className="text-base font-semibold ml-1.5 text-primary-foreground">Add Set</Text>
           </Pressable>
         </View>
 
-        {/* Sets List */}
-        <View style={styles.setsSection}>
-          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Recorded Sets ({sets.length})</Text>
+        {/* Recorded Sets Card */}
+        <View
+          className="rounded-2xl p-5 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-lg font-semibold text-foreground">Recorded Sets</Text>
+            {sets.length > 0 && (
+              <View className="flex-row items-center px-3 py-1.5 rounded-full bg-surface-secondary">
+                <MaterialCommunityIcons name="dumbbell" size={14} color={rawColors.foregroundSecondary} />
+                <Text className="text-sm font-medium ml-1.5 text-foreground-secondary">{sets.length} {sets.length === 1 ? "set" : "sets"}</Text>
+              </View>
+            )}
+          </View>
+
           {sets.length === 0 ? (
-            <Text style={[styles.emptyText, { color: rawColors.foregroundMuted }]}>No sets recorded yet</Text>
+            <View className="items-center py-8">
+              <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-surface-secondary">
+                <MaterialCommunityIcons name="clipboard-outline" size={28} color={rawColors.foregroundMuted} />
+              </View>
+              <Text className="text-base font-medium text-foreground-secondary">No sets recorded yet</Text>
+              <Text className="text-sm text-center mt-1 text-foreground-muted">Add your first set using the form above</Text>
+            </View>
           ) : (
             <FlatList
               data={sets}
@@ -348,11 +391,18 @@ export default function EditWorkoutScreen() {
         </View>
       </ScrollView>
 
-      {/* Action Button */}
-      <View style={[styles.actionButtons, { backgroundColor: rawColors.background, borderTopColor: rawColors.border }]}>
-        <Pressable style={[styles.saveButton, { backgroundColor: rawColors.primary }]} onPress={handleSaveEdits}>
-          <MaterialCommunityIcons name="check-circle" size={20} color={rawColors.surface} />
-          <Text style={[styles.saveButtonText, { color: rawColors.surface }]}>Save Edits</Text>
+      {/* Save Edits Footer */}
+      <View 
+        className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
+        style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 8 }}
+      >
+        <Pressable 
+          className="flex-row items-center justify-center py-4 rounded-xl bg-primary"
+          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+          onPress={handleSaveEdits}
+        >
+          <MaterialCommunityIcons name="check-circle" size={22} color={rawColors.primaryForeground} />
+          <Text className="text-base font-semibold ml-2 text-primary-foreground">Save Edits</Text>
         </Pressable>
       </View>
 
@@ -379,110 +429,3 @@ export default function EditWorkoutScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 50,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  dateSection: {
-    marginBottom: 20,
-  },
-  dateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignSelf: "flex-start",
-    gap: 8,
-  },
-  dateButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  inputSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  noteInput: {
-    minHeight: 80,
-    textAlignVertical: "top",
-    marginBottom: 16,
-  },
-  addButton: {
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-  },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  setsSection: {
-    marginTop: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: "center",
-    paddingVertical: 24,
-  },
-  actionButtons: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    borderTopWidth: 1,
-  },
-  saveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 14,
-    borderRadius: 8,
-    gap: 8,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { useCallback, useContext, useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import AnalyticsChart from "../../../components/charts/AnalyticsChart";
 import DataPointModal from "../../../components/charts/DataPointModal";
 import DateRangeSelector, {
@@ -214,115 +214,147 @@ export default function VisualisationTab() {
   const maxValue = hasData ? Math.max(...filteredData.map((d) => d.value)) : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
+    <View className="flex-1 bg-background">
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        className="flex-1"
+        contentContainerStyle={{ padding: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Metric Selector */}
-        <View style={styles.metricSelector}>
-          <Text style={[styles.label, { color: rawColors.foregroundSecondary }]}>Metric</Text>
-          <Pressable
-            style={[
-              styles.metricButton,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
-            ]}
-            onPress={() => setShowMetricPicker(true)}
+        {/* Controls Card - Metric & Date Range */}
+        <View
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          {/* Metric Selector */}
+          <View className="mb-4">
+            <Text className="text-sm font-medium mb-2 text-foreground-secondary">Metric</Text>
+            <Pressable
+              className="flex-row items-center justify-between border border-border rounded-xl px-4 py-3 bg-surface-secondary"
+              onPress={() => setShowMetricPicker(true)}
+            >
+              <Text className="text-base font-medium text-foreground">{selectedMetricLabel}</Text>
+              <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
+            </Pressable>
+          </View>
+
+          {/* Date Range Selector */}
+          <View>
+            <Text className="text-sm font-medium mb-2 text-foreground-secondary">Date Range</Text>
+            <DateRangeSelector value={dateRange} onChange={setDateRange} />
+          </View>
+        </View>
+
+        {/* Chart Card */}
+        <View
+          className="rounded-2xl mb-4 bg-surface overflow-hidden"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          {loading ? (
+            <View className="items-center justify-center py-16">
+              <MaterialCommunityIcons name="loading" size={32} color={rawColors.foregroundMuted} />
+              <Text className="text-base mt-3 text-foreground-secondary">Loading...</Text>
+            </View>
+          ) : !hasData ? (
+            <View className="items-center justify-center py-12">
+              <View className="w-20 h-20 rounded-full items-center justify-center mb-4 bg-surface-secondary">
+                <MaterialCommunityIcons name="chart-line" size={40} color={rawColors.foregroundMuted} />
+              </View>
+              <Text className="text-lg font-semibold text-foreground">No data available</Text>
+              <Text className="text-sm text-center mt-2 px-4 text-foreground-secondary">
+                {allData.length > 0
+                  ? "No data in selected date range. Try a different range."
+                  : "Record some sets to see your progress"}
+              </Text>
+            </View>
+          ) : (
+            <>
+              {/* Chart Header */}
+              <View className="flex-row items-center justify-between px-5 pt-5 pb-3">
+                <Text className="text-lg font-semibold text-foreground">{selectedMetricLabel}</Text>
+                <View className="flex-row items-center px-3 py-1.5 rounded-full bg-surface-secondary">
+                  <MaterialCommunityIcons name="chart-timeline-variant" size={14} color={rawColors.foregroundSecondary} />
+                  <Text className="text-sm font-medium ml-1.5 text-foreground-secondary">{filteredData.length} sessions</Text>
+                </View>
+              </View>
+
+              {/* Interactive Chart - full width within card */}
+              <AnalyticsChart
+                data={filteredData}
+                trendLineData={trendLineData}
+                height={280}
+                unit={unit}
+                onDataPointPress={handleDataPointPress}
+                onFullscreenPress={() => setShowFullscreen(true)}
+                onGestureStart={handleGestureStart}
+                onGestureEnd={handleGestureEnd}
+                selectedPoint={selectedPoint}
+              />
+            </>
+          )}
+        </View>
+
+        {/* Stats Card */}
+        {hasData && !loading && (
+          <View
+            className="rounded-2xl p-5 bg-surface"
+            style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
           >
-            <Text style={[styles.metricButtonText, { color: rawColors.foreground }]}>{selectedMetricLabel}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
-          </Pressable>
-        </View>
-
-        {/* Date Range Selector */}
-        <View style={styles.dateRangeSection}>
-          <Text style={[styles.label, { color: rawColors.foregroundSecondary }]}>Date Range</Text>
-          <DateRangeSelector value={dateRange} onChange={setDateRange} />
-        </View>
-
-        {/* Chart Section */}
-        {loading ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>Loading...</Text>
-          </View>
-        ) : !hasData ? (
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="chart-line" size={64} color={rawColors.foregroundMuted} />
-            <Text style={[styles.emptyText, { color: rawColors.foreground }]}>No data available</Text>
-            <Text style={[styles.emptySubtext, { color: rawColors.foregroundSecondary }]}>
-              {allData.length > 0
-                ? "No data in selected date range. Try a different range."
-                : "Record some sets to see your progress"}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Chart Title */}
-            <Text style={[styles.chartTitle, { color: rawColors.foreground }]}>
-              {selectedMetricLabel}
-            </Text>
-
-            {/* Interactive Chart */}
-            <AnalyticsChart
-              data={filteredData}
-              trendLineData={trendLineData}
-              height={280}
-              unit={unit}
-              onDataPointPress={handleDataPointPress}
-              onFullscreenPress={() => setShowFullscreen(true)}
-              onGestureStart={handleGestureStart}
-              onGestureEnd={handleGestureEnd}
-              selectedPoint={selectedPoint}
-            />
-
-            {/* Stats Summary */}
-            <View style={styles.statsContainer}>
-              <View style={[styles.statBox, { backgroundColor: rawColors.surfaceSecondary }]}>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>Latest</Text>
-                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
-                  {filteredData[filteredData.length - 1]?.value.toFixed(1)} {unit}
+            <Text className="text-lg font-semibold mb-4 text-foreground">Summary</Text>
+            <View className="flex-row gap-3">
+              <View className="flex-1 items-center py-3 px-2 rounded-xl bg-surface-secondary">
+                <Text className="text-xs font-medium mb-1 text-foreground-secondary">Latest</Text>
+                <Text className="text-base font-bold text-foreground">
+                  {filteredData[filteredData.length - 1]?.value.toFixed(1)}
                 </Text>
+                <Text className="text-xs text-foreground-muted">{unit}</Text>
               </View>
-              <View style={[styles.statBox, { backgroundColor: rawColors.surfaceSecondary }]}>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>Best</Text>
-                <Text style={[styles.statValue, { color: rawColors.primary }]}>
-                  {maxValue.toFixed(1)} {unit}
+              <View className="flex-1 items-center py-3 px-2 rounded-xl bg-primary-light">
+                <Text className="text-xs font-medium mb-1 text-primary">Best</Text>
+                <Text className="text-base font-bold text-primary">
+                  {maxValue.toFixed(1)}
                 </Text>
+                <Text className="text-xs text-primary">{unit}</Text>
               </View>
-              <View style={[styles.statBox, { backgroundColor: rawColors.surfaceSecondary }]}>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>Sessions</Text>
-                <Text style={[styles.statValue, { color: rawColors.foreground }]}>{filteredData.length}</Text>
+              <View className="flex-1 items-center py-3 px-2 rounded-xl bg-surface-secondary">
+                <Text className="text-xs font-medium mb-1 text-foreground-secondary">Sessions</Text>
+                <Text className="text-base font-bold text-foreground">
+                  {filteredData.length}
+                </Text>
+                <Text className="text-xs text-foreground-muted">total</Text>
               </View>
             </View>
-          </>
+          </View>
         )}
       </ScrollView>
 
       {/* Metric Picker Modal */}
       <Modal visible={showMetricPicker} transparent animationType="fade" onRequestClose={() => setShowMetricPicker(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowMetricPicker(false)}>
-          <View style={[styles.pickerContainer, { backgroundColor: rawColors.surface }]}>
-            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Select Metric</Text>
-            {metricOptions.map((option) => (
+        <Pressable 
+          className="flex-1 justify-end"
+          style={{ backgroundColor: rawColors.overlay }}
+          onPress={() => setShowMetricPicker(false)}
+        >
+          <View 
+            className="rounded-t-3xl pt-4 pb-8 bg-surface"
+            style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 }}
+          >
+            <View className="w-10 h-1 rounded-full mx-auto mb-4 bg-border" />
+            <Text className="text-lg font-semibold text-center mb-4 text-foreground">Select Metric</Text>
+            {metricOptions.map((option, index) => (
               <Pressable
                 key={option.value}
-                style={[
-                  styles.pickerOption,
-                  { borderBottomColor: rawColors.border },
-                  selectedMetric === option.value && { backgroundColor: rawColors.primaryLight },
-                ]}
+                className={`flex-row items-center justify-between py-4 px-5 ${
+                  index < metricOptions.length - 1 ? "border-b border-border-light" : ""
+                } ${selectedMetric === option.value ? "bg-primary-light" : ""}`}
                 onPress={() => {
                   setSelectedMetric(option.value);
                   setShowMetricPicker(false);
                 }}
               >
                 <Text
-                  style={[
-                    styles.pickerOptionText,
-                    { color: rawColors.foreground },
-                    selectedMetric === option.value && { color: rawColors.primary, fontWeight: "600" },
-                  ]}
+                  className={`text-base ${
+                    selectedMetric === option.value ? "font-semibold text-primary" : "text-foreground"
+                  }`}
                 >
                   {option.label}
                 </Text>
@@ -362,112 +394,3 @@ export default function VisualisationTab() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  metricSelector: {
-    marginBottom: 16,
-  },
-  dateRangeSection: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  metricButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  metricButtonText: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    minHeight: 300,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  statsContainer: {
-    flexDirection: "row",
-    marginTop: 16,
-    gap: 10,
-  },
-  statBox: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  pickerContainer: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    textAlign: "center",
-    paddingBottom: 12,
-    marginBottom: 8,
-  },
-  pickerOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-  },
-  pickerOptionText: {
-    fontSize: 16,
-  },
-});
