@@ -308,8 +308,13 @@ export default function VisualisationTab() {
                 </Text>
                 <Text className="text-xs text-foreground-muted">{unit}</Text>
               </View>
-              <View className="flex-1 items-center py-3 px-2 rounded-xl bg-primary-light">
-                <Text className="text-xs font-medium mb-1 text-primary">Best</Text>
+              <View 
+                className="flex-1 items-center py-3 px-2 rounded-xl border-2 border-primary bg-primary-light"
+              >
+                <View className="flex-row items-center mb-1">
+                  <MaterialCommunityIcons name="trophy" size={12} color={rawColors.primary} />
+                  <Text className="text-xs font-medium ml-1 text-primary">Best</Text>
+                </View>
                 <Text className="text-base font-bold text-primary">
                   {maxValue.toFixed(1)}
                 </Text>
