@@ -7,7 +7,8 @@
  * - HistoryTab.tsx
  * - edit-workout.tsx
  */
-import { Pressable, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Pressable, Text, View, type ViewStyle } from "react-native";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 interface SetItemProps {
@@ -27,6 +28,8 @@ interface SetItemProps {
   variant?: "default" | "compact";
   /** PR badge text (e.g., "1RM", "5RM") */
   prBadge?: string | null;
+  /** Whether this is the best set in the session */
+  isBestSet?: boolean;
 }
 
 /**
@@ -35,6 +38,7 @@ interface SetItemProps {
  * - Weight and reps
  * - Optional note
  * - Optional long-press handler for editing
+ * - Optional best set highlight with trophy icon
  */
 export default function SetItem({
   index,
@@ -45,17 +49,28 @@ export default function SetItem({
   delayLongPress = 400,
   variant = "default",
   prBadge,
+  isBestSet,
 }: SetItemProps) {
   const { rawColors } = useTheme();
   const isCompact = variant === "compact";
+
+  // Build style for best set highlighting - uses primary color with opacity for cross-theme support
+  const bestSetStyle: ViewStyle | undefined = isBestSet
+    ? {
+        backgroundColor: `${rawColors.primary}20`, // ~12% opacity for subtle highlight
+        borderLeftWidth: 3,
+        borderLeftColor: rawColors.primary,
+      }
+    : undefined;
 
   const content = (
     <View 
       className={`flex-row items-center rounded-lg mb-2 ${
         isCompact 
-          ? "py-2 px-3 mb-1 bg-surface" 
-          : "py-3 px-4 bg-surface-secondary"
-      }`}
+          ? "py-2 px-3 mb-1" 
+          : "py-3 px-4"
+      } ${!isBestSet ? (isCompact ? "bg-surface" : "bg-surface-secondary") : ""}`}
+      style={bestSetStyle}
     >
       <View 
         className={`items-center justify-center mr-3 bg-primary ${
@@ -71,13 +86,22 @@ export default function SetItem({
         </Text>
       </View>
       <View className="flex-1">
-        <View className="flex-row gap-3 mb-1">
+        <View className="flex-row gap-3 mb-1 items-center">
           <Text className="text-base font-semibold text-foreground">
             {weightKg !== null ? `${weightKg} kg` : "—"}
           </Text>
           <Text className="text-base font-semibold text-foreground">
             {reps !== null ? `${reps} reps` : "—"}
           </Text>
+          {isBestSet && (
+            <View className="flex-row items-center ml-1">
+              <MaterialCommunityIcons 
+                name="trophy" 
+                size={14} 
+                color={rawColors.primary} 
+              />
+            </View>
+          )}
         </View>
         {note && (
           <Text 

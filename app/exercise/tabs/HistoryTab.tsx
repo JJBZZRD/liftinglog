@@ -90,6 +90,65 @@ function parseSearchQuery(query: string): ParsedSearch {
 // Extended set row with PR badge
 type SetWithPR = SetRow & { prBadge?: string };
 
+/**
+ * Calculate estimated 1RM using Epley formula
+ * e1RM = weight × (1 + 0.0333 × reps)
+ */
+function calculateE1RM(weight: number | null, reps: number | null): number {
+  if (weight === null || reps === null || weight <= 0 || reps <= 0) return 0;
+  return weight * (1 + 0.0333 * reps);
+}
+
+/**
+ * Calculate session stats for a list of sets
+ */
+function calculateSessionStats(sets: SetWithPR[]): {
+  totalVolume: number;
+  totalReps: number;
+  totalSets: number;
+  bestSetId: number | null;
+  bestSetE1RM: number;
+} {
+  let totalVolume = 0;
+  let totalReps = 0;
+  let bestSetId: number | null = null;
+  let bestSetE1RM = 0;
+
+  for (const set of sets) {
+    const weight = set.weightKg ?? 0;
+    const reps = set.reps ?? 0;
+
+    // Calculate volume (weight × reps)
+    totalVolume += weight * reps;
+    totalReps += reps;
+
+    // Find best set by estimated 1RM
+    const e1rm = calculateE1RM(set.weightKg, set.reps);
+    if (e1rm > bestSetE1RM) {
+      bestSetE1RM = e1rm;
+      bestSetId = set.id;
+    }
+  }
+
+  return {
+    totalVolume,
+    totalReps,
+    totalSets: sets.length,
+    bestSetId,
+    bestSetE1RM,
+  };
+}
+
+/**
+ * Format volume for display (e.g., 1250 kg or 1.2k kg)
+ */
+function formatVolume(volume: number): string {
+  if (volume >= 1000) {
+    return `${(volume / 1000).toFixed(1)}k`;
+  }
+  return `${Math.round(volume)}`;
+}
+
 export default function HistoryTab() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
@@ -648,6 +707,9 @@ export default function HistoryTab() {
           // Use workoutExercise dates for display, fall back to workout dates
           const workoutDate = item.workoutExercise?.performedAt ?? item.workoutExercise?.completedAt ?? item.workout.startedAt;
           const isCompleted = item.workoutExercise?.completedAt !== null;
+          
+          // Calculate session stats
+          const sessionStats = calculateSessionStats(item.sets);
 
           return (
             <View
@@ -685,6 +747,27 @@ export default function HistoryTab() {
                 </View>
               </View>
 
+              {/* Session Stats Summary */}
+              <View style={[styles.sessionStatsContainer, { backgroundColor: rawColors.surfaceSecondary }]}>
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="dumbbell" size={14} color={rawColors.foregroundSecondary} />
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>{sessionStats.totalSets}</Text>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>sets</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: rawColors.border }]} />
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="repeat" size={14} color={rawColors.foregroundSecondary} />
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>{sessionStats.totalReps}</Text>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>reps</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: rawColors.border }]} />
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="weight" size={14} color={rawColors.foregroundSecondary} />
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>{formatVolume(sessionStats.totalVolume)}</Text>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>kg vol</Text>
+                </View>
+              </View>
+
               <View style={styles.setsContainer}>
                 {item.sets.map((set: SetWithPR, index) => (
                   <SetItem
@@ -695,6 +778,7 @@ export default function HistoryTab() {
                     note={set.note}
                     variant="compact"
                     prBadge={set.prBadge}
+                    isBestSet={set.id === sessionStats.bestSetId}
                   />
                 ))}
               </View>
@@ -957,6 +1041,33 @@ const styles = StyleSheet.create({
   },
   setsContainer: {
     gap: 4,
+  },
+
+  // Session Stats
+  sessionStatsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  statItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  statLabel: {
+    fontSize: 12,
+  },
+  statDivider: {
+    width: 1,
+    height: 16,
   },
 });
 
