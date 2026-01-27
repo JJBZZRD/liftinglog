@@ -5,25 +5,24 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
-  LayoutAnimation,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  interpolate,
+} from "react-native-reanimated";
 import SetItem from "../../../components/lists/SetItem";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { getPREventsBySetIds } from "../../../lib/db/prEvents";
 import { deleteExerciseSession, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { useTheme } from "../../../lib/theme/ThemeContext";
-
-// Enable LayoutAnimation on Android
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 // Date range presets
 type DateRangePreset = "1w" | "1m" | "3m" | "6m" | "1y" | "all" | "custom";
@@ -111,6 +110,20 @@ export default function HistoryTab() {
   const [weightFilter, setWeightFilter] = useState<NumericFilter>({ min: "", max: "" });
   const [repsFilter, setRepsFilter] = useState<NumericFilter>({ min: "", max: "" });
 
+  // Animation value for filter reveal (Reanimated)
+  const filterExpansion = useSharedValue(0);
+  
+  // Animated styles using Reanimated
+  const filterAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(filterExpansion.value, [0, 1], [0, 1]),
+      transform: [
+        { translateY: interpolate(filterExpansion.value, [0, 1], [-15, 0]) },
+      ],
+      maxHeight: interpolate(filterExpansion.value, [0, 1], [0, 500]),
+    };
+  });
+
   // Date picker modal states
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -174,7 +187,7 @@ export default function HistoryTab() {
   }, [weightFilter, repsFilter, parsedSearch]);
 
   // Filter history based on all filter criteria
-  const filteredHistory = useMemo(() => {
+  const filteredHistory = useMemo((): (WorkoutHistoryEntry & { sets: SetWithPR[] })[] => {
     const { startDate, endDate } = dateRangeTimestamps;
     const { weightMin, weightMax, repsMin, repsMax, notesQuery } = effectiveFilters;
 
@@ -190,12 +203,12 @@ export default function HistoryTab() {
         // Filter sets by weight, reps, and notes
         const filteredSets = entry.sets.filter((set) => {
           // Weight filter
-          if (weightMin !== null && set.weightKg < weightMin) return false;
-          if (weightMax !== null && set.weightKg > weightMax) return false;
+          if (weightMin !== null && (set.weightKg ?? 0) < weightMin) return false;
+          if (weightMax !== null && (set.weightKg ?? 0) > weightMax) return false;
 
           // Reps filter
-          if (repsMin !== null && set.reps < repsMin) return false;
-          if (repsMax !== null && set.reps > repsMax) return false;
+          if (repsMin !== null && (set.reps ?? 0) < repsMin) return false;
+          if (repsMax !== null && (set.reps ?? 0) > repsMax) return false;
 
           // Notes filter
           if (notesQuery && !(set.note?.toLowerCase().includes(notesQuery))) return false;
@@ -320,9 +333,15 @@ export default function HistoryTab() {
 
   // Toggle filter section with animation
   const toggleFilters = useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setFiltersExpanded((prev) => !prev);
-  }, []);
+    const expanding = !filtersExpanded;
+    setFiltersExpanded(expanding);
+    
+    // Animate with Reanimated - runs on UI thread for smooth 60fps
+    filterExpansion.value = withTiming(expanding ? 1 : 0, {
+      duration: 250,
+      easing: Easing.bezier(0.4, 0, 0.2, 1), // Material Design standard easing
+    });
+  }, [filtersExpanded, filterExpansion]);
 
   // Format date for custom range display
   const formatDateShort = (date: Date) => {
@@ -386,100 +405,29 @@ export default function HistoryTab() {
 
   return (
     <View style={[styles.container, { backgroundColor: rawColors.background }]}>
-      {/* Search and Filter Section */}
+      {/* Search and Filter Section - Collapsible */}
       <View style={[styles.filterSection, { backgroundColor: rawColors.background, borderBottomColor: rawColors.border }]}>
-        {/* Search Bar */}
-        <View
-          style={[
-            styles.searchBar,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
-          ]}
-        >
-          <MaterialCommunityIcons name="magnify" size={20} color={rawColors.foregroundSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: rawColors.foreground }]}
-            placeholder="Search notes, 100kg, 8 reps..."
-            placeholderTextColor={rawColors.foregroundPlaceholder}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery("")}>
-              <MaterialCommunityIcons name="close-circle" size={20} color={rawColors.foregroundSecondary} />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Date Range Presets */}
-        <View style={styles.presetsRow}>
-          {DATE_PRESETS.map((preset) => (
-            <Pressable
-              key={preset.id}
-              style={[
-                styles.presetButton,
-                { borderColor: rawColors.border },
-                dateRange.preset === preset.id && {
-                  backgroundColor: rawColors.primary,
-                  borderColor: rawColors.primary,
-                },
-              ]}
-              onPress={() => handlePresetPress(preset.id)}
-            >
-              <Text
-                style={[
-                  styles.presetText,
-                  { color: rawColors.foreground },
-                  dateRange.preset === preset.id && { color: rawColors.surface },
-                ]}
-              >
-                {preset.label}
-              </Text>
-            </Pressable>
-          ))}
-
-          {/* Custom Date Button */}
-          <Pressable
-            style={[
-              styles.presetButton,
-              { borderColor: rawColors.border },
-              dateRange.preset === "custom" && {
-                backgroundColor: rawColors.primary,
-                borderColor: rawColors.primary,
-              },
-            ]}
-            onPress={() => handlePresetPress("custom")}
-          >
-            <MaterialCommunityIcons
-              name="calendar-range"
-              size={16}
-              color={dateRange.preset === "custom" ? rawColors.surface : rawColors.foregroundSecondary}
-            />
-          </Pressable>
-        </View>
-
-        {/* Custom Range Display */}
-        {dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate && (
-          <Pressable
-            style={[styles.customRangeDisplay, { backgroundColor: rawColors.surfaceSecondary }]}
-            onPress={() => setShowStartPicker(true)}
-          >
-            <Text style={[styles.customRangeText, { color: rawColors.foreground }]}>
-              {formatDateShort(dateRange.startDate)} - {formatDateShort(dateRange.endDate)}
-            </Text>
-            <MaterialCommunityIcons name="pencil" size={14} color={rawColors.foregroundSecondary} />
-          </Pressable>
-        )}
-
-        {/* Expandable Filters Toggle */}
+        {/* Filter Toggle Header */}
         <Pressable
-          style={[styles.filterToggle, { borderColor: rawColors.border }]}
+          style={[styles.filterToggleHeader, { borderColor: rawColors.border }]}
           onPress={toggleFilters}
         >
           <View style={styles.filterToggleLeft}>
-            <MaterialCommunityIcons name="filter-variant" size={18} color={rawColors.foregroundSecondary} />
-            <Text style={[styles.filterToggleText, { color: rawColors.foreground }]}>Filters</Text>
+            <MaterialCommunityIcons 
+              name="filter-variant" 
+              size={18} 
+              color={hasActiveFilters ? rawColors.primary : rawColors.foregroundSecondary} 
+            />
+            <Text style={[styles.filterToggleText, { color: rawColors.foreground }]}>
+              Search & Filters
+            </Text>
+            {hasActiveFilters && (
+              <View style={[styles.activeFilterBadge, { backgroundColor: rawColors.primary }]}>
+                <Text style={[styles.activeFilterBadgeText, { color: rawColors.surface }]}>
+                  {filteredHistory.length}/{rawHistory.length}
+                </Text>
+              </View>
+            )}
           </View>
           <MaterialCommunityIcons
             name={filtersExpanded ? "chevron-up" : "chevron-down"}
@@ -488,82 +436,174 @@ export default function HistoryTab() {
           />
         </Pressable>
 
-        {/* Expanded Filter Inputs */}
-        {filtersExpanded && (
-          <View style={styles.filterInputsContainer}>
-            {/* Weight Filter */}
-            <View style={styles.filterInputRow}>
-              <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Weight (kg)</Text>
-              <View style={styles.filterInputs}>
-                <TextInput
+        {/* Animated Filter Content */}
+        <Animated.View
+          style={[
+            styles.filterContentWrapper,
+            filterAnimatedStyle,
+          ]}
+        >
+          <View style={styles.filterContent}>
+            {/* Search Bar */}
+            <View
+              style={[
+                styles.searchBar,
+                { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
+              ]}
+            >
+              <MaterialCommunityIcons name="magnify" size={20} color={rawColors.foregroundSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: rawColors.foreground }]}
+                placeholder="Search notes, 100kg, 8 reps..."
+                placeholderTextColor={rawColors.foregroundMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery("")}>
+                  <MaterialCommunityIcons name="close-circle" size={20} color={rawColors.foregroundSecondary} />
+                </Pressable>
+              )}
+            </View>
+
+            {/* Date Range Presets */}
+            <View style={styles.presetsRow}>
+              {DATE_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.id}
                   style={[
-                    styles.filterInput,
-                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
+                    styles.presetButton,
+                    { borderColor: rawColors.border },
+                    dateRange.preset === preset.id && {
+                      backgroundColor: rawColors.primary,
+                      borderColor: rawColors.primary,
+                    },
                   ]}
-                  placeholder="Min"
-                  placeholderTextColor={rawColors.foregroundPlaceholder}
-                  value={weightFilter.min}
-                  onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, min: text }))}
-                  keyboardType="numeric"
+                  onPress={() => handlePresetPress(preset.id)}
+                >
+                  <Text
+                    style={[
+                      styles.presetText,
+                      { color: rawColors.foreground },
+                      dateRange.preset === preset.id && { color: rawColors.surface },
+                    ]}
+                  >
+                    {preset.label}
+                  </Text>
+                </Pressable>
+              ))}
+
+              {/* Custom Date Button */}
+              <Pressable
+                style={[
+                  styles.presetButton,
+                  { borderColor: rawColors.border },
+                  dateRange.preset === "custom" && {
+                    backgroundColor: rawColors.primary,
+                    borderColor: rawColors.primary,
+                  },
+                ]}
+                onPress={() => handlePresetPress("custom")}
+              >
+                <MaterialCommunityIcons
+                  name="calendar-range"
+                  size={16}
+                  color={dateRange.preset === "custom" ? rawColors.surface : rawColors.foregroundSecondary}
                 />
-                <Text style={[styles.filterInputDash, { color: rawColors.foregroundSecondary }]}>-</Text>
-                <TextInput
-                  style={[
-                    styles.filterInput,
-                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
-                  ]}
-                  placeholder="Max"
-                  placeholderTextColor={rawColors.foregroundPlaceholder}
-                  value={weightFilter.max}
-                  onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, max: text }))}
-                  keyboardType="numeric"
-                />
+              </Pressable>
+            </View>
+
+            {/* Custom Range Display */}
+            {dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate && (
+              <Pressable
+                style={[styles.customRangeDisplay, { backgroundColor: rawColors.surfaceSecondary }]}
+                onPress={() => setShowStartPicker(true)}
+              >
+                <Text style={[styles.customRangeText, { color: rawColors.foreground }]}>
+                  {formatDateShort(dateRange.startDate)} - {formatDateShort(dateRange.endDate)}
+                </Text>
+                <MaterialCommunityIcons name="pencil" size={14} color={rawColors.foregroundSecondary} />
+              </Pressable>
+            )}
+
+            {/* Weight/Reps Filters */}
+            <View style={styles.filterInputsContainer}>
+              {/* Weight Filter */}
+              <View style={styles.filterInputRow}>
+                <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Weight (kg)</Text>
+                <View style={styles.filterInputs}>
+                  <TextInput
+                    style={[
+                      styles.filterInput,
+                      { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
+                    ]}
+                    placeholder="Min"
+                    placeholderTextColor={rawColors.foregroundMuted}
+                    value={weightFilter.min}
+                    onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, min: text }))}
+                    keyboardType="numeric"
+                  />
+                  <Text style={[styles.filterInputDash, { color: rawColors.foregroundSecondary }]}>-</Text>
+                  <TextInput
+                    style={[
+                      styles.filterInput,
+                      { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
+                    ]}
+                    placeholder="Max"
+                    placeholderTextColor={rawColors.foregroundMuted}
+                    value={weightFilter.max}
+                    onChangeText={(text) => setWeightFilter((prev) => ({ ...prev, max: text }))}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              {/* Reps Filter */}
+              <View style={styles.filterInputRow}>
+                <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Reps</Text>
+                <View style={styles.filterInputs}>
+                  <TextInput
+                    style={[
+                      styles.filterInput,
+                      { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
+                    ]}
+                    placeholder="Min"
+                    placeholderTextColor={rawColors.foregroundMuted}
+                    value={repsFilter.min}
+                    onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, min: text }))}
+                    keyboardType="numeric"
+                  />
+                  <Text style={[styles.filterInputDash, { color: rawColors.foregroundSecondary }]}>-</Text>
+                  <TextInput
+                    style={[
+                      styles.filterInput,
+                      { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
+                    ]}
+                    placeholder="Max"
+                    placeholderTextColor={rawColors.foregroundMuted}
+                    value={repsFilter.max}
+                    onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, max: text }))}
+                    keyboardType="numeric"
+                  />
+                </View>
               </View>
             </View>
 
-            {/* Reps Filter */}
-            <View style={styles.filterInputRow}>
-              <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Reps</Text>
-              <View style={styles.filterInputs}>
-                <TextInput
-                  style={[
-                    styles.filterInput,
-                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
-                  ]}
-                  placeholder="Min"
-                  placeholderTextColor={rawColors.foregroundPlaceholder}
-                  value={repsFilter.min}
-                  onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, min: text }))}
-                  keyboardType="numeric"
-                />
-                <Text style={[styles.filterInputDash, { color: rawColors.foregroundSecondary }]}>-</Text>
-                <TextInput
-                  style={[
-                    styles.filterInput,
-                    { backgroundColor: rawColors.surfaceSecondary, color: rawColors.foreground, borderColor: rawColors.border },
-                  ]}
-                  placeholder="Max"
-                  placeholderTextColor={rawColors.foregroundPlaceholder}
-                  value={repsFilter.max}
-                  onChangeText={(text) => setRepsFilter((prev) => ({ ...prev, max: text }))}
-                  keyboardType="numeric"
-                />
+            {/* Active Filters Summary with Clear */}
+            {hasActiveFilters && (
+              <View style={styles.activeFiltersRow}>
+                <Text style={[styles.activeFiltersText, { color: rawColors.foregroundSecondary }]}>
+                  Showing {filteredHistory.length} of {rawHistory.length} sessions
+                </Text>
+                <Pressable onPress={clearFilters}>
+                  <Text style={[styles.clearFiltersLink, { color: rawColors.primary }]}>Clear All</Text>
+                </Pressable>
               </View>
-            </View>
+            )}
           </View>
-        )}
-
-        {/* Active Filters Summary */}
-        {hasActiveFilters && (
-          <View style={styles.activeFiltersRow}>
-            <Text style={[styles.activeFiltersText, { color: rawColors.foregroundSecondary }]}>
-              {filteredHistory.length} of {rawHistory.length} sessions
-            </Text>
-            <Pressable onPress={clearFilters}>
-              <Text style={[styles.clearFiltersLink, { color: rawColors.primary }]}>Clear</Text>
-            </Pressable>
-          </View>
-        )}
+        </Animated.View>
       </View>
 
       {/* Date Pickers */}
@@ -646,7 +686,7 @@ export default function HistoryTab() {
               </View>
 
               <View style={styles.setsContainer}>
-                {item.sets.map((set, index) => (
+                {item.sets.map((set: SetWithPR, index) => (
                   <SetItem
                     key={set.id}
                     index={index + 1}
@@ -736,10 +776,44 @@ const styles = StyleSheet.create({
 
   // Filter Section
   filterSection: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  filterToggleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  filterToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filterToggleText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  activeFilterBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 4,
+  },
+  activeFilterBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  filterContentWrapper: {
+    overflow: "hidden",
+  },
+  filterContent: {
     paddingTop: 12,
     gap: 12,
-    borderBottomWidth: 1,
   },
   searchBar: {
     flexDirection: "row",
@@ -783,27 +857,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
-  filterToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  filterToggleLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  filterToggleText: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
   filterInputsContainer: {
     gap: 12,
-    paddingTop: 4,
   },
   filterInputRow: {
     flexDirection: "row",

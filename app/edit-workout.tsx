@@ -220,12 +220,12 @@ export default function EditWorkoutScreen() {
   const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);
   if (!hasValidParams) {
     return (
-      <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
+      <View style={[styles.container, { backgroundColor: rawColors.background }]}>
         <Stack.Screen
           options={{
             presentation: "modal",
             title: `Edit ${exerciseName}`,
-            headerStyle: { backgroundColor: rawColors.surface },
+            headerStyle: { backgroundColor: rawColors.background },
             headerTitleStyle: { color: rawColors.foreground },
             headerLeft: () => (
               <Pressable
@@ -245,12 +245,12 @@ export default function EditWorkoutScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: rawColors.surface }]}>
+    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
       <Stack.Screen
         options={{
           presentation: "modal",
           title: `Edit ${exerciseName}`,
-          headerStyle: { backgroundColor: rawColors.surface },
+          headerStyle: { backgroundColor: rawColors.background },
           headerTitleStyle: { color: rawColors.foreground },
           headerLeft: () => (
             <Pressable
@@ -349,7 +349,7 @@ export default function EditWorkoutScreen() {
       </ScrollView>
 
       {/* Action Button */}
-      <View style={[styles.actionButtons, { backgroundColor: rawColors.surface, borderTopColor: rawColors.border }]}>
+      <View style={[styles.actionButtons, { backgroundColor: rawColors.background, borderTopColor: rawColors.border }]}>
         <Pressable style={[styles.saveButton, { backgroundColor: rawColors.primary }]} onPress={handleSaveEdits}>
           <MaterialCommunityIcons name="check-circle" size={20} color={rawColors.surface} />
           <Text style={[styles.saveButtonText, { color: rawColors.surface }]}>Save Edits</Text>

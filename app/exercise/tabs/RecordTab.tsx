@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import SetItem from "../../../components/lists/SetItem";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import EditSetModal from "../../../components/modals/EditSetModal";
@@ -249,8 +249,8 @@ export default function RecordTab() {
 
   if (!exerciseId) {
     return (
-      <View style={styles.tabContainer}>
-        <Text style={[styles.errorText, { color: rawColors.destructive }]}>Invalid exercise ID</Text>
+      <View className="flex-1 items-center justify-center p-4 bg-background">
+        <Text className="text-base text-destructive">Invalid exercise ID</Text>
       </View>
     );
   }
@@ -265,73 +265,144 @@ export default function RecordTab() {
     />
   );
 
+  const timerDisplayText = currentTimer
+    ? formatTime(currentTimer.remainingSeconds)
+    : formatTime((parseInt(timerMinutes, 10) || 1) * 60 + (parseInt(timerSeconds, 10) || 30));
+
   return (
-    <View style={[styles.recordContainer, { backgroundColor: rawColors.background }]}>
+    <View className="flex-1 bg-background">
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Date Picker */}
-        <View style={styles.dateSection}>
+        {/* Date Selector - Pill style */}
+        <View className="flex-row justify-center mb-4">
           <Pressable
-            style={[styles.dateButton, { backgroundColor: rawColors.primaryLight }]}
+            className="flex-row items-center px-4 py-2.5 rounded-full border border-border bg-surface"
+            style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 }}
             onPress={() => setShowDatePicker(true)}
           >
-            <MaterialCommunityIcons name="calendar" size={20} color={rawColors.primary} />
-            <Text style={[styles.dateButtonText, { color: rawColors.primary }]}>{formatRelativeDate(selectedDate)}</Text>
-            <MaterialCommunityIcons name="chevron-down" size={18} color={rawColors.foregroundSecondary} />
+            <MaterialCommunityIcons name="calendar" size={18} color={rawColors.primary} />
+            <Text className="text-[15px] font-semibold mx-2 text-primary">{formatRelativeDate(selectedDate)}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={16} color={rawColors.foregroundSecondary} />
           </Pressable>
         </View>
 
-        {/* Input Section */}
-        <View style={styles.inputSection}>
-          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Add Set</Text>
-          <View style={styles.inputRow}>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Weight (kg)</Text>
+        {/* Add Set Card */}
+        <View
+          className="rounded-2xl p-5 mb-4 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-lg font-semibold text-foreground">Add Set</Text>
+            <View className="flex-row items-center px-3 py-1.5 rounded-full bg-primary-light">
+              <Text className="text-sm font-medium text-primary">Set #{setIndex}</Text>
+            </View>
+          </View>
+
+          {/* Weight and Reps Inputs - Side by side */}
+          <View className="flex-row gap-3 mb-4">
+            <View className="flex-1">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
               <TextInput
-                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
+                className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
                 value={weight}
                 onChangeText={setWeight}
                 placeholder="0"
-                placeholderTextColor={rawColors.foregroundPlaceholder}
+                placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="decimal-pad"
               />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Reps</Text>
+            <View className="flex-1">
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Reps</Text>
               <TextInput
-                style={[styles.input, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
+                className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
                 value={reps}
                 onChangeText={setReps}
                 placeholder="0"
-                placeholderTextColor={rawColors.foregroundPlaceholder}
+                placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="number-pad"
               />
             </View>
           </View>
-          <View style={styles.noteInputGroup}>
-            <Text style={[styles.inputLabel, { color: rawColors.foregroundSecondary }]}>Note (optional)</Text>
+
+          {/* Note Input */}
+          <View className="mb-4">
+            <Text className="text-sm font-medium mb-2 text-foreground-secondary">Note (optional)</Text>
             <TextInput
-              style={[styles.input, styles.noteInput, { borderColor: rawColors.border, backgroundColor: rawColors.surface, color: rawColors.foreground }]}
+              className="border border-border rounded-xl p-3.5 text-base min-h-[70px] bg-surface-secondary text-foreground"
+              style={{ textAlignVertical: "top" }}
               value={note}
               onChangeText={setNote}
               placeholder="Add a note..."
-              placeholderTextColor={rawColors.foregroundPlaceholder}
+              placeholderTextColor={rawColors.foregroundMuted}
               multiline
             />
           </View>
-          <Pressable style={[styles.addButton, { backgroundColor: rawColors.primary }]} onPress={handleAddSet}>
-            <Text style={[styles.addButtonText, { color: rawColors.surface }]}>Add Set</Text>
-          </Pressable>
+
+          {/* Timer and Add Button Row */}
+          <View className="flex-row gap-3">
+            {/* Timer Button */}
+            <Pressable
+              className={`flex-row items-center justify-center px-4 py-3.5 rounded-xl border ${
+                currentTimer?.isRunning 
+                  ? "bg-primary border-primary" 
+                  : "bg-surface-secondary border-border"
+              }`}
+              onPress={handleTimerPress}
+              onLongPress={handleTimerLongPress}
+              delayLongPress={400}
+            >
+              <MaterialCommunityIcons
+                name={currentTimer?.isRunning ? "pause" : "timer-outline"}
+                size={20}
+                color={currentTimer?.isRunning ? rawColors.primaryForeground : rawColors.primary}
+              />
+              <Text
+                className={`text-base font-semibold ml-2 ${
+                  currentTimer?.isRunning ? "text-primary-foreground" : "text-primary"
+                }`}
+              >
+                {timerDisplayText}
+              </Text>
+            </Pressable>
+
+            {/* Add Set Button */}
+            <Pressable 
+              className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl bg-primary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+              onPress={handleAddSet}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color={rawColors.primaryForeground} />
+              <Text className="text-base font-semibold ml-1.5 text-primary-foreground">Add Set</Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Sets List */}
-        <View style={styles.setsSection}>
-          <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>Recorded Sets</Text>
+        {/* Recorded Sets Card */}
+        <View
+          className="rounded-2xl p-5 bg-surface"
+          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+        >
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-lg font-semibold text-foreground">Recorded Sets</Text>
+            {sets.length > 0 && (
+              <View className="flex-row items-center px-3 py-1.5 rounded-full bg-surface-secondary">
+                <MaterialCommunityIcons name="dumbbell" size={14} color={rawColors.foregroundSecondary} />
+                <Text className="text-sm font-medium ml-1.5 text-foreground-secondary">{sets.length} {sets.length === 1 ? "set" : "sets"}</Text>
+              </View>
+            )}
+          </View>
+
           {sets.length === 0 ? (
-            <Text style={[styles.emptyText, { color: rawColors.foregroundMuted }]}>No sets recorded yet. Add your first set above.</Text>
+            <View className="items-center py-8">
+              <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-surface-secondary">
+                <MaterialCommunityIcons name="clipboard-outline" size={28} color={rawColors.foregroundMuted} />
+              </View>
+              <Text className="text-base font-medium text-foreground-secondary">No sets recorded yet</Text>
+              <Text className="text-sm text-center mt-1 text-foreground-muted">Add your first set using the form above</Text>
+            </View>
           ) : (
             <FlatList
               data={sets}
@@ -344,43 +415,29 @@ export default function RecordTab() {
         </View>
       </ScrollView>
 
-      {/* Action Buttons */}
-      <View style={[styles.actionButtons, { backgroundColor: rawColors.background, borderTopColor: rawColors.border }]}>
-        <Pressable
-          style={[
-            styles.actionButton,
-            styles.timerButton,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.primary },
-            currentTimer?.isRunning && { backgroundColor: rawColors.primary },
-          ]}
-          onPress={handleTimerPress}
-          onLongPress={handleTimerLongPress}
-          delayLongPress={400}
-        >
-          <MaterialCommunityIcons
-            name={currentTimer?.isRunning ? "pause" : "timer"}
-            size={20}
-            color={currentTimer?.isRunning ? rawColors.surface : rawColors.primary}
-          />
-          <Text
-            style={[
-              styles.actionButtonText,
-              { color: rawColors.primary },
-              currentTimer?.isRunning && { color: rawColors.surface },
-            ]}
-          >
-            {currentTimer
-              ? formatTime(currentTimer.remainingSeconds)
-              : formatTime((parseInt(timerMinutes, 10) || 1) * 60 + (parseInt(timerSeconds, 10) || 30))}
-          </Text>
-        </Pressable>
+      {/* Complete Exercise Footer */}
+      <View 
+        className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
+        style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 8 }}
+      >
         <Pressable 
-          style={[styles.actionButton, { backgroundColor: rawColors.primary }, sets.length === 0 && { backgroundColor: rawColors.surfaceSecondary }]} 
+          className={`flex-row items-center justify-center py-4 rounded-xl ${
+            sets.length === 0 ? "bg-surface-secondary" : "bg-primary"
+          }`}
+          style={({ pressed }) => ({ opacity: pressed && sets.length > 0 ? 0.8 : 1 })}
           onPress={handleCompleteExercise}
           disabled={sets.length === 0}
         >
-          <MaterialCommunityIcons name="check-circle" size={20} color={sets.length === 0 ? rawColors.foregroundMuted : rawColors.surface} />
-          <Text style={[styles.actionButtonText, { color: rawColors.surface }, sets.length === 0 && { color: rawColors.foregroundMuted }]}>
+          <MaterialCommunityIcons 
+            name="check-circle" 
+            size={22} 
+            color={sets.length === 0 ? rawColors.foregroundMuted : rawColors.primaryForeground} 
+          />
+          <Text 
+            className={`text-base font-semibold ml-2 ${
+              sets.length === 0 ? "text-foreground-muted" : "text-primary-foreground"
+            }`}
+          >
             Complete Exercise
           </Text>
         </Pressable>
@@ -423,119 +480,3 @@ export default function RecordTab() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  tabContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  errorText: {
-    fontSize: 16,
-  },
-  recordContainer: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  dateSection: {
-    marginBottom: 20,
-  },
-  dateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignSelf: "flex-start",
-    gap: 8,
-  },
-  dateButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  inputSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  noteInput: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  noteInputGroup: {
-    marginBottom: 0,
-  },
-  addButton: {
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  setsSection: {
-    marginTop: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: "center",
-    paddingVertical: 24,
-  },
-  actionButtons: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    padding: 16,
-    borderTopWidth: 1,
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 14,
-    borderRadius: 8,
-    gap: 8,
-  },
-  timerButton: {
-    borderWidth: 1,
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
