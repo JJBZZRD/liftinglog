@@ -86,24 +86,24 @@ const defaultLightColors: ThemeColors = {
   error: '#FF3B30',
   destructive: '#FF3B30',
   
-  // Neutral backgrounds
+  // Neutral backgrounds with subtle blue tint
   background: '#F2F2F7',
   surface: '#FFFFFF',
-  surfaceSecondary: '#F9F9F9',
+  surfaceSecondary: '#F5F8FC',
   
-  // Borders
-  border: '#E5E5EA',
-  borderLight: '#F0F0F0',
+  // Borders with blue tint
+  border: '#D4E2F4',
+  borderLight: '#E8F0FA',
   
   // Text colors
   text: '#000000',
-  textSecondary: '#666666',
-  textTertiary: '#999999',
-  textPlaceholder: '#999999',
-  textLight: '#CCCCCC',
+  textSecondary: '#4A5568',
+  textTertiary: '#8899AA',
+  textPlaceholder: '#8899AA',
+  textLight: '#B8C5D6',
   
   // Interactive states
-  pressed: '#E5E5EA',
+  pressed: '#DCE8F8',
   
   // Overlay
   overlay: 'rgba(0,0,0,0.3)',
@@ -170,20 +170,20 @@ const oceanLightColors: ThemeColors = {
   error: '#EF4444',
   destructive: '#EF4444',
   
-  background: '#F0FDFA',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F5FFFE',
+  background: '#E6F7F5',
+  surface: '#F0FDFB',
+  surfaceSecondary: '#E0F5F2',
   
-  border: '#99F6E4',
-  borderLight: '#CCFBF1',
+  border: '#7DD4C9',
+  borderLight: '#A8E6DE',
   
   text: '#134E4A',
-  textSecondary: '#5EEAD4',
-  textTertiary: '#99F6E4',
-  textPlaceholder: '#5EEAD4',
-  textLight: '#CCFBF1',
+  textSecondary: '#1F7268',
+  textTertiary: '#5EADA4',
+  textPlaceholder: '#5EADA4',
+  textLight: '#A8E6DE',
   
-  pressed: '#CCFBF1',
+  pressed: '#C2F0E9',
   
   overlay: 'rgba(13,148,136,0.2)',
   overlayDark: 'rgba(13,148,136,0.4)',
@@ -238,20 +238,20 @@ const forestLightColors: ThemeColors = {
   error: '#EF4444',
   destructive: '#EF4444',
   
-  background: '#ECFDF5',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F0FDF9',
+  background: '#E2F9EE',
+  surface: '#EDFDF4',
+  surfaceSecondary: '#DCF5E8',
   
-  border: '#A7F3D0',
-  borderLight: '#D1FAE5',
+  border: '#7EDFB2',
+  borderLight: '#A3EBCA',
   
   text: '#064E3B',
-  textSecondary: '#047857',
-  textTertiary: '#6EE7B7',
-  textPlaceholder: '#6EE7B7',
-  textLight: '#A7F3D0',
+  textSecondary: '#0A7B5A',
+  textTertiary: '#4DB890',
+  textPlaceholder: '#4DB890',
+  textLight: '#A3EBCA',
   
-  pressed: '#D1FAE5',
+  pressed: '#C1F0D8',
   
   overlay: 'rgba(5,150,105,0.2)',
   overlayDark: 'rgba(5,150,105,0.4)',
@@ -306,20 +306,20 @@ const sunsetLightColors: ThemeColors = {
   error: '#DC2626',
   destructive: '#DC2626',
   
-  background: '#FFF7ED',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#FFFAF5',
+  background: '#FFF0E0',
+  surface: '#FFF8F2',
+  surfaceSecondary: '#FFEBE0',
   
-  border: '#FED7AA',
-  borderLight: '#FFEDD5',
+  border: '#F5C090',
+  borderLight: '#FBD8B5',
   
   text: '#7C2D12',
-  textSecondary: '#C2410C',
-  textTertiary: '#FB923C',
-  textPlaceholder: '#FB923C',
-  textLight: '#FED7AA',
+  textSecondary: '#A84810',
+  textTertiary: '#D97F4A',
+  textPlaceholder: '#D97F4A',
+  textLight: '#FBD8B5',
   
-  pressed: '#FFEDD5',
+  pressed: '#FFE0C8',
   
   overlay: 'rgba(234,88,12,0.2)',
   overlayDark: 'rgba(234,88,12,0.4)',
@@ -374,20 +374,20 @@ const roseLightColors: ThemeColors = {
   error: '#DC2626',
   destructive: '#DC2626',
   
-  background: '#FFF1F2',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#FFF5F6',
+  background: '#FFE8EA',
+  surface: '#FFF5F6',
+  surfaceSecondary: '#FFE0E3',
   
-  border: '#FECDD3',
-  borderLight: '#FFE4E6',
+  border: '#F5A0AD',
+  borderLight: '#FBC5CC',
   
   text: '#881337',
-  textSecondary: '#BE123C',
-  textTertiary: '#FB7185',
-  textPlaceholder: '#FB7185',
-  textLight: '#FECDD3',
+  textSecondary: '#A61840',
+  textTertiary: '#E05A78',
+  textPlaceholder: '#E05A78',
+  textLight: '#FBC5CC',
   
-  pressed: '#FFE4E6',
+  pressed: '#FFD4D9',
   
   overlay: 'rgba(225,29,72,0.2)',
   overlayDark: 'rgba(225,29,72,0.4)',
@@ -442,20 +442,20 @@ const violetLightColors: ThemeColors = {
   error: '#EF4444',
   destructive: '#EF4444',
   
-  background: '#F5F3FF',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#FAF8FF',
+  background: '#EDE6FF',
+  surface: '#F7F4FF',
+  surfaceSecondary: '#E8E0FF',
   
-  border: '#DDD6FE',
-  borderLight: '#EDE9FE',
+  border: '#C4B0F5',
+  borderLight: '#D9CFFA',
   
   text: '#4C1D95',
-  textSecondary: '#6D28D9',
-  textTertiary: '#A78BFA',
-  textPlaceholder: '#A78BFA',
-  textLight: '#DDD6FE',
+  textSecondary: '#6930C3',
+  textTertiary: '#9B72E8',
+  textPlaceholder: '#9B72E8',
+  textLight: '#D9CFFA',
   
-  pressed: '#EDE9FE',
+  pressed: '#DED4FD',
   
   overlay: 'rgba(124,58,237,0.2)',
   overlayDark: 'rgba(124,58,237,0.4)',
@@ -510,20 +510,20 @@ const slateLightColors: ThemeColors = {
   error: '#EF4444',
   destructive: '#EF4444',
   
-  background: '#F8FAFC',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F1F5F9',
+  background: '#E8ECF2',
+  surface: '#F3F6FA',
+  surfaceSecondary: '#E2E8F0',
   
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
+  border: '#B8C4D4',
+  borderLight: '#D0D9E5',
   
   text: '#0F172A',
-  textSecondary: '#475569',
-  textTertiary: '#94A3B8',
-  textPlaceholder: '#94A3B8',
-  textLight: '#CBD5E1',
+  textSecondary: '#374151',
+  textTertiary: '#728197',
+  textPlaceholder: '#728197',
+  textLight: '#D0D9E5',
   
-  pressed: '#E2E8F0',
+  pressed: '#D4DCE8',
   
   overlay: 'rgba(71,85,105,0.2)',
   overlayDark: 'rgba(71,85,105,0.4)',
