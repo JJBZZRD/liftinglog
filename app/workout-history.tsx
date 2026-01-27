@@ -145,16 +145,6 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
             color={themeColors.textSecondary}
           />
         </View>
-
-        {/* Notes Preview (collapsed only) */}
-        {!isExpanded && item.notesPreview && (
-          <Text
-            style={[styles.notesPreview, { color: themeColors.textTertiary }]}
-            numberOfLines={1}
-          >
-            {item.notesPreview}
-          </Text>
-        )}
       </Pressable>
 
       {/* Expanded Content - Pressable for navigation to detail page */}
@@ -215,6 +205,14 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                           ? `Best: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
                           : "No sets recorded"}
                       </Text>
+                      {exercise.note && (
+                        <Text
+                          style={[styles.exerciseNote, { color: themeColors.textTertiary }]}
+                          numberOfLines={2}
+                        >
+                          {exercise.note}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -812,11 +810,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
   },
-  notesPreview: {
-    fontSize: 13,
-    marginTop: 8,
-    fontStyle: "italic",
-  },
   expandedContent: {
     marginTop: 16,
   },
@@ -874,6 +867,11 @@ const styles = StyleSheet.create({
   },
   bestSetText: {
     fontSize: 13,
+  },
+  exerciseNote: {
+    fontSize: 12,
+    fontStyle: "italic",
+    marginTop: 4,
   },
   showMoreText: {
     fontSize: 12,
