@@ -557,7 +557,7 @@ export default function AnalyticsChart({
         {isScrubbing && scrubbedPoint && (
           <View style={[styles.scrubDatePill, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
             <Text style={[styles.scrubDateText, { color: rawColors.foreground }]}>
-              {formatDate(scrubbedPoint.date)}
+            {formatDate(scrubbedPoint.date)} • {scrubbedPoint.value.toFixed(1)} {unit}
             </Text>
           </View>
         )}
