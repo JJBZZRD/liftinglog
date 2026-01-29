@@ -3,7 +3,7 @@
 // Includes persistent notification support
 
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+import { AppState, type AppStateStatus, Platform } from "react-native";
 
 // ============================================================
 // TOGGLE THIS FLAG FOR EXPO GO vs DEV BUILD TESTING
@@ -38,6 +38,7 @@ export type Timer = {
 // Internal timer with intervalId (not exposed to subscribers)
 type InternalTimer = Timer & {
   intervalId: ReturnType<typeof setInterval> | null;
+  endAt: number | null;
 };
 
 type TimerListener = (timers: Map<number, Timer>, tick: number) => void;
@@ -47,11 +48,20 @@ class TimerStore {
   private listeners: Set<TimerListener> = new Set();
   private notificationsReady = false;
   private tick = 0;
+  private appStateSubscription: { remove: () => void } | null = null;
+  private appState: AppStateStatus = AppState.currentState ?? "active";
 
   constructor() {
     if (ENABLE_NOTIFICATIONS) {
       this.initNotifications();
     }
+    this.appStateSubscription = AppState.addEventListener("change", (state) => {
+      this.appState = state;
+      void this.refreshRunningTimerNotifications();
+      if (state === "active") {
+        void this.syncRunningTimers();
+      }
+    });
   }
 
   private async initNotifications() {
@@ -179,6 +189,7 @@ class TimerStore {
       isRunning: false,
       startedAt: null,
       intervalId: null,
+      endAt: null,
       notificationId,
     };
     this.timers.set(id, timer);
@@ -196,6 +207,7 @@ class TimerStore {
 
     timer.isRunning = true;
     timer.startedAt = Date.now();
+    timer.endAt = timer.startedAt + timer.remainingSeconds * 1000;
 
     // Show initial notification
     await this.showTimerNotification(timer);
@@ -205,10 +217,13 @@ class TimerStore {
       const t = this.timers.get(id);
       if (!t) return;
 
-      if (t.remainingSeconds > 0) {
-        t.remainingSeconds -= 1;
-        await this.showTimerNotification(t);
-        this.notify();
+      const remaining = TimerStore.computeRemainingSeconds(t);
+      if (remaining > 0) {
+        if (t.remainingSeconds !== remaining) {
+          t.remainingSeconds = remaining;
+          await this.showTimerNotification(t);
+          this.notify();
+        }
       } else {
         await this.timerComplete(id);
       }
@@ -249,13 +264,14 @@ class TimerStore {
     if (!ENABLE_NOTIFICATIONS || !this.notificationsReady) return;
 
     try {
+      const body = this.getNotificationBody(timer);
       // Use scheduleNotificationAsync with a fixed identifier to update in place
       // By using the same identifier, the notification is replaced instead of creating a new one
       await Notifications.scheduleNotificationAsync({
         identifier: timer.notificationId!, // Fixed ID per exercise - replaces existing
         content: {
           title: `⏱️ ${timer.exerciseName}`,
-          body: `Rest: ${TimerStore.formatTime(timer.remainingSeconds)} remaining`,
+          body,
           sticky: true,
           autoDismiss: false,
           priority: Notifications.AndroidNotificationPriority.LOW, // Low = silent update
@@ -276,11 +292,16 @@ class TimerStore {
     const timer = this.timers.get(id);
     if (!timer) return;
 
+    if (timer.isRunning) {
+      timer.remainingSeconds = TimerStore.computeRemainingSeconds(timer);
+    }
+
     if (timer.intervalId) {
       clearInterval(timer.intervalId);
       timer.intervalId = null;
     }
     timer.isRunning = false;
+    timer.endAt = null;
 
     // Dismiss notification
     if (timer.notificationId && ENABLE_NOTIFICATIONS) {
@@ -300,6 +321,7 @@ class TimerStore {
 
     await this.stopTimer(id);
     timer.remainingSeconds = timer.durationSeconds;
+    timer.endAt = null;
     this.notify();
   }
 
@@ -308,8 +330,13 @@ class TimerStore {
     if (!timer) return;
 
     timer.durationSeconds = durationSeconds;
-    if (!timer.isRunning) {
+    if (timer.isRunning) {
       timer.remainingSeconds = durationSeconds;
+      timer.startedAt = Date.now();
+      timer.endAt = timer.startedAt + durationSeconds * 1000;
+    } else {
+      timer.remainingSeconds = durationSeconds;
+      timer.endAt = null;
     }
     this.notify();
   }
@@ -332,6 +359,59 @@ class TimerStore {
 
     this.timers.delete(id);
     this.notify();
+  }
+
+  private async syncRunningTimers(): Promise<void> {
+    const updates: Array<Promise<void>> = [];
+    this.timers.forEach((timer) => {
+      if (!timer.isRunning) return;
+      const remaining = TimerStore.computeRemainingSeconds(timer);
+      if (remaining <= 0) {
+        updates.push(this.timerComplete(timer.id));
+        return;
+      }
+      if (timer.remainingSeconds !== remaining) {
+        timer.remainingSeconds = remaining;
+        updates.push(this.showTimerNotification(timer));
+      }
+    });
+    if (updates.length > 0) {
+      await Promise.all(updates);
+      this.notify();
+    }
+  }
+
+
+  private async refreshRunningTimerNotifications(): Promise<void> {
+    if (!ENABLE_NOTIFICATIONS || !this.notificationsReady) return;
+    const updates: Array<Promise<void>> = [];
+    this.timers.forEach((timer) => {
+      if (!timer.isRunning) return;
+      updates.push(this.showTimerNotification(timer));
+    });
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+  }
+
+  private getNotificationBody(timer: InternalTimer): string {
+    const remaining = TimerStore.computeRemainingSeconds(timer);
+    if (this.appState === "active") {
+      return `Rest: ${TimerStore.formatTime(remaining)} remaining`;
+    }
+    if (!timer.endAt) {
+      return "Rest running";
+    }
+    const endTime = new Date(timer.endAt);
+    const hours = endTime.getHours().toString().padStart(2, "0");
+    const minutes = endTime.getMinutes().toString().padStart(2, "0");
+    return `Rest ends at ${hours}:${minutes}`;
+  }
+
+  private static computeRemainingSeconds(timer: InternalTimer): number {
+    if (!timer.endAt) return timer.remainingSeconds;
+    const remainingMs = timer.endAt - Date.now();
+    return Math.max(0, Math.ceil(remainingMs / 1000));
   }
 
   static formatTime(seconds: number): string {
