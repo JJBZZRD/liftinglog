@@ -149,7 +149,11 @@ function formatVolume(volume: number): string {
   return `${Math.round(volume)}`;
 }
 
-export default function HistoryTab() {
+type HistoryTabProps = {
+  refreshKey?: number;
+};
+
+export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
@@ -329,6 +333,12 @@ export default function HistoryTab() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (refreshKey !== undefined) {
+      loadHistory();
+    }
+  }, [refreshKey, loadHistory]);
 
   // Reload history when component comes into focus (after returning from edit page)
   useFocusEffect(

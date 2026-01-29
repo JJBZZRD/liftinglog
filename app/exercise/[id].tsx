@@ -2,19 +2,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { SceneMap, TabBar, TabView } from "react-native-tab-view";
+import { TabBar, TabView } from "react-native-tab-view";
 import { TabSwipeContext } from "../../lib/contexts/TabSwipeContext";
 import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 import VisualisationTab from "./tabs/VisualisationTab";
-
-const renderScene = SceneMap({
-  record: RecordTab,
-  history: HistoryTab,
-  visualisation: VisualisationTab,
-});
 
 export default function ExerciseModalScreen() {
   const { rawColors } = useTheme();
@@ -30,9 +24,30 @@ export default function ExerciseModalScreen() {
   ]);
   const [isPinned, setIsPinned] = useState(false);
   const [showPinLimitTooltip, setShowPinLimitTooltip] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   
   // State to control tab swiping (disabled during chart interactions)
   const [swipeEnabled, setSwipeEnabled] = useState(true);
+
+  const triggerHistoryRefresh = useCallback(() => {
+    setHistoryRefreshKey((prev) => prev + 1);
+  }, []);
+
+  const renderScene = useCallback(
+    ({ route }: { route: { key: string } }) => {
+      switch (route.key) {
+        case "record":
+          return <RecordTab onHistoryRefresh={triggerHistoryRefresh} />;
+        case "history":
+          return <HistoryTab refreshKey={historyRefreshKey} />;
+        case "visualisation":
+          return <VisualisationTab />;
+        default:
+          return null;
+      }
+    },
+    [historyRefreshKey, triggerHistoryRefresh]
+  );
 
   // Load pin state on mount
   useEffect(() => {

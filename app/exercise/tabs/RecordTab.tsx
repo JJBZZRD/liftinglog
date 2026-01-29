@@ -25,7 +25,11 @@ import { useTheme } from "../../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 
-export default function RecordTab() {
+type RecordTabProps = {
+  onHistoryRefresh?: () => void;
+};
+
+export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
@@ -170,7 +174,8 @@ export default function RecordTab() {
 
     setNote("");
     await loadWorkout();
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
+    onHistoryRefresh?.();
+  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout, onHistoryRefresh]);
 
   const handleCompleteExercise = useCallback(async () => {
     if (!workoutExerciseId) return;
@@ -237,7 +242,8 @@ export default function RecordTab() {
     setEditModalVisible(false);
     setSelectedSet(null);
     await loadWorkout();
-  }, [selectedSet, loadWorkout]);
+    onHistoryRefresh?.();
+  }, [selectedSet, loadWorkout, onHistoryRefresh]);
 
   const handleDeleteSet = useCallback(async () => {
     if (!selectedSet) return;
@@ -246,7 +252,8 @@ export default function RecordTab() {
     setEditModalVisible(false);
     setSelectedSet(null);
     await loadWorkout();
-  }, [selectedSet, loadWorkout]);
+    onHistoryRefresh?.();
+  }, [selectedSet, loadWorkout, onHistoryRefresh]);
 
   if (!exerciseId) {
     return (
