@@ -565,7 +565,7 @@ export default function WorkoutHistoryScreen() {
           <TextInput
             style={[styles.searchInput, { color: rawColors.foreground }]}
             placeholder="Search exercises, notes, weights..."
-            placeholderTextColor={rawColors.foregroundPlaceholder}
+            placeholderTextColor={rawColors.foregroundMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"

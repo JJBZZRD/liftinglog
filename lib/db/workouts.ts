@@ -711,7 +711,7 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
     INNER JOIN exercises e ON we.exercise_id = e.id
     WHERE we.completed_at IS NOT NULL
       AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
-    ORDER BY we.performed_at
+    ORDER BY COALESCE(we.order_index, 999999), e.name ASC, we.performed_at, we.id
     LIMIT 27
   `);
 
@@ -1089,7 +1089,7 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
     INNER JOIN exercises e ON we.exercise_id = e.id
     WHERE we.completed_at IS NOT NULL
       AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
-    ORDER BY COALESCE(we.order_index, 999999), e.name ASC
+    ORDER BY COALESCE(we.order_index, 999999), e.name ASC, we.performed_at, we.id
     LIMIT 27
   `);
 
@@ -1249,4 +1249,3 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
     hasMore,
   };
 }
-
