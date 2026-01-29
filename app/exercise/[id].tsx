@@ -13,7 +13,7 @@ import VisualisationTab from "./tabs/VisualisationTab";
 
 export default function ExerciseModalScreen() {
   const { rawColors } = useTheme();
-  const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string }>();
+  const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string; tab?: string; source?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const title = typeof params.name === "string" ? params.name : "Exercise";
   const layout = useWindowDimensions();
@@ -64,6 +64,13 @@ export default function ExerciseModalScreen() {
       setIndex(1); // Switch to History tab (index 1)
     }
   }, [params.refreshHistory]);
+
+  // Ensure Record tab is selected when routed from notifications or deep links
+  useEffect(() => {
+    if (params.tab === "record") {
+      setIndex(0);
+    }
+  }, [params.tab]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event) => {
