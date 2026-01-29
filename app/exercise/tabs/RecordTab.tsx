@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { FlatList, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import SetItem from "../../../components/lists/SetItem";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import EditSetModal from "../../../components/modals/EditSetModal";
@@ -141,6 +141,7 @@ export default function RecordTab() {
   }, [exerciseId]);
 
   const handleAddSet = useCallback(async () => {
+    Keyboard.dismiss();
     if (!workoutId || !exerciseId || !workoutExerciseId) return;
 
     const weightValue = weight.trim() ? parseFloat(weight) : null;
