@@ -476,7 +476,12 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
         sql`${workoutExercises.performedAt} <= ${dayEnd.getTime()}`
       )
     )
-    .orderBy(workoutExercises.performedAt);
+    .orderBy(
+      sql`COALESCE(${workoutExercises.orderIndex}, 999999)`,
+      exercises.name,
+      workoutExercises.performedAt,
+      workoutExercises.id
+    );
 
   if (completedEntries.length === 0) {
     return null;

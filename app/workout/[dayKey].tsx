@@ -4,7 +4,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,10 +31,21 @@ export default function WorkoutDayScreen() {
 
   const [data, setData] = useState<WorkoutDayPageData | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Action modal state
-  const [actionModalVisible, setActionModalVisible] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<WorkoutDayExerciseEntry | null>(null);
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const formatVolume = (volume: number) => {
+    if (volume >= 1000) {
+      return `${(volume / 1000).toFixed(1)}k`;
+    }
+    return `${Math.round(volume)}`;
+  };
 
   // Compute display title from dayKey
   const displayDate = dayKey ? new Date(dayKeyToTimestamp(dayKey)) : new Date();
@@ -68,18 +79,8 @@ export default function WorkoutDayScreen() {
     }, [loadData])
   );
 
-  // Handle long press on exercise card - show action modal
-  const handleLongPressExercise = useCallback((entry: WorkoutDayExerciseEntry) => {
-    setSelectedEntry(entry);
-    setActionModalVisible(true);
-  }, []);
-
   // Handle edit action - navigate to edit page
-  const handleEdit = useCallback(() => {
-    if (!selectedEntry) return;
-    setActionModalVisible(false);
-    const entry = selectedEntry;
-    setSelectedEntry(null);
+  const handleEdit = useCallback((entry: WorkoutDayExerciseEntry) => {
     router.push({
       pathname: "/edit-workout",
       params: {
@@ -87,21 +88,31 @@ export default function WorkoutDayScreen() {
         exerciseName: entry.exerciseName,
       },
     });
-  }, [selectedEntry]);
+  }, []);
 
   // Handle delete action - delete the workout exercise entry
-  const handleDelete = useCallback(async () => {
-    if (!selectedEntry) return;
-    
-    try {
-      await deleteWorkoutExercise(selectedEntry.workoutExerciseId);
-      setActionModalVisible(false);
-      setSelectedEntry(null);
-      await loadData();
-    } catch (error) {
-      console.error("Error deleting workout exercise:", error);
-    }
-  }, [selectedEntry, loadData]);
+  const handleDelete = useCallback((entry: WorkoutDayExerciseEntry) => {
+    const setCount = entry.sets.length;
+    Alert.alert(
+      "Delete Exercise",
+      `Are you sure you want to delete ${entry.exerciseName}? This will remove ${setCount} set${setCount !== 1 ? "s" : ""} and cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteWorkoutExercise(entry.workoutExerciseId);
+              await loadData();
+            } catch (error) {
+              console.error("Error deleting workout exercise:", error);
+            }
+          },
+        },
+      ]
+    );
+  }, [loadData]);
 
   if (!dayKey) {
     return (
@@ -214,20 +225,68 @@ export default function WorkoutDayScreen() {
             </Text>
 
             {data.entries.map((entry, index) => (
-              <Pressable
+              <View
                 key={entry.workoutExerciseId}
-                style={[styles.exerciseCard, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]}
-                onLongPress={() => handleLongPressExercise(entry)}
-                delayLongPress={400}
+                style={[
+                  styles.exerciseCard,
+                  { backgroundColor: rawColors.surface, borderColor: rawColors.border },
+                ]}
               >
-                {/* Header Row - A-Z badge + exercise name */}
+                {/* Header Row - A-Z badge + exercise name + time */}
                 <View style={[styles.exerciseHeader, { borderBottomColor: rawColors.border }]}>
-                  <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
-                    <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                  <View style={styles.exerciseHeaderLeft}>
+                    <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
+                      <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                    </View>
+                    <View style={styles.exerciseTitleBlock}>
+                      <Text style={[styles.exerciseName, { color: rawColors.foreground }]} numberOfLines={1}>
+                        {entry.exerciseName}
+                      </Text>
+                      <View style={styles.exerciseMetaRow}>
+                        <MaterialCommunityIcons name="clock-outline" size={14} color={rawColors.foregroundSecondary} />
+                        <Text style={[styles.exerciseMetaText, { color: rawColors.foregroundSecondary }]}>
+                          {formatTime(entry.performedAt)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                  <Text style={[styles.exerciseName, { color: rawColors.foreground }]} numberOfLines={1}>
-                    {entry.exerciseName}
-                  </Text>
+                  <View style={styles.headerActions}>
+                    <Pressable
+                      onPress={() => handleEdit(entry)}
+                      hitSlop={8}
+                      style={[styles.actionIconButton, { backgroundColor: rawColors.background }]}
+                    >
+                      <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleDelete(entry)}
+                      hitSlop={8}
+                      style={[styles.actionIconButton, { backgroundColor: rawColors.background }]}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Session Stats */}
+                <View style={[styles.sessionStatsContainer, { backgroundColor: rawColors.surfaceSecondary }]}>
+                  <View style={styles.statItem}>
+                    <MaterialCommunityIcons name="dumbbell" size={14} color={rawColors.foregroundSecondary} />
+                    <Text style={[styles.statValue, { color: rawColors.foreground }]}>{entry.totalSets}</Text>
+                    <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>sets</Text>
+                  </View>
+                  <View style={[styles.statDivider, { backgroundColor: rawColors.border }]} />
+                  <View style={styles.statItem}>
+                    <MaterialCommunityIcons name="repeat" size={14} color={rawColors.foregroundSecondary} />
+                    <Text style={[styles.statValue, { color: rawColors.foreground }]}>{entry.totalReps}</Text>
+                    <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>reps</Text>
+                  </View>
+                  <View style={[styles.statDivider, { backgroundColor: rawColors.border }]} />
+                  <View style={styles.statItem}>
+                    <MaterialCommunityIcons name="weight" size={14} color={rawColors.foregroundSecondary} />
+                    <Text style={[styles.statValue, { color: rawColors.foreground }]}>{formatVolume(entry.totalVolumeKg)}</Text>
+                    <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>kg vol</Text>
+                  </View>
                 </View>
 
                 {/* Sets List */}
@@ -237,19 +296,35 @@ export default function WorkoutDayScreen() {
                       No sets recorded
                     </Text>
                   ) : (
-                    entry.sets.map((set, setIndex) => (
-                      <SetItem
-                        key={set.id}
-                        index={setIndex + 1}
-                        weightKg={set.weightKg}
-                        reps={set.reps}
-                        note={set.note}
-                        variant="compact"
-                      />
-                    ))
+                    (() => {
+                      let bestSetHighlighted = false;
+                      return entry.sets.map((set, setIndex) => {
+                        const isBestSetMatch =
+                          !bestSetHighlighted &&
+                          !!entry.bestSet &&
+                          set.weightKg === entry.bestSet.weightKg &&
+                          set.reps === entry.bestSet.reps;
+
+                        if (isBestSetMatch) {
+                          bestSetHighlighted = true;
+                        }
+
+                        return (
+                          <SetItem
+                            key={set.id}
+                            index={setIndex + 1}
+                            weightKg={set.weightKg}
+                            reps={set.reps}
+                            note={set.note}
+                            variant="compact"
+                            isBestSet={isBestSetMatch}
+                          />
+                        );
+                      });
+                    })()
                   )}
                 </View>
-              </Pressable>
+              </View>
             ))}
 
             {/* Overflow indicator */}
@@ -262,56 +337,6 @@ export default function WorkoutDayScreen() {
         </ScrollView>
       )}
 
-      {/* Action Modal */}
-      <Modal
-        visible={actionModalVisible}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => {
-          setActionModalVisible(false);
-          setSelectedEntry(null);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            setActionModalVisible(false);
-            setSelectedEntry(null);
-          }}
-        >
-          <View style={[styles.actionModalContent, { backgroundColor: rawColors.surface }]}>
-            <Pressable
-              style={[styles.actionButton, { borderBottomColor: rawColors.border }]}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleEdit();
-              }}
-            >
-              <Text style={[styles.actionButtonText, { color: rawColors.primary }]}>Edit</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionButton, styles.deleteActionButton]}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleDelete();
-              }}
-            >
-              <Text style={[styles.actionButtonText, { color: rawColors.destructive }]}>Delete</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionButton, styles.cancelActionButton, { backgroundColor: rawColors.surfaceSecondary }]}
-              onPress={(e) => {
-                e.stopPropagation();
-                setActionModalVisible(false);
-                setSelectedEntry(null);
-              }}
-            >
-              <Text style={[styles.cancelActionButtonText, { color: rawColors.foregroundSecondary }]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -394,21 +419,51 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 4,
   },
-  // Exercise Card (similar to HistoryTab.tsx)
+  // Exercise Card (aligned with HistoryTab styles)
   exerciseCard: {
     borderRadius: 12,
     padding: 16,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
   },
   exerciseHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
+  },
+  exerciseMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  exerciseMetaText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  exerciseHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  exerciseTitleBlock: {
+    flex: 1,
+    justifyContent: "center",
+    gap: 4,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   alphabetCircle: {
     width: 32,
@@ -442,38 +497,30 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontStyle: "italic",
   },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
+  // Session Stats
+  sessionStatsContainer: {
+    flexDirection: "row",
     alignItems: "center",
-    padding: 20,
+    justifyContent: "space-around",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 10,
   },
-  actionModalContent: {
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 300,
-    padding: 0,
-    overflow: "hidden",
-  },
-  actionButton: {
-    padding: 16,
-    borderBottomWidth: 1,
+  statItem: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 4,
   },
-  actionButtonText: {
-    fontSize: 16,
+  statValue: {
+    fontSize: 14,
     fontWeight: "600",
   },
-  deleteActionButton: {
-    borderBottomWidth: 0,
+  statLabel: {
+    fontSize: 12,
   },
-  cancelActionButton: {
-    borderBottomWidth: 0,
-  },
-  cancelActionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+  statDivider: {
+    width: 1,
+    height: 16,
   },
 });
