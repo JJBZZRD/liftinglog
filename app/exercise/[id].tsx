@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { TabBar, TabView } from "react-native-tab-view";
@@ -16,6 +17,7 @@ export default function ExerciseModalScreen() {
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const title = typeof params.name === "string" ? params.name : "Exercise";
   const layout = useWindowDimensions();
+  const navigation = useNavigation();
   const [index, setIndex] = useState(0);
   const [routes] = useState([
     { key: "record", title: "Record" },
@@ -62,6 +64,18 @@ export default function ExerciseModalScreen() {
       setIndex(1); // Switch to History tab (index 1)
     }
   }, [params.refreshHistory]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (event) => {
+      if (index === 0) {
+        return;
+      }
+      event.preventDefault();
+      setIndex(0);
+    });
+
+    return unsubscribe;
+  }, [navigation, index]);
 
   const handlePinExercise = useCallback(async () => {
     if (!exerciseId) return;
@@ -118,7 +132,13 @@ export default function ExerciseModalScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              onPress={() => router.back()}
+              onPress={() => {
+                if (index === 0) {
+                  router.back();
+                  return;
+                }
+                setIndex(0);
+              }}
               style={{ paddingHorizontal: 12, paddingVertical: 6 }}
             >
               <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
