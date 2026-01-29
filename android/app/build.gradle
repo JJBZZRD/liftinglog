@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.WorkoutLog'
+    namespace 'com.anonymous.LiftingLog'
     defaultConfig {
-        applicationId 'com.anonymous.WorkoutLog'
+        applicationId 'com.anonymous.LiftingLog'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

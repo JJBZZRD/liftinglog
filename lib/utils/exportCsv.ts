@@ -16,7 +16,7 @@ type ExportRow = {
 
 const CSV_HEADERS = ["Date", "Time", "Exercise", "# of Reps", "Weight", "Notes"];
 const LOG_PREFIX = "[exportCsv]";
-const CSV_FILENAME = "workoutlog-export.csv";
+const CSV_FILENAME = "LiftingLog-export.csv";
 type ExportSaveMethod = "android_saf" | "ios_export" | "fallback_share";
 
 /** Custom error for unavailable file system */

@@ -86,7 +86,7 @@ export default function OverviewScreen() {
         {/* Header */}
         <View className="mb-6 mt-12">
           <Text className="text-3xl font-bold text-foreground">
-            WorkoutLog
+            LiftingLog
           </Text>
         </View>
 

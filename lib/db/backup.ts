@@ -7,7 +7,7 @@ import { newUid } from "../utils/uid";
 import { sqlite } from "./connection";
 
 const LOG_PREFIX = "[backup]";
-const DB_NAME = "workoutlog.db";
+const DB_NAME = "LiftingLog.db";
 const BACKUP_TEMP_DB_NAME = "backup-import-temp.db";
 const SQLITE_HEADER = "SQLite format 3";
 
@@ -56,7 +56,7 @@ function generateBackupFilename(): string {
   const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
   const seconds = String(now.getSeconds()).padStart(2, "0");
-  return `workoutlog-backup-${year}${month}${day}-${hours}${minutes}${seconds}.db`;
+  return `LiftingLog-backup-${year}${month}${day}-${hours}${minutes}${seconds}.db`;
 }
 
 /**

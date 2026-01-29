@@ -1,4 +1,4 @@
-package com.anonymous.WorkoutLog
+package com.anonymous.LiftingLog
 
 import android.app.Application
 import android.content.res.Configuration

@@ -173,44 +173,44 @@ export default function WorkoutDayScreen() {
           <View style={[styles.statsCard, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]}>
             <Text style={[styles.statsTitle, { color: rawColors.foreground }]}>Workout Stats</Text>
             <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+              <View style={styles.statsCardItem}>
+                <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
                   {data.totals.totalExercises}
                 </Text>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
                   Exercises
                 </Text>
               </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+              <View style={styles.statsCardItem}>
+                <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
                   {data.totals.totalSets}
                 </Text>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
                   Sets
                 </Text>
               </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+              <View style={styles.statsCardItem}>
+                <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
                   {data.totals.totalReps}
                 </Text>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
                   Reps
                 </Text>
               </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+              <View style={styles.statsCardItem}>
+                <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
                   {data.totals.totalVolumeKg.toLocaleString()}
                 </Text>
-                <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
                   Volume (kg)
                 </Text>
               </View>
               {data.totals.bestE1rmKg && (
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+                <View style={styles.statsCardItem}>
+                  <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
                     {data.totals.bestE1rmKg}
                   </Text>
-                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                  <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
                     Best e1RM
                   </Text>
                 </View>
@@ -397,16 +397,16 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-around",
   },
-  statItem: {
+  statsCardItem: {
     alignItems: "center",
     minWidth: 70,
     marginBottom: 8,
   },
-  statValue: {
+  statsCardValue: {
     fontSize: 20,
     fontWeight: "700",
   },
-  statLabel: {
+  statsCardLabel: {
     fontSize: 11,
     marginTop: 2,
   },

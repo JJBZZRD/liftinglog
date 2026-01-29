@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "WorkoutLog",
-    "slug": "WorkoutLog",
+    "name": "LiftingLog",
+    "slug": "LiftingLog",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "workoutlog",
+    "scheme": "LiftingLog",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -13,11 +13,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.WorkoutLog"
+      "package": "com.anonymous.LiftingLog"
     },
     "web": {
       "bundler": "metro",

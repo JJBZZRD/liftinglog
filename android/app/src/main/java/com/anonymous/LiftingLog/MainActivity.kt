@@ -1,4 +1,4 @@
-package com.anonymous.WorkoutLog
+package com.anonymous.LiftingLog
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

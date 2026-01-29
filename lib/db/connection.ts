@@ -12,7 +12,7 @@ export type E1RMFormulaId =
 export type UnitPreference = "kg" | "lb";
 
 // Single SQLite database for the app
-export const sqlite = openDatabaseSync("workoutlog.db");
+export const sqlite = openDatabaseSync("LiftingLog.db");
 
 // Pragmas
 sqlite.execSync("PRAGMA foreign_keys = ON;");
