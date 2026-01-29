@@ -250,6 +250,21 @@ export default function HistoryTab() {
     const { startDate, endDate } = dateRangeTimestamps;
     const { weightMin, weightMax, repsMin, repsMax, notesQuery } = effectiveFilters;
 
+    const matchesFilters = (set: SetWithPR) => {
+      // Weight filter
+      if (weightMin !== null && (set.weightKg ?? 0) < weightMin) return false;
+      if (weightMax !== null && (set.weightKg ?? 0) > weightMax) return false;
+
+      // Reps filter
+      if (repsMin !== null && (set.reps ?? 0) < repsMin) return false;
+      if (repsMax !== null && (set.reps ?? 0) > repsMax) return false;
+
+      // Notes filter
+      if (notesQuery && !(set.note?.toLowerCase().includes(notesQuery))) return false;
+
+      return true;
+    };
+
     return rawHistory
       .filter((entry) => {
         // Date filter
@@ -258,26 +273,7 @@ export default function HistoryTab() {
         if (endDate && workoutDate > endDate) return false;
         return true;
       })
-      .map((entry) => {
-        // Filter sets by weight, reps, and notes
-        const filteredSets = entry.sets.filter((set) => {
-          // Weight filter
-          if (weightMin !== null && (set.weightKg ?? 0) < weightMin) return false;
-          if (weightMax !== null && (set.weightKg ?? 0) > weightMax) return false;
-
-          // Reps filter
-          if (repsMin !== null && (set.reps ?? 0) < repsMin) return false;
-          if (repsMax !== null && (set.reps ?? 0) > repsMax) return false;
-
-          // Notes filter
-          if (notesQuery && !(set.note?.toLowerCase().includes(notesQuery))) return false;
-
-          return true;
-        });
-
-        return { ...entry, sets: filteredSets };
-      })
-      .filter((entry) => entry.sets.length > 0); // Remove entries with no matching sets
+      .filter((entry) => entry.sets.some(matchesFilters));
   }, [rawHistory, dateRangeTimestamps, effectiveFilters]);
 
   // Check if any filters are active
@@ -1070,4 +1066,3 @@ const styles = StyleSheet.create({
     height: 16,
   },
 });
-
