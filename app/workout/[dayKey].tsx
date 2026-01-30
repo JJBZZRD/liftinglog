@@ -50,6 +50,7 @@ export default function WorkoutDayScreen() {
   // Compute display title from dayKey
   const displayDate = dayKey ? new Date(dayKeyToTimestamp(dayKey)) : new Date();
   const title = `${displayDate.toLocaleDateString("en-US", {
+    weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",

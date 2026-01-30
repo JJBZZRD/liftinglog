@@ -135,7 +135,12 @@ export default function VisualisationTab() {
       console.log('[VisualisationTab] First 5 visible points:',
         sorted.slice(0, 5).map((p, i) => ({
           index: i,
-          date: new Date(p.date).toLocaleDateString(),
+          date: new Date(p.date).toLocaleDateString("en-US", {
+            weekday: "short",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          }),
           workoutId: p.workoutId,
         }))
       );
@@ -159,7 +164,12 @@ export default function VisualisationTab() {
         console.log("[VisualisationTab] handleDataPointPress called:", {
           exerciseId,
           workoutId: point.workoutId,
-          pointDate: new Date(point.date).toLocaleDateString(),
+          pointDate: new Date(point.date).toLocaleDateString("en-US", {
+            weekday: "short",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          }),
           pointValue: point.value,
         });
       }

@@ -51,8 +51,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d7cec8a3-f6d5-43f3-bc61-a3469aa9c1f3"
+        "projectId": "a607c4c7-21f2-409a-83f4-e89d17cce26a"
       }
-    }
+    },
+    "owner": "buzzbyte"
   }
 }

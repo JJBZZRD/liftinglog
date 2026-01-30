@@ -359,6 +359,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleDateString("en-US", {
+      weekday: "short",
       year: "numeric",
       month: "short",
       day: "numeric",

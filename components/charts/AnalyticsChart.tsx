@@ -250,6 +250,15 @@ export default function AnalyticsChart({
     });
   };
 
+  const formatDateWithWeekday = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const getClosestVisiblePointByX = useCallback(
     (tapX: number) => {
       const visiblePoints = renderDataPoints.filter((p) => p.isInVisibleRange);
@@ -557,7 +566,7 @@ export default function AnalyticsChart({
         {isScrubbing && scrubbedPoint && (
           <View style={[styles.scrubDatePill, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
             <Text style={[styles.scrubDateText, { color: rawColors.foreground }]}>
-            {formatDate(scrubbedPoint.date)} • {scrubbedPoint.value.toFixed(1)} {unit}
+            {formatDateWithWeekday(scrubbedPoint.date)} • {scrubbedPoint.value.toFixed(1)} {unit}
             </Text>
           </View>
         )}
