@@ -100,6 +100,7 @@ export default function AnalyticsChart({
   const [visibleEnd, setVisibleEnd] = useState(maxDate);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubbedPoint, setScrubbedPoint] = useState<RenderDataPoint | null>(null);
+  const [scrubPillWidth, setScrubPillWidth] = useState(0);
   // Use shared value for blocking - set synchronously on UI thread before runOnJS
   const scrubBlocked = useSharedValue(false);
 
@@ -564,7 +565,17 @@ export default function AnalyticsChart({
         )}
 
         {isScrubbing && scrubbedPoint && (
-          <View style={[styles.scrubDatePill, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
+          <View
+            onLayout={(event) => setScrubPillWidth(event.nativeEvent.layout.width)}
+            style={[
+              styles.scrubDatePill,
+              {
+                backgroundColor: rawColors.surface,
+                borderColor: rawColors.border,
+                transform: [{ translateX: -Math.round(scrubPillWidth / 2) }],
+              },
+            ]}
+          >
             <Text style={[styles.scrubDateText, { color: rawColors.foreground }]}>
             {formatDateWithWeekday(scrubbedPoint.date)} • {scrubbedPoint.value.toFixed(1)} {unit}
             </Text>
