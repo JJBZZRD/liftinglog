@@ -9,6 +9,7 @@ export type SessionDataPoint = {
   date: number; // timestamp
   value: number;
   workoutId: number;
+  workoutExerciseId: number | null;
 };
 
 export type DateRange = {
@@ -26,6 +27,7 @@ export type SessionSetDetail = {
 export type SessionDetails = {
   date: number;
   workoutId: number;
+  workoutExerciseId: number | null;
   performedAt: number | null;
   completedAt: number | null;
   sets: SessionSetDetail[];
@@ -155,6 +157,15 @@ export async function getSessionDetails(
 
   const workoutDate = performedAt ?? completedAt ?? workoutCompletedAt ?? workoutStartedAt ?? Date.now();
 
+  const uniqueWorkoutExerciseIds = [
+    ...new Set(
+      sessionSets
+        .map((s) => s.workoutExerciseId)
+        .filter((id): id is number => typeof id === "number")
+    ),
+  ];
+  const workoutExerciseIdForSession = uniqueWorkoutExerciseIds.length === 1 ? uniqueWorkoutExerciseIds[0] : null;
+
   // Build individual set details
   const setDetails: SessionSetDetail[] = sessionSets.map((set, index) => ({
     setIndex: set.setIndex ?? index + 1,
@@ -195,6 +206,7 @@ export async function getSessionDetails(
   return {
     date: workoutDate,
     workoutId,
+    workoutExerciseId: workoutExerciseIdForSession,
     performedAt,
     completedAt,
     sets: setDetails,
@@ -209,12 +221,133 @@ export async function getSessionDetails(
 }
 
 /**
+ * Get detailed session information for a specific workout_exercise entry.
+ * This is the canonical "session" identifier when multiple sessions occur on the same day/workout.
+ */
+export async function getSessionDetailsByWorkoutExerciseId(
+  workoutExerciseId: number
+): Promise<SessionDetails | null> {
+  const canQueryWorkoutExercises =
+    hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+
+  const workoutExerciseRows = await db
+    .select({
+      workoutId: workoutExercises.workoutId,
+      performedAt: canQueryWorkoutExercises ? workoutExercises.performedAt : sql<number | null>`NULL`.as("performed_at"),
+      completedAt: canQueryWorkoutExercises ? workoutExercises.completedAt : sql<number | null>`NULL`.as("completed_at"),
+      workoutStartedAt: workouts.startedAt,
+      workoutCompletedAt: workouts.completedAt,
+    })
+    .from(workoutExercises)
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(eq(workoutExercises.id, workoutExerciseId))
+    .limit(1);
+
+  const workoutExercise = workoutExerciseRows[0];
+  if (!workoutExercise) return null;
+
+  const sessionSets = await db
+    .select({
+      setIndex: sets.setIndex,
+      weightKg: sets.weightKg,
+      reps: sets.reps,
+      note: sets.note,
+      performedAt: sets.performedAt,
+    })
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, workoutExerciseId))
+    .orderBy(sets.setIndex, sets.performedAt, sets.id);
+
+  if (sessionSets.length === 0) return null;
+
+  const workoutDate =
+    workoutExercise.performedAt ??
+    workoutExercise.completedAt ??
+    sessionSets.map((s) => s.performedAt).filter((t): t is number => typeof t === "number").sort((a, b) => b - a)[0] ??
+    workoutExercise.workoutCompletedAt ??
+    workoutExercise.workoutStartedAt ??
+    Date.now();
+
+  const setDetails: SessionSetDetail[] = sessionSets.map((set, index) => ({
+    setIndex: set.setIndex ?? index + 1,
+    weightKg: set.weightKg,
+    reps: set.reps,
+    note: set.note,
+  }));
+
+  let totalReps = 0;
+  let totalVolume = 0;
+  let maxWeight = 0;
+  let maxReps = 0;
+  let bestSet: { weight: number; reps: number } | null = null;
+  let maxE1RM = 0;
+
+  const formula = getGlobalFormula();
+
+  for (const set of sessionSets) {
+    const weight = set.weightKg ?? 0;
+    const reps = set.reps ?? 0;
+
+    totalReps += reps;
+    totalVolume += weight * reps;
+
+    if (weight > maxWeight) maxWeight = weight;
+    if (reps > maxReps) maxReps = reps;
+
+    if (weight > 0 && reps > 0) {
+      const e1rm = computeE1rm(formula, weight, reps);
+      if (e1rm > maxE1RM) {
+        maxE1RM = e1rm;
+        bestSet = { weight, reps };
+      }
+    }
+  }
+
+  return {
+    date: workoutDate,
+    workoutId: workoutExercise.workoutId,
+    workoutExerciseId,
+    performedAt: workoutExercise.performedAt ?? null,
+    completedAt: workoutExercise.completedAt ?? null,
+    sets: setDetails,
+    totalSets: sessionSets.length,
+    totalReps,
+    totalVolume,
+    maxWeight,
+    maxReps,
+    bestSet,
+    estimatedE1RM: maxE1RM > 0 ? maxE1RM : null,
+  };
+}
+
+/**
  * Get the maximum weight lifted per session for an exercise
  * Returns data points with workout date and max weight in that session
  */
 export async function getMaxWeightPerSession(exerciseId: number): Promise<SessionDataPoint[]> {
-  // Get all sets for this exercise grouped by workout
+  const canQueryWorkoutExercises =
+    hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+
+  // Canonical path: one point per workout_exercise (session)
   const result = await db
+    .select({
+      maxWeight: sql<number>`MAX(${sets.weightKg})`.as("max_weight"),
+      workoutId: workoutExercises.workoutId,
+      workoutExerciseId: sets.workoutExerciseId,
+      sessionDate: sql<number>`COALESCE(${canQueryWorkoutExercises ? workoutExercises.performedAt : sql`NULL`}, ${canQueryWorkoutExercises ? workoutExercises.completedAt : sql`NULL`}, ${workouts.completedAt}, ${workouts.startedAt})`.as("session_date"),
+    })
+    .from(sets)
+    .innerJoin(
+      workoutExercises,
+      and(eq(sets.workoutExerciseId, workoutExercises.id), eq(sets.workoutId, workoutExercises.workoutId))
+    )
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(eq(sets.exerciseId, exerciseId))
+    .groupBy(sets.workoutExerciseId, workoutExercises.workoutId, workoutExercises.performedAt, workoutExercises.completedAt, workouts.startedAt, workouts.completedAt)
+    .orderBy(desc(sql`session_date`));
+
+  // Legacy fallback: sets without workout_exercise_id get grouped by workout
+  const legacy = await db
     .select({
       workoutId: sets.workoutId,
       maxWeight: sql<number>`MAX(${sets.weightKg})`.as("max_weight"),
@@ -222,17 +355,30 @@ export async function getMaxWeightPerSession(exerciseId: number): Promise<Sessio
     })
     .from(sets)
     .innerJoin(workouts, eq(sets.workoutId, workouts.id))
-    .where(eq(sets.exerciseId, exerciseId))
-    .groupBy(sets.workoutId)
+    .where(and(eq(sets.exerciseId, exerciseId), sql`${sets.workoutExerciseId} IS NULL`))
+    .groupBy(sets.workoutId, workouts.startedAt, workouts.completedAt)
     .orderBy(desc(sql`workout_date`));
 
-  return result
-    .filter(row => row.maxWeight !== null)
-    .map(row => ({
-      date: row.workoutDate,
-      value: row.maxWeight,
-      workoutId: row.workoutId,
-    }));
+  const points: SessionDataPoint[] = [
+    ...result
+      .filter((row) => row.maxWeight !== null && row.sessionDate !== null)
+      .map((row) => ({
+        date: row.sessionDate,
+        value: row.maxWeight,
+        workoutId: row.workoutId,
+        workoutExerciseId: row.workoutExerciseId ?? null,
+      })),
+    ...legacy
+      .filter((row) => row.maxWeight !== null && row.workoutDate !== null)
+      .map((row) => ({
+        date: row.workoutDate,
+        value: row.maxWeight,
+        workoutId: row.workoutId,
+        workoutExerciseId: null,
+      })),
+  ];
+
+  return points.sort((a, b) => b.date - a.date);
 }
 
 /**
@@ -245,8 +391,61 @@ export async function getEstimated1RMPerSession(
 ): Promise<SessionDataPoint[]> {
   const formulaToUse = formula ?? getGlobalFormula();
 
-  // Get all sets with weight and reps
+  const canQueryWorkoutExercises =
+    hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+
+  // Canonical path: group by workout_exercise (session)
   const allSets = await db
+    .select({
+      workoutId: workoutExercises.workoutId,
+      workoutExerciseId: sets.workoutExerciseId,
+      performedAt: canQueryWorkoutExercises ? workoutExercises.performedAt : sql<number | null>`NULL`.as("performed_at"),
+      completedAt: canQueryWorkoutExercises ? workoutExercises.completedAt : sql<number | null>`NULL`.as("completed_at"),
+      workoutStartedAt: workouts.startedAt,
+      workoutCompletedAt: workouts.completedAt,
+      weightKg: sets.weightKg,
+      reps: sets.reps,
+    })
+    .from(sets)
+    .innerJoin(
+      workoutExercises,
+      and(eq(sets.workoutExerciseId, workoutExercises.id), eq(sets.workoutId, workoutExercises.workoutId))
+    )
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(and(
+      eq(sets.exerciseId, exerciseId),
+      sql`${sets.weightKg} IS NOT NULL`,
+      sql`${sets.reps} IS NOT NULL`,
+      sql`${sets.reps} > 0`
+    ));
+
+  const sessionMap = new Map<number, { date: number; maxE1RM: number; workoutId: number; workoutExerciseId: number }>();
+
+  for (const set of allSets) {
+    if (set.workoutExerciseId === null || set.weightKg === null || set.reps === null) continue;
+
+    const e1rm = computeE1rm(formulaToUse, set.weightKg, set.reps);
+    const date =
+      set.performedAt ??
+      set.completedAt ??
+      set.workoutCompletedAt ??
+      set.workoutStartedAt ??
+      Date.now();
+
+    const existing = sessionMap.get(set.workoutExerciseId);
+
+    if (!existing || e1rm > existing.maxE1RM) {
+      sessionMap.set(set.workoutExerciseId, {
+        date,
+        maxE1RM: e1rm,
+        workoutId: set.workoutId,
+        workoutExerciseId: set.workoutExerciseId,
+      });
+    }
+  }
+
+  // Legacy fallback: sets without workout_exercise_id get grouped by workout
+  const legacySets = await db
     .select({
       workoutId: sets.workoutId,
       weightKg: sets.weightKg,
@@ -257,22 +456,19 @@ export async function getEstimated1RMPerSession(
     .innerJoin(workouts, eq(sets.workoutId, workouts.id))
     .where(and(
       eq(sets.exerciseId, exerciseId),
+      sql`${sets.workoutExerciseId} IS NULL`,
       sql`${sets.weightKg} IS NOT NULL`,
       sql`${sets.reps} IS NOT NULL`,
       sql`${sets.reps} > 0`
     ));
 
-  // Group by workout and calculate max e1RM per session
-  const workoutMap = new Map<number, { date: number; maxE1RM: number; workoutId: number }>();
-
-  for (const set of allSets) {
+  const legacyMap = new Map<number, { date: number; maxE1RM: number; workoutId: number }>();
+  for (const set of legacySets) {
     if (set.weightKg === null || set.reps === null) continue;
-
     const e1rm = computeE1rm(formulaToUse, set.weightKg, set.reps);
-    const existing = workoutMap.get(set.workoutId);
-
+    const existing = legacyMap.get(set.workoutId);
     if (!existing || e1rm > existing.maxE1RM) {
-      workoutMap.set(set.workoutId, {
+      legacyMap.set(set.workoutId, {
         date: set.workoutDate,
         maxE1RM: e1rm,
         workoutId: set.workoutId,
@@ -280,20 +476,53 @@ export async function getEstimated1RMPerSession(
     }
   }
 
-  return Array.from(workoutMap.values())
-    .sort((a, b) => b.date - a.date)
-    .map(item => ({
+  const points: SessionDataPoint[] = [
+    ...Array.from(sessionMap.values()).map((item) => ({
       date: item.date,
       value: item.maxE1RM,
       workoutId: item.workoutId,
-    }));
+      workoutExerciseId: item.workoutExerciseId,
+    })),
+    ...Array.from(legacyMap.values()).map((item) => ({
+      date: item.date,
+      value: item.maxE1RM,
+      workoutId: item.workoutId,
+      workoutExerciseId: null,
+    })),
+  ];
+
+  return points.sort((a, b) => b.date - a.date);
 }
 
 /**
  * Get total volume (weight × reps) per session for an exercise
  */
 export async function getTotalVolumePerSession(exerciseId: number): Promise<SessionDataPoint[]> {
+  const canQueryWorkoutExercises =
+    hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+
   const result = await db
+    .select({
+      totalVolume: sql<number>`SUM(${sets.weightKg} * ${sets.reps})`.as("total_volume"),
+      workoutId: workoutExercises.workoutId,
+      workoutExerciseId: sets.workoutExerciseId,
+      sessionDate: sql<number>`COALESCE(${canQueryWorkoutExercises ? workoutExercises.performedAt : sql`NULL`}, ${canQueryWorkoutExercises ? workoutExercises.completedAt : sql`NULL`}, ${workouts.completedAt}, ${workouts.startedAt})`.as("session_date"),
+    })
+    .from(sets)
+    .innerJoin(
+      workoutExercises,
+      and(eq(sets.workoutExerciseId, workoutExercises.id), eq(sets.workoutId, workoutExercises.workoutId))
+    )
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(and(
+      eq(sets.exerciseId, exerciseId),
+      sql`${sets.weightKg} IS NOT NULL`,
+      sql`${sets.reps} IS NOT NULL`
+    ))
+    .groupBy(sets.workoutExerciseId, workoutExercises.workoutId, workoutExercises.performedAt, workoutExercises.completedAt, workouts.startedAt, workouts.completedAt)
+    .orderBy(desc(sql`session_date`));
+
+  const legacy = await db
     .select({
       workoutId: sets.workoutId,
       totalVolume: sql<number>`SUM(${sets.weightKg} * ${sets.reps})`.as("total_volume"),
@@ -303,26 +532,63 @@ export async function getTotalVolumePerSession(exerciseId: number): Promise<Sess
     .innerJoin(workouts, eq(sets.workoutId, workouts.id))
     .where(and(
       eq(sets.exerciseId, exerciseId),
+      sql`${sets.workoutExerciseId} IS NULL`,
       sql`${sets.weightKg} IS NOT NULL`,
       sql`${sets.reps} IS NOT NULL`
     ))
-    .groupBy(sets.workoutId)
+    .groupBy(sets.workoutId, workouts.startedAt, workouts.completedAt)
     .orderBy(desc(sql`workout_date`));
 
-  return result
-    .filter(row => row.totalVolume !== null)
-    .map(row => ({
-      date: row.workoutDate,
-      value: row.totalVolume,
-      workoutId: row.workoutId,
-    }));
+  const points: SessionDataPoint[] = [
+    ...result
+      .filter((row) => row.totalVolume !== null && row.sessionDate !== null)
+      .map((row) => ({
+        date: row.sessionDate,
+        value: row.totalVolume,
+        workoutId: row.workoutId,
+        workoutExerciseId: row.workoutExerciseId ?? null,
+      })),
+    ...legacy
+      .filter((row) => row.totalVolume !== null && row.workoutDate !== null)
+      .map((row) => ({
+        date: row.workoutDate,
+        value: row.totalVolume,
+        workoutId: row.workoutId,
+        workoutExerciseId: null,
+      })),
+  ];
+
+  return points.sort((a, b) => b.date - a.date);
 }
 
 /**
  * Get maximum reps per session for an exercise
  */
 export async function getMaxRepsPerSession(exerciseId: number): Promise<SessionDataPoint[]> {
+  const canQueryWorkoutExercises =
+    hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+
   const result = await db
+    .select({
+      maxReps: sql<number>`MAX(${sets.reps})`.as("max_reps"),
+      workoutId: workoutExercises.workoutId,
+      workoutExerciseId: sets.workoutExerciseId,
+      sessionDate: sql<number>`COALESCE(${canQueryWorkoutExercises ? workoutExercises.performedAt : sql`NULL`}, ${canQueryWorkoutExercises ? workoutExercises.completedAt : sql`NULL`}, ${workouts.completedAt}, ${workouts.startedAt})`.as("session_date"),
+    })
+    .from(sets)
+    .innerJoin(
+      workoutExercises,
+      and(eq(sets.workoutExerciseId, workoutExercises.id), eq(sets.workoutId, workoutExercises.workoutId))
+    )
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(and(
+      eq(sets.exerciseId, exerciseId),
+      sql`${sets.reps} IS NOT NULL`
+    ))
+    .groupBy(sets.workoutExerciseId, workoutExercises.workoutId, workoutExercises.performedAt, workoutExercises.completedAt, workouts.startedAt, workouts.completedAt)
+    .orderBy(desc(sql`session_date`));
+
+  const legacy = await db
     .select({
       workoutId: sets.workoutId,
       maxReps: sql<number>`MAX(${sets.reps})`.as("max_reps"),
@@ -330,27 +596,57 @@ export async function getMaxRepsPerSession(exerciseId: number): Promise<SessionD
     })
     .from(sets)
     .innerJoin(workouts, eq(sets.workoutId, workouts.id))
-    .where(and(
-      eq(sets.exerciseId, exerciseId),
-      sql`${sets.reps} IS NOT NULL`
-    ))
-    .groupBy(sets.workoutId)
+    .where(and(eq(sets.exerciseId, exerciseId), sql`${sets.workoutExerciseId} IS NULL`, sql`${sets.reps} IS NOT NULL`))
+    .groupBy(sets.workoutId, workouts.startedAt, workouts.completedAt)
     .orderBy(desc(sql`workout_date`));
 
-  return result
-    .filter(row => row.maxReps !== null)
-    .map(row => ({
-      date: row.workoutDate,
-      value: row.maxReps,
-      workoutId: row.workoutId,
-    }));
+  const points: SessionDataPoint[] = [
+    ...result
+      .filter((row) => row.maxReps !== null && row.sessionDate !== null)
+      .map((row) => ({
+        date: row.sessionDate,
+        value: row.maxReps,
+        workoutId: row.workoutId,
+        workoutExerciseId: row.workoutExerciseId ?? null,
+      })),
+    ...legacy
+      .filter((row) => row.maxReps !== null && row.workoutDate !== null)
+      .map((row) => ({
+        date: row.workoutDate,
+        value: row.maxReps,
+        workoutId: row.workoutId,
+        workoutExerciseId: null,
+      })),
+  ];
+
+  return points.sort((a, b) => b.date - a.date);
 }
 
 /**
  * Get number of sets per session for an exercise
  */
 export async function getNumberOfSetsPerSession(exerciseId: number): Promise<SessionDataPoint[]> {
+  const canQueryWorkoutExercises =
+    hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+
   const result = await db
+    .select({
+      setCount: sql<number>`COUNT(*)`.as("set_count"),
+      workoutId: workoutExercises.workoutId,
+      workoutExerciseId: sets.workoutExerciseId,
+      sessionDate: sql<number>`COALESCE(${canQueryWorkoutExercises ? workoutExercises.performedAt : sql`NULL`}, ${canQueryWorkoutExercises ? workoutExercises.completedAt : sql`NULL`}, ${workouts.completedAt}, ${workouts.startedAt})`.as("session_date"),
+    })
+    .from(sets)
+    .innerJoin(
+      workoutExercises,
+      and(eq(sets.workoutExerciseId, workoutExercises.id), eq(sets.workoutId, workoutExercises.workoutId))
+    )
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(eq(sets.exerciseId, exerciseId))
+    .groupBy(sets.workoutExerciseId, workoutExercises.workoutId, workoutExercises.performedAt, workoutExercises.completedAt, workouts.startedAt, workouts.completedAt)
+    .orderBy(desc(sql`session_date`));
+
+  const legacy = await db
     .select({
       workoutId: sets.workoutId,
       setCount: sql<number>`COUNT(*)`.as("set_count"),
@@ -358,15 +654,26 @@ export async function getNumberOfSetsPerSession(exerciseId: number): Promise<Ses
     })
     .from(sets)
     .innerJoin(workouts, eq(sets.workoutId, workouts.id))
-    .where(eq(sets.exerciseId, exerciseId))
-    .groupBy(sets.workoutId)
+    .where(and(eq(sets.exerciseId, exerciseId), sql`${sets.workoutExerciseId} IS NULL`))
+    .groupBy(sets.workoutId, workouts.startedAt, workouts.completedAt)
     .orderBy(desc(sql`workout_date`));
 
-  return result.map(row => ({
-    date: row.workoutDate,
-    value: row.setCount,
-    workoutId: row.workoutId,
-  }));
+  const points: SessionDataPoint[] = [
+    ...result.map((row) => ({
+      date: row.sessionDate,
+      value: row.setCount,
+      workoutId: row.workoutId,
+      workoutExerciseId: row.workoutExerciseId ?? null,
+    })),
+    ...legacy.map((row) => ({
+      date: row.workoutDate,
+      value: row.setCount,
+      workoutId: row.workoutId,
+      workoutExerciseId: null,
+    })),
+  ];
+
+  return points.sort((a, b) => b.date - a.date);
 }
 
 /**
@@ -396,6 +703,7 @@ export function computeTrendLine(
       date: point.date,
       value: avg,
       workoutId: point.workoutId,
+      workoutExerciseId: point.workoutExerciseId,
     };
   });
 }

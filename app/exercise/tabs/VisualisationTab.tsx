@@ -20,6 +20,7 @@ import {
   getMaxWeightPerSession,
   getNumberOfSetsPerSession,
   getSessionDetails,
+  getSessionDetailsByWorkoutExerciseId,
   getTotalVolumePerSession,
   type SessionDataPoint,
   type SessionDetails,
@@ -146,6 +147,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
             month: "short",
             day: "numeric",
           }),
+          workoutExerciseId: p.workoutExerciseId,
           workoutId: p.workoutId,
         }))
       );
@@ -181,6 +183,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
       if (__DEV__) {
         console.log("[VisualisationTab] handleDataPointPress called:", {
           exerciseId,
+          workoutExerciseId: point.workoutExerciseId,
           workoutId: point.workoutId,
           pointDate: new Date(point.date).toLocaleDateString("en-US", {
             weekday: "short",
@@ -196,11 +199,15 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
       setSelectedPoint(point);
       
       try {
-        const details = await getSessionDetails(exerciseId, point.workoutId);
+        const details =
+          point.workoutExerciseId !== null
+            ? await getSessionDetailsByWorkoutExerciseId(point.workoutExerciseId)
+            : await getSessionDetails(exerciseId, point.workoutId);
         
         if (__DEV__) {
           console.log("[VisualisationTab] getSessionDetails result:", {
             exerciseId,
+            workoutExerciseId: point.workoutExerciseId,
             workoutId: point.workoutId,
             hasDetails: !!details,
             setsCount: details?.sets?.length ?? 0,
@@ -211,7 +218,12 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
         }
         
         if (!details) {
-          if (__DEV__) console.warn("[VisualisationTab] getSessionDetails returned null - no sets found for exerciseId:", exerciseId, "workoutId:", point.workoutId);
+          if (__DEV__) {
+            console.warn(
+              "[VisualisationTab] getSessionDetails returned null - no sets found for session:",
+              { exerciseId, workoutExerciseId: point.workoutExerciseId, workoutId: point.workoutId }
+            );
+          }
           setSelectedPoint(null); // Clear highlight since we can't show modal
           return; // Do NOT open modal if no details
         }

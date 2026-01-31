@@ -21,7 +21,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
-import { deleteExerciseSession } from "../../lib/db/workouts";
+import { deleteExerciseSession, deleteWorkoutExercise } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
 import SetItem from "../lists/SetItem";
@@ -131,7 +131,7 @@ export default function DataPointModal({
   };
 
   const handleDelete = () => {
-    if (!sessionDetails || !exerciseId || !isCompleted) return;
+    if (!sessionDetails || !isCompleted) return;
     
     Alert.alert(
       "Delete Session",
@@ -146,7 +146,14 @@ export default function DataPointModal({
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteExerciseSession(sessionDetails.workoutId, exerciseId);
+              if (sessionDetails.workoutExerciseId !== null) {
+                await deleteWorkoutExercise(sessionDetails.workoutExerciseId);
+              } else if (exerciseId) {
+                // Legacy fallback for older data points that don't have workoutExerciseId.
+                await deleteExerciseSession(sessionDetails.workoutId, exerciseId);
+              } else {
+                throw new Error("Cannot delete session: missing workoutExerciseId and exerciseId.");
+              }
               onClose();
               onDeleted?.();
             } catch (error) {
@@ -243,14 +250,25 @@ export default function DataPointModal({
                             <Pressable
                               onPress={() => {
                                 onClose();
-                                router.push({
-                                  pathname: "/edit-workout",
-                                  params: {
-                                    exerciseId: String(exerciseId),
-                                    workoutId: String(sessionDetails.workoutId),
-                                    exerciseName: exerciseName || "Exercise",
-                                  },
-                                });
+                                if (sessionDetails.workoutExerciseId !== null) {
+                                  router.push({
+                                    pathname: "/edit-workout",
+                                    params: {
+                                      workoutExerciseId: String(sessionDetails.workoutExerciseId),
+                                      exerciseName: exerciseName || "Exercise",
+                                    },
+                                  });
+                                } else {
+                                  // Legacy fallback for older data points that don't have workoutExerciseId.
+                                  router.push({
+                                    pathname: "/edit-workout",
+                                    params: {
+                                      exerciseId: String(exerciseId),
+                                      workoutId: String(sessionDetails.workoutId),
+                                      exerciseName: exerciseName || "Exercise",
+                                    },
+                                  });
+                                }
                               }}
                               hitSlop={8}
                               style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
@@ -411,14 +429,25 @@ export default function DataPointModal({
                           <Pressable
                             onPress={() => {
                               onClose();
-                              router.push({
-                                pathname: "/edit-workout",
-                                params: {
-                                  exerciseId: String(exerciseId),
-                                  workoutId: String(sessionDetails.workoutId),
-                                  exerciseName: exerciseName || "Exercise",
-                                },
-                              });
+                              if (sessionDetails.workoutExerciseId !== null) {
+                                router.push({
+                                  pathname: "/edit-workout",
+                                  params: {
+                                    workoutExerciseId: String(sessionDetails.workoutExerciseId),
+                                    exerciseName: exerciseName || "Exercise",
+                                  },
+                                });
+                              } else {
+                                // Legacy fallback for older data points that don't have workoutExerciseId.
+                                router.push({
+                                  pathname: "/edit-workout",
+                                  params: {
+                                    exerciseId: String(exerciseId),
+                                    workoutId: String(sessionDetails.workoutId),
+                                    exerciseName: exerciseName || "Exercise",
+                                  },
+                                });
+                              }
                             }}
                             hitSlop={8}
                             style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}

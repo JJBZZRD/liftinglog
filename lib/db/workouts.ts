@@ -412,6 +412,13 @@ export async function updateExerciseEntryDate(workoutExerciseId: number, perform
     .set({ performedAt })
     .where(eq(workoutExercises.id, workoutExerciseId))
     .run();
+
+  // Keep all sets in the session aligned with the session date (RecordTab can change the date after adding sets).
+  await db
+    .update(sets)
+    .set({ performedAt })
+    .where(eq(sets.workoutExerciseId, workoutExerciseId))
+    .run();
 }
 
 /**
