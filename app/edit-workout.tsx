@@ -168,27 +168,52 @@ export default function EditWorkoutScreen() {
     await loadWorkout();
   }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
 
+  const closeScreen = useCallback(() => {
+    // `edit-workout` is presented as a modal in `app/_layout.tsx`.
+    // Using `dismiss()` ensures the screen is removed from the stack (so back won't reopen it).
+    if (router.canDismiss()) {
+      router.dismiss();
+      return;
+    }
+
+    router.back();
+  }, []);
+
   const handleSaveEdits = useCallback(() => {
     // If we came from workout day detail page (direct workoutExerciseId), just go back
     if (workoutExerciseIdParam) {
-      router.back();
+      closeScreen();
       return;
     }
     
-    // Legacy route: navigate back to exercise page with refresh trigger
+    // Legacy route: return to exercise page and trigger a history refresh without leaving
+    // `edit-workout` on the back stack.
     if (exerciseId) {
-      router.replace({
+      const href = {
         pathname: "/exercise/[id]",
         params: {
           id: String(exerciseId),
           name: exerciseName,
           refreshHistory: Date.now().toString(),
         },
-      });
+      } as const;
+
+      try {
+        // Prefer dismissing back to the existing exercise modal (common case).
+        // Falls back to replace if the exercise screen isn't in the stack.
+        if (router.canDismiss()) {
+          router.dismissTo(href);
+          return;
+        }
+      } catch {
+        // Ignore and fall through to replace.
+      }
+
+      router.replace(href);
     } else {
-      router.back();
+      closeScreen();
     }
-  }, [workoutExerciseIdParam, exerciseId, exerciseName]);
+  }, [workoutExerciseIdParam, exerciseId, exerciseName, closeScreen]);
 
   const handleEditSetPress = useCallback((set: SetRow) => {
     setSelectedSet(set);
@@ -243,7 +268,7 @@ export default function EditWorkoutScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
-                onPress={() => router.back()}
+                onPress={closeScreen}
                 className="px-3 py-1.5"
               >
                 <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
@@ -268,7 +293,7 @@ export default function EditWorkoutScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              onPress={() => router.back()}
+              onPress={closeScreen}
               className="px-3 py-1.5"
             >
               <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
