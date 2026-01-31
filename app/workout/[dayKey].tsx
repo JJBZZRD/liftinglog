@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import SetItem from "../../components/lists/SetItem";
+import BaseModal from "../../components/modals/BaseModal";
 import {
   dayKeyToTimestamp,
   deleteWorkoutExercise,
@@ -31,6 +32,8 @@ export default function WorkoutDayScreen() {
 
   const [data, setData] = useState<WorkoutDayPageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<WorkoutDayExerciseEntry | null>(null);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -91,29 +94,30 @@ export default function WorkoutDayScreen() {
     });
   }, []);
 
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirmVisible(false);
+    setDeleteTarget(null);
+  }, []);
+
   // Handle delete action - delete the workout exercise entry
   const handleDelete = useCallback((entry: WorkoutDayExerciseEntry) => {
-    const setCount = entry.sets.length;
-    Alert.alert(
-      "Delete Exercise",
-      `Are you sure you want to delete ${entry.exerciseName}? This will remove ${setCount} set${setCount !== 1 ? "s" : ""} and cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteWorkoutExercise(entry.workoutExerciseId);
-              await loadData();
-            } catch (error) {
-              console.error("Error deleting workout exercise:", error);
-            }
-          },
-        },
-      ]
-    );
-  }, [loadData]);
+    setDeleteTarget(entry);
+    setDeleteConfirmVisible(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+
+    closeDeleteConfirm();
+
+    try {
+      await deleteWorkoutExercise(deleteTarget.workoutExerciseId);
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting workout exercise:", error);
+      Alert.alert("Error", "Failed to delete exercise. Please try again.");
+    }
+  }, [deleteTarget, closeDeleteConfirm, loadData]);
 
   if (!dayKey) {
     return (
@@ -337,6 +341,45 @@ export default function WorkoutDayScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Delete Exercise Confirm Modal */}
+      <BaseModal
+        visible={deleteConfirmVisible}
+        onClose={closeDeleteConfirm}
+        maxWidth={380}
+      >
+        <Text className="text-xl font-bold mb-2 text-foreground">Delete exercise?</Text>
+        <Text className="text-base mb-4 text-foreground-secondary">
+          This will remove the exercise and all recorded sets. This action cannot be undone.
+        </Text>
+
+        {deleteTarget && (
+          <View className="rounded-lg p-3 mb-5 bg-surface-secondary border border-border">
+            <Text className="text-sm font-semibold text-foreground">
+              {deleteTarget.exerciseName} • {formatTime(deleteTarget.performedAt)}
+            </Text>
+            <Text className="text-sm mt-1 text-foreground-secondary">
+              {deleteTarget.sets.length} set{deleteTarget.sets.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+        )}
+
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={closeDeleteConfirm}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
+            onPress={handleConfirmDelete}
+          >
+            <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
+            <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
+          </Pressable>
+        </View>
+      </BaseModal>
 
     </View>
   );

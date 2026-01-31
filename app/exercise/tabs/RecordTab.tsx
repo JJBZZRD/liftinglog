@@ -13,6 +13,7 @@ import {
   addWorkoutExercise,
   completeExerciseEntry,
   deleteSet,
+  deleteSetsForWorkoutExercise,
   getOpenWorkoutExercise,
   getOrCreateActiveWorkout,
   listSetsForWorkoutExercise,
@@ -47,6 +48,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ set: SetRow; displayIndex: number } | null>(null);
+  const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
 
   // Timer state with real-time updates
   const [timerModalVisible, setTimerModalVisible] = useState(false);
@@ -267,6 +269,19 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     onHistoryRefresh?.();
   }, [deleteTarget, closeDeleteConfirm, loadWorkout, onHistoryRefresh]);
 
+  const closeClearConfirm = useCallback(() => {
+    setClearConfirmVisible(false);
+  }, []);
+
+  const handleConfirmClearSets = useCallback(async () => {
+    if (!workoutExerciseId) return;
+
+    await deleteSetsForWorkoutExercise(workoutExerciseId);
+    closeClearConfirm();
+    await loadWorkout();
+    onHistoryRefresh?.();
+  }, [workoutExerciseId, closeClearConfirm, loadWorkout, onHistoryRefresh]);
+
   if (!exerciseId) {
     return (
       <View className="flex-1 items-center justify-center p-4 bg-background">
@@ -455,6 +470,21 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
               nestedScrollEnabled
             />
           )}
+
+          {sets.length > 0 && (
+            <View className="flex-row justify-end mt-4">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear all recorded sets"
+                className="flex-row items-center px-3 py-2 rounded-full bg-surface-secondary"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                onPress={() => setClearConfirmVisible(true)}
+              >
+                <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+                <Text className="text-sm font-semibold ml-1.5 text-destructive">Clear</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -545,6 +575,40 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
           >
             <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
             <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
+          </Pressable>
+        </View>
+      </BaseModal>
+
+      {/* Clear Sets Confirm Modal */}
+      <BaseModal
+        visible={clearConfirmVisible}
+        onClose={closeClearConfirm}
+        maxWidth={380}
+      >
+        <Text className="text-xl font-bold mb-2 text-foreground">Clear sets?</Text>
+        <Text className="text-base mb-4 text-foreground-secondary">
+          This will remove all recorded sets. This action cannot be undone.
+        </Text>
+
+        <View className="rounded-lg p-3 mb-5 bg-surface-secondary border border-border">
+          <Text className="text-sm font-semibold text-foreground">
+            {sets.length} set{sets.length !== 1 ? "s" : ""} will be deleted
+          </Text>
+        </View>
+
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={closeClearConfirm}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
+            onPress={handleConfirmClearSets}
+          >
+            <MaterialCommunityIcons name="delete-sweep" size={20} color={rawColors.surface} />
+            <Text className="text-base font-semibold text-primary-foreground">Clear</Text>
           </Pressable>
         </View>
       </BaseModal>

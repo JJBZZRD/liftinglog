@@ -253,6 +253,10 @@ export async function updateSet(setId: number, updates: {
   await db.update(sets).set(mapped).where(eq(sets.id, setId)).run();
 }
 
+export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): Promise<void> {
+  await db.delete(sets).where(eq(sets.workoutExerciseId, workoutExerciseId)).run();
+}
+
 export async function deleteSet(setId: number): Promise<void> {
   await db.delete(sets).where(eq(sets.id, setId)).run();
 }
