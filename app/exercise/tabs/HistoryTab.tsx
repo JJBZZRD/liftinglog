@@ -19,6 +19,7 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 import SetItem from "../../../components/lists/SetItem";
+import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { getPREventsBySetIds } from "../../../lib/db/prEvents";
 import { deleteExerciseSession, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
@@ -89,6 +90,7 @@ function parseSearchQuery(query: string): ParsedSearch {
 
 // Extended set row with PR badge
 type SetWithPR = SetRow & { prBadge?: string };
+type HistoryEntry = WorkoutHistoryEntry & { sets: SetWithPR[] };
 
 /**
  * Calculate estimated 1RM using Epley formula
@@ -158,8 +160,10 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
-  const [rawHistory, setRawHistory] = useState<(WorkoutHistoryEntry & { sets: SetWithPR[] })[]>([]);
+  const [rawHistory, setRawHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<HistoryEntry | null>(null);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -414,34 +418,29 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const handleDelete = useCallback((entry: WorkoutHistoryEntry) => {
-    if (!exerciseId) return;
-    
-    const setCount = entry.sets.length;
-    Alert.alert(
-      "Delete Session",
-      `Are you sure you want to delete this ${exerciseName} session? This will remove ${setCount} set${setCount !== 1 ? "s" : ""} and cannot be undone.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteExerciseSession(entry.workout.id, exerciseId);
-              await loadHistory();
-            } catch (error) {
-              if (__DEV__) console.error("[HistoryTab] Error deleting session:", error);
-              Alert.alert("Error", "Failed to delete session. Please try again.");
-            }
-          },
-        },
-      ]
-    );
-  }, [exerciseId, exerciseName, loadHistory]);
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirmVisible(false);
+    setDeleteTarget(null);
+  }, []);
+
+  const handleDelete = useCallback((entry: HistoryEntry) => {
+    setDeleteTarget(entry);
+    setDeleteConfirmVisible(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!exerciseId || !deleteTarget) return;
+
+    closeDeleteConfirm();
+
+    try {
+      await deleteExerciseSession(deleteTarget.workout.id, exerciseId);
+      await loadHistory();
+    } catch (error) {
+      if (__DEV__) console.error("[HistoryTab] Error deleting session:", error);
+      Alert.alert("Error", "Failed to delete session. Please try again.");
+    }
+  }, [exerciseId, deleteTarget, closeDeleteConfirm, loadHistory]);
 
   if (!exerciseId) {
     return (
@@ -810,6 +809,54 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
           ) : null
         }
       />
+
+      {/* Delete Session Confirm Modal */}
+      <BaseModal
+        visible={deleteConfirmVisible}
+        onClose={closeDeleteConfirm}
+        maxWidth={380}
+      >
+        <Text className="text-xl font-bold mb-2 text-foreground">Delete session?</Text>
+        <Text className="text-base mb-4 text-foreground-secondary">
+          This will remove the session and all recorded sets. This action cannot be undone.
+        </Text>
+
+        {deleteTarget && (
+          <View className="rounded-lg p-3 mb-5 bg-surface-secondary border border-border">
+            <Text className="text-sm font-semibold text-foreground">
+              {formatDate(
+                deleteTarget.workoutExercise?.performedAt ??
+                  deleteTarget.workoutExercise?.completedAt ??
+                  deleteTarget.workout.startedAt
+              )}{" "}
+              • {formatTime(
+                deleteTarget.workoutExercise?.performedAt ??
+                  deleteTarget.workoutExercise?.completedAt ??
+                  deleteTarget.workout.startedAt
+              )}
+            </Text>
+            <Text className="text-sm mt-1 text-foreground-secondary">
+              {deleteTarget.sets.length} set{deleteTarget.sets.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+        )}
+
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={closeDeleteConfirm}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
+            onPress={handleConfirmDelete}
+          >
+            <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
+            <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
+          </Pressable>
+        </View>
+      </BaseModal>
     </View>
   );
 }
