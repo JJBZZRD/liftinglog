@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import SetItem from "../components/lists/SetItem";
 import BaseModal from "../components/modals/BaseModal";
@@ -57,6 +57,31 @@ export default function EditWorkoutScreen() {
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const initialSnapshotRef = useRef<string | null>(null);
+
+  const currentSnapshot = useMemo(() => {
+    const normalizedSets = sets
+      .map((set) => ({
+        id: set.id,
+        setIndex: set.setIndex ?? null,
+        weightKg: set.weightKg ?? null,
+        reps: set.reps ?? null,
+        note: set.note ?? null,
+        performedAt: set.performedAt ?? null,
+      }))
+      .sort((a, b) => a.id - b.id);
+
+    return JSON.stringify({
+      selectedDate: selectedDate.getTime(),
+      sets: normalizedSets,
+    });
+  }, [selectedDate, sets]);
+
+  const hasUnsavedEdits =
+    hasLoadedOnce &&
+    initialSnapshotRef.current !== null &&
+    currentSnapshot !== initialSnapshotRef.current;
 
   // Handler for date change - updates state immediately, syncs to DB
   const handleDateChange = useCallback((date: Date) => {
@@ -106,6 +131,7 @@ export default function EditWorkoutScreen() {
       } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
         setSelectedDate(new Date(exerciseSets[0].performedAt));
       }
+      setHasLoadedOnce(true);
       return;
     }
 
@@ -136,11 +162,19 @@ export default function EditWorkoutScreen() {
     } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
       setSelectedDate(new Date(exerciseSets[0].performedAt));
     }
+
+    setHasLoadedOnce(true);
   }, [workoutExerciseIdParam, exerciseIdParam, workoutIdParam]);
 
   useEffect(() => {
     loadWorkout();
   }, [loadWorkout]);
+
+  useEffect(() => {
+    if (!hasLoadedOnce) return;
+    if (initialSnapshotRef.current !== null) return;
+    initialSnapshotRef.current = currentSnapshot;
+  }, [hasLoadedOnce, currentSnapshot]);
 
   const handleAddSet = useCallback(async () => {
     if (!workoutId || !exerciseId || !workoutExerciseId) return;
@@ -457,12 +491,25 @@ export default function EditWorkoutScreen() {
         style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 8 }}
       >
         <Pressable 
-          className="flex-row items-center justify-center py-4 rounded-xl bg-primary"
-          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+          className={`flex-row items-center justify-center py-4 rounded-xl ${
+            hasUnsavedEdits ? "bg-primary" : "bg-surface-secondary"
+          }`}
+          style={({ pressed }) => ({ opacity: pressed && hasUnsavedEdits ? 0.8 : 1 })}
           onPress={handleSaveEdits}
+          disabled={!hasUnsavedEdits}
         >
-          <MaterialCommunityIcons name="check-circle" size={22} color={rawColors.primaryForeground} />
-          <Text className="text-base font-semibold ml-2 text-primary-foreground">Save Edits</Text>
+          <MaterialCommunityIcons
+            name="check-circle"
+            size={22}
+            color={hasUnsavedEdits ? rawColors.primaryForeground : rawColors.foregroundMuted}
+          />
+          <Text
+            className={`text-base font-semibold ml-2 ${
+              hasUnsavedEdits ? "text-primary-foreground" : "text-foreground-muted"
+            }`}
+          >
+            Save Edits
+          </Text>
         </Pressable>
       </View>
 
