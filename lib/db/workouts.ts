@@ -164,8 +164,58 @@ export async function getOpenWorkoutExercise(workoutId: number, exerciseId: numb
         isNull(workoutExercises.completedAt)
       )
     )
+    .orderBy(desc(workoutExercises.performedAt), desc(workoutExercises.id))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export type InProgressExercise = {
+  workoutExerciseId: number;
+  exerciseId: number;
+  exerciseName: string;
+  muscleGroup: string | null;
+  performedAt: number | null;
+};
+
+/**
+ * List exercises that currently have an open (not completed) workout_exercise entry for a workout.
+ * This is used to power the "In Progress" section of the pinned overlay.
+ */
+export async function listInProgressExercises(workoutId: number): Promise<InProgressExercise[]> {
+  if (!canQueryWorkoutExercises("listInProgressExercises")) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      workoutExerciseId: workoutExercises.id,
+      exerciseId: exercises.id,
+      exerciseName: exercises.name,
+      muscleGroup: exercises.muscleGroup,
+      performedAt: workoutExercises.performedAt,
+    })
+    .from(workoutExercises)
+    .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+    // Match HistoryTab semantics: an "in progress" session exists when there's an open workout_exercise WITH sets.
+    // RecordTab may create an open entry before any sets are logged; we intentionally exclude those here.
+    .innerJoin(sets, eq(sets.workoutExerciseId, workoutExercises.id))
+    .where(and(eq(workoutExercises.workoutId, workoutId), isNull(workoutExercises.completedAt)))
+    .groupBy(
+      workoutExercises.id,
+      exercises.id,
+      exercises.name,
+      exercises.muscleGroup,
+      workoutExercises.performedAt
+    )
+    .orderBy(desc(workoutExercises.performedAt), desc(workoutExercises.id));
+
+  // Defensive de-dupe: if multiple open entries exist for the same exercise, keep the latest.
+  const seen = new Set<number>();
+  return rows.filter((row) => {
+    if (seen.has(row.exerciseId)) return false;
+    seen.add(row.exerciseId);
+    return true;
+  });
 }
 
 export async function addSet(args: {

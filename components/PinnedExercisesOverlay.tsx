@@ -6,20 +6,33 @@ import {
   Animated,
   Dimensions,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import { TabBar, TabView } from "react-native-tab-view";
 import { getPinnedExercises, togglePinExercise, type Exercise } from "../lib/db/exercises";
+import { getActiveWorkout, listInProgressExercises, type InProgressExercise } from "../lib/db/workouts";
 import { useTheme } from "../lib/theme/ThemeContext";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+type OverlayTabKey = "pinned" | "inProgress";
+
 export default function PinnedExercisesOverlay() {
   const { rawColors, isDark } = useTheme();
+  const layout = useWindowDimensions();
   const [isOpen, setIsOpen] = useState(false);
+  const [tabIndex, setTabIndex] = useState(0);
+  const [tabRoutes] = useState<Array<{ key: OverlayTabKey; title: string }>>([
+    { key: "pinned", title: "Pinned" },
+    { key: "inProgress", title: "In Progress" },
+  ]);
   const [pinnedExercises, setPinnedExercises] = useState<Exercise[]>([]);
+  const [inProgressExercises, setInProgressExercises] = useState<InProgressExercise[]>([]);
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const buttonRotation = useRef(new Animated.Value(0)).current;
@@ -29,12 +42,23 @@ export default function PinnedExercisesOverlay() {
     setPinnedExercises(exercises);
   }, []);
 
+  const loadInProgressExercises = useCallback(async () => {
+    const activeWorkout = await getActiveWorkout();
+    if (!activeWorkout) {
+      setInProgressExercises([]);
+      return;
+    }
+
+    const rows = await listInProgressExercises(activeWorkout.id);
+    setInProgressExercises(rows);
+  }, []);
+
   // Load pinned exercises when opening
   useEffect(() => {
     if (isOpen) {
-      loadPinnedExercises();
+      void Promise.all([loadPinnedExercises(), loadInProgressExercises()]);
     }
-  }, [isOpen, loadPinnedExercises]);
+  }, [isOpen, loadPinnedExercises, loadInProgressExercises]);
 
   const openDropdown = useCallback(() => {
     setIsOpen(true);
@@ -99,6 +123,14 @@ export default function PinnedExercisesOverlay() {
     });
   }, [closeDropdown]);
 
+  const handleInProgressExercisePress = useCallback((entry: InProgressExercise) => {
+    closeDropdown();
+    router.push({
+      pathname: "/exercise/[id]",
+      params: { id: String(entry.exerciseId), name: entry.exerciseName, tab: "record", source: "in-progress-overlay" },
+    });
+  }, [closeDropdown]);
+
   const handleUnpinExercise = useCallback(async (exerciseId: number) => {
     await togglePinExercise(exerciseId);
     // Update the list immediately
@@ -133,6 +165,162 @@ export default function PinnedExercisesOverlay() {
     [handleUnpinExercise, rawColors]
   );
 
+  const renderPinnedContent = useCallback(() => {
+    if (pinnedExercises.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons
+            name="pin-off-outline"
+            size={48}
+            color={rawColors.foregroundMuted}
+          />
+          <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>No pinned exercises</Text>
+          <Text style={[styles.emptySubtext, { color: rawColors.foregroundMuted }]}>
+            Pin exercises from their detail page for quick access
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView contentContainerStyle={styles.exerciseList} showsVerticalScrollIndicator={false}>
+        {pinnedExercises.map((exercise) => (
+          <Swipeable
+            key={exercise.id}
+            renderRightActions={(progress, dragX) =>
+              renderRightActions(progress, dragX, exercise.id)
+            }
+            overshootRight={false}
+            rightThreshold={140}
+            friction={2}
+            onSwipeableOpen={() => handleUnpinExercise(exercise.id)}
+          >
+            <Pressable
+              style={[styles.exerciseItem, { backgroundColor: rawColors.surface }]}
+              onPress={() => handleExercisePress(exercise)}
+            >
+              <View style={[styles.exerciseIcon, { backgroundColor: rawColors.primaryLight }]}>
+                <MaterialCommunityIcons
+                  name="dumbbell"
+                  size={20}
+                  color={rawColors.primary}
+                />
+              </View>
+              <View style={styles.exerciseInfo}>
+                <Text style={[styles.exerciseName, { color: rawColors.foreground }]}>{exercise.name}</Text>
+                {exercise.muscleGroup && (
+                  <Text style={[styles.exerciseMuscle, { color: rawColors.foregroundSecondary }]}>
+                    {exercise.muscleGroup}
+                  </Text>
+                )}
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={24}
+                color={rawColors.foregroundMuted}
+              />
+            </Pressable>
+          </Swipeable>
+        ))}
+      </ScrollView>
+    );
+  }, [
+    pinnedExercises,
+    rawColors.foreground,
+    rawColors.foregroundMuted,
+    rawColors.foregroundSecondary,
+    rawColors.primary,
+    rawColors.primaryLight,
+    rawColors.surface,
+    handleExercisePress,
+    handleUnpinExercise,
+    renderRightActions,
+  ]);
+
+  const renderInProgressContent = useCallback(() => {
+    if (inProgressExercises.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons
+            name="progress-clock"
+            size={48}
+            color={rawColors.foregroundMuted}
+          />
+          <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>No exercises in progress</Text>
+          <Text style={[styles.emptySubtext, { color: rawColors.foregroundMuted }]}>
+            Start recording sets to see your active exercises here
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView contentContainerStyle={styles.exerciseList} showsVerticalScrollIndicator={false}>
+        {inProgressExercises.map((entry) => (
+          <Pressable
+            key={entry.workoutExerciseId}
+            style={[styles.exerciseItem, { backgroundColor: rawColors.surface }]}
+            onPress={() => handleInProgressExercisePress(entry)}
+          >
+            <View style={[styles.exerciseIcon, { backgroundColor: rawColors.primaryLight }]}>
+              <MaterialCommunityIcons
+                name="progress-clock"
+                size={20}
+                color={rawColors.primary}
+              />
+            </View>
+            <View style={styles.exerciseInfo}>
+              <Text style={[styles.exerciseName, { color: rawColors.foreground }]}>{entry.exerciseName}</Text>
+              {entry.muscleGroup && (
+                <Text style={[styles.exerciseMuscle, { color: rawColors.foregroundSecondary }]}>
+                  {entry.muscleGroup}
+                </Text>
+              )}
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color={rawColors.foregroundMuted}
+            />
+          </Pressable>
+        ))}
+      </ScrollView>
+    );
+  }, [
+    inProgressExercises,
+    rawColors.foreground,
+    rawColors.foregroundMuted,
+    rawColors.foregroundSecondary,
+    rawColors.primary,
+    rawColors.primaryLight,
+    rawColors.surface,
+    handleInProgressExercisePress,
+  ]);
+
+  const renderScene = useCallback(
+    ({ route }: { route: { key: OverlayTabKey } }) => {
+      switch (route.key) {
+        case "pinned":
+          return renderPinnedContent();
+        case "inProgress":
+          return renderInProgressContent();
+        default:
+          return null;
+      }
+    },
+    [renderPinnedContent, renderInProgressContent]
+  );
+
+  const handleTabIndexChange = useCallback(
+    (nextIndex: number) => {
+      setTabIndex(nextIndex);
+      if (tabRoutes[nextIndex]?.key === "inProgress" && isOpen) {
+        void loadInProgressExercises();
+      }
+    },
+    [isOpen, loadInProgressExercises, tabRoutes]
+  );
+
   const rotateInterpolation = buttonRotation.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "45deg"],
@@ -160,66 +348,38 @@ export default function PinnedExercisesOverlay() {
         ]}
         pointerEvents={isOpen ? "auto" : "none"}
       >
-        <View style={[styles.dropdown, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]}>
-          <View style={[styles.dropdownHeader, { borderBottomColor: rawColors.borderLight }]}>
-            <MaterialCommunityIcons name="pin" size={20} color={rawColors.primary} />
-            <Text style={[styles.dropdownTitle, { color: rawColors.foreground }]}>Pinned Exercises</Text>
-          </View>
-
-          {pinnedExercises.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons
-                name="pin-off-outline"
-                size={48}
-                color={rawColors.foregroundMuted}
-              />
-              <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>No pinned exercises</Text>
-              <Text style={[styles.emptySubtext, { color: rawColors.foregroundMuted }]}>
-                Pin exercises from their detail page for quick access
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.exerciseList}>
-              {pinnedExercises.map((exercise) => (
-                <Swipeable
-                  key={exercise.id}
-                  renderRightActions={(progress, dragX) =>
-                    renderRightActions(progress, dragX, exercise.id)
-                  }
-                  overshootRight={false}
-                  rightThreshold={140}
-                  friction={2}
-                  onSwipeableOpen={() => handleUnpinExercise(exercise.id)}
-                >
-                  <Pressable
-                    style={[styles.exerciseItem, { backgroundColor: rawColors.surface }]}
-                    onPress={() => handleExercisePress(exercise)}
-                  >
-                    <View style={[styles.exerciseIcon, { backgroundColor: rawColors.primaryLight }]}>
-                      <MaterialCommunityIcons
-                        name="dumbbell"
-                        size={20}
-                        color={rawColors.primary}
-                      />
-                    </View>
-                    <View style={styles.exerciseInfo}>
-                      <Text style={[styles.exerciseName, { color: rawColors.foreground }]}>{exercise.name}</Text>
-                      {exercise.muscleGroup && (
-                        <Text style={[styles.exerciseMuscle, { color: rawColors.foregroundSecondary }]}>
-                          {exercise.muscleGroup}
-                        </Text>
-                      )}
-                    </View>
-                    <MaterialCommunityIcons
-                      name="chevron-right"
-                      size={24}
-                      color={rawColors.foregroundMuted}
-                    />
-                  </Pressable>
-                </Swipeable>
-              ))}
-            </View>
-          )}
+        <View
+          style={[
+            styles.dropdown,
+            {
+              backgroundColor: rawColors.surface,
+              shadowColor: rawColors.shadow,
+            },
+          ]}
+        >
+          <TabView
+            navigationState={{ index: tabIndex, routes: tabRoutes }}
+            renderScene={renderScene}
+            onIndexChange={handleTabIndexChange}
+            initialLayout={{ width: layout.width - 32 }}
+            swipeEnabled={false}
+            renderTabBar={(props) => (
+              <View style={[styles.dropdownHeader, { borderBottomColor: rawColors.borderLight }]}>
+                <View style={styles.dropdownTitleRow}>
+                  <MaterialCommunityIcons name="dumbbell" size={20} color={rawColors.primary} />
+                  <Text style={[styles.dropdownTitle, { color: rawColors.foreground }]}>Exercises</Text>
+                </View>
+                <TabBar
+                  {...props}
+                  indicatorStyle={{ backgroundColor: rawColors.primary }}
+                  style={[styles.tabBar, { backgroundColor: rawColors.surface }]}
+                  activeColor={rawColors.primary}
+                  inactiveColor={rawColors.foregroundSecondary}
+                  pressColor={rawColors.pressed}
+                />
+              </View>
+            )}
+          />
         </View>
       </Animated.View>
 
@@ -264,18 +424,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-    maxHeight: SCREEN_HEIGHT * 0.6,
+    height: SCREEN_HEIGHT * 0.6,
   },
   dropdownHeader: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 0,
+    borderBottomWidth: 1,
+  },
+  dropdownTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    padding: 16,
-    borderBottomWidth: 1,
+    paddingBottom: 10,
   },
   dropdownTitle: {
     fontSize: 18,
     fontWeight: "600",
+  },
+  tabBar: {
+    marginHorizontal: -16,
   },
   emptyState: {
     alignItems: "center",
