@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import SetItem from "../../../components/lists/SetItem";
+import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import EditSetModal from "../../../components/modals/EditSetModal";
 import TimerModal from "../../../components/TimerModal";
@@ -44,6 +45,8 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const [setIndex, setSetIndex] = useState(1);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ set: SetRow; displayIndex: number } | null>(null);
 
   // Timer state with real-time updates
   const [timerModalVisible, setTimerModalVisible] = useState(false);
@@ -225,7 +228,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     setTimerModalVisible(true);
   }, [currentTimer]);
 
-  const handleLongPressSet = useCallback((set: SetRow) => {
+  const handleEditSetPress = useCallback((set: SetRow) => {
     setSelectedSet(set);
     setEditModalVisible(true);
   }, []);
@@ -245,15 +248,24 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     onHistoryRefresh?.();
   }, [selectedSet, loadWorkout, onHistoryRefresh]);
 
-  const handleDeleteSet = useCallback(async () => {
-    if (!selectedSet) return;
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirmVisible(false);
+    setDeleteTarget(null);
+  }, []);
 
-    await deleteSet(selectedSet.id);
-    setEditModalVisible(false);
-    setSelectedSet(null);
+  const handleDeleteSetPress = useCallback((set: SetRow, displayIndex: number) => {
+    setDeleteTarget({ set, displayIndex });
+    setDeleteConfirmVisible(true);
+  }, []);
+
+  const handleConfirmDeleteSet = useCallback(async () => {
+    if (!deleteTarget) return;
+
+    await deleteSet(deleteTarget.set.id);
+    closeDeleteConfirm();
     await loadWorkout();
     onHistoryRefresh?.();
-  }, [selectedSet, loadWorkout, onHistoryRefresh]);
+  }, [deleteTarget, closeDeleteConfirm, loadWorkout, onHistoryRefresh]);
 
   if (!exerciseId) {
     return (
@@ -269,7 +281,30 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       weightKg={item.weightKg}
       reps={item.reps}
       note={item.note}
-      onLongPress={() => handleLongPressSet(item)}
+      rightActions={
+        <View className="flex-row items-center gap-2 ml-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Edit set ${index + 1}`}
+            hitSlop={8}
+            className="w-7 h-7 rounded-full items-center justify-center bg-background"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            onPress={() => handleEditSetPress(item)}
+          >
+            <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Delete set ${index + 1}`}
+            hitSlop={8}
+            className="w-7 h-7 rounded-full items-center justify-center bg-background"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            onPress={() => handleDeleteSetPress(item, index + 1)}
+          >
+            <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+          </Pressable>
+        </View>
+      }
     />
   );
 
@@ -468,9 +503,51 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
         }}
         set={selectedSet}
         onSave={handleUpdateSet}
-        onDelete={handleDeleteSet}
-        showDatePicker={false}
+        showTimePicker={true}
       />
+
+      {/* Delete Set Confirm Modal */}
+      <BaseModal
+        visible={deleteConfirmVisible}
+        onClose={closeDeleteConfirm}
+        maxWidth={380}
+      >
+        <Text className="text-xl font-bold mb-2 text-foreground">Delete set?</Text>
+        <Text className="text-base mb-4 text-foreground-secondary">
+          This action cannot be undone.
+        </Text>
+
+        {deleteTarget && (
+          <View className="rounded-lg p-3 mb-5 bg-surface-secondary border border-border">
+            <Text className="text-sm font-semibold text-foreground">
+              Set #{deleteTarget.displayIndex}:{" "}
+              {deleteTarget.set.weightKg !== null ? `${deleteTarget.set.weightKg} kg` : "—"}{" "}
+              × {deleteTarget.set.reps !== null ? `${deleteTarget.set.reps} reps` : "—"}
+            </Text>
+            {!!deleteTarget.set.note && (
+              <Text className="text-sm mt-1 italic text-foreground-secondary" numberOfLines={2}>
+                {deleteTarget.set.note}
+              </Text>
+            )}
+          </View>
+        )}
+
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={closeDeleteConfirm}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
+            onPress={handleConfirmDeleteSet}
+          >
+            <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
+            <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
+          </Pressable>
+        </View>
+      </BaseModal>
 
       {/* Timer Modal */}
       <TimerModal

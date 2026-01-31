@@ -8,7 +8,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTheme } from "../../lib/theme/ThemeContext";
-import { formatRelativeDate } from "../../lib/utils/formatters";
+import { formatHistoryTime } from "../../lib/utils/formatters";
 import BaseModal from "./BaseModal";
 import DatePickerModal from "./DatePickerModal";
 
@@ -29,10 +29,8 @@ interface EditSetModalProps {
   set: SetData | null;
   /** Called when the set is saved */
   onSave: (updates: { weight_kg: number; reps: number; note: string | null; performed_at?: number }) => void;
-  /** Called when the set is deleted */
-  onDelete: () => void;
-  /** Whether to show the date picker (default: true for edit-workout, false for RecordTab) */
-  showDatePicker?: boolean;
+  /** Whether to show the time picker */
+  showTimePicker: boolean;
 }
 
 /**
@@ -41,22 +39,26 @@ interface EditSetModalProps {
  * - Reps input
  * - Optional note
  * - Optional date picker (for editing historical sets)
- * - Delete button
  */
 export default function EditSetModal({
   visible,
   onClose,
   set,
   onSave,
-  onDelete,
-  showDatePicker = false,
+  showTimePicker = false,
 }: EditSetModalProps) {
   const { rawColors } = useTheme();
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(new Date());
-  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [showTimePickerModal, setShowTimePickerModal] = useState(false);
+
+  const mergeTime = useCallback((base: Date, time: Date) => {
+    const merged = new Date(base);
+    merged.setHours(time.getHours(), time.getMinutes(), 0, 0);
+    return merged;
+  }, []);
 
   // Reset form when set changes
   useEffect(() => {
@@ -84,12 +86,12 @@ export default function EditSetModal({
       note: noteValue,
     };
 
-    if (showDatePicker) {
+    if (showTimePicker) {
       updates.performed_at = date.getTime();
     }
 
     onSave(updates);
-  }, [weight, reps, note, date, showDatePicker, onSave]);
+  }, [weight, reps, note, date, showTimePicker, onSave]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -103,7 +105,7 @@ export default function EditSetModal({
         visible={visible}
         onClose={handleClose}
         maxWidth={400}
-        contentStyle={{ padding: 0, maxHeight: "45%" }}
+        contentStyle={{ padding: 0, maxHeight: "60%" }}
       >
         <ScrollView
           contentContainerStyle={{ padding: 24 }}
@@ -149,27 +151,22 @@ export default function EditSetModal({
             />
           </View>
 
-          {showDatePicker && (
+          {showTimePicker && (
             <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Date</Text>
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Time</Text>
               <Pressable
                 className="flex-row items-center border border-border bg-primary-light px-3 py-3 rounded-lg gap-2"
-                onPress={() => setShowDatePickerModal(true)}
+                onPress={() => setShowTimePickerModal(true)}
               >
-                <MaterialCommunityIcons name="calendar" size={18} color={rawColors.primary} />
-                <Text className="text-base font-medium text-primary">{formatRelativeDate(date)}</Text>
+                <MaterialCommunityIcons name="clock-outline" size={18} color={rawColors.primary} />
+                <Text className="text-base font-medium text-primary">
+                  {formatHistoryTime(date.getTime())}
+                </Text>
               </Pressable>
             </View>
           )}
 
           <View className="flex-row gap-3 mt-5">
-            <Pressable 
-              className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
-              onPress={onDelete}
-            >
-              <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
-              <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
-            </Pressable>
             <Pressable 
               className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
               onPress={handleClose}
@@ -186,12 +183,13 @@ export default function EditSetModal({
         </ScrollView>
       </BaseModal>
 
-      {showDatePicker && (
+      {showTimePicker && (
         <DatePickerModal
-          visible={showDatePickerModal}
-          onClose={() => setShowDatePickerModal(false)}
+          visible={showTimePickerModal}
+          onClose={() => setShowTimePickerModal(false)}
           value={date}
-          onChange={setDate}
+          mode="time"
+          onChange={(next) => setDate((current) => mergeTime(current, next))}
         />
       )}
     </>

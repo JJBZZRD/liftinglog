@@ -18,6 +18,8 @@ interface DatePickerModalProps {
   value: Date;
   /** Called when the date changes */
   onChange: (date: Date) => void;
+  /** Picker mode (date or time) */
+  mode?: "date" | "time";
   /** Maximum selectable date (default: today) */
   maximumDate?: Date;
   /** Minimum selectable date */
@@ -37,11 +39,15 @@ export default function DatePickerModal({
   onClose,
   value,
   onChange,
-  maximumDate = new Date(),
+  mode = "date",
+  maximumDate,
   minimumDate,
-  title = "Select Date",
+  title,
 }: DatePickerModalProps) {
   const { rawColors } = useTheme();
+  const resolvedTitle = title ?? (mode === "time" ? "Select Time" : "Select Date");
+  const resolvedMaximumDate = mode === "date" ? (maximumDate ?? new Date()) : maximumDate;
+  const resolvedMinimumDate = mode === "date" ? minimumDate : undefined;
 
   const handleChange = (_event: any, selectedDate?: Date) => {
     // On Android, the native picker handles its own dismissal
@@ -66,11 +72,11 @@ export default function DatePickerModal({
     return (
       <DateTimePicker
         value={value}
-        mode="date"
+        mode={mode}
         display="default"
         onChange={handleChange}
-        maximumDate={maximumDate}
-        minimumDate={minimumDate}
+        maximumDate={resolvedMaximumDate}
+        minimumDate={resolvedMinimumDate}
       />
     );
   }
@@ -84,18 +90,18 @@ export default function DatePickerModal({
       contentStyle={{ padding: 0, overflow: "hidden" }}
     >
       <View className="flex-row justify-between items-center px-5 py-4 border-b border-border">
-        <Text className="text-[17px] font-semibold text-foreground">{title}</Text>
+        <Text className="text-[17px] font-semibold text-foreground">{resolvedTitle}</Text>
         <Pressable onPress={handleDone}>
           <Text className="text-[17px] font-semibold text-primary">Done</Text>
         </Pressable>
       </View>
       <DateTimePicker
         value={value}
-        mode="date"
+        mode={mode}
         display="spinner"
         onChange={handleChange}
-        maximumDate={maximumDate}
-        minimumDate={minimumDate}
+        maximumDate={resolvedMaximumDate}
+        minimumDate={resolvedMinimumDate}
         style={{ height: 200, backgroundColor: rawColors.surface }}
       />
     </BaseModal>

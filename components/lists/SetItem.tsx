@@ -8,6 +8,7 @@
  * - edit-workout.tsx
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import type { ReactNode } from "react";
 import { Pressable, Text, View, type ViewStyle } from "react-native";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
@@ -30,6 +31,8 @@ interface SetItemProps {
   prBadge?: string | null;
   /** Whether this is the best set in the session */
   isBestSet?: boolean;
+  /** Optional right-side actions/accessories */
+  rightActions?: ReactNode;
 }
 
 /**
@@ -50,6 +53,7 @@ export default function SetItem({
   variant = "default",
   prBadge,
   isBestSet,
+  rightActions,
 }: SetItemProps) {
   const { rawColors } = useTheme();
   const isCompact = variant === "compact";
@@ -122,6 +126,7 @@ export default function SetItem({
           </Text>
         </View>
       )}
+      {rightActions}
     </View>
   );
 
