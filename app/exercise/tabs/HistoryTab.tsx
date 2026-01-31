@@ -22,7 +22,7 @@ import SetItem from "../../../components/lists/SetItem";
 import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { getPREventsBySetIds } from "../../../lib/db/prEvents";
-import { deleteExerciseSession, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
+import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 
 // Date range presets
@@ -379,16 +379,16 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   };
 
   const handleEdit = useCallback((entry: WorkoutHistoryEntry) => {
-    if (!exerciseId) return;
+    const workoutExerciseId = entry.workoutExercise?.id;
+    if (!workoutExerciseId) return;
     router.push({
       pathname: "/edit-workout",
       params: {
-        exerciseId: String(exerciseId),
-        workoutId: String(entry.workout.id),
+        workoutExerciseId: String(workoutExerciseId),
         exerciseName,
       },
     });
-  }, [exerciseId, exerciseName]);
+  }, [exerciseName]);
 
   // Handle date preset selection
   const handlePresetPress = useCallback((preset: DateRangePreset) => {
@@ -429,18 +429,19 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
-    if (!exerciseId || !deleteTarget) return;
+    const workoutExerciseId = deleteTarget?.workoutExercise?.id;
+    if (!workoutExerciseId) return;
 
     closeDeleteConfirm();
 
     try {
-      await deleteExerciseSession(deleteTarget.workout.id, exerciseId);
+      await deleteWorkoutExercise(workoutExerciseId);
       await loadHistory();
     } catch (error) {
       if (__DEV__) console.error("[HistoryTab] Error deleting session:", error);
       Alert.alert("Error", "Failed to delete session. Please try again.");
     }
-  }, [exerciseId, deleteTarget, closeDeleteConfirm, loadHistory]);
+  }, [deleteTarget, closeDeleteConfirm, loadHistory]);
 
   if (!exerciseId) {
     return (
@@ -707,7 +708,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
 
       <FlatList
         data={filteredHistory}
-        keyExtractor={(item) => String(item.workout.id)}
+        keyExtractor={(item) => String(item.workoutExercise?.id ?? item.workout.id)}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
           // Use workoutExercise dates for display, fall back to workout dates
