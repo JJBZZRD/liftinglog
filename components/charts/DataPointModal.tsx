@@ -51,13 +51,20 @@ export default function DataPointModal({
 }: DataPointModalProps) {
   const { rawColors } = useTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
 
   // Track measured height of the fixed section
   const [fixedHeight, setFixedHeight] = useState(0);
+  const [landscapeLeftHeight, setLandscapeLeftHeight] = useState(0);
 
   // Responsive card dimensions (pixel-based)
-  const cardMaxHeight = Math.min(windowHeight * 0.8, 600);
-  const cardMaxWidth = Math.min(windowWidth - 40, 380);
+  const cardMaxHeight = Math.min(windowHeight * (isLandscape ? 0.95 : 0.8), 600);
+  const portraitCardMaxWidth = Math.min(windowWidth - 40, 380);
+  const landscapeLeftWidth = portraitCardMaxWidth;
+  const landscapeRightWidth = Math.min(280, Math.max(200, Math.round((windowWidth - 40) * 0.33)));
+  const cardMaxWidth = isLandscape
+    ? Math.min(windowWidth - 40, landscapeLeftWidth + 1 + landscapeRightWidth)
+    : portraitCardMaxWidth;
 
   // Compute available height for sets region
   // Ensure at least MIN_SETS_HEIGHT even if fixedSection is tall
@@ -89,6 +96,14 @@ export default function DataPointModal({
     if (__DEV__) {
       const { width, height } = event.nativeEvent.layout;
       console.log("[DataPointModal] SetsContainer layout:", { width, height });
+    }
+  };
+
+  const handleLandscapeLeftLayout = (event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    setLandscapeLeftHeight((prev) => (Math.abs(prev - height) > 1 ? height : prev));
+    if (__DEV__) {
+      console.log("[DataPointModal] LandscapeLeft layout:", { height });
     }
   };
 
@@ -176,7 +191,175 @@ export default function DataPointModal({
               </Text>
             </View>
           ) : hasDetailsWithSets ? (
-            <>
+            isLandscape ? (
+              <View style={styles.landscapeContent}>
+                {/* Left: session meta + summary */}
+                <View
+                  style={[styles.landscapeLeft, { width: landscapeLeftWidth }]}
+                  onLayout={handleLandscapeLeftLayout}
+                >
+                  {/* Header */}
+                  <View style={[styles.header, { borderBottomColor: rawColors.border }]}>
+                    <View style={styles.headerLeft}>
+                      <Text style={[styles.title, { color: rawColors.foreground }]}>
+                        Session
+                      </Text>
+                      {exerciseName && (
+                        <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
+                          {exerciseName}
+                        </Text>
+                      )}
+                    </View>
+                    <Pressable 
+                      onPress={onClose} 
+                      hitSlop={12}
+                      style={[styles.closeButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                    >
+                      <MaterialCommunityIcons name="close" size={20} color={rawColors.foregroundSecondary} />
+                    </Pressable>
+                  </View>
+
+                  {/* Date/Time Meta Row */}
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaLeft}>
+                      <MaterialCommunityIcons name="calendar-outline" size={16} color={rawColors.foregroundSecondary} />
+                      <Text style={[styles.metaDate, { color: rawColors.foreground }]}>
+                        {formatDate(sessionDetails.date)}
+                      </Text>
+                      <Text style={[styles.metaTime, { color: rawColors.foregroundSecondary }]}>
+                        {formatTime(sessionDetails.date)}
+                      </Text>
+                    </View>
+                    {exerciseId && (
+                      <View style={styles.metaActions}>
+                        {!isCompleted ? (
+                          <View style={[styles.inProgressBadge, { backgroundColor: rawColors.primary }]}>
+                            <Text style={[styles.inProgressText, { color: rawColors.surface }]}>
+                              In Progress
+                            </Text>
+                          </View>
+                        ) : (
+                          <>
+                            <Pressable
+                              onPress={() => {
+                                onClose();
+                                router.push({
+                                  pathname: "/edit-workout",
+                                  params: {
+                                    exerciseId: String(exerciseId),
+                                    workoutId: String(sessionDetails.workoutId),
+                                    exerciseName: exerciseName || "Exercise",
+                                  },
+                                });
+                              }}
+                              hitSlop={8}
+                              style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                            >
+                              <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
+                            </Pressable>
+                            <Pressable
+                              onPress={handleDelete}
+                              hitSlop={8}
+                              style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                            >
+                              <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+                            </Pressable>
+                          </>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Summary Section */}
+                  <View style={styles.summarySection}>
+                    <Text style={[styles.sectionTitle, { color: rawColors.foreground }]}>
+                      Summary
+                    </Text>
+                    
+                    {/* Stat Tiles Row */}
+                    <View style={styles.statRow}>
+                      <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
+                        <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                          Volume
+                        </Text>
+                        <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+                          {sessionDetails.totalVolume.toFixed(0)}
+                        </Text>
+                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
+                      </View>
+                      <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
+                        <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                          Reps
+                        </Text>
+                        <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+                          {sessionDetails.totalReps}
+                        </Text>
+                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>total</Text>
+                      </View>
+                      {sessionDetails.estimatedE1RM && (
+                        <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
+                          <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
+                            Est. 1RM
+                          </Text>
+                          <Text style={[styles.statValue, { color: rawColors.primary }]}>
+                            {sessionDetails.estimatedE1RM.toFixed(0)}
+                          </Text>
+                          <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Best Set Row */}
+                    {sessionDetails.bestSet && (
+                      <View style={[styles.bestSetRow, { borderColor: rawColors.border }]}>
+                        <Text style={[styles.bestSetLabel, { color: rawColors.foregroundSecondary }]}>
+                          Best Set
+                        </Text>
+                        <Text style={[styles.bestSetValue, { color: rawColors.foreground }]}>
+                          {sessionDetails.bestSet.weight} kg × {sessionDetails.bestSet.reps} reps
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={[styles.landscapeDivider, { backgroundColor: rawColors.border }]} />
+
+                {/* Right: sets list */}
+                <View
+                  style={[
+                    styles.landscapeRight,
+                    { width: landscapeRightWidth },
+                    landscapeLeftHeight > 0 ? { height: Math.min(landscapeLeftHeight, cardMaxHeight) } : null,
+                  ]}
+                >
+                  <Text style={[styles.sectionTitle, styles.setsSectionTitle, { color: rawColors.foreground }]}>
+                    Sets ({sessionDetails.totalSets})
+                  </Text>
+                  
+                  <ScrollView
+                    onLayout={handleScrollViewLayout}
+                    style={styles.setsScrollView}
+                    contentContainerStyle={styles.setsScrollContent}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                    bounces={false}
+                  >
+                    {sessionDetails.sets.map((set, index) => (
+                      <SetItem
+                        key={index}
+                        index={index + 1}
+                        weightKg={set.weightKg}
+                        reps={set.reps}
+                        note={set.note}
+                        variant="compact"
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+            ) : (
+              <>
               {/* ===== FIXED SECTION (Header + Date + Summary) ===== */}
               {/* flexShrink: 0, overflow: hidden - maintains natural height, clips children */}
               <View 
@@ -347,6 +530,7 @@ export default function DataPointModal({
                 </ScrollView>
               </View>
             </>
+            )
           ) : (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons 
@@ -541,6 +725,26 @@ const styles = StyleSheet.create({
   setsContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
+    paddingBottom: 16,
+  },
+
+  // Landscape layout: two-column split (meta/summary left, sets right)
+  landscapeContent: {
+    flexDirection: "row",
+  },
+  landscapeLeft: {
+    flexShrink: 0,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  landscapeDivider: {
+    width: 1,
+  },
+  landscapeRight: {
+    flexShrink: 0,
+    paddingTop: 16,
+    paddingHorizontal: 16,
     paddingBottom: 16,
   },
   
