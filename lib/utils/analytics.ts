@@ -1,7 +1,7 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { E1RMFormulaId } from "../db/connection";
-import { db } from "../db/connection";
-import { sets, workouts } from "../db/schema";
+import { db, hasColumn } from "../db/connection";
+import { sets, workoutExercises, workouts } from "../db/schema";
 import { getGlobalFormula } from "../db/settings";
 import { computeE1rm } from "../pr";
 
@@ -26,6 +26,8 @@ export type SessionSetDetail = {
 export type SessionDetails = {
   date: number;
   workoutId: number;
+  performedAt: number | null;
+  completedAt: number | null;
   sets: SessionSetDetail[];
   totalSets: number;
   totalReps: number;
@@ -65,6 +67,7 @@ export async function getSessionDetails(
 
   const sessionSets = await db
     .select({
+      workoutExerciseId: sets.workoutExerciseId,
       setIndex: sets.setIndex,
       weightKg: sets.weightKg,
       reps: sets.reps,
@@ -97,7 +100,60 @@ export async function getSessionDetails(
     .where(eq(workouts.id, workoutId))
     .limit(1);
 
-  const workoutDate = workout[0]?.completedAt ?? workout[0]?.startedAt ?? Date.now();
+  const workoutStartedAt = workout[0]?.startedAt ?? Date.now();
+  const workoutCompletedAt = workout[0]?.completedAt ?? null;
+
+  let performedAt: number | null = null;
+  let completedAt: number | null = null;
+
+  const canQueryWorkoutExercises = hasColumn("workout_exercises", "performed_at") && hasColumn("workout_exercises", "completed_at");
+  if (canQueryWorkoutExercises) {
+    const workoutExerciseIds = [
+      ...new Set(
+        sessionSets
+          .map((s) => s.workoutExerciseId)
+          .filter((id): id is number => typeof id === "number")
+      ),
+    ];
+
+    if (workoutExerciseIds.length > 0) {
+      const rows = await db
+        .select({
+          performedAt: workoutExercises.performedAt,
+          completedAt: workoutExercises.completedAt,
+        })
+        .from(workoutExercises)
+        .where(inArray(workoutExercises.id, workoutExerciseIds));
+
+      // If ANY related workout_exercise is incomplete, treat the session as in-progress.
+      const anyInProgress = rows.some((r) => r.completedAt === null);
+      completedAt = anyInProgress ? null : (rows.map((r) => r.completedAt).filter((t): t is number => typeof t === "number").sort((a, b) => b - a)[0] ?? null);
+
+      performedAt = rows
+        .map((r) => r.performedAt)
+        .filter((t): t is number => typeof t === "number")
+        .sort((a, b) => b - a)[0] ?? null;
+    } else {
+      // Older data may have sets without workout_exercise_id; fall back to the latest entry for this exercise in the workout.
+      const rows = await db
+        .select({
+          performedAt: workoutExercises.performedAt,
+          completedAt: workoutExercises.completedAt,
+        })
+        .from(workoutExercises)
+        .where(and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId)))
+        .orderBy(desc(workoutExercises.performedAt), desc(workoutExercises.id))
+        .limit(1);
+
+      performedAt = rows[0]?.performedAt ?? null;
+      completedAt = rows[0]?.completedAt ?? null;
+    }
+  } else {
+    // Best-effort fallback for "in progress" detection when workout_exercises columns are missing.
+    completedAt = workoutCompletedAt;
+  }
+
+  const workoutDate = performedAt ?? completedAt ?? workoutCompletedAt ?? workoutStartedAt ?? Date.now();
 
   // Build individual set details
   const setDetails: SessionSetDetail[] = sessionSets.map((set, index) => ({
@@ -139,6 +195,8 @@ export async function getSessionDetails(
   return {
     date: workoutDate,
     workoutId,
+    performedAt,
+    completedAt,
     sets: setDetails,
     totalSets,
     totalReps,

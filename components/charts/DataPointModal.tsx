@@ -67,6 +67,7 @@ export default function DataPointModal({
 
   // Determine which branch will be rendered
   const hasDetailsWithSets = !!(sessionDetails && sessionDetails.sets && sessionDetails.sets.length > 0);
+  const isCompleted = sessionDetails ? sessionDetails.completedAt !== null : false;
 
   // onLayout handlers
   const handleCardLayout = (event: LayoutChangeEvent) => {
@@ -115,7 +116,7 @@ export default function DataPointModal({
   };
 
   const handleDelete = () => {
-    if (!sessionDetails || !exerciseId) return;
+    if (!sessionDetails || !exerciseId || !isCompleted) return;
     
     Alert.alert(
       "Delete Session",
@@ -216,30 +217,40 @@ export default function DataPointModal({
                   </View>
                   {exerciseId && (
                     <View style={styles.metaActions}>
-                      <Pressable
-                        onPress={() => {
-                          onClose();
-                          router.push({
-                            pathname: "/edit-workout",
-                            params: {
-                              exerciseId: String(exerciseId),
-                              workoutId: String(sessionDetails.workoutId),
-                              exerciseName: exerciseName || "Exercise",
-                            },
-                          });
-                        }}
-                        hitSlop={8}
-                        style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
-                      >
-                        <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={handleDelete}
-                        hitSlop={8}
-                        style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
-                      >
-                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
-                      </Pressable>
+                      {!isCompleted ? (
+                        <View style={[styles.inProgressBadge, { backgroundColor: rawColors.primary }]}>
+                          <Text style={[styles.inProgressText, { color: rawColors.surface }]}>
+                            In Progress
+                          </Text>
+                        </View>
+                      ) : (
+                        <>
+                          <Pressable
+                            onPress={() => {
+                              onClose();
+                              router.push({
+                                pathname: "/edit-workout",
+                                params: {
+                                  exerciseId: String(exerciseId),
+                                  workoutId: String(sessionDetails.workoutId),
+                                  exerciseName: exerciseName || "Exercise",
+                                },
+                              });
+                            }}
+                            hitSlop={8}
+                            style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                          >
+                            <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
+                          </Pressable>
+                          <Pressable
+                            onPress={handleDelete}
+                            hitSlop={8}
+                            style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                          >
+                            <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+                          </Pressable>
+                        </>
+                      )}
                     </View>
                   )}
                 </View>
@@ -451,6 +462,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  inProgressBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  inProgressText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   
   // Summary Section

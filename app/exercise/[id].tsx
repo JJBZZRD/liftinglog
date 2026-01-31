@@ -43,7 +43,7 @@ export default function ExerciseModalScreen() {
         case "history":
           return <HistoryTab refreshKey={historyRefreshKey} />;
         case "visualisation":
-          return <VisualisationTab />;
+          return <VisualisationTab refreshKey={historyRefreshKey} />;
         default:
           return null;
       }

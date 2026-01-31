@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams } from "expo-router";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -50,7 +51,11 @@ const getMetricUnit = (metric: MetricType): string => {
   }
 };
 
-export default function VisualisationTab() {
+type VisualisationTabProps = {
+  refreshKey?: number;
+};
+
+export default function VisualisationTab({ refreshKey }: VisualisationTabProps) {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
@@ -151,6 +156,19 @@ export default function VisualisationTab() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (refreshKey !== undefined) {
+      fetchData();
+    }
+  }, [refreshKey, fetchData]);
+
+  // Reload when tab comes into focus (e.g., after recording sets)
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   // Handle data point press - fetch details BEFORE opening modal
   const handleDataPointPress = useCallback(
