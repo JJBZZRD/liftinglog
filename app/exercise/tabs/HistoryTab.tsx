@@ -21,7 +21,7 @@ import Animated, {
 import SetItem from "../../../components/lists/SetItem";
 import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
-import { getPREventsBySetIds } from "../../../lib/db/prEvents";
+import { getCurrentPREventsForExercise } from "../../../lib/db/prEvents";
 import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 
@@ -313,9 +313,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     try {
       const exerciseHistory = await getExerciseHistory(exerciseId);
       
-      // Get all set IDs to fetch PR events
-      const allSetIds = exerciseHistory.flatMap(entry => entry.sets.map(set => set.id));
-      const prEventsMap = await getPREventsBySetIds(allSetIds);
+      const prEventsMap = await getCurrentPREventsForExercise(exerciseId);
       
       // Map PR events to sets
       const historyWithPRs = exerciseHistory.map(entry => ({

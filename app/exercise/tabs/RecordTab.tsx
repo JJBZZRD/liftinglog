@@ -22,7 +22,6 @@ import {
   updateWorkoutExerciseInputs,
   type SetRow,
 } from "../../../lib/db/workouts";
-import { detectAndRecordPRs } from "../../../lib/pr/detection";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
@@ -161,7 +160,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       return;
     }
 
-    const newSetId = await addSet({
+    await addSet({
       workout_id: workoutId,
       exercise_id: exerciseId,
       workout_exercise_id: workoutExerciseId,
@@ -171,11 +170,6 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       set_index: setIndex,
       performed_at: selectedDate.getTime(),
     });
-
-    // Detect and record PRs for the newly added set
-    if (newSetId) {
-      await detectAndRecordPRs(newSetId, exerciseId, weightValue, repsValue, selectedDate.getTime());
-    }
 
     setNote("");
     await loadWorkout();

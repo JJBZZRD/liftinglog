@@ -2,6 +2,7 @@ import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeE1rm } from "../pr";
 import { db, sqlite, hasColumn } from "./connection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
+import { rebuildPREventsForExercise } from "./prEvents";
 import { getGlobalFormula } from "./settings";
 import { newUid } from "../utils/uid";
 
@@ -83,17 +84,38 @@ export async function getOrCreateActiveWorkout(): Promise<number> {
 }
 
 export async function deleteWorkout(id: number): Promise<void> {
+  const exerciseRows = await db
+    .select({ exerciseId: sets.exerciseId })
+    .from(sets)
+    .where(eq(sets.workoutId, id));
+  const exerciseIds = [...new Set(exerciseRows.map((row) => row.exerciseId))];
+
   await db.delete(workouts).where(eq(workouts.id, id)).run();
+
+  for (const exerciseId of exerciseIds) {
+    await rebuildPREventsForExercise(exerciseId);
+  }
 }
 
 /**
  * Delete a workout_exercise entry and its associated sets.
  */
 export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<void> {
+  const we = await db
+    .select({ exerciseId: workoutExercises.exerciseId })
+    .from(workoutExercises)
+    .where(eq(workoutExercises.id, workoutExerciseId))
+    .limit(1);
+  const exerciseId = we[0]?.exerciseId ?? null;
+
   // Delete associated sets first
   await db.delete(sets).where(eq(sets.workoutExerciseId, workoutExerciseId)).run();
   // Then delete the workout_exercise entry
   await db.delete(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId)).run();
+
+  if (exerciseId !== null) {
+    await rebuildPREventsForExercise(exerciseId);
+  }
 }
 
 /**
@@ -110,6 +132,8 @@ export async function deleteExerciseSession(workoutId: number, exerciseId: numbe
   await db.delete(workoutExercises).where(
     and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId))
   ).run();
+
+  await rebuildPREventsForExercise(exerciseId);
 }
 
 export async function addWorkoutExercise(args: {
@@ -252,6 +276,8 @@ export async function addSet(args: {
       performedAt: args.performed_at ?? Date.now(),
     })
     .run();
+
+  await rebuildPREventsForExercise(args.exercise_id);
   return (res.lastInsertRowId as number) ?? 0;
 }
 
@@ -293,6 +319,18 @@ export async function updateSet(setId: number, updates: {
   set_index?: number | null;
   performed_at?: number | null;
 }): Promise<void> {
+  const affectsPR = updates.weight_kg !== undefined || updates.reps !== undefined || updates.performed_at !== undefined;
+
+  let exerciseIdForPR: number | null = null;
+  if (affectsPR) {
+    const rows = await db
+      .select({ exerciseId: sets.exerciseId })
+      .from(sets)
+      .where(eq(sets.id, setId))
+      .limit(1);
+    exerciseIdForPR = rows[0]?.exerciseId ?? null;
+  }
+
   const mapped: Partial<typeof sets.$inferInsert> = {};
   if (updates.weight_kg !== undefined) mapped.weightKg = updates.weight_kg;
   if (updates.reps !== undefined) mapped.reps = updates.reps;
@@ -301,14 +339,39 @@ export async function updateSet(setId: number, updates: {
   if (updates.performed_at !== undefined) mapped.performedAt = updates.performed_at;
   if (Object.keys(mapped).length === 0) return;
   await db.update(sets).set(mapped).where(eq(sets.id, setId)).run();
+
+  if (affectsPR && exerciseIdForPR !== null) {
+    await rebuildPREventsForExercise(exerciseIdForPR);
+  }
 }
 
 export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): Promise<void> {
+  const exerciseRows = await db
+    .select({ exerciseId: sets.exerciseId })
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, workoutExerciseId));
+  const exerciseIds = [...new Set(exerciseRows.map((row) => row.exerciseId))];
+
   await db.delete(sets).where(eq(sets.workoutExerciseId, workoutExerciseId)).run();
+
+  for (const exerciseId of exerciseIds) {
+    await rebuildPREventsForExercise(exerciseId);
+  }
 }
 
 export async function deleteSet(setId: number): Promise<void> {
+  const rows = await db
+    .select({ exerciseId: sets.exerciseId })
+    .from(sets)
+    .where(eq(sets.id, setId))
+    .limit(1);
+  const exerciseId = rows[0]?.exerciseId ?? null;
+
   await db.delete(sets).where(eq(sets.id, setId)).run();
+
+  if (exerciseId !== null) {
+    await rebuildPREventsForExercise(exerciseId);
+  }
 }
 
 export type WorkoutHistoryEntry = {
@@ -457,6 +520,13 @@ export async function updateExerciseEntryDate(workoutExerciseId: number, perform
   if (!canQueryWorkoutExercises("updateExerciseEntryDate")) {
     return;
   }
+  const we = await db
+    .select({ exerciseId: workoutExercises.exerciseId })
+    .from(workoutExercises)
+    .where(eq(workoutExercises.id, workoutExerciseId))
+    .limit(1);
+  const exerciseId = we[0]?.exerciseId ?? null;
+
   await db
     .update(workoutExercises)
     .set({ performedAt })
@@ -469,6 +539,10 @@ export async function updateExerciseEntryDate(workoutExerciseId: number, perform
     .set({ performedAt })
     .where(eq(sets.workoutExerciseId, workoutExerciseId))
     .run();
+
+  if (exerciseId !== null) {
+    await rebuildPREventsForExercise(exerciseId);
+  }
 }
 
 /**
