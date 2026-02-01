@@ -14,13 +14,26 @@ import {
   listSetsForExercise,
   listSetsForWorkoutExercise,
   listWorkoutExercises,
-  updateExerciseEntryDate,
   updateSet,
+  updateWorkoutExercisePerformedAt,
   type SetRow,
   type WorkoutExercise,
 } from "../lib/db/workouts";
 import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
+
+function mergeDatePreserveTimeMs(timeSourceMs: number | null, dateSourceMs: number): number {
+  if (timeSourceMs === null) return dateSourceMs;
+  const timeSource = new Date(timeSourceMs);
+  const dateSource = new Date(dateSourceMs);
+  timeSource.setFullYear(dateSource.getFullYear(), dateSource.getMonth(), dateSource.getDate());
+  return timeSource.getTime();
+}
+
+function getNextSetIndex(sets: SetRow[]): number {
+  const maxSetIndex = sets.reduce((max, set) => Math.max(max, set.setIndex ?? 0), 0);
+  return maxSetIndex + 1;
+}
 
 export default function EditWorkoutScreen() {
   const { rawColors } = useTheme();
@@ -59,6 +72,9 @@ export default function EditWorkoutScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const initialSnapshotRef = useRef<string | null>(null);
+  const initialSetsRef = useRef<SetRow[]>([]);
+  const initialSelectedDateMsRef = useRef<number | null>(null);
+  const nextTempIdRef = useRef(-1);
 
   const currentSnapshot = useMemo(() => {
     const normalizedSets = sets
@@ -83,22 +99,21 @@ export default function EditWorkoutScreen() {
     initialSnapshotRef.current !== null &&
     currentSnapshot !== initialSnapshotRef.current;
 
-  // Handler for date change - updates state immediately, syncs to DB
+  // Handler for date change - updates draft state only (committed on Save Edits)
   const handleDateChange = useCallback((date: Date) => {
+    const nextDateMs = date.getTime();
     setSelectedDate(date);
     setShowDatePicker(false);
-    
-    // Update exercise entry date and sets in background
-    if (workoutExerciseId) {
-      updateExerciseEntryDate(workoutExerciseId, date.getTime());
-      sets.forEach((set) => {
-        updateSet(set.id, { performed_at: date.getTime() });
-      });
-    }
-  }, [workoutExerciseId, sets]);
+
+    setSets((prevSets) =>
+      prevSets.map((set) => ({
+        ...set,
+        performedAt: mergeDatePreserveTimeMs(set.performedAt ?? null, nextDateMs),
+      }))
+    );
+  }, []);
 
   const loadWorkout = useCallback(async () => {
-    let resolvedWorkoutExerciseId = workoutExerciseIdParam;
     let resolvedExerciseId = exerciseIdParam;
     let resolvedWorkoutId = workoutIdParam;
     let currentWorkoutExercise: WorkoutExercise | null = null;
@@ -111,7 +126,6 @@ export default function EditWorkoutScreen() {
         return;
       }
       currentWorkoutExercise = we;
-      resolvedWorkoutExerciseId = we.id;
       resolvedExerciseId = we.exerciseId;
       resolvedWorkoutId = we.workoutId;
       
@@ -123,14 +137,22 @@ export default function EditWorkoutScreen() {
       // Load sets for this specific workout_exercise
       const exerciseSets = await listSetsForWorkoutExercise(we.id);
       setSets(exerciseSets);
-      setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+      setSetIndex(getNextSetIndex(exerciseSets));
       
       // Load date from workout_exercise.performed_at
       if (we.performedAt) {
-        setSelectedDate(new Date(we.performedAt));
+        const dateMs = we.performedAt;
+        setSelectedDate(new Date(dateMs));
+        initialSelectedDateMsRef.current = dateMs;
       } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
-        setSelectedDate(new Date(exerciseSets[0].performedAt));
+        const dateMs = exerciseSets[0].performedAt;
+        setSelectedDate(new Date(dateMs));
+        initialSelectedDateMsRef.current = dateMs;
+      } else {
+        initialSelectedDateMsRef.current = Date.now();
       }
+
+      initialSetsRef.current = exerciseSets;
       setHasLoadedOnce(true);
       return;
     }
@@ -145,24 +167,34 @@ export default function EditWorkoutScreen() {
       setWorkoutExerciseId(existingWorkoutExercise.id);
       currentWorkoutExercise = existingWorkoutExercise;
     } else {
-      const newWorkoutExerciseId = await addWorkoutExercise({
-        workout_id: resolvedWorkoutId,
-        exercise_id: resolvedExerciseId,
-      });
-      setWorkoutExerciseId(newWorkoutExerciseId);
+      // Do not create any DB rows until the user presses "Save Edits".
+      setWorkoutExerciseId(null);
     }
 
-    const exerciseSets = await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId);
+    // Prefer the newer session-scoped query when possible; fallback for legacy data.
+    const exerciseSets =
+      existingWorkoutExercise
+        ? await listSetsForWorkoutExercise(existingWorkoutExercise.id).then(async (rows) =>
+            rows.length > 0 ? rows : await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId)
+          )
+        : await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId);
     setSets(exerciseSets);
-    setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+    setSetIndex(getNextSetIndex(exerciseSets));
     
     // Load date from workout_exercise.performed_at, fallback to first set's date
     if (currentWorkoutExercise?.performedAt) {
-      setSelectedDate(new Date(currentWorkoutExercise.performedAt));
+      const dateMs = currentWorkoutExercise.performedAt;
+      setSelectedDate(new Date(dateMs));
+      initialSelectedDateMsRef.current = dateMs;
     } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
-      setSelectedDate(new Date(exerciseSets[0].performedAt));
+      const dateMs = exerciseSets[0].performedAt;
+      setSelectedDate(new Date(dateMs));
+      initialSelectedDateMsRef.current = dateMs;
+    } else {
+      initialSelectedDateMsRef.current = Date.now();
     }
 
+    initialSetsRef.current = exerciseSets;
     setHasLoadedOnce(true);
   }, [workoutExerciseIdParam, exerciseIdParam, workoutIdParam]);
 
@@ -176,8 +208,8 @@ export default function EditWorkoutScreen() {
     initialSnapshotRef.current = currentSnapshot;
   }, [hasLoadedOnce, currentSnapshot]);
 
-  const handleAddSet = useCallback(async () => {
-    if (!workoutId || !exerciseId || !workoutExerciseId) return;
+  const handleAddSet = useCallback(() => {
+    if (!workoutId || !exerciseId) return;
 
     const weightValue = weight.trim() ? parseFloat(weight) : null;
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
@@ -187,20 +219,32 @@ export default function EditWorkoutScreen() {
       return;
     }
 
-    await addSet({
-      workout_id: workoutId,
-      exercise_id: exerciseId,
-      workout_exercise_id: workoutExerciseId,
-      weight_kg: weightValue,
+    const draftSet: SetRow = {
+      id: nextTempIdRef.current--,
+      uid: null,
+      workoutId,
+      exerciseId,
+      workoutExerciseId: workoutExerciseId ?? null,
+      setGroupId: null,
+      setIndex,
+      weightKg: weightValue,
       reps: repsValue,
+      rpe: null,
+      rir: null,
+      isWarmup: false,
       note: noteValue,
-      set_index: setIndex,
-      performed_at: selectedDate.getTime(),
-    });
+      supersetGroupId: null,
+      performedAt: selectedDate.getTime(),
+    };
 
     setNote("");
-    await loadWorkout();
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout]);
+    setSets((prev) => {
+      const next = [...prev, draftSet];
+      next.sort((a, b) => (a.setIndex ?? 0) - (b.setIndex ?? 0) || (a.performedAt ?? 0) - (b.performedAt ?? 0) || a.id - b.id);
+      setSetIndex(getNextSetIndex(next));
+      return next;
+    });
+  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate]);
 
   const closeScreen = useCallback(() => {
     // `edit-workout` is presented as a modal in `app/_layout.tsx`.
@@ -213,16 +257,95 @@ export default function EditWorkoutScreen() {
     router.back();
   }, []);
 
-  const handleSaveEdits = useCallback(() => {
-    // If we came from workout day detail page (direct workoutExerciseId), just go back
-    if (workoutExerciseIdParam) {
-      closeScreen();
-      return;
-    }
-    
-    // Legacy route: return to exercise page and trigger a history refresh without leaving
-    // `edit-workout` on the back stack.
-    if (exerciseId) {
+  const handleSaveEdits = useCallback(async () => {
+    try {
+      if (!workoutId || !exerciseId) {
+        closeScreen();
+        return;
+      }
+
+      const initialSetsById = new Map<number, SetRow>();
+      for (const set of initialSetsRef.current) {
+        initialSetsById.set(set.id, set);
+      }
+
+      const currentSetsById = new Map<number, SetRow>();
+      const draftNewSets: SetRow[] = [];
+      for (const set of sets) {
+        if (set.id < 0) {
+          draftNewSets.push(set);
+        } else {
+          currentSetsById.set(set.id, set);
+        }
+      }
+
+      const deletedSetIds: number[] = [];
+      for (const initialSetId of initialSetsById.keys()) {
+        if (!currentSetsById.has(initialSetId)) {
+          deletedSetIds.push(initialSetId);
+        }
+      }
+
+      let resolvedWorkoutExerciseId = workoutExerciseId ?? null;
+      const shouldCreateWorkoutExercise =
+        resolvedWorkoutExerciseId === null && draftNewSets.length > 0 && workoutId !== null && exerciseId !== null;
+
+      if (shouldCreateWorkoutExercise) {
+        resolvedWorkoutExerciseId = await addWorkoutExercise({
+          workout_id: workoutId,
+          exercise_id: exerciseId,
+          performed_at: selectedDate.getTime(),
+        });
+      }
+
+      const initialSelectedDateMs = initialSelectedDateMsRef.current;
+      if (
+        resolvedWorkoutExerciseId !== null &&
+        initialSelectedDateMs !== null &&
+        initialSelectedDateMs !== selectedDate.getTime()
+      ) {
+        await updateWorkoutExercisePerformedAt(resolvedWorkoutExerciseId, selectedDate.getTime());
+      }
+
+      for (const setId of deletedSetIds) {
+        await deleteSet(setId);
+      }
+
+      for (const [setId, nextSet] of currentSetsById.entries()) {
+        const prevSet = initialSetsById.get(setId);
+        if (!prevSet) continue;
+
+        const updates: Parameters<typeof updateSet>[1] = {};
+        if (prevSet.weightKg !== nextSet.weightKg) updates.weight_kg = nextSet.weightKg ?? null;
+        if (prevSet.reps !== nextSet.reps) updates.reps = nextSet.reps ?? null;
+        if (prevSet.note !== nextSet.note) updates.note = nextSet.note ?? null;
+        if (prevSet.setIndex !== nextSet.setIndex) updates.set_index = nextSet.setIndex ?? null;
+        if (prevSet.performedAt !== nextSet.performedAt) updates.performed_at = nextSet.performedAt ?? null;
+
+        await updateSet(setId, updates);
+      }
+
+      for (const draftSet of draftNewSets) {
+        await addSet({
+          workout_id: workoutId,
+          exercise_id: exerciseId,
+          workout_exercise_id: resolvedWorkoutExerciseId,
+          weight_kg: draftSet.weightKg ?? null,
+          reps: draftSet.reps ?? null,
+          note: draftSet.note ?? null,
+          set_index: draftSet.setIndex ?? null,
+          performed_at: draftSet.performedAt ?? selectedDate.getTime(),
+        });
+      }
+
+      // If we came from workout day detail page (direct workoutExerciseId), just go back
+      if (workoutExerciseIdParam) {
+        closeScreen();
+        return;
+      }
+
+      // Legacy route: return to exercise page and trigger a history refresh without leaving
+      // `edit-workout` on the back stack.
       const href = {
         pathname: "/exercise/[id]",
         params: {
@@ -233,8 +356,6 @@ export default function EditWorkoutScreen() {
       } as const;
 
       try {
-        // Prefer dismissing back to the existing exercise modal (common case).
-        // Falls back to replace if the exercise screen isn't in the stack.
         if (router.canDismiss()) {
           router.dismissTo(href);
           return;
@@ -244,30 +365,45 @@ export default function EditWorkoutScreen() {
       }
 
       router.replace(href);
-    } else {
-      closeScreen();
+    } catch (err) {
+      console.error("[edit-workout] Failed to save edits:", err);
     }
-  }, [workoutExerciseIdParam, exerciseId, exerciseName, closeScreen]);
+  }, [
+    workoutId,
+    exerciseId,
+    workoutExerciseId,
+    workoutExerciseIdParam,
+    exerciseName,
+    selectedDate,
+    sets,
+    closeScreen,
+  ]);
 
   const handleEditSetPress = useCallback((set: SetRow) => {
     setSelectedSet(set);
     setEditModalVisible(true);
   }, []);
 
-  const handleUpdateSet = useCallback(async (updates: { weight_kg: number; reps: number; note: string | null; performed_at?: number }) => {
+  const handleUpdateSet = useCallback((updates: { weight_kg: number; reps: number; note: string | null; performed_at?: number }) => {
     if (!selectedSet) return;
 
-    await updateSet(selectedSet.id, {
-      weight_kg: updates.weight_kg,
-      reps: updates.reps,
-      note: updates.note,
-      performed_at: updates.performed_at,
-    });
+    setSets((prev) =>
+      prev.map((set) =>
+        set.id !== selectedSet.id
+          ? set
+          : {
+              ...set,
+              weightKg: updates.weight_kg,
+              reps: updates.reps,
+              note: updates.note,
+              performedAt: updates.performed_at ?? set.performedAt,
+            }
+      )
+    );
 
     setEditModalVisible(false);
     setSelectedSet(null);
-    await loadWorkout();
-  }, [selectedSet, loadWorkout]);
+  }, [selectedSet]);
 
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirmVisible(false);
@@ -279,13 +415,16 @@ export default function EditWorkoutScreen() {
     setDeleteConfirmVisible(true);
   }, []);
 
-  const handleConfirmDeleteSet = useCallback(async () => {
+  const handleConfirmDeleteSet = useCallback(() => {
     if (!deleteTarget) return;
 
-    await deleteSet(deleteTarget.set.id);
+    setSets((prev) => {
+      const next = prev.filter((set) => set.id !== deleteTarget.set.id);
+      setSetIndex(getNextSetIndex(next));
+      return next;
+    });
     closeDeleteConfirm();
-    await loadWorkout();
-  }, [deleteTarget, closeDeleteConfirm, loadWorkout]);
+  }, [deleteTarget, closeDeleteConfirm]);
 
   // Show error only if we don't have valid params (neither direct workoutExerciseId nor legacy exerciseId+workoutId)
   const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);

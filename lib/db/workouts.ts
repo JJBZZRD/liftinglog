@@ -472,6 +472,21 @@ export async function updateExerciseEntryDate(workoutExerciseId: number, perform
 }
 
 /**
+ * Update the performed_at timestamp for a workout_exercise entry without cascading to sets.
+ * Use this when set timestamps are user-editable and should be preserved.
+ */
+export async function updateWorkoutExercisePerformedAt(workoutExerciseId: number, performedAt: number): Promise<void> {
+  if (!canQueryWorkoutExercises("updateWorkoutExercisePerformedAt")) {
+    return;
+  }
+  await db
+    .update(workoutExercises)
+    .set({ performedAt })
+    .where(eq(workoutExercises.id, workoutExerciseId))
+    .run();
+}
+
+/**
  * Result type for the last workout day query
  */
 export type LastWorkoutDayExercise = {
