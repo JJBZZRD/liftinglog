@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
-import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDataPoint } from "../../lib/utils/analytics";
 
@@ -32,6 +32,8 @@ interface AnalyticsChartProps {
   onGestureEnd?: () => void;
   /** Point to highlight (e.g., when tapped) */
   selectedPoint?: SessionDataPoint | null;
+  /** Sessions to highlight as PR sessions (see lib/db/prEvents) */
+  prSessionKeys?: ReadonlySet<string>;
 }
 
 type RenderDataPoint = SessionDataPoint & {
@@ -39,6 +41,7 @@ type RenderDataPoint = SessionDataPoint & {
   y: number;
   index: number;
   isInVisibleRange: boolean;
+  isPRSession: boolean;
 };
 
 // Layout constants
@@ -67,6 +70,7 @@ export default function AnalyticsChart({
   onGestureStart,
   onGestureEnd,
   selectedPoint,
+  prSessionKeys,
 }: AnalyticsChartProps) {
   const { rawColors } = useTheme();
   const screenWidth = Dimensions.get("window").width;
@@ -185,8 +189,9 @@ export default function AnalyticsChart({
         index,
         // Track if point is within visible range (for hit testing)
         isInVisibleRange: point.date >= visibleStart && point.date <= visibleEnd,
+        isPRSession: prSessionKeys?.has(`${point.workoutId}:${point.workoutExerciseId ?? "null"}`) ?? false,
       }));
-  }, [sortedData, visibleStart, visibleEnd, dateToX, valueToY]);
+  }, [sortedData, visibleStart, visibleEnd, dateToX, valueToY, prSessionKeys]);
 
   // Calculate trend line points
   const visibleTrendPoints = useMemo(() => {
@@ -659,16 +664,29 @@ export default function AnalyticsChart({
                   )}
 
                   {/* Data points */}
-                  {renderDataPoints.map((point, i) => (
-                    <Circle
-                      key={`point-${i}`}
-                      cx={point.x}
-                      cy={point.y + PADDING_TOP}
-                      r={DATA_POINT_RADIUS}
-                      fill={rawColors.primary}
-                      stroke={rawColors.surface}
-                      strokeWidth={2}
-                    />
+                  {renderDataPoints.map((point) => (
+                    <G
+                      key={`${point.workoutId}-${point.workoutExerciseId ?? "null"}-${point.date}`}
+                    >
+                      {point.isPRSession && (
+                        <Circle
+                          cx={point.x}
+                          cy={point.y + PADDING_TOP}
+                          r={DATA_POINT_RADIUS + 3}
+                          fill="none"
+                          stroke={rawColors.prGold}
+                          strokeWidth={2}
+                        />
+                      )}
+                      <Circle
+                        cx={point.x}
+                        cy={point.y + PADDING_TOP}
+                        r={DATA_POINT_RADIUS}
+                        fill={rawColors.primary}
+                        stroke={rawColors.surface}
+                        strokeWidth={2}
+                      />
+                    </G>
                   ))}
 
                   {/* Highlight ring for selected/scrubbed point */}

@@ -21,6 +21,7 @@ interface FullscreenChartProps {
   title: string;
   unit: string;
   onDataPointPress?: (point: SessionDataPoint) => void;
+  prSessionKeys?: ReadonlySet<string>;
 }
 
 export default function FullscreenChart({
@@ -31,6 +32,7 @@ export default function FullscreenChart({
   title,
   unit,
   onDataPointPress,
+  prSessionKeys,
 }: FullscreenChartProps) {
   const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -134,6 +136,7 @@ export default function FullscreenChart({
             height={chartHeight}
             unit={unit}
             onDataPointPress={onDataPointPress}
+            prSessionKeys={prSessionKeys}
           />
         </View>
       </View>

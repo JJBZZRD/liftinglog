@@ -10,6 +10,7 @@ import DateRangeSelector, {
   type DateRange,
 } from "../../../components/charts/DateRangeSelector";
 import FullscreenChart from "../../../components/charts/FullscreenChart";
+import { getCurrentPRSessionKeysForExercise } from "../../../lib/db/prEvents";
 import { TabSwipeContext } from "../../../lib/contexts/TabSwipeContext";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import {
@@ -81,6 +82,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
   const [filteredData, setFilteredData] = useState<SessionDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [showMetricPicker, setShowMetricPicker] = useState(false);
+  const [prSessionKeys, setPrSessionKeys] = useState<Set<string>>(new Set());
   
   // Data point modal state
   const [showDataPointModal, setShowDataPointModal] = useState(false);
@@ -96,29 +98,35 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
   const fetchData = useCallback(async () => {
     if (!exerciseId) return;
     setLoading(true);
-    let fetchedData: SessionDataPoint[] = [];
     try {
-      switch (selectedMetric) {
-        case "maxWeight":
-          fetchedData = await getMaxWeightPerSession(exerciseId);
-          break;
-        case "e1rm":
-          fetchedData = await getEstimated1RMPerSession(exerciseId);
-          break;
-        case "totalVolume":
-          fetchedData = await getTotalVolumePerSession(exerciseId);
-          break;
-        case "maxReps":
-          fetchedData = await getMaxRepsPerSession(exerciseId);
-          break;
-        case "numSets":
-          fetchedData = await getNumberOfSetsPerSession(exerciseId);
-          break;
-      }
+      const metricPromise: Promise<SessionDataPoint[]> = (() => {
+        switch (selectedMetric) {
+          case "maxWeight":
+            return getMaxWeightPerSession(exerciseId);
+          case "e1rm":
+            return getEstimated1RMPerSession(exerciseId);
+          case "totalVolume":
+            return getTotalVolumePerSession(exerciseId);
+          case "maxReps":
+            return getMaxRepsPerSession(exerciseId);
+          case "numSets":
+            return getNumberOfSetsPerSession(exerciseId);
+          default:
+            return Promise.resolve([]);
+        }
+      })();
+
+      const [fetchedData, nextPrSessionKeys] = await Promise.all([
+        metricPromise,
+        getCurrentPRSessionKeysForExercise(exerciseId),
+      ]);
+
       setAllData(fetchedData);
+      setPrSessionKeys(nextPrSessionKeys);
     } catch (error) {
       console.error("Error fetching chart data:", error);
       setAllData([]);
+      setPrSessionKeys(new Set());
     } finally {
       setLoading(false);
     }
@@ -328,6 +336,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
                 onGestureStart={handleGestureStart}
                 onGestureEnd={handleGestureEnd}
                 selectedPoint={selectedPoint}
+                prSessionKeys={prSessionKeys}
               />
             </>
           )}
@@ -435,6 +444,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
         title={`${exerciseName} - ${selectedMetricLabel}`}
         unit={unit}
         onDataPointPress={handleDataPointPress}
+        prSessionKeys={prSessionKeys}
       />
     </View>
   );

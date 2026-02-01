@@ -5,6 +5,10 @@ import { newUid } from "../utils/uid";
 
 export type PREvent = PREventRow;
 
+function toSessionKey(workoutId: number, workoutExerciseId: number | null): string {
+  return `${workoutId}:${workoutExerciseId ?? "null"}`;
+}
+
 function isValidSetForPR(set: { weightKg: number | null; reps: number | null; performedAt: number | null }): set is {
   weightKg: number;
   reps: number;
@@ -144,6 +148,33 @@ export async function getCurrentPREventsForExercise(exerciseId: number): Promise
   }
 
   return map;
+}
+
+/**
+ * Get session keys for sessions that contain the current PR sets for an exercise.
+ *
+ * A "session key" matches the chart grouping:
+ * - Modern sessions: `${workoutId}:${workoutExerciseId}`
+ * - Legacy sessions (no workoutExerciseId): `${workoutId}:null`
+ */
+export async function getCurrentPRSessionKeysForExercise(exerciseId: number): Promise<Set<string>> {
+  const current = await getCurrentPREventsForExercise(exerciseId);
+  const setIds = [...current.keys()];
+  if (setIds.length === 0) return new Set();
+
+  const rows = await db
+    .select({
+      workoutId: sets.workoutId,
+      workoutExerciseId: sets.workoutExerciseId,
+    })
+    .from(sets)
+    .where(inArray(sets.id, setIds));
+
+  const keys = new Set<string>();
+  for (const row of rows) {
+    keys.add(toSessionKey(row.workoutId, row.workoutExerciseId ?? null));
+  }
+  return keys;
 }
 
 /**
