@@ -19,9 +19,10 @@
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { deleteExerciseSession, deleteWorkoutExercise } from "../../lib/db/workouts";
+import { getCurrentPREventsForExercise, type PREvent } from "../../lib/db/prEvents";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
 import SetItem from "../lists/SetItem";
@@ -56,6 +57,31 @@ export default function DataPointModal({
   // Track measured height of the fixed section
   const [fixedHeight, setFixedHeight] = useState(0);
   const [landscapeLeftHeight, setLandscapeLeftHeight] = useState(0);
+  const [prEventsBySetId, setPrEventsBySetId] = useState<Map<number, PREvent>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPrEvents = async () => {
+      if (!visible || !exerciseId) {
+        setPrEventsBySetId(new Map());
+        return;
+      }
+
+      try {
+        const map = await getCurrentPREventsForExercise(exerciseId);
+        if (!cancelled) setPrEventsBySetId(map);
+      } catch (error) {
+        console.error("Error loading PR events:", error);
+        if (!cancelled) setPrEventsBySetId(new Map());
+      }
+    };
+
+    loadPrEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, exerciseId]);
 
   // Responsive card dimensions (pixel-based)
   const cardMaxHeight = Math.min(windowHeight * (isLandscape ? 0.95 : 0.8), 600);
@@ -365,12 +391,13 @@ export default function DataPointModal({
                   >
                     {sessionDetails.sets.map((set, index) => (
                       <SetItem
-                        key={index}
+                        key={set.id}
                         index={index + 1}
                         weightKg={set.weightKg}
                         reps={set.reps}
                         note={set.note}
                         variant="compact"
+                        prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
                       />
                     ))}
                   </ScrollView>
@@ -548,12 +575,13 @@ export default function DataPointModal({
                 >
                   {sessionDetails.sets.map((set, index) => (
                     <SetItem
-                      key={index}
+                      key={set.id}
                       index={index + 1}
                       weightKg={set.weightKg}
                       reps={set.reps}
                       note={set.note}
                       variant="compact"
+                      prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
                     />
                   ))}
                 </ScrollView>

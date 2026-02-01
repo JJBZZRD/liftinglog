@@ -18,6 +18,7 @@ export type DateRange = {
 };
 
 export type SessionSetDetail = {
+  id: number;
   setIndex: number;
   weightKg: number | null;
   reps: number | null;
@@ -69,6 +70,7 @@ export async function getSessionDetails(
 
   const sessionSets = await db
     .select({
+      id: sets.id,
       workoutExerciseId: sets.workoutExerciseId,
       setIndex: sets.setIndex,
       weightKg: sets.weightKg,
@@ -168,6 +170,7 @@ export async function getSessionDetails(
 
   // Build individual set details
   const setDetails: SessionSetDetail[] = sessionSets.map((set, index) => ({
+    id: set.id,
     setIndex: set.setIndex ?? index + 1,
     weightKg: set.weightKg,
     reps: set.reps,
@@ -248,6 +251,7 @@ export async function getSessionDetailsByWorkoutExerciseId(
 
   const sessionSets = await db
     .select({
+      id: sets.id,
       setIndex: sets.setIndex,
       weightKg: sets.weightKg,
       reps: sets.reps,
@@ -269,6 +273,7 @@ export async function getSessionDetailsByWorkoutExerciseId(
     Date.now();
 
   const setDetails: SessionSetDetail[] = sessionSets.map((set, index) => ({
+    id: set.id,
     setIndex: set.setIndex ?? index + 1,
     weightKg: set.weightKg,
     reps: set.reps,
