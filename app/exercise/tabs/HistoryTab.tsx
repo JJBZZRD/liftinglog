@@ -92,6 +92,26 @@ function parseSearchQuery(query: string): ParsedSearch {
 type SetWithPR = SetRow & { prBadge?: string };
 type HistoryEntry = WorkoutHistoryEntry & { sets: SetWithPR[] };
 
+type SortField = "date" | "e1rm" | "maxWeight" | "volume" | "reps" | "sets";
+type SortDirection = "asc" | "desc";
+
+const SORT_OPTIONS: { id: SortField; label: string }[] = [
+  { id: "date", label: "Date" },
+  { id: "e1rm", label: "e1RM" },
+  { id: "maxWeight", label: "Max" },
+  { id: "volume", label: "Volume" },
+  { id: "reps", label: "Reps" },
+  { id: "sets", label: "Sets" },
+];
+
+function getHistoryEntryKey(entry: WorkoutHistoryEntry): string {
+  return String(entry.workoutExercise?.id ?? entry.workout.id);
+}
+
+function getHistoryEntryTimestamp(entry: WorkoutHistoryEntry): number {
+  return entry.workoutExercise?.performedAt ?? entry.workoutExercise?.completedAt ?? entry.workout.startedAt;
+}
+
 /**
  * Calculate estimated 1RM using Epley formula
  * e1RM = weight × (1 + 0.0333 × reps)
@@ -110,11 +130,13 @@ function calculateSessionStats(sets: SetWithPR[]): {
   totalSets: number;
   bestSetId: number | null;
   bestSetE1RM: number;
+  maxWeightKg: number;
 } {
   let totalVolume = 0;
   let totalReps = 0;
   let bestSetId: number | null = null;
   let bestSetE1RM = 0;
+  let maxWeightKg = 0;
 
   for (const set of sets) {
     const weight = set.weightKg ?? 0;
@@ -123,6 +145,10 @@ function calculateSessionStats(sets: SetWithPR[]): {
     // Calculate volume (weight × reps)
     totalVolume += weight * reps;
     totalReps += reps;
+
+    if (weight > maxWeightKg) {
+      maxWeightKg = weight;
+    }
 
     // Find best set by estimated 1RM
     const e1rm = calculateE1RM(set.weightKg, set.reps);
@@ -138,6 +164,7 @@ function calculateSessionStats(sets: SetWithPR[]): {
     totalSets: sets.length,
     bestSetId,
     bestSetE1RM,
+    maxWeightKg,
   };
 }
 
@@ -176,6 +203,8 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [weightFilter, setWeightFilter] = useState<NumericFilter>({ min: "", max: "" });
   const [repsFilter, setRepsFilter] = useState<NumericFilter>({ min: "", max: "" });
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   // Animation value for filter reveal (Reanimated)
   const filterExpansion = useSharedValue(0);
@@ -276,13 +305,68 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     return rawHistory
       .filter((entry) => {
         // Date filter
-        const workoutDate = entry.workoutExercise?.performedAt ?? entry.workoutExercise?.completedAt ?? entry.workout.startedAt;
+        const workoutDate = getHistoryEntryTimestamp(entry);
         if (startDate && workoutDate < startDate) return false;
         if (endDate && workoutDate > endDate) return false;
         return true;
       })
       .filter((entry) => entry.sets.some(matchesFilters));
   }, [rawHistory, dateRangeTimestamps, effectiveFilters]);
+
+  const sessionStatsByEntryKey = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof calculateSessionStats>>();
+    for (const entry of filteredHistory) {
+      map.set(getHistoryEntryKey(entry), calculateSessionStats(entry.sets));
+    }
+    return map;
+  }, [filteredHistory]);
+
+  const sortedHistory = useMemo(() => {
+    if (filteredHistory.length <= 1) return filteredHistory;
+
+    const dirMultiplier = sortDirection === "asc" ? 1 : -1;
+
+    const items = filteredHistory.map((entry) => {
+      const key = getHistoryEntryKey(entry);
+      const workoutDate = getHistoryEntryTimestamp(entry);
+      const stats = sessionStatsByEntryKey.get(key);
+
+      const sortValue: number = (() => {
+        switch (sortField) {
+          case "date":
+            return workoutDate;
+          case "e1rm":
+            return stats?.bestSetE1RM ?? 0;
+          case "maxWeight":
+            return stats?.maxWeightKg ?? 0;
+          case "volume":
+            return stats?.totalVolume ?? 0;
+          case "reps":
+            return stats?.totalReps ?? 0;
+          case "sets":
+            return stats?.totalSets ?? entry.sets.length;
+          default:
+            return workoutDate;
+        }
+      })();
+
+      return { entry, key, workoutDate, sortValue };
+    });
+
+    items.sort((a, b) => {
+      const primary = (a.sortValue - b.sortValue) * dirMultiplier;
+      if (primary !== 0) return primary;
+
+      if (sortField !== "date") {
+        const dateTieBreak = b.workoutDate - a.workoutDate;
+        if (dateTieBreak !== 0) return dateTieBreak;
+      }
+
+      return a.key.localeCompare(b.key);
+    });
+
+    return items.map((i) => i.entry);
+  }, [filteredHistory, sessionStatsByEntryKey, sortField, sortDirection]);
 
   // Check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -302,6 +386,19 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     setDateRange({ preset: "all", startDate: null, endDate: null });
     setWeightFilter({ min: "", max: "" });
     setRepsFilter({ min: "", max: "" });
+  }, []);
+
+  const handleSortFieldPress = useCallback((next: SortField) => {
+    if (next === sortField) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortField(next);
+    setSortDirection("desc");
+  }, [sortField]);
+
+  const toggleSortDirection = useCallback(() => {
+    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -532,6 +629,54 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
               )}
             </View>
 
+            {/* Sort */}
+            <View style={styles.sortRow}>
+              <Text style={[styles.sortLabel, { color: rawColors.foreground }]}>
+                Sort
+              </Text>
+              <View style={styles.sortChips}>
+                {SORT_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Sort by ${option.label}`}
+                    style={[
+                      styles.presetButton,
+                      { borderColor: rawColors.border },
+                      sortField === option.id && {
+                        backgroundColor: rawColors.primary,
+                        borderColor: rawColors.primary,
+                      },
+                    ]}
+                    onPress={() => handleSortFieldPress(option.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.presetText,
+                        { color: rawColors.foreground },
+                        sortField === option.id && { color: rawColors.surface },
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                ))}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sort direction ${sortDirection === "asc" ? "ascending" : "descending"}`}
+                  style={[styles.sortDirectionButton, { borderColor: rawColors.border }]}
+                  onPress={toggleSortDirection}
+                >
+                  <MaterialCommunityIcons
+                    name={sortDirection === "asc" ? "arrow-up" : "arrow-down"}
+                    size={16}
+                    color={rawColors.foregroundSecondary}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
             {/* Date Range Presets */}
             <View style={styles.presetsRow}>
               {DATE_PRESETS.map((preset) => (
@@ -705,16 +850,17 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
       />
 
       <FlatList
-        data={filteredHistory}
-        keyExtractor={(item) => String(item.workoutExercise?.id ?? item.workout.id)}
+        data={sortedHistory}
+        keyExtractor={(item) => getHistoryEntryKey(item)}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
           // Use workoutExercise dates for display, fall back to workout dates
-          const workoutDate = item.workoutExercise?.performedAt ?? item.workoutExercise?.completedAt ?? item.workout.startedAt;
+          const workoutDate = getHistoryEntryTimestamp(item);
           const isCompleted = item.workoutExercise?.completedAt !== null;
           
           // Calculate session stats
-          const sessionStats = calculateSessionStats(item.sets);
+          const entryKey = getHistoryEntryKey(item);
+          const sessionStats = sessionStatsByEntryKey.get(entryKey) ?? calculateSessionStats(item.sets);
 
           return (
             <View
@@ -970,6 +1116,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 6,
     alignItems: "center",
+    flexWrap: "wrap",
   },
   presetButton: {
     paddingHorizontal: 12,
@@ -1023,6 +1170,35 @@ const styles = StyleSheet.create({
   },
   filterInputDash: {
     fontSize: 14,
+  },
+  sortRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  sortLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    paddingTop: 8,
+    width: 44,
+  },
+  sortChips: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 6,
+  },
+  sortDirectionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 38,
   },
   activeFiltersRow: {
     flexDirection: "row",
