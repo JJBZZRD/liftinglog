@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -205,6 +206,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const [repsFilter, setRepsFilter] = useState<NumericFilter>({ min: "", max: "" });
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [showSortPicker, setShowSortPicker] = useState(false);
 
   // Animation value for filter reveal (Reanimated)
   const filterExpansion = useSharedValue(0);
@@ -388,17 +390,14 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     setRepsFilter({ min: "", max: "" });
   }, []);
 
-  const handleSortFieldPress = useCallback((next: SortField) => {
-    if (next === sortField) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setSortField(next);
-    setSortDirection("desc");
-  }, [sortField]);
-
   const toggleSortDirection = useCallback(() => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+  }, []);
+
+  const handleSortSelect = useCallback((next: SortField) => {
+    setSortField(next);
+    setSortDirection("desc");
+    setShowSortPicker(false);
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -634,38 +633,28 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
               <Text style={[styles.sortLabel, { color: rawColors.foreground }]}>
                 Sort
               </Text>
-              <View style={styles.sortChips}>
-                {SORT_OPTIONS.map((option) => (
-                  <Pressable
-                    key={option.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Sort by ${option.label}`}
-                    style={[
-                      styles.presetButton,
-                      { borderColor: rawColors.border },
-                      sortField === option.id && {
-                        backgroundColor: rawColors.primary,
-                        borderColor: rawColors.primary,
-                      },
-                    ]}
-                    onPress={() => handleSortFieldPress(option.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.presetText,
-                        { color: rawColors.foreground },
-                        sortField === option.id && { color: rawColors.surface },
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                ))}
-
+              <View style={styles.sortControls}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose sort metric"
+                  style={[
+                    styles.pickerButton,
+                    { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
+                  ]}
+                  onPress={() => setShowSortPicker(true)}
+                >
+                  <Text style={[styles.pickerButtonText, { color: rawColors.foreground }]}>
+                    {SORT_OPTIONS.find((opt) => opt.id === sortField)?.label ?? "Select"}
+                  </Text>
+                  <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
+                </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Sort direction ${sortDirection === "asc" ? "ascending" : "descending"}`}
-                  style={[styles.sortDirectionButton, { borderColor: rawColors.border }]}
+                  style={[
+                    styles.sortDirectionButton,
+                    { borderColor: rawColors.border, backgroundColor: rawColors.surfaceSecondary },
+                  ]}
                   onPress={toggleSortDirection}
                 >
                   <MaterialCommunityIcons
@@ -673,6 +662,9 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                     size={16}
                     color={rawColors.foregroundSecondary}
                   />
+                  <Text style={[styles.sortDirectionText, { color: rawColors.foregroundSecondary }]}>
+                    {sortDirection === "asc" ? "Asc" : "Desc"}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -848,6 +840,39 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
         onChange={(date) => setTempEndDate(date)}
         title="End Date"
       />
+
+      {/* Sort Picker Modal */}
+      <Modal visible={showSortPicker} transparent animationType="fade" onRequestClose={() => setShowSortPicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSortPicker(false)}>
+          <View style={[styles.pickerContainer, { backgroundColor: rawColors.surface }]}>
+            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Sort By</Text>
+            {SORT_OPTIONS.map((option) => (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.pickerOption,
+                  { borderBottomColor: rawColors.border },
+                  sortField === option.id && { backgroundColor: rawColors.primaryLight },
+                ]}
+                onPress={() => handleSortSelect(option.id)}
+              >
+                <Text
+                  style={[
+                    styles.pickerOptionText,
+                    { color: rawColors.foreground },
+                    sortField === option.id && { color: rawColors.primary, fontWeight: "600" },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {sortField === option.id && (
+                  <MaterialCommunityIcons name="check" size={20} color={rawColors.primary} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
 
       <FlatList
         data={sortedHistory}
@@ -1183,22 +1208,69 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     width: 44,
   },
-  sortChips: {
+  sortControls: {
     flex: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   sortDirectionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    alignItems: "center",
     justifyContent: "center",
-    minWidth: 38,
+    minWidth: 70,
+  },
+  sortDirectionText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  pickerButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pickerButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  pickerContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingBottom: 12,
+    marginBottom: 8,
+  },
+  pickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  pickerOptionText: {
+    fontSize: 16,
   },
   activeFiltersRow: {
     flexDirection: "row",
