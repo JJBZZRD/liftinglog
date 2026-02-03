@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
+  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,8 @@ import { getActiveWorkout, listInProgressExercises, type InProgressExercise } fr
 import { useTheme } from "../lib/theme/ThemeContext";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const OPEN_ANIMATION_MS = 220;
+const CLOSE_ANIMATION_MS = 200;
 
 type OverlayTabKey = "pinned" | "inProgress";
 
@@ -62,6 +65,9 @@ export default function PinnedExercisesOverlay() {
 
   const openDropdown = useCallback(() => {
     setIsOpen(true);
+    slideAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+    buttonRotation.stopAnimation();
     Animated.parallel([
       Animated.spring(slideAnim, {
         toValue: 0,
@@ -74,36 +80,40 @@ export default function PinnedExercisesOverlay() {
         duration: 200,
         useNativeDriver: true,
       }),
-      Animated.spring(buttonRotation, {
+      Animated.timing(buttonRotation, {
         toValue: 1,
+        duration: OPEN_ANIMATION_MS,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-        tension: 100,
-        friction: 10,
       }),
     ]).start();
   }, [slideAnim, fadeAnim, buttonRotation]);
 
   const closeDropdown = useCallback(() => {
+    slideAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+    buttonRotation.stopAnimation();
     Animated.parallel([
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: -SCREEN_HEIGHT,
+        duration: CLOSE_ANIMATION_MS,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
-        tension: 65,
-        friction: 11,
       }),
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 150,
+        duration: CLOSE_ANIMATION_MS,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.spring(buttonRotation, {
+      Animated.timing(buttonRotation, {
         toValue: 0,
+        duration: CLOSE_ANIMATION_MS,
+        easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
-        tension: 100,
-        friction: 10,
       }),
-    ]).start(() => {
-      setIsOpen(false);
+    ]).start(({ finished }) => {
+      if (finished) setIsOpen(false);
     });
   }, [slideAnim, fadeAnim, buttonRotation]);
 
@@ -323,7 +333,20 @@ export default function PinnedExercisesOverlay() {
 
   const rotateInterpolation = buttonRotation.interpolate({
     inputRange: [0, 1],
-    outputRange: ["0deg", "45deg"],
+    outputRange: ["0deg", "90deg"],
+    extrapolate: "clamp",
+  });
+
+  const pinOpacity = buttonRotation.interpolate({
+    inputRange: [0, 0.35, 0.65, 1],
+    outputRange: [1, 1, 0, 0],
+    extrapolate: "clamp",
+  });
+
+  const closeOpacity = buttonRotation.interpolate({
+    inputRange: [0, 0.55, 0.8, 1],
+    outputRange: [0, 0, 1, 1],
+    extrapolate: "clamp",
   });
 
   return (
@@ -385,12 +408,13 @@ export default function PinnedExercisesOverlay() {
 
       {/* Floating Action Button */}
       <Pressable style={[styles.fab, { backgroundColor: rawColors.primary, shadowColor: rawColors.primary }]} onPress={handleToggle}>
-        <Animated.View style={{ transform: [{ rotate: rotateInterpolation }] }}>
-          <MaterialCommunityIcons
-            name={isOpen ? "close" : "pin"}
-            size={24}
-            color={rawColors.surface}
-          />
+        <Animated.View style={[styles.fabIconContainer, { transform: [{ rotate: rotateInterpolation }] }]}>
+          <Animated.View style={[styles.fabIcon, { opacity: pinOpacity }]}>
+            <MaterialCommunityIcons name="pin" size={24} color={rawColors.surface} />
+          </Animated.View>
+          <Animated.View style={[styles.fabIcon, { opacity: closeOpacity }]}>
+            <MaterialCommunityIcons name="close" size={24} color={rawColors.surface} />
+          </Animated.View>
         </Animated.View>
       </Pressable>
     </>
@@ -518,5 +542,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
     zIndex: 1000,
+  },
+  fabIconContainer: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fabIcon: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
