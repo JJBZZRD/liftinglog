@@ -11,7 +11,7 @@
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
@@ -52,6 +52,11 @@ const PADDING_BOTTOM = 12; // Space for bottom Y-axis label
 const PADDING_RIGHT = 16;
 const PLOT_PADDING_X = 16; // Padding inside plot area for first/last points
 
+// X-axis label density
+const X_AXIS_MIN_TICKS = 3;
+const X_AXIS_MAX_TICKS = 10;
+const X_AXIS_MIN_LABEL_SPACING_PX = 70;
+
 // Zoom constraints
 const MIN_VISIBLE_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -73,8 +78,8 @@ export default function AnalyticsChart({
   prSessionKeys,
 }: AnalyticsChartProps) {
   const { rawColors } = useTheme();
-  const screenWidth = Dimensions.get("window").width;
-  const containerWidth = propWidth ?? screenWidth - 32;
+  const { width: windowWidth } = useWindowDimensions();
+  const containerWidth = propWidth ?? windowWidth - 32;
   const chartWidth = containerWidth - Y_AXIS_WIDTH - PADDING_RIGHT;
   const plotWidth = chartWidth - PLOT_PADDING_X * 2; // Usable area for data points
   const chartHeight = height - X_AXIS_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
@@ -236,24 +241,49 @@ export default function AnalyticsChart({
     return `${linePath} L ${lastX} ${chartHeight} L ${firstX} ${chartHeight} Z`;
   }, [linePath, renderDataPoints, chartHeight]);
 
-  // X-axis labels - use visible points only (no buffer zone points)
-  const xAxisLabels = useMemo(() => {
-    const visiblePoints = renderDataPoints.filter((p) => p.isInVisibleRange);
-    if (visiblePoints.length === 0) return [];
-    if (visiblePoints.length <= 5) return visiblePoints;
+  const baseXAxisTickCount = useMemo(() => {
+    const ticks = Math.floor(plotWidth / X_AXIS_MIN_LABEL_SPACING_PX) + 1;
+    return Math.max(X_AXIS_MIN_TICKS, Math.min(ticks, X_AXIS_MAX_TICKS));
+  }, [plotWidth]);
 
-    const step = Math.ceil(visiblePoints.length / 5);
-    return visiblePoints.filter(
-      (_, i) => i % step === 0 || i === visiblePoints.length - 1
-    );
-  }, [renderDataPoints]);
+  // X-axis labels - evenly spaced across the visible date range
+  const xAxisLabels = useMemo(() => {
+    if (sortedData.length === 0) return [];
+
+    if (visibleEnd <= visibleStart) {
+      const date = visibleStart;
+      return [{ date, x: dateToX(date) }];
+    }
+
+    const rangeMs = visibleEnd - visibleStart;
+    const maxDayTicks = Math.floor(rangeMs / MS_PER_DAY) + 1;
+    const tickCount = Math.max(2, Math.min(baseXAxisTickCount, maxDayTicks));
+
+    if (tickCount === 2) {
+      return [
+        { date: visibleStart, x: dateToX(visibleStart) },
+        { date: visibleEnd, x: dateToX(visibleEnd) },
+      ];
+    }
+
+    const stepMs = rangeMs / (tickCount - 1);
+    return Array.from({ length: tickCount }, (_, i) => {
+      const date = i === tickCount - 1 ? visibleEnd : visibleStart + stepMs * i;
+      return { date, x: dateToX(date) };
+    });
+  }, [sortedData.length, visibleStart, visibleEnd, dateToX, baseXAxisTickCount]);
+
+  const showYearOnXAxis = useMemo(() => {
+    return new Date(visibleStart).getFullYear() !== new Date(visibleEnd).getFullYear();
+  }, [visibleStart, visibleEnd]);
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
+    const options: Intl.DateTimeFormatOptions = {
       month: "short",
       day: "numeric",
-      year: "numeric",
-    });
+    };
+    if (showYearOnXAxis) options.year = "2-digit";
+    return new Date(timestamp).toLocaleDateString("en-US", options);
   };
 
   const formatDateWithWeekday = (timestamp: number) => {
@@ -714,7 +744,9 @@ export default function AnalyticsChart({
                       y={18}
                       fontSize={9}
                       fill={rawColors.foregroundSecondary}
-                      textAnchor="middle"
+                      textAnchor={
+                        i === 0 ? "start" : i === xAxisLabels.length - 1 ? "end" : "middle"
+                      }
                     >
                       {formatDate(point.date)}
                     </SvgText>
