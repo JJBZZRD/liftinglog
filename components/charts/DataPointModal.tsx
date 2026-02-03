@@ -30,6 +30,14 @@ import SetItem from "../lists/SetItem";
 // Minimum height for the sets region (ensures 2-3 rows visible)
 const MIN_SETS_HEIGHT = 160;
 
+function timestampToDayKey(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 interface DataPointModalProps {
   visible: boolean;
   onClose: () => void;
@@ -276,6 +284,19 @@ export default function DataPointModal({
                             <Pressable
                               onPress={() => {
                                 onClose();
+                                const dayKey = timestampToDayKey(sessionDetails.date);
+                                router.push({ pathname: "/workout/[dayKey]", params: { dayKey } });
+                              }}
+                              hitSlop={8}
+                              style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                              accessibilityRole="button"
+                              accessibilityLabel="View workout"
+                            >
+                              <MaterialCommunityIcons name="eye-outline" size={16} color={rawColors.primary} />
+                            </Pressable>
+                            <Pressable
+                              onPress={() => {
+                                onClose();
                                 if (sessionDetails.workoutExerciseId !== null) {
                                   router.push({
                                     pathname: "/edit-workout",
@@ -451,13 +472,26 @@ export default function DataPointModal({
                             In Progress
                           </Text>
                         </View>
-                      ) : (
-                        <>
-                          <Pressable
-                            onPress={() => {
-                              onClose();
-                              if (sessionDetails.workoutExerciseId !== null) {
-                                router.push({
+                        ) : (
+                          <>
+                            <Pressable
+                              onPress={() => {
+                                onClose();
+                                const dayKey = timestampToDayKey(sessionDetails.date);
+                                router.push({ pathname: "/workout/[dayKey]", params: { dayKey } });
+                              }}
+                              hitSlop={8}
+                              style={[styles.actionButton, { backgroundColor: rawColors.surfaceSecondary }]}
+                              accessibilityRole="button"
+                              accessibilityLabel="View workout"
+                            >
+                              <MaterialCommunityIcons name="eye-outline" size={16} color={rawColors.primary} />
+                            </Pressable>
+                            <Pressable
+                              onPress={() => {
+                                onClose();
+                                if (sessionDetails.workoutExerciseId !== null) {
+                                  router.push({
                                   pathname: "/edit-workout",
                                   params: {
                                     workoutExerciseId: String(sessionDetails.workoutExerciseId),
