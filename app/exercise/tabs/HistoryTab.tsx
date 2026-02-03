@@ -113,6 +113,14 @@ function getHistoryEntryTimestamp(entry: WorkoutHistoryEntry): number {
   return entry.workoutExercise?.performedAt ?? entry.workoutExercise?.completedAt ?? entry.workout.startedAt;
 }
 
+function timestampToDayKey(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Calculate estimated 1RM using Epley formula
  * e1RM = weight × (1 + 0.0333 × reps)
@@ -471,6 +479,11 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
       minute: "2-digit",
     });
   };
+
+  const handleViewWorkout = useCallback((entry: WorkoutHistoryEntry) => {
+    const dayKey = timestampToDayKey(getHistoryEntryTimestamp(entry));
+    router.push({ pathname: "/workout/[dayKey]", params: { dayKey } });
+  }, []);
 
   const handleEdit = useCallback((entry: WorkoutHistoryEntry) => {
     const workoutExerciseId = entry.workoutExercise?.id;
@@ -904,6 +917,15 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                   )}
                   {isCompleted && (
                     <>
+                      <Pressable
+                        onPress={() => handleViewWorkout(item)}
+                        hitSlop={8}
+                        style={[styles.actionIconButton, { backgroundColor: rawColors.background }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="View workout"
+                      >
+                        <MaterialCommunityIcons name="eye-outline" size={16} color={rawColors.primary} />
+                      </Pressable>
                       <Pressable
                         onPress={() => handleEdit(item)}
                         hitSlop={8}
