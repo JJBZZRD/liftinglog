@@ -191,12 +191,10 @@ export default function ExercisesScreen() {
                 setRenameText(item.name);
                 setActionModalVisible(true);
               }}
+              className="rounded-2xl p-5"
               style={{
-                borderWidth: 1,
-                borderRadius: 10,
-                padding: 12,
+                borderRadius: 16,
                 backgroundColor: rawColors.surface,
-                borderColor: rawColors.border,
                 shadowColor: rawColors.shadow,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.1,
@@ -204,11 +202,20 @@ export default function ExercisesScreen() {
                 elevation: 4,
               }}
             >
-              <Text style={{ fontWeight: "600", marginBottom: 4, color: rawColors.foreground }}>{item.name}</Text>
-              <Text style={{ fontSize: 12, color: rawColors.foregroundSecondary }}>
+              <View className="flex-row items-center justify-between gap-3">
+                <Text className="flex-1 text-base font-semibold text-foreground" numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={rawColors.foregroundSecondary}
+                />
+              </View>
+              <Text className="mt-1 text-xs text-foreground-secondary">
                 {lastPerformedAtByExerciseId[item.id]
-                  ? new Date(lastPerformedAtByExerciseId[item.id] as number).toLocaleDateString()
-                  : "Never"}
+                  ? `Last completed ${new Date(lastPerformedAtByExerciseId[item.id] as number).toLocaleDateString()}`
+                  : "Never completed"}
               </Text>
             </Pressable>
           </Link>
@@ -489,18 +496,6 @@ const styles = StyleSheet.create({
   },
   headerFade: {
     height: 8,
-  },
-  exerciseCard: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-  },
-  exerciseName: {
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  exerciseDate: {
-    fontSize: 12,
   },
   fab: {
     position: "absolute",
