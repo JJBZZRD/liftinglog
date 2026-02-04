@@ -232,11 +232,11 @@ export default function SettingsScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}>
         {/* Header */}
-        <View className="mb-6 mt-8">
-          <Text className="text-3xl font-bold text-foreground">Settings</Text>
+        <View className="mb-6 pt-3">
+          <Text className="text-[32px] leading-[38px] font-bold text-foreground">Settings</Text>
           <Text className="text-base mt-1 text-foreground-secondary">
             Customize your experience
           </Text>

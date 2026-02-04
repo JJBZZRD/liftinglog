@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 4,
   },
   headerIcons: {
@@ -480,6 +480,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 32,
+    lineHeight: 38,
     fontWeight: "700",
   },
   headerSubtitle: {

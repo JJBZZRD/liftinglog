@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { getTotalPRCount } from "../../lib/db/prEvents";
 import { getLastWorkoutDay, getQuickStats, type LastWorkoutDayResult, type QuickStats } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
@@ -81,11 +82,11 @@ export default function OverviewScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background">
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}>
         {/* Header */}
-        <View className="mb-6 mt-12">
-          <Text className="text-3xl font-bold text-foreground">
+        <View className="mb-6 pt-3">
+          <Text className="text-[32px] leading-[38px] font-bold text-foreground">
             LiftingLog
           </Text>
         </View>
@@ -215,6 +216,6 @@ export default function OverviewScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
