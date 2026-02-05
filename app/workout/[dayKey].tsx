@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -39,6 +39,7 @@ export default function WorkoutDayScreen() {
   const [deleteMediaChecked, setDeleteMediaChecked] = useState(false);
   const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
   const [deleteMediaSetIds, setDeleteMediaSetIds] = useState<number[]>([]);
+  const [setIdsWithMedia, setSetIdsWithMedia] = useState<Set<number>>(new Set());
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -87,6 +88,37 @@ export default function WorkoutDayScreen() {
       loadData();
     }, [loadData])
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const setIds = data
+      ? data.entries.flatMap((entry) => entry.sets.map((set) => set.id)).filter((id) => id > 0)
+      : [];
+    if (setIds.length === 0) {
+      setSetIdsWithMedia(new Set());
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    listMediaForSetIds(setIds)
+      .then((mediaRows) => {
+        if (cancelled) return;
+        const nextSetIds = new Set(
+          mediaRows
+            .map((row) => row.setId)
+            .filter((setId): setId is number => typeof setId === "number")
+        );
+        setSetIdsWithMedia(nextSetIds);
+      })
+      .catch(() => {
+        if (!cancelled) setSetIdsWithMedia(new Set());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
 
   // Handle edit action - navigate to edit page
   const handleEdit = useCallback((entry: WorkoutDayExerciseEntry) => {
@@ -355,6 +387,17 @@ export default function WorkoutDayScreen() {
                             variant="compact"
                             isBestSet={isBestSetMatch}
                             onPress={() => handleSetPress(set.id)}
+                            rightActions={
+                              setIdsWithMedia.has(set.id) ? (
+                                <View style={styles.mediaIconBadge}>
+                                  <MaterialCommunityIcons
+                                    name="video-outline"
+                                    size={16}
+                                    color={rawColors.primary}
+                                  />
+                                </View>
+                              ) : undefined
+                            }
                           />
                         );
                       });
@@ -556,6 +599,13 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mediaIconBadge: {
+    marginLeft: 8,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
   },

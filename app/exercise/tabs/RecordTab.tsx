@@ -57,6 +57,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const [clearMediaChecked, setClearMediaChecked] = useState(false);
   const [clearMediaAvailable, setClearMediaAvailable] = useState(false);
   const [clearMediaSetIds, setClearMediaSetIds] = useState<number[]>([]);
+  const [setIdsWithMedia, setSetIdsWithMedia] = useState<Set<number>>(new Set());
 
   // Timer state with real-time updates
   const [timerModalVisible, setTimerModalVisible] = useState(false);
@@ -143,6 +144,35 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       refreshSets();
     }, [refreshSets])
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const setIds = sets.map((set) => set.id).filter((id) => id > 0);
+    if (setIds.length === 0) {
+      setSetIdsWithMedia(new Set());
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    listMediaForSetIds(setIds)
+      .then((mediaRows) => {
+        if (cancelled) return;
+        const nextSetIds = new Set(
+          mediaRows
+            .map((row) => row.setId)
+            .filter((setId): setId is number => typeof setId === "number")
+        );
+        setSetIdsWithMedia(nextSetIds);
+      })
+      .catch(() => {
+        if (!cancelled) setSetIdsWithMedia(new Set());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sets]);
 
   const setWeight = useCallback((value: string) => {
     setWeightState(value);
@@ -381,6 +411,11 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       onPress={() => handleSetPress(item.id)}
       rightActions={
         <View className="flex-row items-center gap-2 ml-2">
+          {setIdsWithMedia.has(item.id) && (
+            <View className="w-7 h-7 rounded-full items-center justify-center bg-background">
+              <MaterialCommunityIcons name="video-outline" size={16} color={rawColors.primary} />
+            </View>
+          )}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Edit set ${index + 1}`}

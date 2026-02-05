@@ -22,6 +22,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { deleteExerciseSession, deleteWorkoutExercise } from "../../lib/db/workouts";
+import { listMediaForSetIds } from "../../lib/db/media";
 import { getCurrentPREventsForExercise, type PREvent } from "../../lib/db/prEvents";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
@@ -66,6 +67,7 @@ export default function DataPointModal({
   const [fixedHeight, setFixedHeight] = useState(0);
   const [landscapeLeftHeight, setLandscapeLeftHeight] = useState(0);
   const [prEventsBySetId, setPrEventsBySetId] = useState<Map<number, PREvent>>(new Map());
+  const [setIdsWithMedia, setSetIdsWithMedia] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +92,35 @@ export default function DataPointModal({
       cancelled = true;
     };
   }, [visible, exerciseId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const setIds = sessionDetails?.sets.map((set) => set.id).filter((id) => id > 0) ?? [];
+    if (!visible || setIds.length === 0) {
+      setSetIdsWithMedia(new Set());
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    listMediaForSetIds(setIds)
+      .then((mediaRows) => {
+        if (cancelled) return;
+        const nextSetIds = new Set(
+          mediaRows
+            .map((row) => row.setId)
+            .filter((setId): setId is number => typeof setId === "number")
+        );
+        setSetIdsWithMedia(nextSetIds);
+      })
+      .catch(() => {
+        if (!cancelled) setSetIdsWithMedia(new Set());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, sessionDetails]);
 
   // Responsive card dimensions (pixel-based)
   const cardMaxHeight = Math.min(windowHeight * (isLandscape ? 0.95 : 0.8), 600);
@@ -203,6 +234,15 @@ export default function DataPointModal({
   const handleSetPress = (setId: number) => {
     onClose();
     router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
+  };
+
+  const renderSetMediaIcon = (setId: number) => {
+    if (!setIdsWithMedia.has(setId)) return undefined;
+    return (
+      <View style={styles.mediaIconBadge}>
+        <MaterialCommunityIcons name="video-outline" size={16} color={rawColors.primary} />
+      </View>
+    );
   };
 
   return (
@@ -425,6 +465,7 @@ export default function DataPointModal({
                         variant="compact"
                         prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
                         onPress={() => handleSetPress(set.id)}
+                        rightActions={renderSetMediaIcon(set.id)}
                       />
                     ))}
                   </ScrollView>
@@ -623,6 +664,7 @@ export default function DataPointModal({
                       variant="compact"
                       prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
                       onPress={() => handleSetPress(set.id)}
+                      rightActions={renderSetMediaIcon(set.id)}
                     />
                   ))}
                 </ScrollView>
@@ -710,6 +752,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mediaIconBadge: {
+    marginLeft: 8,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
   },

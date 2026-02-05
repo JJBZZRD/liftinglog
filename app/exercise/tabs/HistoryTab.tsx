@@ -205,6 +205,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const [deleteMediaChecked, setDeleteMediaChecked] = useState(false);
   const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
   const [deleteMediaSetIds, setDeleteMediaSetIds] = useState<number[]>([]);
+  const [setIdsWithMedia, setSetIdsWithMedia] = useState<Set<number>>(new Set());
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -450,6 +451,37 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
       loadHistory();
     }
   }, [refreshKey, loadHistory]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const setIds = rawHistory
+      .flatMap((entry) => entry.sets.map((set) => set.id))
+      .filter((id) => id > 0);
+    if (setIds.length === 0) {
+      setSetIdsWithMedia(new Set());
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    listMediaForSetIds(setIds)
+      .then((mediaRows) => {
+        if (cancelled) return;
+        const nextSetIds = new Set(
+          mediaRows
+            .map((row) => row.setId)
+            .filter((setId): setId is number => typeof setId === "number")
+        );
+        setSetIdsWithMedia(nextSetIds);
+      })
+      .catch(() => {
+        if (!cancelled) setSetIdsWithMedia(new Set());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawHistory]);
 
   // Reload history when component comes into focus (after returning from edit page)
   useFocusEffect(
@@ -1009,6 +1041,13 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                     prBadge={set.prBadge}
                     isBestSet={set.id === sessionStats.bestSetId}
                     onPress={() => handleSetPress(set.id)}
+                    rightActions={
+                      setIdsWithMedia.has(set.id) ? (
+                        <View className="ml-2">
+                          <MaterialCommunityIcons name="video-outline" size={16} color={rawColors.primary} />
+                        </View>
+                      ) : undefined
+                    }
                   />
                 ))}
               </View>
