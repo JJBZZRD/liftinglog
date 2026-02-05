@@ -1,13 +1,324 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import * as MediaLibrary from "expo-media-library";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { WebView } from "react-native-webview";
+import BaseModal from "../../components/modals/BaseModal";
+import { addMedia, getLatestMediaForSet, updateMedia, type Media } from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
+
+function toMillis(value?: number): number {
+  if (!value || Number.isNaN(value)) return Date.now();
+  return value < 1_000_000_000_000 ? value * 1000 : value;
+}
+
+function getUriScheme(uri: string | null | undefined): string {
+  if (!uri) return "unknown";
+  const match = uri.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+  return match?.[1]?.toLowerCase() ?? "unknown";
+}
+
+function buildVideoHtml(uri: string, withControls: boolean): string {
+  const encodedUri = encodeURI(uri);
+  const src = JSON.stringify(encodedUri);
+  const controls = withControls ? "controls" : "";
+  const autoplay = withControls ? "autoplay" : "autoplay muted loop";
+  return `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+      video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+    </style>
+  </head>
+  <body>
+    <video id="player" ${controls} ${autoplay} playsinline webkit-playsinline>
+      <source src=${src} type="video/mp4" />
+    </video>
+    <script>
+      (function () {
+        var player = document.getElementById("player");
+        function send(type, payload) {
+          try {
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, payload: payload || null }));
+            }
+          } catch (err) {}
+        }
+        function errorPayload() {
+          if (!player || !player.error) return null;
+          return { code: player.error.code || null, message: player.error.message || null };
+        }
+        var events = [
+          "loadstart",
+          "loadedmetadata",
+          "loadeddata",
+          "canplay",
+          "canplaythrough",
+          "play",
+          "playing",
+          "pause",
+          "stalled",
+          "suspend",
+          "waiting",
+          "ended",
+          "error"
+        ];
+        events.forEach(function (evt) {
+          player.addEventListener(evt, function () {
+            send("video-event", {
+              event: evt,
+              currentSrc: player.currentSrc || null,
+              readyState: player.readyState,
+              networkState: player.networkState,
+              error: errorPayload()
+            });
+          });
+        });
+        window.addEventListener("error", function (e) {
+          send("window-error", { message: e.message || "unknown" });
+        });
+        setTimeout(function () {
+          var playPromise = player.play();
+          if (playPromise && typeof playPromise.catch === "function") {
+            playPromise.catch(function (err) {
+              send("play-rejected", { message: String(err) });
+            });
+          }
+        }, 60);
+      })();
+    </script>
+  </body>
+</html>`;
+}
 
 export default function SetInfoScreen() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
   const setId = typeof params.id === "string" ? Number(params.id) : null;
   const isValidId = typeof setId === "number" && Number.isFinite(setId) && setId > 0;
+
+  const [videoMedia, setVideoMedia] = useState<Media | null>(null);
+  const [loadingVideo, setLoadingVideo] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [videoAssets, setVideoAssets] = useState<MediaLibrary.Asset[]>([]);
+  const [savingSelection, setSavingSelection] = useState(false);
+  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+  const [resolvedVideoUri, setResolvedVideoUri] = useState<string | null>(null);
+
+  const videoUri = resolvedVideoUri;
+  const previewHtml = useMemo(() => (videoUri ? buildVideoHtml(videoUri, false) : ""), [videoUri]);
+  const fullscreenHtml = useMemo(() => (videoUri ? buildVideoHtml(videoUri, true) : ""), [videoUri]);
+  const webViewSource = useMemo(
+    () => (previewHtml ? { html: previewHtml, baseUrl: "file:///" } : { html: "" }),
+    [previewHtml]
+  );
+  const fullscreenWebViewSource = useMemo(
+    () => (fullscreenHtml ? { html: fullscreenHtml, baseUrl: "file:///" } : { html: "" }),
+    [fullscreenHtml]
+  );
+  const iOSReadAccessUri = useMemo(
+    () => (Platform.OS === "ios" ? videoUri ?? undefined : undefined),
+    [videoUri]
+  );
+
+  const loadVideoMedia = useCallback(async () => {
+    if (!isValidId || !setId) {
+      setVideoMedia(null);
+      setResolvedVideoUri(null);
+      return;
+    }
+
+    setLoadingVideo(true);
+    try {
+      const media = await getLatestMediaForSet(setId);
+      if (!media) {
+        setVideoMedia(null);
+        setResolvedVideoUri(null);
+        return;
+      }
+
+      setVideoMedia(media);
+
+      let nextUri = media.localUri ?? null;
+      if (media.assetId) {
+        try {
+          const assetInfo = await MediaLibrary.getAssetInfoAsync(media.assetId);
+          nextUri = assetInfo?.localUri ?? assetInfo?.uri ?? nextUri;
+          if (__DEV__) {
+            console.log("[SetInfo] Resolved media URI from assetId:", {
+              setId,
+              mediaId: media.id,
+              assetId: media.assetId,
+              storedLocalUri: media.localUri,
+              assetUri: assetInfo?.uri ?? null,
+              assetLocalUri: assetInfo?.localUri ?? null,
+              chosenUri: nextUri,
+              chosenScheme: getUriScheme(nextUri),
+            });
+          }
+        } catch (assetError) {
+          if (__DEV__) {
+            console.warn("[SetInfo] Failed resolving assetId to URI:", {
+              setId,
+              mediaId: media.id,
+              assetId: media.assetId,
+              error: String(assetError),
+            });
+          }
+        }
+      } else if (__DEV__) {
+        console.log("[SetInfo] Using stored media URI without assetId:", {
+          setId,
+          mediaId: media.id,
+          uri: nextUri,
+          scheme: getUriScheme(nextUri),
+        });
+      }
+
+      setResolvedVideoUri(nextUri);
+    } catch (error) {
+      if (__DEV__) console.error("[SetInfo] Failed loading media:", error);
+      setVideoMedia(null);
+      setResolvedVideoUri(null);
+    } finally {
+      setLoadingVideo(false);
+    }
+  }, [isValidId, setId]);
+
+  useEffect(() => {
+    loadVideoMedia();
+  }, [loadVideoMedia]);
+
+  const ensureVideoLibraryPermission = useCallback(async () => {
+    let permission = await MediaLibrary.getPermissionsAsync(false, ["video"]);
+    if (!permission.granted) {
+      permission = await MediaLibrary.requestPermissionsAsync(false, ["video"]);
+    }
+    return permission.granted && permission.accessPrivileges !== "none";
+  }, []);
+
+  const openVideoPicker = useCallback(async () => {
+    if (!isValidId || !setId) return;
+
+    const hasPermission = await ensureVideoLibraryPermission();
+    if (!hasPermission) {
+      Alert.alert("Permission required", "Allow video library access to link a video to this set.");
+      return;
+    }
+
+    setPickerLoading(true);
+    try {
+      const page = await MediaLibrary.getAssetsAsync({
+        first: 120,
+        mediaType: ["video"],
+      });
+      setVideoAssets(page.assets);
+      setPickerVisible(true);
+    } catch (error) {
+      if (__DEV__) console.error("[SetInfo] Failed loading gallery videos:", error);
+      Alert.alert("Error", "Failed to load videos from gallery.");
+    } finally {
+      setPickerLoading(false);
+    }
+  }, [ensureVideoLibraryPermission, isValidId, setId]);
+
+  const handlePickVideo = useCallback(
+    async (asset: MediaLibrary.Asset) => {
+      if (!isValidId || !setId) return;
+
+      setSavingSelection(true);
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+        const localUri = info.localUri ?? info.uri ?? asset.uri;
+
+        if (videoMedia) {
+          await updateMedia(videoMedia.id, {
+            local_uri: localUri,
+            asset_id: asset.id,
+            mime: "video/mp4",
+            set_id: setId,
+            created_at: Date.now(),
+          });
+        } else {
+          await addMedia({
+            local_uri: localUri,
+            asset_id: asset.id,
+            mime: "video/mp4",
+            set_id: setId,
+            created_at: Date.now(),
+          });
+        }
+
+        if (__DEV__) {
+          console.log("[SetInfo] Linked gallery video to set:", {
+            setId,
+            mediaId: videoMedia?.id ?? null,
+            assetId: asset.id,
+            assetUri: asset.uri,
+            resolvedUri: localUri,
+            uriScheme: getUriScheme(localUri),
+          });
+        }
+
+        setPickerVisible(false);
+        await loadVideoMedia();
+      } catch (error) {
+        if (__DEV__) console.error("[SetInfo] Failed linking selected video:", error);
+        Alert.alert("Error", "Failed to link video to this set.");
+      } finally {
+        setSavingSelection(false);
+      }
+    },
+    [isValidId, setId, videoMedia, loadVideoMedia]
+  );
+
+  const formatAssetDate = useCallback((timestamp?: number) => {
+    return new Date(toMillis(timestamp)).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }, []);
+
+  const handleWebViewMessage = useCallback((event: { nativeEvent: { data?: string } }) => {
+    if (!__DEV__) return;
+    const rawData = event.nativeEvent.data;
+    if (!rawData) return;
+    try {
+      const parsed = JSON.parse(rawData);
+      console.log("[SetInfo] Video webview message:", parsed);
+    } catch {
+      console.log("[SetInfo] Video webview message (raw):", rawData);
+    }
+  }, []);
+
+  const handleWebViewError = useCallback((kind: "preview" | "fullscreen", payload: unknown) => {
+    if (__DEV__) {
+      console.warn("[SetInfo] WebView error:", {
+        kind,
+        payload,
+        videoUri,
+        uriScheme: getUriScheme(videoUri),
+      });
+    }
+  }, [videoUri]);
 
   return (
     <View style={[styles.container, { backgroundColor: rawColors.background }]}>
@@ -24,21 +335,241 @@ export default function SetInfoScreen() {
         }}
       />
 
-      <View style={styles.content}>
-        <View style={[styles.iconCircle, { backgroundColor: rawColors.surfaceSecondary }]}>
-          <MaterialCommunityIcons name="information-outline" size={32} color={rawColors.primary} />
+      <ScrollView contentContainerStyle={styles.content}>
+        <View
+          style={[
+            styles.infoCard,
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border, shadowColor: rawColors.shadow },
+          ]}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: rawColors.surfaceSecondary }]}>
+            <MaterialCommunityIcons name="information-outline" size={30} color={rawColors.primary} />
+          </View>
+          <View style={styles.infoText}>
+            <Text style={[styles.title, { color: rawColors.foreground }]}>Set Details</Text>
+            <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
+              Set ID {isValidId ? setId : "Unknown"}
+            </Text>
+          </View>
         </View>
-        <Text style={[styles.title, { color: rawColors.foreground }]}>Set Info</Text>
-        <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
-          Detailed information for this set will be available here soon.
+
+        <View
+          style={[
+            styles.videoCard,
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border, shadowColor: rawColors.shadow },
+          ]}
+        >
+          <View style={styles.videoHeader}>
+            <View style={styles.videoHeaderTitle}>
+              <MaterialCommunityIcons name="video-outline" size={18} color={rawColors.primary} />
+              <Text style={[styles.videoTitle, { color: rawColors.foreground }]}>Video</Text>
+            </View>
+            {isValidId && (
+              <Pressable
+                onPress={openVideoPicker}
+                disabled={pickerLoading || savingSelection}
+                style={({ pressed }) => ({ opacity: pressed || pickerLoading || savingSelection ? 0.7 : 1 })}
+              >
+                <View style={[styles.actionPill, { backgroundColor: rawColors.surfaceSecondary }]}>
+                  <MaterialCommunityIcons
+                    name={videoUri ? "pencil-outline" : "plus"}
+                    size={16}
+                    color={rawColors.primary}
+                  />
+                  <Text style={[styles.actionPillText, { color: rawColors.primary }]}>
+                    {videoUri ? "Edit" : "Add"}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+          </View>
+
+          {loadingVideo ? (
+            <View style={styles.emptyVideoState}>
+              <ActivityIndicator size="small" color={rawColors.primary} />
+              <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>Loading video...</Text>
+            </View>
+          ) : videoUri ? (
+            <>
+              <Pressable
+                style={[styles.videoPreview, { borderColor: rawColors.border }]}
+                onPress={() => setFullscreenVisible(true)}
+              >
+                <WebView
+                  source={webViewSource}
+                  originWhitelist={["*"]}
+                  scrollEnabled={false}
+                  javaScriptEnabled
+                  allowsInlineMediaPlayback
+                  allowFileAccess
+                  allowingReadAccessToURL={iOSReadAccessUri}
+                  allowFileAccessFromFileURLs
+                  allowUniversalAccessFromFileURLs
+                  mixedContentMode="always"
+                  mediaPlaybackRequiresUserAction={false}
+                  onMessage={handleWebViewMessage}
+                  onLoadStart={() => {
+                    if (__DEV__) {
+                      console.log("[SetInfo] Preview webview load start:", {
+                        uri: videoUri,
+                        scheme: getUriScheme(videoUri),
+                      });
+                    }
+                  }}
+                  onLoadEnd={() => {
+                    if (__DEV__) {
+                      console.log("[SetInfo] Preview webview load end");
+                    }
+                  }}
+                  onError={(e) => handleWebViewError("preview", e.nativeEvent)}
+                  onHttpError={(e) => handleWebViewError("preview", e.nativeEvent)}
+                  style={styles.webview}
+                />
+                <View style={[styles.previewOverlayButton, { backgroundColor: `${rawColors.background}AA` }]}>
+                  <MaterialCommunityIcons name="fullscreen" size={18} color={rawColors.foreground} />
+                </View>
+              </Pressable>
+              <Text style={[styles.videoMetaText, { color: rawColors.foregroundSecondary }]}>
+                Tap video to open full screen.
+              </Text>
+              {videoMedia?.createdAt ? (
+                <Text style={[styles.videoMetaText, { color: rawColors.foregroundMuted }]}>
+                  Linked {formatAssetDate(videoMedia.createdAt)}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.emptyVideoState}>
+              <MaterialCommunityIcons name="video-off-outline" size={26} color={rawColors.foregroundMuted} />
+              <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>
+                No video linked to this set.
+              </Text>
+              {isValidId && (
+                <Pressable
+                  onPress={openVideoPicker}
+                  disabled={pickerLoading || savingSelection}
+                  style={({ pressed }) => ({ opacity: pressed || pickerLoading || savingSelection ? 0.75 : 1 })}
+                >
+                  <View style={[styles.addButton, { backgroundColor: rawColors.primary }]}>
+                    <MaterialCommunityIcons name="plus" size={18} color={rawColors.primaryForeground} />
+                    <Text style={[styles.addButtonText, { color: rawColors.primaryForeground }]}>
+                      Add From Gallery
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      <BaseModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        maxWidth={440}
+        contentStyle={{ maxHeight: 520 }}
+      >
+        <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Choose Video</Text>
+        <Text style={[styles.pickerSubtitle, { color: rawColors.foregroundSecondary }]}>
+          Select a video from your gallery to link to this set.
         </Text>
-        <View style={[styles.idBadge, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border }]}>
-          <Text style={[styles.idLabel, { color: rawColors.foregroundSecondary }]}>Set ID</Text>
-          <Text style={[styles.idValue, { color: isValidId ? rawColors.foreground : rawColors.destructive }]}>
-            {isValidId ? setId : "Unknown"}
-          </Text>
+
+        {pickerLoading ? (
+          <View style={styles.pickerLoadingState}>
+            <ActivityIndicator size="small" color={rawColors.primary} />
+          </View>
+        ) : videoAssets.length === 0 ? (
+          <View style={styles.pickerLoadingState}>
+            <MaterialCommunityIcons name="folder-video-outline" size={26} color={rawColors.foregroundMuted} />
+            <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>
+              No videos found in gallery.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={videoAssets}
+            keyExtractor={(item) => item.id}
+            style={styles.pickerList}
+            contentContainerStyle={styles.pickerListContent}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => handlePickVideo(item)}
+                disabled={savingSelection}
+                style={({ pressed }) => [
+                  styles.assetRow,
+                  { borderColor: rawColors.border, backgroundColor: rawColors.surfaceSecondary },
+                  { opacity: pressed || savingSelection ? 0.75 : 1 },
+                ]}
+              >
+                <View style={[styles.assetIcon, { backgroundColor: rawColors.background }]}>
+                  <MaterialCommunityIcons name="video" size={18} color={rawColors.primary} />
+                </View>
+                <View style={styles.assetMeta}>
+                  <Text style={[styles.assetName, { color: rawColors.foreground }]} numberOfLines={1}>
+                    {item.filename || "Video"}
+                  </Text>
+                  <Text style={[styles.assetDate, { color: rawColors.foregroundSecondary }]}>
+                    {formatAssetDate(item.creationTime)}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={rawColors.foregroundSecondary} />
+              </Pressable>
+            )}
+          />
+        )}
+      </BaseModal>
+
+      <Modal
+        visible={fullscreenVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenVisible(false)}
+      >
+        <View style={styles.fullscreenOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setFullscreenVisible(false)} />
+          <View style={styles.fullscreenContent}>
+            <WebView
+              source={fullscreenWebViewSource}
+              originWhitelist={["*"]}
+              scrollEnabled={false}
+              javaScriptEnabled
+              allowsInlineMediaPlayback
+              allowFileAccess
+              allowingReadAccessToURL={iOSReadAccessUri}
+              allowFileAccessFromFileURLs
+              allowUniversalAccessFromFileURLs
+              mixedContentMode="always"
+              allowsFullscreenVideo
+              mediaPlaybackRequiresUserAction={false}
+              onMessage={handleWebViewMessage}
+              onLoadStart={() => {
+                if (__DEV__) {
+                  console.log("[SetInfo] Fullscreen webview load start:", {
+                    uri: videoUri,
+                    scheme: getUriScheme(videoUri),
+                  });
+                }
+              }}
+              onLoadEnd={() => {
+                if (__DEV__) {
+                  console.log("[SetInfo] Fullscreen webview load end");
+                }
+              }}
+              onError={(e) => handleWebViewError("fullscreen", e.nativeEvent)}
+              onHttpError={(e) => handleWebViewError("fullscreen", e.nativeEvent)}
+              style={styles.webview}
+            />
+            <Pressable
+              style={styles.fullscreenClose}
+              onPress={() => setFullscreenVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close full screen video"
+            >
+              <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </Modal>
     </View>
   );
 }
@@ -52,44 +583,191 @@ const styles = StyleSheet.create({
     marginLeft: -8,
   },
   content: {
-    flex: 1,
+    padding: 16,
+    gap: 14,
+  },
+  infoCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    gap: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
+  },
+  infoText: {
+    flex: 1,
   },
   title: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "700",
   },
   subtitle: {
+    marginTop: 3,
+    fontSize: 14,
+  },
+  videoCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  videoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  videoHeaderTitle: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  videoTitle: {
+    marginLeft: 6,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 18,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  actionPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  emptyVideoState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    gap: 10,
+  },
+  emptyVideoText: {
     fontSize: 14,
     textAlign: "center",
   },
-  idBadge: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 6,
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  videoPreview: {
+    width: "100%",
+    height: 220,
     borderRadius: 12,
     borderWidth: 1,
+    overflow: "hidden",
+    backgroundColor: "#000000",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  previewOverlayButton: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    borderRadius: 14,
+    width: 28,
+    height: 28,
     alignItems: "center",
-    gap: 4,
+    justifyContent: "center",
   },
-  idLabel: {
+  videoMetaText: {
+    marginTop: 8,
     fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  idValue: {
-    fontSize: 16,
+  pickerTitle: {
+    fontSize: 18,
     fontWeight: "700",
+    marginBottom: 4,
+  },
+  pickerSubtitle: {
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  pickerLoadingState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    gap: 8,
+  },
+  pickerList: {
+    maxHeight: 360,
+  },
+  pickerListContent: {
+    paddingBottom: 4,
+  },
+  assetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 8,
+  },
+  assetIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  assetMeta: {
+    flex: 1,
+  },
+  assetName: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  assetDate: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  fullscreenOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.94)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullscreenContent: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000000",
+  },
+  fullscreenClose: {
+    position: "absolute",
+    right: 14,
+    top: 44,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
 });
