@@ -1,11 +1,11 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import * as MediaLibrary from "expo-media-library";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
   Platform,
   Pressable,
@@ -15,7 +15,6 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import BaseModal from "../../components/modals/BaseModal";
 import { addMedia, getLatestMediaForSet, updateMedia, type Media } from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
@@ -113,9 +112,7 @@ export default function SetInfoScreen() {
 
   const [videoMedia, setVideoMedia] = useState<Media | null>(null);
   const [loadingVideo, setLoadingVideo] = useState(false);
-  const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerLoading, setPickerLoading] = useState(false);
-  const [videoAssets, setVideoAssets] = useState<MediaLibrary.Asset[]>([]);
   const [savingSelection, setSavingSelection] = useState(false);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [resolvedVideoUri, setResolvedVideoUri] = useState<string | null>(null);
@@ -205,11 +202,11 @@ export default function SetInfoScreen() {
   }, [loadVideoMedia]);
 
   const ensureVideoLibraryPermission = useCallback(async () => {
-    let permission = await MediaLibrary.getPermissionsAsync(false, ["video"]);
+    let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      permission = await MediaLibrary.requestPermissionsAsync(false, ["video"]);
+      permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     }
-    return permission.granted && permission.accessPrivileges !== "none";
+    return permission.granted;
   }, []);
 
   const openVideoPicker = useCallback(async () => {
@@ -223,59 +220,50 @@ export default function SetInfoScreen() {
 
     setPickerLoading(true);
     try {
-      const page = await MediaLibrary.getAssetsAsync({
-        first: 120,
-        mediaType: ["video"],
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsMultipleSelection: false,
+        quality: 1,
       });
-      setVideoAssets(page.assets);
-      setPickerVisible(true);
-    } catch (error) {
-      if (__DEV__) console.error("[SetInfo] Failed loading gallery videos:", error);
-      Alert.alert("Error", "Failed to load videos from gallery.");
-    } finally {
-      setPickerLoading(false);
-    }
-  }, [ensureVideoLibraryPermission, isValidId, setId]);
 
-  const handlePickVideo = useCallback(
-    async (asset: MediaLibrary.Asset) => {
-      if (!isValidId || !setId) return;
+      if (result.canceled || result.assets.length === 0) return;
+
+      const selectedAsset = result.assets[0];
+      const localUri = selectedAsset.uri;
+      const assetId = selectedAsset.assetId ?? null;
 
       setSavingSelection(true);
       try {
-        const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-        const localUri = info.localUri ?? info.uri ?? asset.uri;
-
         if (videoMedia) {
           await updateMedia(videoMedia.id, {
             local_uri: localUri,
-            asset_id: asset.id,
-            mime: "video/mp4",
+            asset_id: assetId,
+            mime: selectedAsset.mimeType ?? "video/mp4",
             set_id: setId,
             created_at: Date.now(),
           });
         } else {
           await addMedia({
             local_uri: localUri,
-            asset_id: asset.id,
-            mime: "video/mp4",
+            asset_id: assetId,
+            mime: selectedAsset.mimeType ?? "video/mp4",
             set_id: setId,
             created_at: Date.now(),
           });
         }
 
         if (__DEV__) {
-          console.log("[SetInfo] Linked gallery video to set:", {
+          console.log("[SetInfo] Linked picked video to set:", {
             setId,
             mediaId: videoMedia?.id ?? null,
-            assetId: asset.id,
-            assetUri: asset.uri,
+            assetId,
+            assetUri: selectedAsset.uri,
+            fileName: selectedAsset.fileName ?? null,
             resolvedUri: localUri,
             uriScheme: getUriScheme(localUri),
           });
         }
 
-        setPickerVisible(false);
         await loadVideoMedia();
       } catch (error) {
         if (__DEV__) console.error("[SetInfo] Failed linking selected video:", error);
@@ -283,9 +271,13 @@ export default function SetInfoScreen() {
       } finally {
         setSavingSelection(false);
       }
-    },
-    [isValidId, setId, videoMedia, loadVideoMedia]
-  );
+    } catch (error) {
+      if (__DEV__) console.error("[SetInfo] Failed opening system gallery picker:", error);
+      Alert.alert("Error", "Failed to open gallery.");
+    } finally {
+      setPickerLoading(false);
+    }
+  }, [ensureVideoLibraryPermission, isValidId, setId, videoMedia, loadVideoMedia]);
 
   const formatAssetDate = useCallback((timestamp?: number) => {
     return new Date(toMillis(timestamp)).toLocaleString("en-US", {
@@ -462,62 +454,6 @@ export default function SetInfoScreen() {
           )}
         </View>
       </ScrollView>
-
-      <BaseModal
-        visible={pickerVisible}
-        onClose={() => setPickerVisible(false)}
-        maxWidth={440}
-        contentStyle={{ maxHeight: 520 }}
-      >
-        <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Choose Video</Text>
-        <Text style={[styles.pickerSubtitle, { color: rawColors.foregroundSecondary }]}>
-          Select a video from your gallery to link to this set.
-        </Text>
-
-        {pickerLoading ? (
-          <View style={styles.pickerLoadingState}>
-            <ActivityIndicator size="small" color={rawColors.primary} />
-          </View>
-        ) : videoAssets.length === 0 ? (
-          <View style={styles.pickerLoadingState}>
-            <MaterialCommunityIcons name="folder-video-outline" size={26} color={rawColors.foregroundMuted} />
-            <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>
-              No videos found in gallery.
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={videoAssets}
-            keyExtractor={(item) => item.id}
-            style={styles.pickerList}
-            contentContainerStyle={styles.pickerListContent}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => handlePickVideo(item)}
-                disabled={savingSelection}
-                style={({ pressed }) => [
-                  styles.assetRow,
-                  { borderColor: rawColors.border, backgroundColor: rawColors.surfaceSecondary },
-                  { opacity: pressed || savingSelection ? 0.75 : 1 },
-                ]}
-              >
-                <View style={[styles.assetIcon, { backgroundColor: rawColors.background }]}>
-                  <MaterialCommunityIcons name="video" size={18} color={rawColors.primary} />
-                </View>
-                <View style={styles.assetMeta}>
-                  <Text style={[styles.assetName, { color: rawColors.foreground }]} numberOfLines={1}>
-                    {item.filename || "Video"}
-                  </Text>
-                  <Text style={[styles.assetDate, { color: rawColors.foregroundSecondary }]}>
-                    {formatAssetDate(item.creationTime)}
-                  </Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={18} color={rawColors.foregroundSecondary} />
-              </Pressable>
-            )}
-          />
-        )}
-      </BaseModal>
 
       <Modal
         visible={fullscreenVisible}
@@ -699,54 +635,6 @@ const styles = StyleSheet.create({
   videoMetaText: {
     marginTop: 8,
     fontSize: 12,
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  pickerSubtitle: {
-    fontSize: 13,
-    marginBottom: 10,
-  },
-  pickerLoadingState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 24,
-    gap: 8,
-  },
-  pickerList: {
-    maxHeight: 360,
-  },
-  pickerListContent: {
-    paddingBottom: 4,
-  },
-  assetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 10,
-    marginBottom: 8,
-  },
-  assetIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  assetMeta: {
-    flex: 1,
-  },
-  assetName: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  assetDate: {
-    fontSize: 12,
-    marginTop: 2,
   },
   fullscreenOverlay: {
     flex: 1,
