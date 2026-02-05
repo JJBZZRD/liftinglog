@@ -193,11 +193,11 @@ export default function RecordVideoScreen() {
       }
 
       const existingAlbum = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
-      const asset = await MediaLibrary.createAssetAsync(recordedUri);
+      const asset = existingAlbum
+        ? await MediaLibrary.createAssetAsync(recordedUri, existingAlbum)
+        : await MediaLibrary.createAssetAsync(recordedUri);
 
-      if (existingAlbum) {
-        await MediaLibrary.addAssetsToAlbumAsync(asset, existingAlbum, false);
-      } else if (asset) {
+      if (!existingAlbum && asset) {
         await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
       }
 

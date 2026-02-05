@@ -23,7 +23,7 @@ import {
   updateWorkoutExerciseInputs,
   type SetRow,
 } from "../../../lib/db/workouts";
-import { listMediaForSet } from "../../../lib/db/media";
+import { listMediaForSet, listMediaForSetIds } from "../../../lib/db/media";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
@@ -54,6 +54,9 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
   const [deleteMediaSetIds, setDeleteMediaSetIds] = useState<number[]>([]);
   const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
+  const [clearMediaChecked, setClearMediaChecked] = useState(false);
+  const [clearMediaAvailable, setClearMediaAvailable] = useState(false);
+  const [clearMediaSetIds, setClearMediaSetIds] = useState<number[]>([]);
 
   // Timer state with real-time updates
   const [timerModalVisible, setTimerModalVisible] = useState(false);
@@ -322,16 +325,44 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
 
   const closeClearConfirm = useCallback(() => {
     setClearConfirmVisible(false);
+    setClearMediaChecked(false);
+    setClearMediaAvailable(false);
+    setClearMediaSetIds([]);
   }, []);
+
+  const handleOpenClearConfirm = useCallback(async () => {
+    setClearConfirmVisible(true);
+    setClearMediaChecked(false);
+    const setIds = sets.map((set) => set.id).filter((id) => id > 0);
+    setClearMediaSetIds(setIds);
+    if (setIds.length === 0) {
+      setClearMediaAvailable(false);
+      return;
+    }
+    const mediaRows = await listMediaForSetIds(setIds);
+    setClearMediaAvailable(mediaRows.length > 0);
+  }, [sets]);
 
   const handleConfirmClearSets = useCallback(async () => {
     if (!workoutExerciseId) return;
+
+    if (clearMediaChecked && clearMediaAvailable && clearMediaSetIds.length > 0) {
+      await deleteAssociatedMediaForSets(clearMediaSetIds);
+    }
 
     await deleteSetsForWorkoutExercise(workoutExerciseId);
     closeClearConfirm();
     await loadWorkout();
     onHistoryRefresh?.();
-  }, [workoutExerciseId, closeClearConfirm, loadWorkout, onHistoryRefresh]);
+  }, [
+    workoutExerciseId,
+    clearMediaChecked,
+    clearMediaAvailable,
+    clearMediaSetIds,
+    closeClearConfirm,
+    loadWorkout,
+    onHistoryRefresh,
+  ]);
 
   if (!exerciseId) {
     return (
@@ -546,7 +577,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
                 accessibilityLabel="Clear all recorded sets"
                 className="flex-row items-center px-3 py-2 rounded-full bg-surface-secondary"
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                onPress={() => setClearConfirmVisible(true)}
+                onPress={handleOpenClearConfirm}
               >
                 <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
                 <Text className="text-sm font-semibold ml-1.5 text-destructive">Clear</Text>
@@ -681,6 +712,24 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
             {sets.length} set{sets.length !== 1 ? "s" : ""} will be deleted
           </Text>
         </View>
+
+        {clearMediaAvailable && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: clearMediaChecked }}
+            className="flex-row items-center mb-5"
+            onPress={() => setClearMediaChecked((prev) => !prev)}
+          >
+            <MaterialCommunityIcons
+              name={clearMediaChecked ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={20}
+              color={clearMediaChecked ? rawColors.primary : rawColors.foregroundSecondary}
+            />
+            <Text className="text-sm font-medium ml-2 text-foreground">
+              Delete associated media
+            </Text>
+          </Pressable>
+        )}
 
         <View className="flex-row gap-3">
           <Pressable
