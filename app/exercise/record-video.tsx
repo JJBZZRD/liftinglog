@@ -6,6 +6,7 @@ import * as MediaLibrary from "expo-media-library";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, PanResponder, Pressable, Text, TextInput, View } from "react-native";
 import { PinchGestureHandler, State } from "react-native-gesture-handler";
+import { runOnJS, SensorType, useAnimatedReaction, useAnimatedSensor } from "react-native-reanimated";
 import BaseModal from "../../components/modals/BaseModal";
 import { addMedia } from "../../lib/db/media";
 import { addSet, listSetsForWorkoutExercise } from "../../lib/db/workouts";
@@ -16,6 +17,29 @@ const ZOOM_SENSITIVITY = 0.35;
 const DEFAULT_SLIDER_WIDTH = 180;
 
 const clampZoom = (value: number) => Math.min(1, Math.max(0, value));
+
+function gravityToRotationDeg(x: number, y: number, z: number): number | null {
+  "worklet";
+  const absX = Math.abs(x);
+  const absY = Math.abs(y);
+  const absZ = Math.abs(z);
+  const axisDeltaThreshold = 0.2;
+
+  // If the phone is mostly flat, keep the previous control rotation.
+  if (absZ > 0.85) {
+    return null;
+  }
+
+  if (absX - absY > axisDeltaThreshold) {
+    return x > 0 ? -90 : 90;
+  }
+
+  if (absY - absX > axisDeltaThreshold) {
+    return 0;
+  }
+
+  return null;
+}
 
 export default function RecordVideoScreen() {
   const { rawColors } = useTheme();
@@ -65,10 +89,22 @@ export default function RecordVideoScreen() {
   const [note, setNote] = useState("");
   const [nextSetIndex, setNextSetIndex] = useState(initialSetIndex);
   const [sliderWidth, setSliderWidth] = useState(DEFAULT_SLIDER_WIDTH);
+  const [controlsRotationDeg, setControlsRotationDeg] = useState(0);
   const pinchStartZoom = useRef(0);
+  const gravitySensor = useAnimatedSensor(SensorType.GRAVITY, {
+    interval: 150,
+    adjustToInterfaceOrientation: false,
+  });
 
   const isReadyForSet = !!exerciseId && !!workoutId && !!workoutExerciseId;
   const canSaveVideo = !!recordedUri && !isRecording && isReadyForSet;
+
+  const applyControlsRotation = useCallback((deg: number, source: string) => {
+    setControlsRotationDeg((prev) => (prev === deg ? prev : deg));
+    if (__DEV__) {
+      console.log("[RecordVideo] Control rotation update:", { source, deg });
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -81,6 +117,20 @@ export default function RecordVideoScreen() {
       isMounted = false;
     };
   }, [workoutExerciseId]);
+
+  useAnimatedReaction(
+    () => {
+      const { x, y, z } = gravitySensor.sensor.value;
+      return gravityToRotationDeg(x, y, z);
+    },
+    (nextDeg, prevDeg) => {
+      if (nextDeg === null || nextDeg === prevDeg) {
+        return;
+      }
+      runOnJS(applyControlsRotation)(nextDeg, "gravity");
+    },
+    [applyControlsRotation]
+  );
 
   const handleRequestPermissions = useCallback(async () => {
     if (!cameraPermission?.granted) {
@@ -239,6 +289,7 @@ export default function RecordVideoScreen() {
     nextSetIndex,
     performedAt,
     ensureMediaPermission,
+    router,
   ]);
 
   const flashLabel = useMemo(() => {
@@ -262,6 +313,10 @@ export default function RecordVideoScreen() {
   }, [sliderWidth, thumbSize, zoom]);
 
   const permissionReady = cameraPermission?.granted && micPermission?.granted;
+  const iconRotationStyle = useMemo(
+    () => ({ transform: [{ rotate: `${controlsRotationDeg}deg` }] }),
+    [controlsRotationDeg]
+  );
 
   if (!isReadyForSet) {
     return (
@@ -334,7 +389,7 @@ export default function RecordVideoScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={flashLabel}
                     className="px-3 py-2 rounded-full bg-surface-secondary border border-border"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                    style={({ pressed }) => [iconRotationStyle, { opacity: pressed ? 0.7 : 1 }]}
                     onPress={handleCycleFlash}
                   >
                     <MaterialCommunityIcons name={flashIcon} size={18} color={rawColors.foreground} />
@@ -358,7 +413,7 @@ export default function RecordVideoScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Flip camera"
                   className="px-3 py-2 rounded-full bg-surface-secondary border border-border"
-                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  style={({ pressed }) => [iconRotationStyle, { opacity: pressed ? 0.7 : 1 }]}
                   onPress={handleToggleFacing}
                 >
                   <MaterialCommunityIcons name="camera-switch-outline" size={18} color={rawColors.foreground} />
@@ -440,7 +495,11 @@ export default function RecordVideoScreen() {
             onPress={handleSavePress}
             disabled={!canSaveVideo}
           >
-            <MaterialCommunityIcons name="content-save" size={18} color={canSaveVideo ? rawColors.primaryForeground : rawColors.foregroundMuted} />
+            <MaterialCommunityIcons
+              name="content-save"
+              size={18}
+              color={canSaveVideo ? rawColors.primaryForeground : rawColors.foregroundMuted}
+            />
             <Text
               className={`text-sm font-semibold ml-1.5 ${
                 canSaveVideo ? "text-primary-foreground" : "text-foreground-muted"
@@ -519,7 +578,11 @@ export default function RecordVideoScreen() {
             {isSaving ? (
               <ActivityIndicator size="small" color={rawColors.foregroundMuted} />
             ) : (
-              <MaterialCommunityIcons name="content-save" size={20} color={rawColors.primaryForeground} />
+              <MaterialCommunityIcons
+                name="content-save"
+                size={20}
+                color={rawColors.primaryForeground}
+              />
             )}
             <Text
               className={`text-base font-semibold ${

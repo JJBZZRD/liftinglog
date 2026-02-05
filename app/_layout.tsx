@@ -11,6 +11,11 @@ import { seedTestDataExercise } from "../lib/db/seedTestData";
 import { useNotificationHandler } from "../lib/notificationHandler";
 import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
 
+function isActivityUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes("current activity is no longer available");
+}
+
 function RootLayoutContent() {
   // Set up notification tap handling for deep linking
   useNotificationHandler();
@@ -19,7 +24,12 @@ function RootLayoutContent() {
   // Lock app to portrait orientation on mount
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
-      .catch((error) => console.warn("Failed to lock portrait orientation:", error));
+      .catch((error) => {
+        if (isActivityUnavailableError(error)) {
+          return;
+        }
+        console.warn("Failed to lock portrait orientation:", error);
+      });
   }, []);
 
   // Seed test data in development mode
