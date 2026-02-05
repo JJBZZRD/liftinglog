@@ -488,7 +488,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
           <View className="flex-row gap-3">
             {/* Timer Button */}
             <Pressable
-              className={`flex-row items-center justify-center px-4 py-3.5 min-h-[48px] rounded-xl border ${
+              className={`flex-row items-center justify-center px-4 h-[52px] rounded-xl border ${
                 currentTimer?.isRunning 
                   ? "bg-primary border-primary" 
                   : "bg-surface-secondary border-border"
@@ -515,7 +515,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Record video"
-              className="w-12 h-12 rounded-xl items-center justify-center border border-border bg-surface-secondary"
+              className="w-[52px] h-[52px] rounded-xl items-center justify-center border border-border bg-surface-secondary"
               style={({ pressed }) => ({
                 opacity: pressed ? 0.8 : canOpenCamera ? 1 : 0.5,
               })}
@@ -527,7 +527,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
 
             {/* Add Set Button */}
             <Pressable 
-              className="flex-1 flex-row items-center justify-center py-3.5 min-h-[48px] rounded-xl bg-primary"
+              className="flex-1 flex-row items-center justify-center h-[52px] rounded-xl bg-primary"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
               onPress={handleAddSet}
             >
