@@ -200,6 +200,11 @@ export default function DataPointModal({
     );
   };
 
+  const handleSetPress = (setId: number) => {
+    onClose();
+    router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
+  };
+
   return (
     <Modal
       visible={visible}
@@ -419,6 +424,7 @@ export default function DataPointModal({
                         note={set.note}
                         variant="compact"
                         prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
+                        onPress={() => handleSetPress(set.id)}
                       />
                     ))}
                   </ScrollView>
@@ -616,6 +622,7 @@ export default function DataPointModal({
                       note={set.note}
                       variant="compact"
                       prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
+                      onPress={() => handleSetPress(set.id)}
                     />
                   ))}
                 </ScrollView>

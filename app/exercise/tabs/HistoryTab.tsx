@@ -497,6 +497,10 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     });
   }, [exerciseName]);
 
+  const handleSetPress = useCallback((setId: number) => {
+    router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
+  }, []);
+
   // Handle date preset selection
   const handlePresetPress = useCallback((preset: DateRangePreset) => {
     if (preset === "custom") {
@@ -977,6 +981,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                     variant="compact"
                     prBadge={set.prBadge}
                     isBestSet={set.id === sessionStats.bestSetId}
+                    onPress={() => handleSetPress(set.id)}
                   />
                 ))}
               </View>

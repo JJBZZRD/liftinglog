@@ -384,6 +384,10 @@ export default function EditWorkoutScreen() {
     setEditModalVisible(true);
   }, []);
 
+  const handleSetPress = useCallback((setId: number) => {
+    router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
+  }, []);
+
   const handleUpdateSet = useCallback((updates: { weight_kg: number; reps: number; note: string | null; performed_at?: number }) => {
     if (!selectedSet) return;
 
@@ -593,6 +597,7 @@ export default function EditWorkoutScreen() {
                   weightKg={item.weightKg}
                   reps={item.reps}
                   note={item.note}
+                  onPress={item.id > 0 ? () => handleSetPress(item.id) : undefined}
                   rightActions={
                     <View className="flex-row items-center gap-2 ml-2">
                       <Pressable

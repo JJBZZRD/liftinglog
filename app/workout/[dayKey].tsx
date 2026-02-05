@@ -105,6 +105,10 @@ export default function WorkoutDayScreen() {
     setDeleteConfirmVisible(true);
   }, []);
 
+  const handleSetPress = useCallback((setId: number) => {
+    router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
+  }, []);
+
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
 
@@ -323,6 +327,7 @@ export default function WorkoutDayScreen() {
                             note={set.note}
                             variant="compact"
                             isBestSet={isBestSetMatch}
+                            onPress={() => handleSetPress(set.id)}
                           />
                         );
                       });

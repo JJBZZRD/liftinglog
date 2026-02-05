@@ -21,6 +21,8 @@ interface SetItemProps {
   reps: number | null;
   /** Optional note */
   note?: string | null;
+  /** Called on press */
+  onPress?: () => void;
   /** Called on long press (for edit mode) */
   onLongPress?: () => void;
   /** Long press delay in ms (default: 400) */
@@ -48,6 +50,7 @@ export default function SetItem({
   weightKg,
   reps,
   note,
+  onPress,
   onLongPress,
   delayLongPress = 400,
   variant = "default",
@@ -130,9 +133,14 @@ export default function SetItem({
     </View>
   );
 
-  if (onLongPress) {
+  if (onPress || onLongPress) {
     return (
-      <Pressable onLongPress={onLongPress} delayLongPress={delayLongPress}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={delayLongPress}
+        style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      >
         {content}
       </Pressable>
     );
@@ -153,6 +161,7 @@ interface SetData {
 
 interface SetItemListProps {
   sets: SetData[];
+  onPressSet?: (set: SetData) => void;
   onLongPressSet?: (set: SetData) => void;
   variant?: "default" | "compact";
   emptyText?: string;
@@ -160,6 +169,7 @@ interface SetItemListProps {
 
 export function SetItemList({
   sets,
+  onPressSet,
   onLongPressSet,
   variant = "default",
   emptyText = "No sets recorded",
@@ -181,6 +191,7 @@ export function SetItemList({
           weightKg={set.weightKg}
           reps={set.reps}
           note={set.note}
+          onPress={onPressSet ? () => onPressSet(set) : undefined}
           onLongPress={onLongPressSet ? () => onLongPressSet(set) : undefined}
           variant={variant}
         />
