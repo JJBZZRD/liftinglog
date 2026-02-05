@@ -9,13 +9,25 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow LiftingLog to access your camera to record lift videos.",
+        "NSMicrophoneUsageDescription": "Allow LiftingLog to access your microphone for video recording audio.",
+        "NSPhotoLibraryAddUsageDescription": "Allow LiftingLog to save lift videos to your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_MEDIA_VIDEO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.LiftingLog"
     },
@@ -26,6 +38,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow LiftingLog to access your media library.",
+          "savePhotosPermission": "Allow LiftingLog to save lift videos to your media library.",
+          "granularPermissions": ["video"]
+        }
+      ],
       [
         "expo-splash-screen",
         {

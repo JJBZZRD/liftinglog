@@ -62,10 +62,20 @@ export const prEvents = sqliteTable("pr_events", {
   occurredAt: integer("occurred_at").notNull(),
 });
 
+export const media = sqliteTable("media", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  localUri: text("local_uri").notNull(),
+  assetId: text("asset_id"),
+  mime: text("mime"),
+  setId: integer("set_id"),
+  workoutId: integer("workout_id"),
+  note: text("note"),
+  createdAt: integer("created_at"),
+});
+
 export type ExerciseRow = typeof exercises.$inferSelect;
 export type WorkoutRow = typeof workouts.$inferSelect;
 export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
 export type SetRow = typeof sets.$inferSelect;
 export type PREventRow = typeof prEvents.$inferSelect;
-
-
+export type MediaRow = typeof media.$inferSelect;

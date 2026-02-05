@@ -24,7 +24,9 @@ import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { getCurrentPREventsForExercise } from "../../../lib/db/prEvents";
 import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
+import { listMediaForSetIds } from "../../../lib/db/media";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import { deleteAssociatedMediaForSets } from "../../../lib/utils/mediaCleanup";
 
 // Date range presets
 type DateRangePreset = "1w" | "1m" | "3m" | "6m" | "1y" | "all" | "custom";
@@ -200,6 +202,9 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const [loading, setLoading] = useState(true);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HistoryEntry | null>(null);
+  const [deleteMediaChecked, setDeleteMediaChecked] = useState(false);
+  const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
+  const [deleteMediaSetIds, setDeleteMediaSetIds] = useState<number[]>([]);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -532,11 +537,23 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirmVisible(false);
     setDeleteTarget(null);
+    setDeleteMediaChecked(false);
+    setDeleteMediaAvailable(false);
+    setDeleteMediaSetIds([]);
   }, []);
 
-  const handleDelete = useCallback((entry: HistoryEntry) => {
+  const handleDelete = useCallback(async (entry: HistoryEntry) => {
     setDeleteTarget(entry);
     setDeleteConfirmVisible(true);
+    setDeleteMediaChecked(false);
+    const setIds = entry.sets.map((set) => set.id).filter((id) => id > 0);
+    setDeleteMediaSetIds(setIds);
+    if (setIds.length === 0) {
+      setDeleteMediaAvailable(false);
+      return;
+    }
+    const mediaRows = await listMediaForSetIds(setIds);
+    setDeleteMediaAvailable(mediaRows.length > 0);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -546,13 +563,23 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     closeDeleteConfirm();
 
     try {
+      if (deleteMediaChecked && deleteMediaAvailable && deleteMediaSetIds.length > 0) {
+        await deleteAssociatedMediaForSets(deleteMediaSetIds);
+      }
       await deleteWorkoutExercise(workoutExerciseId);
       await loadHistory();
     } catch (error) {
       if (__DEV__) console.error("[HistoryTab] Error deleting session:", error);
       Alert.alert("Error", "Failed to delete session. Please try again.");
     }
-  }, [deleteTarget, closeDeleteConfirm, loadHistory]);
+  }, [
+    deleteTarget,
+    deleteMediaChecked,
+    deleteMediaAvailable,
+    deleteMediaSetIds,
+    closeDeleteConfirm,
+    loadHistory,
+  ]);
 
   if (!exerciseId) {
     return (
@@ -1036,6 +1063,24 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
               {deleteTarget.sets.length} set{deleteTarget.sets.length !== 1 ? "s" : ""}
             </Text>
           </View>
+        )}
+
+        {deleteMediaAvailable && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: deleteMediaChecked }}
+            className="flex-row items-center mb-5"
+            onPress={() => setDeleteMediaChecked((prev) => !prev)}
+          >
+            <MaterialCommunityIcons
+              name={deleteMediaChecked ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={20}
+              color={deleteMediaChecked ? rawColors.primary : rawColors.foregroundSecondary}
+            />
+            <Text className="text-sm font-medium ml-2 text-foreground">
+              Delete associated media
+            </Text>
+          </Pressable>
         )}
 
         <View className="flex-row gap-3">

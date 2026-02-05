@@ -6,6 +6,7 @@ import SetItem from "../components/lists/SetItem";
 import BaseModal from "../components/modals/BaseModal";
 import DatePickerModal from "../components/modals/DatePickerModal";
 import EditSetModal from "../components/modals/EditSetModal";
+import { listMediaForSet } from "../lib/db/media";
 import {
   addSet,
   addWorkoutExercise,
@@ -21,6 +22,7 @@ import {
 } from "../lib/db/workouts";
 import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
+import { deleteAssociatedMediaForSets } from "../lib/utils/mediaCleanup";
 
 function mergeDatePreserveTimeMs(timeSourceMs: number | null, dateSourceMs: number): number {
   if (timeSourceMs === null) return dateSourceMs;
@@ -66,6 +68,9 @@ export default function EditWorkoutScreen() {
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ set: SetRow; displayIndex: number } | null>(null);
+  const [deleteMediaChecked, setDeleteMediaChecked] = useState(false);
+  const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
+  const [mediaDeleteSetIds, setMediaDeleteSetIds] = useState<number[]>([]);
 
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -307,6 +312,11 @@ export default function EditWorkoutScreen() {
         await updateWorkoutExercisePerformedAt(resolvedWorkoutExerciseId, selectedDate.getTime());
       }
 
+      const mediaSetIdsToDelete = deletedSetIds.filter((setId) => mediaDeleteSetIds.includes(setId));
+      if (mediaSetIdsToDelete.length > 0) {
+        await deleteAssociatedMediaForSets(mediaSetIdsToDelete);
+      }
+
       for (const setId of deletedSetIds) {
         await deleteSet(setId);
       }
@@ -376,6 +386,7 @@ export default function EditWorkoutScreen() {
     exerciseName,
     selectedDate,
     sets,
+    mediaDeleteSetIds,
     closeScreen,
   ]);
 
@@ -412,15 +423,31 @@ export default function EditWorkoutScreen() {
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirmVisible(false);
     setDeleteTarget(null);
+    setDeleteMediaChecked(false);
+    setDeleteMediaAvailable(false);
   }, []);
 
-  const handleDeleteSetPress = useCallback((set: SetRow, displayIndex: number) => {
+  const handleDeleteSetPress = useCallback(async (set: SetRow, displayIndex: number) => {
     setDeleteTarget({ set, displayIndex });
     setDeleteConfirmVisible(true);
+    setDeleteMediaChecked(false);
+    if (set.id > 0) {
+      const mediaRows = await listMediaForSet(set.id);
+      setDeleteMediaAvailable(mediaRows.length > 0);
+    } else {
+      setDeleteMediaAvailable(false);
+    }
   }, []);
 
   const handleConfirmDeleteSet = useCallback(() => {
     if (!deleteTarget) return;
+
+    if (deleteMediaChecked && deleteTarget.set.id > 0) {
+      setMediaDeleteSetIds((prev) => {
+        if (prev.includes(deleteTarget.set.id)) return prev;
+        return [...prev, deleteTarget.set.id];
+      });
+    }
 
     setSets((prev) => {
       const next = prev.filter((set) => set.id !== deleteTarget.set.id);
@@ -428,7 +455,7 @@ export default function EditWorkoutScreen() {
       return next;
     });
     closeDeleteConfirm();
-  }, [deleteTarget, closeDeleteConfirm]);
+  }, [deleteTarget, deleteMediaChecked, closeDeleteConfirm]);
 
   // Show error only if we don't have valid params (neither direct workoutExerciseId nor legacy exerciseId+workoutId)
   const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);
@@ -701,6 +728,24 @@ export default function EditWorkoutScreen() {
               </Text>
             )}
           </View>
+        )}
+
+        {deleteMediaAvailable && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: deleteMediaChecked }}
+            className="flex-row items-center mb-5"
+            onPress={() => setDeleteMediaChecked((prev) => !prev)}
+          >
+            <MaterialCommunityIcons
+              name={deleteMediaChecked ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={20}
+              color={deleteMediaChecked ? rawColors.primary : rawColors.foregroundSecondary}
+            />
+            <Text className="text-sm font-medium ml-2 text-foreground">
+              Delete associated media
+            </Text>
+          </Pressable>
         )}
 
         <View className="flex-row gap-3">

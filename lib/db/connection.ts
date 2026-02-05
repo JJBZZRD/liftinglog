@@ -171,6 +171,7 @@ sqlite.execSync(`
   CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY NOT NULL,
     local_uri TEXT NOT NULL,
+    asset_id TEXT,
     mime TEXT,
     set_id INTEGER,
     workout_id INTEGER,
@@ -250,6 +251,13 @@ try {
 // Add performed_at column to workout_exercises table if it doesn't exist
 try {
   sqlite.execSync(`ALTER TABLE workout_exercises ADD COLUMN performed_at INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+
+// Add asset_id column to media table if it doesn't exist
+try {
+  sqlite.execSync(`ALTER TABLE media ADD COLUMN asset_id TEXT;`);
 } catch {
   // Column already exists, ignore
 }

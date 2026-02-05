@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -22,9 +23,11 @@ import {
   updateWorkoutExerciseInputs,
   type SetRow,
 } from "../../../lib/db/workouts";
+import { listMediaForSet } from "../../../lib/db/media";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
+import { deleteAssociatedMediaForSets } from "../../../lib/utils/mediaCleanup";
 
 type RecordTabProps = {
   onHistoryRefresh?: () => void;
@@ -47,6 +50,9 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ set: SetRow; displayIndex: number } | null>(null);
+  const [deleteMediaChecked, setDeleteMediaChecked] = useState(false);
+  const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
+  const [deleteMediaSetIds, setDeleteMediaSetIds] = useState<number[]>([]);
   const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
 
   // Timer state with real-time updates
@@ -118,9 +124,22 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     }
   }, [exerciseId]);
 
+  const refreshSets = useCallback(async () => {
+    if (!workoutExerciseId) return;
+    const exerciseSets = await listSetsForWorkoutExercise(workoutExerciseId);
+    setSets(exerciseSets);
+    setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+  }, [workoutExerciseId]);
+
   useEffect(() => {
     loadWorkout();
   }, [loadWorkout]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshSets();
+    }, [refreshSets])
+  );
 
   const setWeight = useCallback((value: string) => {
     setWeightState(value);
@@ -224,6 +243,21 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     setTimerModalVisible(true);
   }, [currentTimer]);
 
+  const handleRecordVideoPress = useCallback(() => {
+    if (!exerciseId || !workoutId || !workoutExerciseId) return;
+    router.push({
+      pathname: "/exercise/record-video",
+      params: {
+        id: String(exerciseId),
+        name: exerciseName,
+        workoutId: String(workoutId),
+        workoutExerciseId: String(workoutExerciseId),
+        performedAt: String(selectedDate.getTime()),
+        setIndex: String(setIndex),
+      },
+    });
+  }, [exerciseId, workoutId, workoutExerciseId, exerciseName, selectedDate, setIndex]);
+
   const handleEditSetPress = useCallback((set: SetRow) => {
     setSelectedSet(set);
     setEditModalVisible(true);
@@ -251,21 +285,40 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirmVisible(false);
     setDeleteTarget(null);
+    setDeleteMediaChecked(false);
+    setDeleteMediaAvailable(false);
+    setDeleteMediaSetIds([]);
   }, []);
 
-  const handleDeleteSetPress = useCallback((set: SetRow, displayIndex: number) => {
+  const handleDeleteSetPress = useCallback(async (set: SetRow, displayIndex: number) => {
     setDeleteTarget({ set, displayIndex });
     setDeleteConfirmVisible(true);
+    setDeleteMediaChecked(false);
+    const mediaRows = await listMediaForSet(set.id);
+    setDeleteMediaAvailable(mediaRows.length > 0);
+    setDeleteMediaSetIds(mediaRows.length > 0 ? [set.id] : []);
   }, []);
 
   const handleConfirmDeleteSet = useCallback(async () => {
     if (!deleteTarget) return;
 
+    if (deleteMediaChecked && deleteMediaAvailable && deleteMediaSetIds.length > 0) {
+      await deleteAssociatedMediaForSets(deleteMediaSetIds);
+    }
+
     await deleteSet(deleteTarget.set.id);
     closeDeleteConfirm();
     await loadWorkout();
     onHistoryRefresh?.();
-  }, [deleteTarget, closeDeleteConfirm, loadWorkout, onHistoryRefresh]);
+  }, [
+    deleteTarget,
+    deleteMediaChecked,
+    deleteMediaAvailable,
+    deleteMediaSetIds,
+    closeDeleteConfirm,
+    loadWorkout,
+    onHistoryRefresh,
+  ]);
 
   const closeClearConfirm = useCallback(() => {
     setClearConfirmVisible(false);
@@ -325,6 +378,8 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const timerDisplayText = currentTimer
     ? formatTime(currentTimer.remainingSeconds)
     : formatTime((parseInt(timerMinutes, 10) || 1) * 60 + (parseInt(timerSeconds, 10) || 30));
+
+  const canOpenCamera = !!exerciseId && !!workoutId && !!workoutExerciseId;
 
   return (
     <View className="flex-1 bg-background">
@@ -402,7 +457,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
           <View className="flex-row gap-3">
             {/* Timer Button */}
             <Pressable
-              className={`flex-row items-center justify-center px-4 py-3.5 rounded-xl border ${
+              className={`flex-row items-center justify-center px-4 py-3.5 min-h-[48px] rounded-xl border ${
                 currentTimer?.isRunning 
                   ? "bg-primary border-primary" 
                   : "bg-surface-secondary border-border"
@@ -425,9 +480,23 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
               </Text>
             </Pressable>
 
+            {/* Record Video Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Record video"
+              className="w-12 h-12 rounded-xl items-center justify-center border border-border bg-surface-secondary"
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.8 : canOpenCamera ? 1 : 0.5,
+              })}
+              onPress={handleRecordVideoPress}
+              disabled={!canOpenCamera}
+            >
+              <MaterialCommunityIcons name="video-outline" size={22} color={canOpenCamera ? rawColors.primary : rawColors.foregroundMuted} />
+            </Pressable>
+
             {/* Add Set Button */}
             <Pressable 
-              className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl bg-primary"
+              className="flex-1 flex-row items-center justify-center py-3.5 min-h-[48px] rounded-xl bg-primary"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
               onPress={handleAddSet}
             >
@@ -559,6 +628,24 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
               </Text>
             )}
           </View>
+        )}
+
+        {deleteMediaAvailable && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: deleteMediaChecked }}
+            className="flex-row items-center mb-5"
+            onPress={() => setDeleteMediaChecked((prev) => !prev)}
+          >
+            <MaterialCommunityIcons
+              name={deleteMediaChecked ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={20}
+              color={deleteMediaChecked ? rawColors.primary : rawColors.foregroundSecondary}
+            />
+            <Text className="text-sm font-medium ml-2 text-foreground">
+              Delete associated media
+            </Text>
+          </Pressable>
         )}
 
         <View className="flex-row gap-3">

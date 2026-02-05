@@ -20,7 +20,9 @@ import {
   type WorkoutDayExerciseEntry,
   type WorkoutDayPageData,
 } from "../../lib/db/workouts";
+import { listMediaForSetIds } from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { deleteAssociatedMediaForSets } from "../../lib/utils/mediaCleanup";
 
 // Helper to get alphabet letter (A-Z)
 const getAlphabetLetter = (index: number) => String.fromCharCode(65 + index);
@@ -34,6 +36,9 @@ export default function WorkoutDayScreen() {
   const [loading, setLoading] = useState(true);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkoutDayExerciseEntry | null>(null);
+  const [deleteMediaChecked, setDeleteMediaChecked] = useState(false);
+  const [deleteMediaAvailable, setDeleteMediaAvailable] = useState(false);
+  const [deleteMediaSetIds, setDeleteMediaSetIds] = useState<number[]>([]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -97,12 +102,24 @@ export default function WorkoutDayScreen() {
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirmVisible(false);
     setDeleteTarget(null);
+    setDeleteMediaChecked(false);
+    setDeleteMediaAvailable(false);
+    setDeleteMediaSetIds([]);
   }, []);
 
   // Handle delete action - delete the workout exercise entry
-  const handleDelete = useCallback((entry: WorkoutDayExerciseEntry) => {
+  const handleDelete = useCallback(async (entry: WorkoutDayExerciseEntry) => {
     setDeleteTarget(entry);
     setDeleteConfirmVisible(true);
+    setDeleteMediaChecked(false);
+    const setIds = entry.sets.map((set) => set.id).filter((id) => id > 0);
+    setDeleteMediaSetIds(setIds);
+    if (setIds.length === 0) {
+      setDeleteMediaAvailable(false);
+      return;
+    }
+    const mediaRows = await listMediaForSetIds(setIds);
+    setDeleteMediaAvailable(mediaRows.length > 0);
   }, []);
 
   const handleSetPress = useCallback((setId: number) => {
@@ -115,13 +132,23 @@ export default function WorkoutDayScreen() {
     closeDeleteConfirm();
 
     try {
+      if (deleteMediaChecked && deleteMediaAvailable && deleteMediaSetIds.length > 0) {
+        await deleteAssociatedMediaForSets(deleteMediaSetIds);
+      }
       await deleteWorkoutExercise(deleteTarget.workoutExerciseId);
       await loadData();
     } catch (error) {
       console.error("Error deleting workout exercise:", error);
       Alert.alert("Error", "Failed to delete exercise. Please try again.");
     }
-  }, [deleteTarget, closeDeleteConfirm, loadData]);
+  }, [
+    deleteTarget,
+    deleteMediaChecked,
+    deleteMediaAvailable,
+    deleteMediaSetIds,
+    closeDeleteConfirm,
+    loadData,
+  ]);
 
   if (!dayKey) {
     return (
@@ -367,6 +394,24 @@ export default function WorkoutDayScreen() {
               {deleteTarget.sets.length} set{deleteTarget.sets.length !== 1 ? "s" : ""}
             </Text>
           </View>
+        )}
+
+        {deleteMediaAvailable && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: deleteMediaChecked }}
+            className="flex-row items-center mb-5"
+            onPress={() => setDeleteMediaChecked((prev) => !prev)}
+          >
+            <MaterialCommunityIcons
+              name={deleteMediaChecked ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={20}
+              color={deleteMediaChecked ? rawColors.primary : rawColors.foregroundSecondary}
+            />
+            <Text className="text-sm font-medium ml-2 text-foreground">
+              Delete associated media
+            </Text>
+          </Pressable>
         )}
 
         <View className="flex-row gap-3">
