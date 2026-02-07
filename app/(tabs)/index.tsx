@@ -185,7 +185,11 @@ export default function OverviewScreen() {
                 contentContainerStyle={{ paddingBottom: 8 }}
               >
                 {lastWorkout.exercises.map((exercise, index) => (
-                  <View key={exercise.workoutExerciseId} className="flex-row items-center py-2.5">
+                  <Pressable
+                    key={exercise.workoutExerciseId}
+                    className="flex-row items-center py-2.5"
+                    onPress={handleLastWorkoutPress}
+                  >
                     {/* Alphabet Circle */}
                     <View className="w-8 h-8 rounded-full items-center justify-center mr-3 bg-primary">
                       <Text className="text-sm font-semibold text-primary-foreground">
@@ -207,14 +211,16 @@ export default function OverviewScreen() {
                           : "Best set: —"}
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
 
                 {/* Show more indicator */}
                 {lastWorkout.hasMore && (
-                  <Text className="text-xs text-center py-2 italic text-foreground-muted">
-                    Showing first 26 exercises
-                  </Text>
+                  <Pressable onPress={handleLastWorkoutPress}>
+                    <Text className="text-xs text-center py-2 italic text-foreground-muted">
+                      Showing first 26 exercises
+                    </Text>
+                  </Pressable>
                 )}
               </ScrollView>
             </View>
