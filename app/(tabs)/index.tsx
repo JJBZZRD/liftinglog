@@ -126,7 +126,7 @@ export default function OverviewScreen() {
 
         {/* Workout History */}
         <View
-          className="rounded-2xl p-5 mb-4 bg-surface min-h-[400px] max-h-[700px]"
+          className="rounded-2xl p-5 mb-4 bg-surface min-h-[400px] max-h-[700px] overflow-hidden"
           style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
         >
           {/* Card Header */}
@@ -166,19 +166,24 @@ export default function OverviewScreen() {
               </Text>
             </View>
           ) : (
-            <Pressable className="flex-1" onPress={handleLastWorkoutPress}>
+            <View className="flex-1 min-h-0">
               {/* Last Workout Header */}
-              <View className="mb-4">
+              <Pressable className="mb-4" onPress={handleLastWorkoutPress}>
                 <Text className="text-xs font-medium uppercase tracking-wide text-foreground-secondary">
                   Last Workout
                 </Text>
                 <Text className="text-xl font-semibold mt-1 text-foreground">
                   {formatDate(lastWorkout.date)}
                 </Text>
-              </View>
+              </Pressable>
 
               {/* Exercise List */}
-              <View className="flex-1">
+              <ScrollView
+                className="flex-1 min-h-0"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={lastWorkout.exercises.length > 5}
+                contentContainerStyle={{ paddingBottom: 8 }}
+              >
                 {lastWorkout.exercises.map((exercise, index) => (
                   <View key={exercise.workoutExerciseId} className="flex-row items-center py-2.5">
                     {/* Alphabet Circle */}
@@ -211,8 +216,8 @@ export default function OverviewScreen() {
                     Showing first 26 exercises
                   </Text>
                 )}
-              </View>
-            </Pressable>
+              </ScrollView>
+            </View>
           )}
         </View>
       </ScrollView>
