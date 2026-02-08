@@ -1,5 +1,5 @@
 import * as MediaLibrary from "expo-media-library";
-import { listMediaForSetIds } from "../db/media";
+import { listMediaForAssetIds, listMediaForLocalUris, listMediaForSetIds } from "../db/media";
 
 const ALBUM_NAME = "LiftingLog";
 const PAGE_SIZE = 200;
@@ -240,7 +240,7 @@ export async function deleteAssociatedMediaForSets(setIds: number[]): Promise<vo
     console.warn("Failed to resolve media assets:", error);
   }
 
-  const idsToDelete = Array.from(new Set([...verifiedDirectIds, ...resolvedIds]));
+  let idsToDelete = Array.from(new Set([...verifiedDirectIds, ...resolvedIds]));
   if (__DEV__) {
     console.log("[mediaCleanup] Deleting assets:", {
       directCount: verifiedDirectIds.length,
@@ -248,6 +248,85 @@ export async function deleteAssociatedMediaForSets(setIds: number[]): Promise<vo
       totalCount: idsToDelete.length,
     });
   }
+  if (idsToDelete.length === 0) return;
+
+  const setIdSet = new Set(setIds);
+  const isTargetSetId = (setId: number | null) => setId !== null && setIdSet.has(setId);
+
+  // Guard: if the same underlying asset is linked to multiple sets, deleting media for one set
+  // should not delete the asset for the other sets.
+  try {
+    const rowsWithAssetId = await listMediaForAssetIds(idsToDelete);
+    const sharedAssetIds = new Set(
+      rowsWithAssetId
+        .filter((row) => row.assetId !== null && !isTargetSetId(row.setId))
+        .map((row) => row.assetId)
+    );
+
+    if (sharedAssetIds.size > 0) {
+      idsToDelete = idsToDelete.filter((assetId) => !sharedAssetIds.has(assetId));
+      if (__DEV__) {
+        console.log("[mediaCleanup] Skipping shared assets (assetId referenced by other sets):", {
+          skipped: sharedAssetIds.size,
+        });
+      }
+    }
+  } catch (error) {
+    console.warn("[mediaCleanup] Failed checking shared assetId references:", error);
+  }
+
+  if (idsToDelete.length === 0) return;
+
+  try {
+    const assetInfos = await Promise.all(
+      idsToDelete.map(async (assetId) => {
+        const info = await getSafeAssetInfo(assetId);
+        return info ? { assetId, info } : null;
+      })
+    );
+
+    const assetInfoPairs = assetInfos.filter(
+      (item): item is { assetId: string; info: MediaLibrary.AssetInfo } => item !== null
+    );
+
+    const urisToCheck = Array.from(
+      new Set(
+        assetInfoPairs
+          .flatMap(({ info }) => [info.uri, info.localUri ?? null])
+          .filter((uri): uri is string => typeof uri === "string" && uri.length > 0)
+      )
+    );
+
+    if (urisToCheck.length > 0) {
+      const rowsWithMatchingUri = await listMediaForLocalUris(urisToCheck);
+      const sharedUris = new Set(
+        rowsWithMatchingUri
+          .filter((row) => !isTargetSetId(row.setId))
+          .map((row) => row.localUri)
+      );
+
+      if (sharedUris.size > 0) {
+        const sharedByUri = new Set<string>();
+        for (const { assetId, info } of assetInfoPairs) {
+          if (sharedUris.has(info.uri) || (info.localUri && sharedUris.has(info.localUri))) {
+            sharedByUri.add(assetId);
+          }
+        }
+
+        if (sharedByUri.size > 0) {
+          idsToDelete = idsToDelete.filter((assetId) => !sharedByUri.has(assetId));
+          if (__DEV__) {
+            console.log("[mediaCleanup] Skipping shared assets (URI referenced by other sets):", {
+              skipped: sharedByUri.size,
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[mediaCleanup] Failed checking shared URI references:", error);
+  }
+
   if (idsToDelete.length === 0) return;
 
   try {

@@ -4,6 +4,16 @@ import { media, type MediaRow } from "./schema";
 
 export type Media = MediaRow;
 
+export async function listMediaForAssetIds(assetIds: string[]): Promise<Media[]> {
+  if (assetIds.length === 0) return [];
+  return await db.select().from(media).where(inArray(media.assetId, assetIds));
+}
+
+export async function listMediaForLocalUris(localUris: string[]): Promise<Media[]> {
+  if (localUris.length === 0) return [];
+  return await db.select().from(media).where(inArray(media.localUri, localUris));
+}
+
 export async function addMedia(args: {
   local_uri: string;
   asset_id?: string | null;
@@ -30,6 +40,10 @@ export async function addMedia(args: {
 
 export async function listMediaForSet(setId: number): Promise<Media[]> {
   return await db.select().from(media).where(eq(media.setId, setId));
+}
+
+export async function unlinkMediaForSet(setId: number): Promise<void> {
+  await db.delete(media).where(eq(media.setId, setId)).run();
 }
 
 export async function listMediaForSetIds(setIds: number[]): Promise<Media[]> {

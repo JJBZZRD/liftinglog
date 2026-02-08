@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import { addMedia, getLatestMediaForSet, updateMedia, type Media } from "../../lib/db/media";
+import { addMedia, getLatestMediaForSet, unlinkMediaForSet, updateMedia, type Media } from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 function toMillis(value?: number): number {
@@ -114,6 +114,7 @@ export default function SetInfoScreen() {
   const [loadingVideo, setLoadingVideo] = useState(false);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [savingSelection, setSavingSelection] = useState(false);
+  const [unlinkingVideo, setUnlinkingVideo] = useState(false);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [resolvedVideoUri, setResolvedVideoUri] = useState<string | null>(null);
 
@@ -279,6 +280,42 @@ export default function SetInfoScreen() {
     }
   }, [ensureVideoLibraryPermission, isValidId, setId, videoMedia, loadVideoMedia]);
 
+  const unlinkVideo = useCallback(async () => {
+    if (!isValidId || !setId) return;
+    if (!videoUri) return;
+
+    setUnlinkingVideo(true);
+    try {
+      await unlinkMediaForSet(setId);
+
+      if (__DEV__) {
+        console.log("[SetInfo] Unlinked video from set:", { setId });
+      }
+
+      await loadVideoMedia();
+    } catch (error) {
+      if (__DEV__) console.error("[SetInfo] Failed unlinking video:", error);
+      Alert.alert("Error", "Failed to unlink video from this set.");
+    } finally {
+      setUnlinkingVideo(false);
+    }
+  }, [isValidId, setId, videoUri, loadVideoMedia]);
+
+  const handleVideoActionPress = useCallback(() => {
+    if (!isValidId || !setId) return;
+
+    if (!videoUri) {
+      void openVideoPicker();
+      return;
+    }
+
+    Alert.alert("Video options", "Unlinking removes the link to this set but won’t delete the video file.", [
+      { text: "Change video", onPress: () => void openVideoPicker() },
+      { text: "Unlink video", style: "destructive", onPress: () => void unlinkVideo() },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [isValidId, setId, videoUri, openVideoPicker, unlinkVideo]);
+
   const formatAssetDate = useCallback((timestamp?: number) => {
     return new Date(toMillis(timestamp)).toLocaleString("en-US", {
       month: "short",
@@ -358,9 +395,11 @@ export default function SetInfoScreen() {
             </View>
             {isValidId && (
               <Pressable
-                onPress={openVideoPicker}
-                disabled={pickerLoading || savingSelection}
-                style={({ pressed }) => ({ opacity: pressed || pickerLoading || savingSelection ? 0.7 : 1 })}
+                onPress={handleVideoActionPress}
+                disabled={pickerLoading || savingSelection || unlinkingVideo}
+                style={({ pressed }) => ({
+                  opacity: pressed || pickerLoading || savingSelection || unlinkingVideo ? 0.7 : 1,
+                })}
               >
                 <View style={[styles.actionPill, { backgroundColor: rawColors.surfaceSecondary }]}>
                   <MaterialCommunityIcons
@@ -438,9 +477,11 @@ export default function SetInfoScreen() {
               </Text>
               {isValidId && (
                 <Pressable
-                  onPress={openVideoPicker}
-                  disabled={pickerLoading || savingSelection}
-                  style={({ pressed }) => ({ opacity: pressed || pickerLoading || savingSelection ? 0.75 : 1 })}
+                  onPress={handleVideoActionPress}
+                  disabled={pickerLoading || savingSelection || unlinkingVideo}
+                  style={({ pressed }) => ({
+                    opacity: pressed || pickerLoading || savingSelection || unlinkingVideo ? 0.75 : 1,
+                  })}
                 >
                   <View style={[styles.addButton, { backgroundColor: rawColors.primary }]}>
                     <MaterialCommunityIcons name="plus" size={18} color={rawColors.primaryForeground} />
