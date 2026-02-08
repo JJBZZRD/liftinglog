@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabBar, TabView } from "react-native-tab-view";
 import { getPinnedExercises, togglePinExercise, type Exercise } from "../lib/db/exercises";
 import { getActiveWorkout, listInProgressExercises, type InProgressExercise } from "../lib/db/workouts";
@@ -27,6 +28,7 @@ type OverlayTabKey = "pinned" | "inProgress";
 
 export default function PinnedExercisesOverlay() {
   const { rawColors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const layout = useWindowDimensions();
   const [isOpen, setIsOpen] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
@@ -407,7 +409,17 @@ export default function PinnedExercisesOverlay() {
       </Animated.View>
 
       {/* Floating Action Button */}
-      <Pressable style={[styles.fab, { backgroundColor: rawColors.primary, shadowColor: rawColors.primary }]} onPress={handleToggle}>
+      <Pressable
+        style={[
+          styles.fab,
+          {
+            top: insets.top + 6,
+            backgroundColor: rawColors.primary,
+            shadowColor: rawColors.primary,
+          },
+        ]}
+        onPress={handleToggle}
+      >
         <Animated.View style={[styles.fabIconContainer, { transform: [{ rotate: rotateInterpolation }] }]}>
           <Animated.View style={[styles.fabIcon, { opacity: pinOpacity }]}>
             <MaterialCommunityIcons name="pin" size={24} color={rawColors.surface} />
