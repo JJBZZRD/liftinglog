@@ -2,19 +2,17 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import * as MediaLibrary from "expo-media-library";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { WebView } from "react-native-webview";
 import { addMedia, getLatestMediaForSet, unlinkMediaForSet, updateMedia, type Media } from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
@@ -29,81 +27,6 @@ function getUriScheme(uri: string | null | undefined): string {
   return match?.[1]?.toLowerCase() ?? "unknown";
 }
 
-function buildVideoHtml(uri: string, withControls: boolean): string {
-  const encodedUri = encodeURI(uri);
-  const src = JSON.stringify(encodedUri);
-  const controls = withControls ? "controls" : "";
-  const autoplay = withControls ? "autoplay" : "autoplay muted loop";
-  return `<!doctype html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <style>
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-      video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-    </style>
-  </head>
-  <body>
-    <video id="player" ${controls} ${autoplay} playsinline webkit-playsinline>
-      <source src=${src} type="video/mp4" />
-    </video>
-    <script>
-      (function () {
-        var player = document.getElementById("player");
-        function send(type, payload) {
-          try {
-            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, payload: payload || null }));
-            }
-          } catch (err) {}
-        }
-        function errorPayload() {
-          if (!player || !player.error) return null;
-          return { code: player.error.code || null, message: player.error.message || null };
-        }
-        var events = [
-          "loadstart",
-          "loadedmetadata",
-          "loadeddata",
-          "canplay",
-          "canplaythrough",
-          "play",
-          "playing",
-          "pause",
-          "stalled",
-          "suspend",
-          "waiting",
-          "ended",
-          "error"
-        ];
-        events.forEach(function (evt) {
-          player.addEventListener(evt, function () {
-            send("video-event", {
-              event: evt,
-              currentSrc: player.currentSrc || null,
-              readyState: player.readyState,
-              networkState: player.networkState,
-              error: errorPayload()
-            });
-          });
-        });
-        window.addEventListener("error", function (e) {
-          send("window-error", { message: e.message || "unknown" });
-        });
-        setTimeout(function () {
-          var playPromise = player.play();
-          if (playPromise && typeof playPromise.catch === "function") {
-            playPromise.catch(function (err) {
-              send("play-rejected", { message: String(err) });
-            });
-          }
-        }, 60);
-      })();
-    </script>
-  </body>
-</html>`;
-}
-
 export default function SetInfoScreen() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -115,24 +38,62 @@ export default function SetInfoScreen() {
   const [pickerLoading, setPickerLoading] = useState(false);
   const [savingSelection, setSavingSelection] = useState(false);
   const [unlinkingVideo, setUnlinkingVideo] = useState(false);
-  const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [resolvedVideoUri, setResolvedVideoUri] = useState<string | null>(null);
 
+  const videoViewRef = useRef<VideoView | null>(null);
   const videoUri = resolvedVideoUri;
-  const previewHtml = useMemo(() => (videoUri ? buildVideoHtml(videoUri, false) : ""), [videoUri]);
-  const fullscreenHtml = useMemo(() => (videoUri ? buildVideoHtml(videoUri, true) : ""), [videoUri]);
-  const webViewSource = useMemo(
-    () => (previewHtml ? { html: previewHtml, baseUrl: "file:///" } : { html: "" }),
-    [previewHtml]
-  );
-  const fullscreenWebViewSource = useMemo(
-    () => (fullscreenHtml ? { html: fullscreenHtml, baseUrl: "file:///" } : { html: "" }),
-    [fullscreenHtml]
-  );
-  const iOSReadAccessUri = useMemo(
-    () => (Platform.OS === "ios" ? videoUri ?? undefined : undefined),
-    [videoUri]
-  );
+  const player = useVideoPlayer(null, (player) => {
+    player.loop = true;
+    player.muted = true;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSource = async () => {
+      if (!videoUri) {
+        player.pause();
+        return;
+      }
+
+      try {
+        await player.replaceAsync(videoUri);
+        if (cancelled) return;
+        player.play();
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("[SetInfo] Failed to load video source:", {
+            uri: videoUri,
+            scheme: getUriScheme(videoUri),
+            error: String(error),
+          });
+        }
+      }
+    };
+
+    void loadSource();
+    return () => {
+      cancelled = true;
+    };
+  }, [player, videoUri]);
+
+  const handleFullscreenEnter = useCallback(() => {
+    player.loop = false;
+    player.muted = false;
+  }, [player]);
+
+  const openFullscreen = useCallback(() => {
+    if (!videoUri) return;
+    handleFullscreenEnter();
+    player.play();
+    void videoViewRef.current?.enterFullscreen();
+  }, [handleFullscreenEnter, player, videoUri]);
+
+  const handleFullscreenExit = useCallback(() => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  }, [player]);
 
   const loadVideoMedia = useCallback(async () => {
     if (!isValidId || !setId) {
@@ -154,14 +115,15 @@ export default function SetInfoScreen() {
 
       let nextUri = media.localUri ?? null;
       if (media.assetId) {
+        const assetId = String(media.assetId);
         try {
-          const assetInfo = await MediaLibrary.getAssetInfoAsync(media.assetId);
-          nextUri = assetInfo?.localUri ?? assetInfo?.uri ?? nextUri;
+          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+          nextUri = assetInfo?.uri ?? assetInfo?.localUri ?? nextUri;
           if (__DEV__) {
             console.log("[SetInfo] Resolved media URI from assetId:", {
               setId,
               mediaId: media.id,
-              assetId: media.assetId,
+              assetId,
               storedLocalUri: media.localUri,
               assetUri: assetInfo?.uri ?? null,
               assetLocalUri: assetInfo?.localUri ?? null,
@@ -174,7 +136,7 @@ export default function SetInfoScreen() {
             console.warn("[SetInfo] Failed resolving assetId to URI:", {
               setId,
               mediaId: media.id,
-              assetId: media.assetId,
+              assetId,
               error: String(assetError),
             });
           }
@@ -326,29 +288,6 @@ export default function SetInfoScreen() {
     });
   }, []);
 
-  const handleWebViewMessage = useCallback((event: { nativeEvent: { data?: string } }) => {
-    if (!__DEV__) return;
-    const rawData = event.nativeEvent.data;
-    if (!rawData) return;
-    try {
-      const parsed = JSON.parse(rawData);
-      console.log("[SetInfo] Video webview message:", parsed);
-    } catch {
-      console.log("[SetInfo] Video webview message (raw):", rawData);
-    }
-  }, []);
-
-  const handleWebViewError = useCallback((kind: "preview" | "fullscreen", payload: unknown) => {
-    if (__DEV__) {
-      console.warn("[SetInfo] WebView error:", {
-        kind,
-        payload,
-        videoUri,
-        uriScheme: getUriScheme(videoUri),
-      });
-    }
-  }, [videoUri]);
-
   return (
     <View style={[styles.container, { backgroundColor: rawColors.background }]}>
       <Stack.Screen
@@ -424,37 +363,16 @@ export default function SetInfoScreen() {
             <>
               <Pressable
                 style={[styles.videoPreview, { borderColor: rawColors.border }]}
-                onPress={() => setFullscreenVisible(true)}
+                onPress={openFullscreen}
               >
-                <WebView
-                  source={webViewSource}
-                  originWhitelist={["*"]}
-                  scrollEnabled={false}
-                  javaScriptEnabled
-                  allowsInlineMediaPlayback
-                  allowFileAccess
-                  allowingReadAccessToURL={iOSReadAccessUri}
-                  allowFileAccessFromFileURLs
-                  allowUniversalAccessFromFileURLs
-                  mixedContentMode="always"
-                  mediaPlaybackRequiresUserAction={false}
-                  onMessage={handleWebViewMessage}
-                  onLoadStart={() => {
-                    if (__DEV__) {
-                      console.log("[SetInfo] Preview webview load start:", {
-                        uri: videoUri,
-                        scheme: getUriScheme(videoUri),
-                      });
-                    }
-                  }}
-                  onLoadEnd={() => {
-                    if (__DEV__) {
-                      console.log("[SetInfo] Preview webview load end");
-                    }
-                  }}
-                  onError={(e) => handleWebViewError("preview", e.nativeEvent)}
-                  onHttpError={(e) => handleWebViewError("preview", e.nativeEvent)}
-                  style={styles.webview}
+                <VideoView
+                  ref={videoViewRef}
+                  player={player}
+                  nativeControls={false}
+                  contentFit="contain"
+                  onFullscreenEnter={handleFullscreenEnter}
+                  onFullscreenExit={handleFullscreenExit}
+                  style={styles.videoView}
                 />
                 <View style={[styles.previewOverlayButton, { backgroundColor: `${rawColors.background}AA` }]}>
                   <MaterialCommunityIcons name="fullscreen" size={18} color={rawColors.foreground} />
@@ -495,58 +413,6 @@ export default function SetInfoScreen() {
           )}
         </View>
       </ScrollView>
-
-      <Modal
-        visible={fullscreenVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFullscreenVisible(false)}
-      >
-        <View style={styles.fullscreenOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setFullscreenVisible(false)} />
-          <View style={styles.fullscreenContent}>
-            <WebView
-              source={fullscreenWebViewSource}
-              originWhitelist={["*"]}
-              scrollEnabled={false}
-              javaScriptEnabled
-              allowsInlineMediaPlayback
-              allowFileAccess
-              allowingReadAccessToURL={iOSReadAccessUri}
-              allowFileAccessFromFileURLs
-              allowUniversalAccessFromFileURLs
-              mixedContentMode="always"
-              allowsFullscreenVideo
-              mediaPlaybackRequiresUserAction={false}
-              onMessage={handleWebViewMessage}
-              onLoadStart={() => {
-                if (__DEV__) {
-                  console.log("[SetInfo] Fullscreen webview load start:", {
-                    uri: videoUri,
-                    scheme: getUriScheme(videoUri),
-                  });
-                }
-              }}
-              onLoadEnd={() => {
-                if (__DEV__) {
-                  console.log("[SetInfo] Fullscreen webview load end");
-                }
-              }}
-              onError={(e) => handleWebViewError("fullscreen", e.nativeEvent)}
-              onHttpError={(e) => handleWebViewError("fullscreen", e.nativeEvent)}
-              style={styles.webview}
-            />
-            <Pressable
-              style={styles.fullscreenClose}
-              onPress={() => setFullscreenVisible(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Close full screen video"
-            >
-              <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -659,7 +525,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#000000",
   },
-  webview: {
+  videoView: {
     flex: 1,
     backgroundColor: "#000000",
   },
@@ -676,27 +542,5 @@ const styles = StyleSheet.create({
   videoMetaText: {
     marginTop: 8,
     fontSize: 12,
-  },
-  fullscreenOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.94)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  fullscreenContent: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#000000",
-  },
-  fullscreenClose: {
-    position: "absolute",
-    right: 14,
-    top: 44,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
 });

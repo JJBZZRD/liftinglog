@@ -41,6 +41,15 @@ function gravityToRotationDeg(x: number, y: number, z: number): number | null {
   return null;
 }
 
+function inferVideoMimeFromUri(uri: string | null): string {
+  const lower = (uri ?? "").split("?")[0].toLowerCase();
+  if (lower.endsWith(".mov") || lower.endsWith(".qt")) return "video/quicktime";
+  if (lower.endsWith(".m4v")) return "video/x-m4v";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".3gp") || lower.endsWith(".3gpp")) return "video/3gpp";
+  return "video/mp4";
+}
+
 export default function RecordVideoScreen() {
   const { rawColors } = useTheme();
   const router = useRouter();
@@ -251,6 +260,9 @@ export default function RecordVideoScreen() {
         await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
       }
 
+      const assetId = asset?.id != null ? String(asset.id) : null;
+      const storedLocalUri = asset?.uri ?? recordedUri;
+
       const setId = await addSet({
         workout_id: workoutId,
         exercise_id: exerciseId,
@@ -263,9 +275,9 @@ export default function RecordVideoScreen() {
       });
 
       await addMedia({
-        local_uri: asset?.uri ?? recordedUri,
-        asset_id: asset?.id ?? null,
-        mime: "video/mp4",
+        local_uri: storedLocalUri,
+        asset_id: assetId,
+        mime: inferVideoMimeFromUri(storedLocalUri),
         set_id: setId,
         workout_id: workoutId,
         note: noteValue,
