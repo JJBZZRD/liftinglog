@@ -184,7 +184,7 @@ export default function SetInfoScreen() {
   }, [player, videoUri]);
 
   const handleFullscreenEnter = useCallback(() => {
-    player.loop = false;
+    player.loop = true;
     player.muted = false;
   }, [player]);
 
