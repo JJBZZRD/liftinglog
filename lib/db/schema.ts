@@ -71,6 +71,11 @@ export const media = sqliteTable("media", {
   workoutId: integer("workout_id"),
   note: text("note"),
   createdAt: integer("created_at"),
+  // Metadata for re-discovery after reinstall
+  originalFilename: text("original_filename"),
+  mediaCreatedAt: integer("media_created_at"), // Video file creation timestamp
+  durationMs: integer("duration_ms"),
+  albumName: text("album_name"),
 });
 
 export type ExerciseRow = typeof exercises.$inferSelect;

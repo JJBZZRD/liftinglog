@@ -262,6 +262,28 @@ try {
   // Column already exists, ignore
 }
 
+// Add metadata columns to media table for video re-discovery after reinstall
+try {
+  sqlite.execSync(`ALTER TABLE media ADD COLUMN original_filename TEXT;`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  sqlite.execSync(`ALTER TABLE media ADD COLUMN media_created_at INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  sqlite.execSync(`ALTER TABLE media ADD COLUMN duration_ms INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  sqlite.execSync(`ALTER TABLE media ADD COLUMN album_name TEXT;`);
+} catch {
+  // Column already exists, ignore
+}
+
 // ============================================================
 // UID column migrations for merge-based backup import
 // ============================================================

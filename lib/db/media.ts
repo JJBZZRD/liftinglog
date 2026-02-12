@@ -22,6 +22,10 @@ export async function addMedia(args: {
   workout_id?: number | null;
   note?: string | null;
   created_at?: number | null;
+  original_filename?: string | null;
+  media_created_at?: number | null;
+  duration_ms?: number | null;
+  album_name?: string | null;
 }): Promise<number> {
   const res = await db
     .insert(media)
@@ -33,6 +37,10 @@ export async function addMedia(args: {
       workoutId: args.workout_id ?? null,
       note: args.note ?? null,
       createdAt: args.created_at ?? Date.now(),
+      originalFilename: args.original_filename ?? null,
+      mediaCreatedAt: args.media_created_at ?? null,
+      durationMs: args.duration_ms ?? null,
+      albumName: args.album_name ?? null,
     })
     .run();
   return (res.lastInsertRowId as number) ?? 0;
@@ -71,6 +79,10 @@ export async function updateMedia(
     workout_id?: number | null;
     note?: string | null;
     created_at?: number | null;
+    original_filename?: string | null;
+    media_created_at?: number | null;
+    duration_ms?: number | null;
+    album_name?: string | null;
   }
 ): Promise<void> {
   const updates: {
@@ -81,6 +93,10 @@ export async function updateMedia(
     workoutId?: number | null;
     note?: string | null;
     createdAt?: number | null;
+    originalFilename?: string | null;
+    mediaCreatedAt?: number | null;
+    durationMs?: number | null;
+    albumName?: string | null;
   } = {};
 
   if (args.local_uri !== undefined) updates.localUri = args.local_uri;
@@ -90,6 +106,10 @@ export async function updateMedia(
   if (args.workout_id !== undefined) updates.workoutId = args.workout_id;
   if (args.note !== undefined) updates.note = args.note;
   if (args.created_at !== undefined) updates.createdAt = args.created_at;
+  if (args.original_filename !== undefined) updates.originalFilename = args.original_filename;
+  if (args.media_created_at !== undefined) updates.mediaCreatedAt = args.media_created_at;
+  if (args.duration_ms !== undefined) updates.durationMs = args.duration_ms;
+  if (args.album_name !== undefined) updates.albumName = args.album_name;
 
   if (Object.keys(updates).length === 0) return;
 

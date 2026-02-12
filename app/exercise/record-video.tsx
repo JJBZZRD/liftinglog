@@ -261,7 +261,57 @@ export default function RecordVideoScreen() {
       }
 
       const assetId = asset?.id != null ? String(asset.id) : null;
-      const storedLocalUri = asset?.uri ?? recordedUri;
+
+      // CRITICAL: After creating the asset, we must get its localUri (file://) for playback.
+      // The asset.uri from createAssetAsync is often a MediaLibrary reference (ph:// on iOS,
+      // content:// on Android) which expo-video cannot play directly in release builds.
+      // getAssetInfoAsync returns both .uri (MediaLibrary ref) and .localUri (actual file path).
+      // We also capture metadata for re-discovery after reinstall.
+      let storedLocalUri = recordedUri; // fallback to original recording URI
+      let originalFilename: string | null = null;
+      let mediaCreatedAt: number | null = null;
+      let durationMs: number | null = null;
+
+      if (assetId) {
+        try {
+          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+          // Prefer localUri (file://) which is the actual playable file path
+          if (assetInfo?.localUri) {
+            storedLocalUri = assetInfo.localUri;
+          } else if (assetInfo?.uri) {
+            storedLocalUri = assetInfo.uri;
+          }
+
+          // Capture metadata for re-discovery after app reinstall
+          originalFilename = assetInfo?.filename ?? null;
+          mediaCreatedAt = assetInfo?.creationTime != null ? assetInfo.creationTime : null;
+          durationMs = assetInfo?.duration != null ? Math.round(assetInfo.duration * 1000) : null;
+
+          if (__DEV__) {
+            console.log("[RecordVideo] Resolved asset URI and metadata for storage:", {
+              assetId,
+              assetUri: assetInfo?.uri ?? null,
+              assetLocalUri: assetInfo?.localUri ?? null,
+              storedUri: storedLocalUri,
+              originalFilename,
+              mediaCreatedAt,
+              durationMs,
+            });
+          }
+        } catch (infoError) {
+          // If getAssetInfoAsync fails, fall back to asset.uri or recordedUri
+          storedLocalUri = asset?.uri ?? recordedUri;
+          if (__DEV__) {
+            console.warn("[RecordVideo] Failed to get asset info, using fallback:", {
+              assetId,
+              fallbackUri: storedLocalUri,
+              error: String(infoError),
+            });
+          }
+        }
+      } else {
+        storedLocalUri = asset?.uri ?? recordedUri;
+      }
 
       const setId = await addSet({
         workout_id: workoutId,
@@ -281,6 +331,10 @@ export default function RecordVideoScreen() {
         set_id: setId,
         workout_id: workoutId,
         note: noteValue,
+        original_filename: originalFilename,
+        media_created_at: mediaCreatedAt,
+        duration_ms: durationMs,
+        album_name: ALBUM_NAME,
       });
 
       setShowAddSetModal(false);
