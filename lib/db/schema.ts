@@ -78,9 +78,57 @@ export const media = sqliteTable("media", {
   albumName: text("album_name"),
 });
 
+// Programs
+export const programs = sqliteTable("programs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at"),
+});
+
+export const programDays = sqliteTable("program_days", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  programId: integer("program_id").notNull(),
+  schedule: text("schedule").notNull(), // "weekly" | "interval"
+  dayOfWeek: integer("day_of_week"), // 0-6 for weekly
+  intervalDays: integer("interval_days"), // for interval schedule
+  note: text("note"),
+});
+
+export const programExercises = sqliteTable("program_exercises", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  programDayId: integer("program_day_id").notNull(),
+  exerciseId: integer("exercise_id").notNull(),
+  orderIndex: integer("order_index"),
+  prescriptionJson: text("prescription_json"),
+});
+
+export const progressions = sqliteTable("progressions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  programExerciseId: integer("program_exercise_id").notNull(),
+  type: text("type").notNull(), // "kg_per_session" | "percent_per_session" | "double_progression" | "autoreg_rpe"
+  value: real("value").notNull(),
+  cadence: text("cadence").notNull(), // "every_session" | "weekly" | "every_2_exposures"
+  capKg: real("cap_kg"),
+});
+
+export const plannedWorkouts = sqliteTable("planned_workouts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  programId: integer("program_id").notNull(),
+  programDayId: integer("program_day_id").notNull(),
+  plannedFor: integer("planned_for").notNull(),
+  note: text("note"),
+});
+
 export type ExerciseRow = typeof exercises.$inferSelect;
 export type WorkoutRow = typeof workouts.$inferSelect;
 export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
 export type SetRow = typeof sets.$inferSelect;
 export type PREventRow = typeof prEvents.$inferSelect;
 export type MediaRow = typeof media.$inferSelect;
+export type ProgramRow = typeof programs.$inferSelect;
+export type ProgramDayRow = typeof programDays.$inferSelect;
+export type ProgramExerciseRow = typeof programExercises.$inferSelect;
+export type ProgressionRow = typeof progressions.$inferSelect;
+export type PlannedWorkoutRow = typeof plannedWorkouts.$inferSelect;

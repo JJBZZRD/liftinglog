@@ -1404,3 +1404,65 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
     hasMore,
   };
 }
+
+// ============================================================================
+// Get workout exercises for a specific performedAt timestamp
+// ============================================================================
+
+export type WorkoutExerciseStatus = {
+  workoutExerciseId: number;
+  exerciseId: number;
+  exerciseName: string;
+  completedAt: number | null;
+  performedAt: number | null;
+  setCount: number;
+};
+
+export async function getWorkoutExercisesForDate(
+  plannedForMs: number
+): Promise<WorkoutExerciseStatus[]> {
+  if (!canQueryWorkoutExercises("getWorkoutExercisesForDate")) {
+    return [];
+  }
+
+  const dayStart = new Date(plannedForMs);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(plannedForMs);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const rows = await db
+    .select({
+      workoutExerciseId: workoutExercises.id,
+      exerciseId: workoutExercises.exerciseId,
+      exerciseName: exercises.name,
+      completedAt: workoutExercises.completedAt,
+      performedAt: workoutExercises.performedAt,
+    })
+    .from(workoutExercises)
+    .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+    .where(
+      and(
+        sql`${workoutExercises.performedAt} >= ${dayStart.getTime()}`,
+        sql`${workoutExercises.performedAt} <= ${dayEnd.getTime()}`
+      )
+    )
+    .orderBy(
+      sql`COALESCE(${workoutExercises.orderIndex}, 999999)`,
+      workoutExercises.id
+    );
+
+  // Get set counts for each workout exercise
+  const result: WorkoutExerciseStatus[] = [];
+  for (const row of rows) {
+    const setsForExercise = await db
+      .select({ id: sets.id })
+      .from(sets)
+      .where(eq(sets.workoutExerciseId, row.workoutExerciseId));
+    result.push({
+      ...row,
+      setCount: setsForExercise.length,
+    });
+  }
+
+  return result;
+}

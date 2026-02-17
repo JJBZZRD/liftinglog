@@ -60,6 +60,30 @@ function RootLayoutContent() {
           name="workout-history"
           options={{ presentation: "card" }}
         />
+        <Stack.Screen
+          name="programs/[id]"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
+          name="programs/builder"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
+          name="programs/day/[dayKey]"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
+          name="programs/exercise-config"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
+          name="programs/templates"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
+          name="programs/planned/[plannedWorkoutId]"
+          options={{ presentation: "modal" }}
+        />
       </Stack>
     </GestureHandlerRootView>
   );

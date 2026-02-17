@@ -212,33 +212,54 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       return;
     }
 
-    await addSet({
-      workout_id: workoutId,
-      exercise_id: exerciseId,
-      workout_exercise_id: workoutExerciseId,
-      weight_kg: weightValue,
-      reps: repsValue,
-      note: noteValue,
-      set_index: setIndex,
-      performed_at: selectedDate.getTime(),
-    });
+    // Check for a placeholder set (weightKg === null) to fill before adding a new one
+    const placeholder = sets.find((s) => s.weightKg === null);
+    if (placeholder) {
+      await updateSet(placeholder.id, {
+        weight_kg: weightValue,
+        reps: repsValue,
+        note: noteValue ?? placeholder.note,
+        performed_at: selectedDate.getTime(),
+      });
+    } else {
+      await addSet({
+        workout_id: workoutId,
+        exercise_id: exerciseId,
+        workout_exercise_id: workoutExerciseId,
+        weight_kg: weightValue,
+        reps: repsValue,
+        note: noteValue,
+        set_index: setIndex,
+        performed_at: selectedDate.getTime(),
+      });
+    }
 
     setNote("");
     await loadWorkout();
     onHistoryRefresh?.();
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, loadWorkout, onHistoryRefresh]);
+  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, sets, loadWorkout, onHistoryRefresh]);
+
+  // Determine if there are any real (filled) sets for completion gating
+  const filledSets = sets.filter((s) => s.weightKg !== null && s.reps !== null && s.weightKg > 0 && s.reps > 0);
+  const hasFilledSets = filledSets.length > 0;
 
   const handleCompleteExercise = useCallback(async () => {
-    if (!workoutExerciseId) return;
+    if (!workoutExerciseId || !hasFilledSets) return;
     
     if (currentTimer) {
       await timerStore.deleteTimer(currentTimer.id);
+    }
+
+    // Purge unfilled placeholder sets (weightKg === null) before completing
+    const unfilled = sets.filter((s) => s.weightKg === null);
+    for (const s of unfilled) {
+      await deleteSet(s.id);
     }
     
     // Complete exercise entry with the selected date
     await completeExerciseEntry(workoutExerciseId, selectedDate.getTime());
     router.back();
-  }, [workoutExerciseId, currentTimer, selectedDate]);
+  }, [workoutExerciseId, currentTimer, selectedDate, sets, hasFilledSets]);
 
   const handleTimerPress = useCallback(async () => {
     if (!exerciseId) return;
@@ -402,44 +423,49 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     );
   }
 
-  const renderSetItem = ({ item, index }: { item: SetRow; index: number }) => (
-    <SetItem
-      index={index + 1}
-      weightKg={item.weightKg}
-      reps={item.reps}
-      note={item.note}
-      onPress={() => handleSetPress(item.id)}
-      rightActions={
-        <View className="flex-row items-center gap-2 ml-2">
-          {setIdsWithMedia.has(item.id) && (
-            <View className="w-7 h-7 rounded-full items-center justify-center bg-background">
-              <MaterialCommunityIcons name="video-outline" size={16} color={rawColors.primary} />
+  const renderSetItem = ({ item, index }: { item: SetRow; index: number }) => {
+    const isPlaceholder = item.weightKg === null;
+    return (
+      <View style={isPlaceholder ? { opacity: 0.5 } : undefined}>
+        <SetItem
+          index={index + 1}
+          weightKg={item.weightKg}
+          reps={item.reps}
+          note={isPlaceholder ? `${item.note ? item.note + " " : ""}(Planned)` : item.note}
+          onPress={() => handleSetPress(item.id)}
+          rightActions={
+            <View className="flex-row items-center gap-2 ml-2">
+              {setIdsWithMedia.has(item.id) && (
+                <View className="w-7 h-7 rounded-full items-center justify-center bg-background">
+                  <MaterialCommunityIcons name="video-outline" size={16} color={rawColors.primary} />
+                </View>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Edit set ${index + 1}`}
+                hitSlop={8}
+                className="w-7 h-7 rounded-full items-center justify-center bg-background"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                onPress={() => handleEditSetPress(item)}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Delete set ${index + 1}`}
+                hitSlop={8}
+                className="w-7 h-7 rounded-full items-center justify-center bg-background"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                onPress={() => handleDeleteSetPress(item, index + 1)}
+              >
+                <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+              </Pressable>
             </View>
-          )}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Edit set ${index + 1}`}
-            hitSlop={8}
-            className="w-7 h-7 rounded-full items-center justify-center bg-background"
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            onPress={() => handleEditSetPress(item)}
-          >
-            <MaterialCommunityIcons name="pencil-outline" size={16} color={rawColors.primary} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Delete set ${index + 1}`}
-            hitSlop={8}
-            className="w-7 h-7 rounded-full items-center justify-center bg-background"
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            onPress={() => handleDeleteSetPress(item, index + 1)}
-          >
-            <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
-          </Pressable>
-        </View>
-      }
-    />
-  );
+          }
+        />
+      </View>
+    );
+  };
 
   const timerDisplayText = currentTimer
     ? formatTime(currentTimer.remainingSeconds)
@@ -629,20 +655,20 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       >
         <Pressable 
           className={`flex-row items-center justify-center py-4 rounded-xl ${
-            sets.length === 0 ? "bg-surface-secondary" : "bg-primary"
+            !hasFilledSets ? "bg-surface-secondary" : "bg-primary"
           }`}
-          style={({ pressed }) => ({ opacity: pressed && sets.length > 0 ? 0.8 : 1 })}
+          style={({ pressed }) => ({ opacity: pressed && hasFilledSets ? 0.8 : 1 })}
           onPress={handleCompleteExercise}
-          disabled={sets.length === 0}
+          disabled={!hasFilledSets}
         >
           <MaterialCommunityIcons 
             name="check-circle" 
             size={22} 
-            color={sets.length === 0 ? rawColors.foregroundMuted : rawColors.primaryForeground} 
+            color={!hasFilledSets ? rawColors.foregroundMuted : rawColors.primaryForeground} 
           />
           <Text 
             className={`text-base font-semibold ml-2 ${
-              sets.length === 0 ? "text-foreground-muted" : "text-primary-foreground"
+              !hasFilledSets ? "text-foreground-muted" : "text-primary-foreground"
             }`}
           >
             Complete Exercise
