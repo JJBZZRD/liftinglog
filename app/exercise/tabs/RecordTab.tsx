@@ -35,9 +35,11 @@ type RecordTabProps = {
 
 export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const { rawColors } = useTheme();
-  const params = useLocalSearchParams<{ id?: string; name?: string }>();
+  const params = useLocalSearchParams<{ id?: string; name?: string; weId?: string; plannedDate?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
+  const paramWeId = typeof params.weId === "string" ? parseInt(params.weId, 10) : null;
+  const paramPlannedDate = typeof params.plannedDate === "string" ? parseInt(params.plannedDate, 10) : null;
 
   const [workoutId, setWorkoutId] = useState<number | null>(null);
   const [workoutExerciseId, setWorkoutExerciseId] = useState<number | null>(null);
@@ -86,38 +88,60 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     const activeWorkoutId = await getOrCreateActiveWorkout();
     setWorkoutId(activeWorkoutId);
 
-    // Find an OPEN (not completed) workout_exercise entry for this exercise
-    const openWorkoutExercise = await getOpenWorkoutExercise(activeWorkoutId, exerciseId);
-
     let weId: number;
-    if (openWorkoutExercise) {
-      // Reuse existing open entry
-      weId = openWorkoutExercise.id;
+
+    // If a specific workout_exercise_id was passed (e.g. from a planned workout),
+    // use it directly — this avoids picking a stale/unrelated open entry
+    if (paramWeId) {
+      weId = paramWeId;
       setWorkoutExerciseId(weId);
-      
-      if (openWorkoutExercise.currentWeight !== null) {
-        setWeightState(String(openWorkoutExercise.currentWeight));
-      }
-      if (openWorkoutExercise.currentReps !== null) {
-        setRepsState(String(openWorkoutExercise.currentReps));
+
+      // Set date to the planned workout date if provided
+      if (paramPlannedDate) {
+        setSelectedDate(new Date(paramPlannedDate));
       }
     } else {
-      // No open entry exists - create a new one
-      weId = await addWorkoutExercise({
-        workout_id: activeWorkoutId,
-        exercise_id: exerciseId,
-        performed_at: selectedDate.getTime(),
-      });
-      setWorkoutExerciseId(weId);
-      // Reset input fields for new entry
-      setWeightState("");
-      setRepsState("");
+      // Find an OPEN (not completed) workout_exercise entry for this exercise
+      const openWorkoutExercise = await getOpenWorkoutExercise(activeWorkoutId, exerciseId);
+
+      if (openWorkoutExercise) {
+        // Reuse existing open entry
+        weId = openWorkoutExercise.id;
+        setWorkoutExerciseId(weId);
+        
+        if (openWorkoutExercise.currentWeight !== null) {
+          setWeightState(String(openWorkoutExercise.currentWeight));
+        }
+        if (openWorkoutExercise.currentReps !== null) {
+          setRepsState(String(openWorkoutExercise.currentReps));
+        }
+      } else {
+        // No open entry exists - create a new one
+        weId = await addWorkoutExercise({
+          workout_id: activeWorkoutId,
+          exercise_id: exerciseId,
+          performed_at: selectedDate.getTime(),
+        });
+        setWorkoutExerciseId(weId);
+        // Reset input fields for new entry
+        setWeightState("");
+        setRepsState("");
+      }
     }
 
     // List sets for THIS workout_exercise entry only (not all sets for the exercise)
     const exerciseSets = await listSetsForWorkoutExercise(weId);
     setSets(exerciseSets);
     setSetIndex(exerciseSets.length > 0 ? exerciseSets.length + 1 : 1);
+
+    // Pre-fill weight/reps input from first planned set if available
+    if (paramWeId && exerciseSets.length > 0) {
+      const firstPlanned = exerciseSets.find((s) => (s.note ?? "").startsWith("[PLANNED]"));
+      if (firstPlanned) {
+        if (firstPlanned.weightKg !== null) setWeightState(String(firstPlanned.weightKg));
+        if (firstPlanned.reps !== null) setRepsState(String(firstPlanned.reps));
+      }
+    }
 
     const lastRest = await getLastRestSeconds(exerciseId);
     if (lastRest !== null && lastRest > 0) {
@@ -126,7 +150,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       setTimerMinutes(String(mins));
       setTimerSeconds(String(secs));
     }
-  }, [exerciseId]);
+  }, [exerciseId, paramWeId, paramPlannedDate]);
 
   const refreshSets = useCallback(async () => {
     if (!workoutExerciseId) return;
@@ -212,13 +236,15 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       return;
     }
 
-    // Check for a placeholder set (weightKg === null) to fill before adding a new one
-    const placeholder = sets.find((s) => s.weightKg === null);
+    // Check for a planned set (marked with [PLANNED] in note) to fill before adding a new one
+    const placeholder = sets.find((s) => (s.note ?? "").startsWith("[PLANNED]"));
     if (placeholder) {
+      const strippedNote = (placeholder.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null;
+      const cleanNote = noteValue ?? strippedNote;
       await updateSet(placeholder.id, {
         weight_kg: weightValue,
         reps: repsValue,
-        note: noteValue ?? placeholder.note,
+        note: cleanNote,
         performed_at: selectedDate.getTime(),
       });
     } else {
@@ -239,27 +265,29 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     onHistoryRefresh?.();
   }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, sets, loadWorkout, onHistoryRefresh]);
 
-  // Determine if there are any real (filled) sets for completion gating
-  const filledSets = sets.filter((s) => s.weightKg !== null && s.reps !== null && s.weightKg > 0 && s.reps > 0);
-  const hasFilledSets = filledSets.length > 0;
+  // A "confirmed" set is one that is NOT still marked as [PLANNED] and has valid weight+reps
+  const confirmedSets = sets.filter(
+    (s) => !(s.note ?? "").startsWith("[PLANNED]") && s.weightKg !== null && s.reps !== null && s.weightKg > 0 && s.reps > 0
+  );
+  const hasConfirmedSets = confirmedSets.length > 0;
 
   const handleCompleteExercise = useCallback(async () => {
-    if (!workoutExerciseId || !hasFilledSets) return;
+    if (!workoutExerciseId || !hasConfirmedSets) return;
     
     if (currentTimer) {
       await timerStore.deleteTimer(currentTimer.id);
     }
 
-    // Purge unfilled placeholder sets (weightKg === null) before completing
-    const unfilled = sets.filter((s) => s.weightKg === null);
-    for (const s of unfilled) {
+    // Purge unconfirmed planned sets before completing
+    const unconfirmed = sets.filter((s) => (s.note ?? "").startsWith("[PLANNED]"));
+    for (const s of unconfirmed) {
       await deleteSet(s.id);
     }
     
     // Complete exercise entry with the selected date
     await completeExerciseEntry(workoutExerciseId, selectedDate.getTime());
     router.back();
-  }, [workoutExerciseId, currentTimer, selectedDate, sets, hasFilledSets]);
+  }, [workoutExerciseId, currentTimer, selectedDate, sets, hasConfirmedSets]);
 
   const handleTimerPress = useCallback(async () => {
     if (!exerciseId) return;
@@ -423,18 +451,47 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     );
   }
 
+  // Confirm a planned set — strip the [PLANNED] marker from its note
+  const handleConfirmPlannedSet = useCallback(async (setItem: SetRow) => {
+    const cleanNote = (setItem.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null;
+    await updateSet(setItem.id, { note: cleanNote });
+    await refreshSets();
+    onHistoryRefresh?.();
+  }, [refreshSets, onHistoryRefresh]);
+
   const renderSetItem = ({ item, index }: { item: SetRow; index: number }) => {
-    const isPlaceholder = item.weightKg === null;
+    const isPlanned = (item.note ?? "").startsWith("[PLANNED]");
+    const displayNote = isPlanned
+      ? (item.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null
+      : item.note;
+
     return (
-      <View style={isPlaceholder ? { opacity: 0.5 } : undefined}>
+      <View style={isPlanned ? { opacity: 0.55 } : undefined}>
         <SetItem
           index={index + 1}
           weightKg={item.weightKg}
           reps={item.reps}
-          note={isPlaceholder ? `${item.note ? item.note + " " : ""}(Planned)` : item.note}
+          note={isPlanned ? `${displayNote ? displayNote + " " : ""}(Planned)` : displayNote}
           onPress={() => handleSetPress(item.id)}
           rightActions={
             <View className="flex-row items-center gap-2 ml-2">
+              {isPlanned && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Confirm set ${index + 1}`}
+                  hitSlop={8}
+                  className="w-7 h-7 rounded-full items-center justify-center"
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.7 : 1,
+                    backgroundColor: rawColors.success + "20",
+                    borderWidth: 1.5,
+                    borderColor: rawColors.success,
+                  })}
+                  onPress={() => handleConfirmPlannedSet(item)}
+                >
+                  <MaterialCommunityIcons name="check" size={16} color={rawColors.success} />
+                </Pressable>
+              )}
               {setIdsWithMedia.has(item.id) && (
                 <View className="w-7 h-7 rounded-full items-center justify-center bg-background">
                   <MaterialCommunityIcons name="video-outline" size={16} color={rawColors.primary} />
@@ -655,20 +712,20 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       >
         <Pressable 
           className={`flex-row items-center justify-center py-4 rounded-xl ${
-            !hasFilledSets ? "bg-surface-secondary" : "bg-primary"
+            !hasConfirmedSets ? "bg-surface-secondary" : "bg-primary"
           }`}
-          style={({ pressed }) => ({ opacity: pressed && hasFilledSets ? 0.8 : 1 })}
+          style={({ pressed }) => ({ opacity: pressed && hasConfirmedSets ? 0.8 : 1 })}
           onPress={handleCompleteExercise}
-          disabled={!hasFilledSets}
+          disabled={!hasConfirmedSets}
         >
           <MaterialCommunityIcons 
             name="check-circle" 
             size={22} 
-            color={!hasFilledSets ? rawColors.foregroundMuted : rawColors.primaryForeground} 
+            color={!hasConfirmedSets ? rawColors.foregroundMuted : rawColors.primaryForeground} 
           />
           <Text 
             className={`text-base font-semibold ml-2 ${
-              !hasFilledSets ? "text-foreground-muted" : "text-primary-foreground"
+              !hasConfirmedSets ? "text-foreground-muted" : "text-primary-foreground"
             }`}
           >
             Complete Exercise

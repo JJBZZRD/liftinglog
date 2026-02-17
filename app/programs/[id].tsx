@@ -4,6 +4,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -35,7 +36,7 @@ import {
 } from "../../lib/db/plannedWorkouts";
 import { getExerciseById } from "../../lib/db/exercises";
 import { parseProgramPrescription } from "../../lib/programs/prescription";
-import { getWorkoutExercisesForDate, type WorkoutExerciseStatus } from "../../lib/db/workouts";
+import { getWorkoutExercisesForDate, resetWorkoutForDate, type WorkoutExerciseStatus } from "../../lib/db/workouts";
 import BaseModal from "../../components/modals/BaseModal";
 
 // ============================================================================
@@ -187,6 +188,28 @@ function UpcomingTab({
     }
   }, [nextPlanned, applying]);
 
+  const handleResetWorkout = useCallback(() => {
+    if (!nextPlanned) return;
+    Alert.alert(
+      "Reset Workout",
+      "This will remove all uncompleted exercises and their sets for this workout day. Already completed exercises will be kept. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            await resetWorkoutForDate(nextPlanned.plannedFor);
+            setWorkoutStarted(false);
+            setAppliedExercises([]);
+            setExerciseStatuses([]);
+            await loadData();
+          },
+        },
+      ]
+    );
+  }, [nextPlanned, loadData]);
+
   const handleExercisePress = useCallback(
     (applied: AppliedExercise) => {
       router.push({
@@ -195,10 +218,12 @@ function UpcomingTab({
           id: String(applied.exerciseId),
           name: applied.exerciseName,
           tab: "record",
+          weId: String(applied.workoutExerciseId),
+          plannedDate: nextPlanned ? String(nextPlanned.plannedFor) : undefined,
         },
       });
     },
-    []
+    [nextPlanned]
   );
 
   const formatPlannedDate = (ts: number) => {
@@ -472,7 +497,7 @@ function UpcomingTab({
         </View>
       )}
 
-      {workoutStarted && completedCount < totalCount && (
+      {workoutStarted && (
         <View
           className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
           style={{
@@ -483,40 +508,63 @@ function UpcomingTab({
             elevation: 10,
           }}
         >
-          <View
-            style={{
-              borderRadius: 16,
-              padding: 16,
-              backgroundColor: rawColors.surface,
-              borderWidth: 1,
-              borderColor: rawColors.border,
-            }}
-          >
-            {/* Progress bar */}
-            <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-semibold text-foreground">Workout Progress</Text>
-              <Text className="text-sm font-semibold" style={{ color: rawColors.primary }}>
-                {completedCount}/{totalCount}
-              </Text>
-            </View>
+          {completedCount < totalCount && (
             <View
               style={{
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: rawColors.surfaceSecondary,
-                overflow: "hidden",
+                borderRadius: 16,
+                padding: 16,
+                backgroundColor: rawColors.surface,
+                borderWidth: 1,
+                borderColor: rawColors.border,
+                marginBottom: 10,
               }}
             >
+              {/* Progress bar */}
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-sm font-semibold text-foreground">Workout Progress</Text>
+                <Text className="text-sm font-semibold" style={{ color: rawColors.primary }}>
+                  {completedCount}/{totalCount}
+                </Text>
+              </View>
               <View
                 style={{
                   height: 6,
                   borderRadius: 3,
-                  backgroundColor: rawColors.primary,
-                  width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%`,
+                  backgroundColor: rawColors.surfaceSecondary,
+                  overflow: "hidden",
                 }}
-              />
+              >
+                <View
+                  style={{
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: rawColors.primary,
+                    width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%`,
+                  }}
+                />
+              </View>
             </View>
-          </View>
+          )}
+
+          {/* Reset Workout Button */}
+          <Pressable
+            className="flex-row items-center justify-center py-3 rounded-xl"
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.7 : 1,
+              backgroundColor: rawColors.destructive + "15",
+              borderWidth: 1,
+              borderColor: rawColors.destructive + "40",
+            })}
+            onPress={handleResetWorkout}
+          >
+            <MaterialCommunityIcons name="restart" size={18} color={rawColors.destructive} />
+            <Text
+              className="text-sm font-semibold ml-1.5"
+              style={{ color: rawColors.destructive }}
+            >
+              Reset Workout
+            </Text>
+          </Pressable>
         </View>
       )}
     </View>

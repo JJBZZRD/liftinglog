@@ -1466,3 +1466,46 @@ export async function getWorkoutExercisesForDate(
 
   return result;
 }
+
+/**
+ * Reset/cancel a started workout for a specific date.
+ * Deletes all workout_exercises (and their sets) that were created for a given performedAt day.
+ * Only deletes entries that have NOT been completed (completedAt is null).
+ */
+export async function resetWorkoutForDate(
+  plannedForMs: number
+): Promise<number> {
+  if (!canQueryWorkoutExercises("resetWorkoutForDate")) {
+    return 0;
+  }
+
+  const dayStart = new Date(plannedForMs);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(plannedForMs);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // Find all uncompleted workout_exercises for this date
+  const rows = await db
+    .select({
+      id: workoutExercises.id,
+    })
+    .from(workoutExercises)
+    .where(
+      and(
+        isNull(workoutExercises.completedAt),
+        sql`${workoutExercises.performedAt} >= ${dayStart.getTime()}`,
+        sql`${workoutExercises.performedAt} <= ${dayEnd.getTime()}`
+      )
+    );
+
+  let deleted = 0;
+  for (const row of rows) {
+    // Delete all sets for this workout_exercise
+    await db.delete(sets).where(eq(sets.workoutExerciseId, row.id)).run();
+    // Delete the workout_exercise itself
+    await db.delete(workoutExercises).where(eq(workoutExercises.id, row.id)).run();
+    deleted++;
+  }
+
+  return deleted;
+}

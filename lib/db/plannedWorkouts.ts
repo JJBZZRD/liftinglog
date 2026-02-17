@@ -363,7 +363,8 @@ export async function applyPlannedWorkout(
       performed_at: plannedFor,
     });
 
-    // Generate placeholder sets from prescription
+    // Generate planned sets from prescription with weight pre-filled
+    // Sets are marked with [PLANNED] prefix in the note so the UI can distinguish them
     if (prescription) {
       let setIdx = 1;
       for (const block of prescription.blocks) {
@@ -377,7 +378,7 @@ export async function applyPlannedWorkout(
               is_warmup: true,
               weight_kg: null,
               reps: block.reps ?? null,
-              note: `Warmup ${s + 1}/${block.sets}`,
+              note: `[PLANNED] Warmup ${s + 1}/${block.sets}`,
               performed_at: plannedFor,
             });
           }
@@ -393,17 +394,24 @@ export async function applyPlannedWorkout(
           if (block.reps.type === "range") {
             noteStr = `Target: ${block.reps.min}-${block.reps.max} reps`;
           }
+
+          // Resolve the weight for this block
+          let blockWeight: number | null = null;
           if (block.target) {
-            if (block.target.type === "rpe") {
+            if (block.target.type === "fixed_weight_kg") {
+              blockWeight = block.target.value;
+              if (suggestedWeight === null) suggestedWeight = block.target.value;
+            } else if (block.target.type === "rpe") {
               noteStr += `${noteStr ? ", " : "Target: "}RPE ${block.target.value}`;
             } else if (block.target.type === "rir") {
               noteStr += `${noteStr ? ", " : "Target: "}RIR ${block.target.value}`;
             } else if (block.target.type === "percent_e1rm") {
               noteStr += `${noteStr ? ", " : "Target: "}${block.target.value}% e1RM`;
-            } else if (block.target.type === "fixed_weight_kg" && suggestedWeight === null) {
-              suggestedWeight = block.target.value;
             }
           }
+
+          // Use the resolved weight: blockWeight > suggestedWeight (from progression) > null
+          const setWeight = blockWeight ?? suggestedWeight ?? null;
 
           for (let s = 0; s < block.sets; s++) {
             await addSet({
@@ -412,11 +420,11 @@ export async function applyPlannedWorkout(
               workout_exercise_id: weId,
               set_index: setIdx++,
               is_warmup: false,
-              weight_kg: null,
+              weight_kg: setWeight,
               reps: targetReps,
               rpe: block.target?.type === "rpe" ? block.target.value : null,
               rir: block.target?.type === "rir" ? block.target.value : null,
-              note: noteStr || null,
+              note: `[PLANNED]${noteStr ? " " + noteStr : ""}`,
               performed_at: plannedFor,
             });
           }
