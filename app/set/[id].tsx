@@ -324,8 +324,8 @@ export default function SetInfoScreen() {
 
       setVideoMedia(media);
 
-      const storedUri = media.localUri ?? null;
-      let nextUri = storedUri;
+      const storedUri: string | null = media.localUri ?? null;
+      let nextUri: string | null = storedUri;
       let nextAssetId = media.assetId ?? null;
       let nextOriginalFilename = media.originalFilename ?? null;
       let nextMediaCreatedAt = media.mediaCreatedAt ?? null;
