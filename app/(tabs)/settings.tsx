@@ -11,7 +11,8 @@ import {
     InvalidBackupError,
     type MergeResult,
 } from "../../lib/db/backup";
-import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId } from "../../lib/db/index";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
+import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId, type UnitPreference } from "../../lib/db/index";
 import { getColorTheme, getThemePreference, type ThemePreference } from "../../lib/db/settings";
 import { COLOR_THEME_OPTIONS, type ColorThemeId } from "../../lib/theme/themes";
 import { useTheme } from "../../lib/theme/ThemeContext";
@@ -22,7 +23,8 @@ import {
 } from "../../lib/utils/exportCsv";
 
 export default function SettingsScreen() {
-  const { rawColors, setThemePreference: updateThemePreference, setColorTheme: updateColorTheme, colorTheme } = useTheme();
+  const { rawColors, setThemePreference: updateThemePreference, setColorTheme: updateColorTheme } = useTheme();
+  const { unitPreference, setUnitPreference: updateUnitPreference } = useUnitPreference();
   const [selected, setSelected] = useState<E1RMFormulaId>("epley");
   const [selectedTheme, setSelectedTheme] = useState<ThemePreference>("system");
   const [selectedColorTheme, setSelectedColorTheme] = useState<ColorThemeId>("default");
@@ -30,6 +32,7 @@ export default function SettingsScreen() {
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isImportingBackup, setIsImportingBackup] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [showUnitPicker, setShowUnitPicker] = useState(false);
   const [showFormulaPicker, setShowFormulaPicker] = useState(false);
 
   useEffect(() => {
@@ -231,6 +234,19 @@ export default function SettingsScreen() {
     []
   );
 
+  const unitOptions = useMemo(
+    () =>
+      [
+        { id: "kg" as UnitPreference, label: "Kilograms (kg)" },
+        { id: "lb" as UnitPreference, label: "Pounds (lb)" },
+      ] as { id: UnitPreference; label: string }[],
+    []
+  );
+
+  function onUnitSelect(unit: UnitPreference) {
+    updateUnitPreference(unit);
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}>
@@ -316,7 +332,25 @@ export default function SettingsScreen() {
           style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
         >
           <Text className="text-[13px] font-semibold tracking-wide mb-4 text-foreground-secondary">CALCULATIONS</Text>
-          <Text className="text-base font-semibold mb-3 text-foreground">Estimated 1RM Formula</Text>
+
+          <Text className="text-base font-semibold mb-3 text-foreground">Weight Unit</Text>
+          <Pressable
+            style={[
+              styles.pickerButton,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
+            ]}
+            onPress={() => setShowUnitPicker(true)}
+          >
+            <Text style={[styles.pickerButtonText, { color: rawColors.foreground }]}>
+              {unitOptions.find((opt) => opt.id === unitPreference)?.label || "Select"}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={rawColors.foregroundSecondary} />
+          </Pressable>
+          <Text className="text-[13px] mt-3 leading-[18px] text-foreground-muted">
+            Choose the unit used for weight and volume across the app.
+          </Text>
+
+          <Text className="text-base font-semibold mb-3 mt-5 text-foreground">Estimated 1RM Formula</Text>
           <Pressable
             style={[
               styles.pickerButton,
@@ -443,6 +477,42 @@ export default function SettingsScreen() {
                   {option.label}
                 </Text>
                 {selectedTheme === option.id && (
+                  <MaterialCommunityIcons name="check" size={20} color={rawColors.primary} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Unit Picker Modal */}
+      <Modal visible={showUnitPicker} transparent animationType="fade" onRequestClose={() => setShowUnitPicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowUnitPicker(false)}>
+          <View style={[styles.pickerContainer, { backgroundColor: rawColors.surface }]}>
+            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>Weight Unit</Text>
+            {unitOptions.map((option) => (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.pickerOption,
+                  { borderBottomColor: rawColors.border },
+                  unitPreference === option.id && { backgroundColor: rawColors.primaryLight },
+                ]}
+                onPress={() => {
+                  onUnitSelect(option.id);
+                  setShowUnitPicker(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.pickerOptionText,
+                    { color: rawColors.foreground },
+                    unitPreference === option.id && { color: rawColors.primary, fontWeight: "600" },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {unitPreference === option.id && (
                   <MaterialCommunityIcons name="check" size={20} color={rawColors.primary} />
                 )}
               </Pressable>

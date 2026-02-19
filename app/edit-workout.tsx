@@ -6,6 +6,7 @@ import SetItem from "../components/lists/SetItem";
 import BaseModal from "../components/modals/BaseModal";
 import DatePickerModal from "../components/modals/DatePickerModal";
 import EditSetModal from "../components/modals/EditSetModal";
+import { useUnitPreference } from "../lib/contexts/UnitPreferenceContext";
 import {
   addSet,
   addWorkoutExercise,
@@ -21,6 +22,7 @@ import {
 } from "../lib/db/workouts";
 import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
+import { formatWeightFromKg, getWeightUnitLabel, parseWeightInputToKg } from "../lib/utils/units";
 
 function mergeDatePreserveTimeMs(timeSourceMs: number | null, dateSourceMs: number): number {
   if (timeSourceMs === null) return dateSourceMs;
@@ -37,6 +39,7 @@ function getNextSetIndex(sets: SetRow[]): number {
 
 export default function EditWorkoutScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ 
     exerciseId?: string; 
     workoutId?: string; 
@@ -211,11 +214,11 @@ export default function EditWorkoutScreen() {
   const handleAddSet = useCallback(() => {
     if (!workoutId || !exerciseId) return;
 
-    const weightValue = weight.trim() ? parseFloat(weight) : null;
+    const weightValueKg = parseWeightInputToKg(weight, unitPreference);
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
-    if (!weightValue || weightValue === 0 || !repsValue || repsValue === 0) {
+    if (!weightValueKg || weightValueKg === 0 || !repsValue || repsValue === 0) {
       return;
     }
 
@@ -227,7 +230,7 @@ export default function EditWorkoutScreen() {
       workoutExerciseId: workoutExerciseId ?? null,
       setGroupId: null,
       setIndex,
-      weightKg: weightValue,
+      weightKg: weightValueKg,
       reps: repsValue,
       rpe: null,
       rir: null,
@@ -244,7 +247,7 @@ export default function EditWorkoutScreen() {
       setSetIndex(getNextSetIndex(next));
       return next;
     });
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate]);
+  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, unitPreference]);
 
   const closeScreen = useCallback(() => {
     // `edit-workout` is presented as a modal in `app/_layout.tsx`.
@@ -512,7 +515,9 @@ export default function EditWorkoutScreen() {
           {/* Weight and Reps Inputs - Side by side */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1">
-              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">
+                Weight ({getWeightUnitLabel(unitPreference)})
+              </Text>
               <TextInput
                 className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
                 value={weight}
@@ -692,8 +697,7 @@ export default function EditWorkoutScreen() {
           <View className="rounded-lg p-3 mb-5 bg-surface-secondary border border-border">
             <Text className="text-sm font-semibold text-foreground">
               Set #{deleteTarget.displayIndex}:{" "}
-              {deleteTarget.set.weightKg !== null ? `${deleteTarget.set.weightKg} kg` : "—"}{" "}
-              × {deleteTarget.set.reps !== null ? `${deleteTarget.set.reps} reps` : "—"}
+              {formatWeightFromKg(deleteTarget.set.weightKg, unitPreference)} x {deleteTarget.set.reps !== null ? String(deleteTarget.set.reps) + " reps" : "--"}
             </Text>
             {!!deleteTarget.set.note && (
               <Text className="text-sm mt-1 italic text-foreground-secondary" numberOfLines={2}>
@@ -722,3 +726,4 @@ export default function EditWorkoutScreen() {
     </View>
   );
 }
+

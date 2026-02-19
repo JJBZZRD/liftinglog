@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
+import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import {
   getPlannedWorkoutById,
@@ -24,6 +25,7 @@ import { listProgramExercises, type ProgramExercise } from "../../../lib/db/prog
 import { getProgramById } from "../../../lib/db/programs";
 import { getExerciseById } from "../../../lib/db/exercises";
 import { parseProgramPrescription } from "../../../lib/programs/prescription";
+import { formatWeightFromKg } from "../../../lib/utils/units";
 
 type ExerciseDisplayItem = {
   id: number;
@@ -33,6 +35,7 @@ type ExerciseDisplayItem = {
 
 export default function PlannedDayDetailScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ plannedWorkoutId?: string }>();
   const pwId =
     typeof params.plannedWorkoutId === "string"
@@ -85,7 +88,9 @@ export default function PlannedDayDetailScreen() {
                 if (wb.target.type === "rpe") summary += ` @RPE ${wb.target.value}`;
                 else if (wb.target.type === "rir") summary += ` RIR ${wb.target.value}`;
                 else if (wb.target.type === "percent_e1rm") summary += ` @${wb.target.value}%`;
-                else if (wb.target.type === "fixed_weight_kg") summary += ` ${wb.target.value}kg`;
+                else if (wb.target.type === "fixed_weight_kg") {
+                  summary += ` ${formatWeightFromKg(wb.target.value, unitPreference)}`;
+                }
               }
             }
           }
@@ -101,7 +106,7 @@ export default function PlannedDayDetailScreen() {
     }
 
     setLoading(false);
-  }, [pwId]);
+  }, [pwId, unitPreference]);
 
   useEffect(() => {
     loadData();

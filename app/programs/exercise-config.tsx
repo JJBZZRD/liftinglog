@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import BaseModal from "../../components/modals/BaseModal";
 import DatePickerModal from "../../components/modals/DatePickerModal";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
   getProgramExerciseById,
@@ -43,6 +44,11 @@ import {
   EXERCISE_PROGRESSION_TEMPLATES,
   type ExerciseProgressionTemplate,
 } from "../../lib/programs/exerciseTemplates";
+import {
+  formatEditableWeightFromKg,
+  getWeightUnitLabel,
+  parseWeightInputToKg,
+} from "../../lib/utils/units";
 
 // ============================================================================
 // Types
@@ -70,6 +76,7 @@ type DurationMode = "weeks" | "end_date";
 
 export default function ExerciseConfigScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{
     programExerciseId?: string;
     exerciseId?: string;
@@ -114,6 +121,7 @@ export default function ExerciseConfigScreen() {
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const weightUnitLabel = getWeightUnitLabel(unitPreference);
 
   // Load existing data
   useFocusEffect(
@@ -145,7 +153,9 @@ export default function ExerciseConfigScreen() {
               let weightStr = "";
               let rpeStr = "";
               if (block.target) {
-                if (block.target.type === "fixed_weight_kg") weightStr = String(block.target.value);
+                if (block.target.type === "fixed_weight_kg") {
+                  weightStr = formatEditableWeightFromKg(block.target.value, unitPreference);
+                }
                 else if (block.target.type === "rpe") rpeStr = String(block.target.value);
               }
               for (let i = 0; i < block.sets; i++) {
@@ -166,7 +176,7 @@ export default function ExerciseConfigScreen() {
         const progs = await listProgressionsForExercise(programExerciseId);
         if (progs.length > 0) {
           const prog = progs[0];
-          setIncrementValue(String(prog.value));
+          setIncrementValue(formatEditableWeightFromKg(prog.value, unitPreference));
           if (prog.cadence === "every_session") {
             setIncrementMode("per_session");
           } else if (prog.cadence === "weekly") {
@@ -175,7 +185,7 @@ export default function ExerciseConfigScreen() {
         }
       };
       load();
-    }, [programExerciseId])
+    }, [programExerciseId, unitPreference])
   );
 
   // ----------------------------------------
@@ -266,8 +276,8 @@ export default function ExerciseConfigScreen() {
 
           let target: TargetSpec | undefined;
           if (sample.weight) {
-            const w = parseFloat(sample.weight);
-            if (w > 0) target = { type: "fixed_weight_kg", value: w };
+            const w = parseWeightInputToKg(sample.weight, unitPreference);
+            if (w !== null && w > 0) target = { type: "fixed_weight_kg", value: w };
           }
           if (sample.rpe) {
             const r = parseFloat(sample.rpe);
@@ -300,8 +310,8 @@ export default function ExerciseConfigScreen() {
       }
 
       if (incrementMode === "per_session" || incrementMode === "per_week") {
-        const val = parseFloat(incrementValue);
-        if (val > 0) {
+        const val = parseWeightInputToKg(incrementValue, unitPreference);
+        if (val !== null && val > 0) {
           await createProgression({
             program_exercise_id: programExerciseId,
             type: "kg_per_session",
@@ -334,7 +344,7 @@ export default function ExerciseConfigScreen() {
           return serializePrescription(basePrescription);
         }
 
-        const incVal = parseFloat(incrementValue) || 0;
+        const incVal = parseWeightInputToKg(incrementValue, unitPreference) || 0;
         if (incVal <= 0) return serializePrescription(basePrescription);
 
         // For per_week: increment once per week occurrence
@@ -375,8 +385,8 @@ export default function ExerciseConfigScreen() {
         });
         // Propagate the same progression to the new exercise
         if (incrementMode === "per_session" || incrementMode === "per_week") {
-          const val = parseFloat(incrementValue);
-          if (val > 0) {
+          const val = parseWeightInputToKg(incrementValue, unitPreference);
+          if (val !== null && val > 0) {
             await createProgression({
               program_exercise_id: newPeId,
               type: "kg_per_session",
@@ -483,6 +493,7 @@ export default function ExerciseConfigScreen() {
     intervalDays,
     incrementMode,
     incrementValue,
+    unitPreference,
     selectedTemplateId,
     durationMode,
     durationWeeks,
@@ -542,7 +553,9 @@ export default function ExerciseConfigScreen() {
           {/* Input row */}
           <View className="flex-row gap-2 mb-3">
             <View className="flex-1">
-              <Text className="text-[11px] uppercase text-foreground-muted mb-1">Weight (kg)</Text>
+              <Text className="text-[11px] uppercase text-foreground-muted mb-1">
+                Weight ({weightUnitLabel})
+              </Text>
               <TextInput
                 className="border border-border rounded-xl p-3 text-base bg-surface-secondary text-foreground"
                 value={weightInput}
@@ -623,7 +636,7 @@ export default function ExerciseConfigScreen() {
                   </View>
                   <View className="flex-1">
                     <Text className="text-sm font-semibold text-foreground">
-                      {s.weight ? `${s.weight} kg` : "— kg"} × {s.reps || "—"} reps
+                      {s.weight ? `${s.weight} ${weightUnitLabel}` : `-- ${weightUnitLabel}`} x {s.reps || "--"} reps
                       {s.rpe ? ` @RPE ${s.rpe}` : ""}
                     </Text>
                     {s.isWarmup && (
@@ -866,7 +879,7 @@ export default function ExerciseConfigScreen() {
                 keyboardType="decimal-pad"
               />
               <Text className="text-sm text-foreground-secondary ml-2">
-                kg / {incrementMode === "per_session" ? "session" : "week"}
+                {weightUnitLabel} / {incrementMode === "per_session" ? "session" : "week"}
               </Text>
             </View>
           )}
@@ -976,3 +989,4 @@ export default function ExerciseConfigScreen() {
     </View>
   );
 }
+

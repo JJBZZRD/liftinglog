@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import DatePickerModal from "../components/modals/DatePickerModal";
+import { useUnitPreference } from "../lib/contexts/UnitPreferenceContext";
 import {
   getWorkoutDayDetails,
   listWorkoutDays,
@@ -23,6 +24,7 @@ import {
   type WorkoutDaySummary,
 } from "../lib/db/workouts";
 import { useTheme, type RawThemeColors } from "../lib/theme/ThemeContext";
+import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../lib/utils/units";
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -116,6 +118,9 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
   onContentPress,
   rawColors,
 }: WorkoutDayCardProps) {
+  const { unitPreference } = useUnitPreference();
+  const weightUnitLabel = getWeightUnitLabel(unitPreference);
+
   return (
     <View
       style={[
@@ -168,19 +173,22 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                 </View>
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { color: rawColors.foreground }]}>
-                    {details.totalVolumeKg.toLocaleString()}
+                    {formatVolumeFromKg(details.totalVolumeKg, unitPreference, { maximumFractionDigits: 0 })}
                   </Text>
                   <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
-                    Volume (kg)
+                    Volume ({weightUnitLabel})
                   </Text>
                 </View>
                 {details.bestE1rmKg && (
                   <View style={styles.statItem}>
                     <Text style={[styles.statValue, { color: rawColors.foreground }]}>
-                      {details.bestE1rmKg}
+                      {formatWeightFromKg(details.bestE1rmKg, unitPreference, {
+                        withUnit: false,
+                        maximumFractionDigits: 0,
+                      })}
                     </Text>
                     <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
-                      Best e1RM
+                      Best e1RM ({weightUnitLabel})
                     </Text>
                   </View>
                 )}
@@ -202,7 +210,7 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                       </Text>
                       <Text style={[styles.bestSetText, { color: rawColors.foregroundSecondary }]}>
                         {exercise.bestSet
-                          ? `Best: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
+                          ? `Best: ${formatWeightFromKg(exercise.bestSet.weightKg, unitPreference)} x ${exercise.bestSet.reps} (e1RM ${formatWeightFromKg(exercise.bestSet.e1rm, unitPreference)})`
                           : "No sets recorded"}
                       </Text>
                       {exercise.note && (
@@ -914,3 +922,4 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
 });
+

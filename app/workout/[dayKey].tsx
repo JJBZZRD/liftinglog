@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import SetItem from "../../components/lists/SetItem";
 import BaseModal from "../../components/modals/BaseModal";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import {
   dayKeyToTimestamp,
   deleteWorkoutExercise,
@@ -22,12 +23,18 @@ import {
 } from "../../lib/db/workouts";
 import { listMediaForSetIds } from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import {
+  formatVolumeFromKg,
+  formatWeightFromKg,
+  getWeightUnitLabel,
+} from "../../lib/utils/units";
 
 // Helper to get alphabet letter (A-Z)
 const getAlphabetLetter = (index: number) => String.fromCharCode(65 + index);
 
 export default function WorkoutDayScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ dayKey: string }>();
   const dayKey = typeof params.dayKey === "string" ? params.dayKey : "";
 
@@ -36,6 +43,7 @@ export default function WorkoutDayScreen() {
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkoutDayExerciseEntry | null>(null);
   const [setIdsWithMedia, setSetIdsWithMedia] = useState<Set<number>>(new Set());
+  const weightUnitLabel = getWeightUnitLabel(unitPreference);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -46,10 +54,7 @@ export default function WorkoutDayScreen() {
   };
 
   const formatVolume = (volume: number) => {
-    if (volume >= 1000) {
-      return `${(volume / 1000).toFixed(1)}k`;
-    }
-    return `${Math.round(volume)}`;
+    return formatVolumeFromKg(volume, unitPreference, { abbreviate: true, maximumFractionDigits: 0 });
   };
 
   // Compute display title from dayKey
@@ -241,19 +246,22 @@ export default function WorkoutDayScreen() {
               </View>
               <View style={styles.statsCardItem}>
                 <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
-                  {data.totals.totalVolumeKg.toLocaleString()}
+                  {formatVolumeFromKg(data.totals.totalVolumeKg, unitPreference, { maximumFractionDigits: 0 })}
                 </Text>
                 <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
-                  Volume (kg)
+                  Volume ({weightUnitLabel})
                 </Text>
               </View>
               {data.totals.bestE1rmKg && (
                 <View style={styles.statsCardItem}>
                   <Text style={[styles.statsCardValue, { color: rawColors.foreground }]}>
-                    {data.totals.bestE1rmKg}
+                    {formatWeightFromKg(data.totals.bestE1rmKg, unitPreference, {
+                      withUnit: false,
+                      maximumFractionDigits: 0,
+                    })}
                   </Text>
                   <Text style={[styles.statsCardLabel, { color: rawColors.foregroundSecondary }]}>
-                    Best e1RM
+                    Best e1RM ({weightUnitLabel})
                   </Text>
                 </View>
               )}
@@ -327,7 +335,7 @@ export default function WorkoutDayScreen() {
                   <View style={styles.statItem}>
                     <MaterialCommunityIcons name="weight" size={14} color={rawColors.foregroundSecondary} />
                     <Text style={[styles.statValue, { color: rawColors.foreground }]}>{formatVolume(entry.totalVolumeKg)}</Text>
-                    <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>kg vol</Text>
+                    <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel} vol</Text>
                   </View>
                 </View>
 

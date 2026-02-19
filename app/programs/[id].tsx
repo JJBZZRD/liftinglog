@@ -15,6 +15,7 @@ import {
 import { Calendar } from "react-native-calendars";
 import type { DateData, MarkedDates } from "react-native-calendars/src/types";
 import { TabBar, TabView } from "react-native-tab-view";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
   getProgramById,
@@ -36,6 +37,7 @@ import {
 } from "../../lib/db/plannedWorkouts";
 import { getExerciseById } from "../../lib/db/exercises";
 import { parseProgramPrescription } from "../../lib/programs/prescription";
+import { formatWeightFromKg } from "../../lib/utils/units";
 import { getWorkoutExercisesForDate, resetWorkoutForDate, type WorkoutExerciseStatus } from "../../lib/db/workouts";
 import BaseModal from "../../components/modals/BaseModal";
 
@@ -77,6 +79,7 @@ function UpcomingTab({
   program: Program;
   rawColors: any;
 }) {
+  const { unitPreference } = useUnitPreference();
   const [nextPlanned, setNextPlanned] = useState<PlannedWorkout | null>(null);
   const [exercises, setExercises] = useState<UpcomingExercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +115,7 @@ function UpcomingTab({
                     wb.reps.type === "fixed" ? `${wb.reps.value}` : `${wb.reps.min}-${wb.reps.max}`;
                   parts.push(`${wb.sets}x${repsStr}`);
                   if (wb.target?.type === "fixed_weight_kg") {
-                    weightStr = `${wb.target.value}kg`;
+                    weightStr = formatWeightFromKg(wb.target.value, unitPreference);
                   } else if (wb.target?.type === "rpe") {
                     weightStr = `RPE ${wb.target.value}`;
                   } else if (wb.target?.type === "percent_e1rm") {
@@ -162,7 +165,7 @@ function UpcomingTab({
     } finally {
       setLoading(false);
     }
-  }, [program.id]);
+  }, [program.id, unitPreference]);
 
   useFocusEffect(
     useCallback(() => {
@@ -582,6 +585,7 @@ function CalendarTab({
   program: Program;
   rawColors: any;
 }) {
+  const { unitPreference } = useUnitPreference();
   const [calendarMode, setCalendarMode] = useState<"grid" | "list">("grid");
   const [dayInfoMap, setDayInfoMap] = useState<Map<string, CalendarDayInfo>>(new Map());
   const [allDays, setAllDays] = useState<CalendarDayInfo[]>([]);
@@ -636,7 +640,9 @@ function CalendarTab({
                     const repsStr =
                       wb.reps.type === "fixed" ? `${wb.reps.value}` : `${wb.reps.min}-${wb.reps.max}`;
                     let wStr = "";
-                    if (wb.target?.type === "fixed_weight_kg") wStr = ` @ ${wb.target.value}kg`;
+                    if (wb.target?.type === "fixed_weight_kg") {
+                      wStr = ` @ ${formatWeightFromKg(wb.target.value, unitPreference)}`;
+                    }
                     parts.push(`${wb.sets}x${repsStr}${wStr}`);
                   }
                 }
@@ -671,7 +677,7 @@ function CalendarTab({
     } finally {
       setLoading(false);
     }
-  }, [program.id]);
+  }, [program.id, unitPreference]);
 
   useFocusEffect(
     useCallback(() => {
@@ -747,7 +753,7 @@ function CalendarTab({
     });
   };
 
-  // Build list for 8 weeks — show ALL days
+  // Build list for 8 weeks â€” show ALL days
   const listDays = useMemo(() => {
     const days: { dayKey: string; info: CalendarDayInfo | null; hasExercises: boolean }[] = [];
     const today = new Date();
@@ -1183,3 +1189,4 @@ export default function ProgramDetailScreen() {
     </View>
   );
 }
+

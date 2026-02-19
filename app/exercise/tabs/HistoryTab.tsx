@@ -22,10 +22,13 @@ import Animated, {
 import SetItem from "../../../components/lists/SetItem";
 import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
+import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
+import type { UnitPreference } from "../../../lib/db";
 import { getCurrentPREventsForExercise } from "../../../lib/db/prEvents";
 import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { listMediaForSetIds } from "../../../lib/db/media";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import { convertWeightToKg, formatVolumeFromKg, getWeightUnitLabel } from "../../../lib/utils/units";
 
 // Date range presets
 type DateRangePreset = "1w" | "1m" | "3m" | "6m" | "1y" | "all" | "custom";
@@ -54,26 +57,30 @@ interface NumericFilter {
 // Parsed search result
 interface ParsedSearch {
   notesQuery: string;
-  weightValue: number | null;
+  weightKgValue: number | null;
   repsValue: number | null;
 }
 
 /**
  * Parse search query to extract weight, reps, and notes text.
  * Supports patterns like:
- * - Weight: "100kg", "100 kg", "100KG"
+ * - Weight: "100kg", "100 kg", "100lb", "100 lb"
  * - Reps: "10 reps", "10reps", "10 rep"
  * - Remaining text is treated as notes search
  */
-function parseSearchQuery(query: string): ParsedSearch {
+function parseSearchQuery(query: string, currentUnit: UnitPreference): ParsedSearch {
   let notesQuery = query.trim();
-  let weightValue: number | null = null;
+  let weightKgValue: number | null = null;
   let repsValue: number | null = null;
 
-  // Extract weight pattern: 100kg, 100 kg, 100KG
-  const weightMatch = notesQuery.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  // Extract weight pattern: 100kg, 100 kg, 100lb, 100 lb
+  const weightMatch = notesQuery.match(/(\d+(?:\.\d+)?)\s*(kg|lb)\b/i);
   if (weightMatch) {
-    weightValue = parseFloat(weightMatch[1]);
+    const parsedWeight = parseFloat(weightMatch[1]);
+    const parsedUnit = (weightMatch[2]?.toLowerCase() as UnitPreference | undefined) ?? currentUnit;
+    if (!Number.isNaN(parsedWeight)) {
+      weightKgValue = convertWeightToKg(parsedWeight, parsedUnit);
+    }
     notesQuery = notesQuery.replace(weightMatch[0], "").trim();
   }
 
@@ -87,7 +94,7 @@ function parseSearchQuery(query: string): ParsedSearch {
   // Clean up multiple spaces
   notesQuery = notesQuery.replace(/\s+/g, " ").trim();
 
-  return { notesQuery, weightValue, repsValue };
+  return { notesQuery, weightKgValue, repsValue };
 }
 
 // Extended set row with PR badge
@@ -181,11 +188,11 @@ function calculateSessionStats(sets: SetWithPR[]): {
 /**
  * Format volume for display (e.g., 1250 kg or 1.2k kg)
  */
-function formatVolume(volume: number): string {
-  if (volume >= 1000) {
-    return `${(volume / 1000).toFixed(1)}k`;
-  }
-  return `${Math.round(volume)}`;
+function formatVolume(volumeKg: number, unitPreference: UnitPreference): string {
+  return formatVolumeFromKg(volumeKg, unitPreference, {
+    abbreviate: true,
+    maximumFractionDigits: 0,
+  });
 }
 
 type HistoryTabProps = {
@@ -194,6 +201,8 @@ type HistoryTabProps = {
 
 export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
+  const weightUnitLabel = getWeightUnitLabel(unitPreference);
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -276,14 +285,25 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   }, [dateRange]);
 
   // Parse search query for weight, reps, and notes
-  const parsedSearch = useMemo(() => parseSearchQuery(debouncedQuery), [debouncedQuery]);
+  const parsedSearch = useMemo(
+    () => parseSearchQuery(debouncedQuery, unitPreference),
+    [debouncedQuery, unitPreference]
+  );
 
   // Compute effective filter values (explicit filters take precedence over parsed search)
   const effectiveFilters = useMemo(() => {
-    const weightMin = weightFilter.min ? parseFloat(weightFilter.min) : parsedSearch.weightValue;
-    const weightMax = weightFilter.max ? parseFloat(weightFilter.max) : null;
+    const explicitWeightMin =
+      weightFilter.min && !Number.isNaN(parseFloat(weightFilter.min))
+        ? convertWeightToKg(parseFloat(weightFilter.min), unitPreference)
+        : null;
+    const explicitWeightMax =
+      weightFilter.max && !Number.isNaN(parseFloat(weightFilter.max))
+        ? convertWeightToKg(parseFloat(weightFilter.max), unitPreference)
+        : null;
     const repsMin = repsFilter.min ? parseInt(repsFilter.min, 10) : parsedSearch.repsValue;
     const repsMax = repsFilter.max ? parseInt(repsFilter.max, 10) : null;
+    const weightMin = explicitWeightMin ?? parsedSearch.weightKgValue;
+    const weightMax = explicitWeightMax;
 
     return {
       weightMin: !isNaN(weightMin as number) ? weightMin : null,
@@ -292,7 +312,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
       repsMax: !isNaN(repsMax as number) ? repsMax : null,
       notesQuery: parsedSearch.notesQuery.toLowerCase(),
     };
-  }, [weightFilter, repsFilter, parsedSearch]);
+  }, [weightFilter, repsFilter, parsedSearch, unitPreference]);
 
   // Filter history based on all filter criteria
   const filteredHistory = useMemo((): (WorkoutHistoryEntry & { sets: SetWithPR[] })[] => {
@@ -783,7 +803,9 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
             <View style={styles.filterInputsContainer}>
               {/* Weight Filter */}
               <View style={styles.filterInputRow}>
-                <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>Weight (kg)</Text>
+                <Text style={[styles.filterInputLabel, { color: rawColors.foreground }]}>
+                  Weight ({weightUnitLabel})
+                </Text>
                 <View style={styles.filterInputs}>
                   <TextInput
                     style={[
@@ -998,8 +1020,10 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                 <View style={[styles.statDivider, { backgroundColor: rawColors.border }]} />
                 <View style={styles.statItem}>
                   <MaterialCommunityIcons name="weight" size={14} color={rawColors.foregroundSecondary} />
-                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>{formatVolume(sessionStats.totalVolume)}</Text>
-                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>kg vol</Text>
+                  <Text style={[styles.statValue, { color: rawColors.foreground }]}>
+                    {formatVolume(sessionStats.totalVolume, unitPreference)}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel} vol</Text>
                 </View>
               </View>
 

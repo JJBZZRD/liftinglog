@@ -8,6 +8,7 @@ import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import EditSetModal from "../../../components/modals/EditSetModal";
 import TimerModal from "../../../components/TimerModal";
+import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import { getLastRestSeconds, setLastRestSeconds } from "../../../lib/db/exercises";
 import {
   addSet,
@@ -28,6 +29,12 @@ import { useTheme } from "../../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../../lib/utils/formatters";
 import { deleteAssociatedMediaForSets } from "../../../lib/utils/mediaCleanup";
+import {
+  formatEditableWeightFromKg,
+  formatWeightFromKg,
+  getWeightUnitLabel,
+  parseWeightInputToKg,
+} from "../../../lib/utils/units";
 
 type RecordTabProps = {
   onHistoryRefresh?: () => void;
@@ -35,6 +42,7 @@ type RecordTabProps = {
 
 export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ id?: string; name?: string; weId?: string; plannedDate?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -91,7 +99,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     let weId: number;
 
     // If a specific workout_exercise_id was passed (e.g. from a planned workout),
-    // use it directly — this avoids picking a stale/unrelated open entry
+    // use it directly â€” this avoids picking a stale/unrelated open entry
     if (paramWeId) {
       weId = paramWeId;
       setWorkoutExerciseId(weId);
@@ -110,7 +118,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
         setWorkoutExerciseId(weId);
         
         if (openWorkoutExercise.currentWeight !== null) {
-          setWeightState(String(openWorkoutExercise.currentWeight));
+          setWeightState(formatEditableWeightFromKg(openWorkoutExercise.currentWeight, unitPreference));
         }
         if (openWorkoutExercise.currentReps !== null) {
           setRepsState(String(openWorkoutExercise.currentReps));
@@ -138,7 +146,9 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     if (paramWeId && exerciseSets.length > 0) {
       const firstPlanned = exerciseSets.find((s) => (s.note ?? "").startsWith("[PLANNED]"));
       if (firstPlanned) {
-        if (firstPlanned.weightKg !== null) setWeightState(String(firstPlanned.weightKg));
+        if (firstPlanned.weightKg !== null) {
+          setWeightState(formatEditableWeightFromKg(firstPlanned.weightKg, unitPreference));
+        }
         if (firstPlanned.reps !== null) setRepsState(String(firstPlanned.reps));
       }
     }
@@ -150,7 +160,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       setTimerMinutes(String(mins));
       setTimerSeconds(String(secs));
     }
-  }, [exerciseId, paramWeId, paramPlannedDate]);
+  }, [exerciseId, paramWeId, paramPlannedDate, unitPreference]);
 
   const refreshSets = useCallback(async () => {
     if (!workoutExerciseId) return;
@@ -201,10 +211,10 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
   const setWeight = useCallback((value: string) => {
     setWeightState(value);
     if (workoutExerciseId) {
-      const numValue = value.trim() ? parseFloat(value) : null;
-      updateWorkoutExerciseInputs(workoutExerciseId, { currentWeight: numValue });
+      const weightKg = parseWeightInputToKg(value, unitPreference);
+      updateWorkoutExerciseInputs(workoutExerciseId, { currentWeight: weightKg });
     }
-  }, [workoutExerciseId]);
+  }, [workoutExerciseId, unitPreference]);
 
   const setReps = useCallback((value: string) => {
     setRepsState(value);
@@ -228,11 +238,11 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     Keyboard.dismiss();
     if (!workoutId || !exerciseId || !workoutExerciseId) return;
 
-    const weightValue = weight.trim() ? parseFloat(weight) : null;
+    const weightValueKg = parseWeightInputToKg(weight, unitPreference);
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
-    if (!weightValue || weightValue === 0 || !repsValue || repsValue === 0) {
+    if (!weightValueKg || weightValueKg === 0 || !repsValue || repsValue === 0) {
       return;
     }
 
@@ -242,7 +252,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
       const strippedNote = (placeholder.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null;
       const cleanNote = noteValue ?? strippedNote;
       await updateSet(placeholder.id, {
-        weight_kg: weightValue,
+        weight_kg: weightValueKg,
         reps: repsValue,
         note: cleanNote,
         performed_at: selectedDate.getTime(),
@@ -252,7 +262,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
         workout_id: workoutId,
         exercise_id: exerciseId,
         workout_exercise_id: workoutExerciseId,
-        weight_kg: weightValue,
+        weight_kg: weightValueKg,
         reps: repsValue,
         note: noteValue,
         set_index: setIndex,
@@ -263,7 +273,20 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     setNote("");
     await loadWorkout();
     onHistoryRefresh?.();
-  }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, sets, loadWorkout, onHistoryRefresh]);
+  }, [
+    workoutId,
+    exerciseId,
+    workoutExerciseId,
+    weight,
+    reps,
+    note,
+    setIndex,
+    selectedDate,
+    sets,
+    loadWorkout,
+    onHistoryRefresh,
+    unitPreference,
+  ]);
 
   // A "confirmed" set is one that is NOT still marked as [PLANNED] and has valid weight+reps
   const confirmedSets = sets.filter(
@@ -451,7 +474,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     );
   }
 
-  // Confirm a planned set — strip the [PLANNED] marker from its note
+  // Confirm a planned set â€” strip the [PLANNED] marker from its note
   const handleConfirmPlannedSet = useCallback(async (setItem: SetRow) => {
     const cleanNote = (setItem.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null;
     await updateSet(setItem.id, { note: cleanNote });
@@ -565,7 +588,9 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
           {/* Weight and Reps Inputs - Side by side */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1">
-              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">
+                Weight ({getWeightUnitLabel(unitPreference)})
+              </Text>
               <TextInput
                 className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
                 value={weight}
@@ -768,8 +793,7 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
           <View className="rounded-lg p-3 mb-5 bg-surface-secondary border border-border">
             <Text className="text-sm font-semibold text-foreground">
               Set #{deleteTarget.displayIndex}:{" "}
-              {deleteTarget.set.weightKg !== null ? `${deleteTarget.set.weightKg} kg` : "—"}{" "}
-              × {deleteTarget.set.reps !== null ? `${deleteTarget.set.reps} reps` : "—"}
+              {formatWeightFromKg(deleteTarget.set.weightKg, unitPreference)} x {deleteTarget.set.reps !== null ? String(deleteTarget.set.reps) + " reps" : "--"}
             </Text>
             {!!deleteTarget.set.note && (
               <Text className="text-sm mt-1 italic text-foreground-secondary" numberOfLines={2}>
@@ -882,3 +906,4 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     </View>
   );
 }
+

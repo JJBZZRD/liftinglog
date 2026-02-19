@@ -12,6 +12,7 @@ import DateRangeSelector, {
 import FullscreenChart from "../../../components/charts/FullscreenChart";
 import { getCurrentPRSessionKeysForExercise } from "../../../lib/db/prEvents";
 import { TabSwipeContext } from "../../../lib/contexts/TabSwipeContext";
+import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import {
   computeTrendLine,
@@ -26,6 +27,7 @@ import {
   type SessionDataPoint,
   type SessionDetails,
 } from "../../../lib/utils/analytics";
+import { convertWeightFromKg } from "../../../lib/utils/units";
 
 type MetricType = "maxWeight" | "e1rm" | "totalVolume" | "maxReps" | "numSets";
 
@@ -37,13 +39,13 @@ const metricOptions: { label: string; value: MetricType }[] = [
   { label: "Number of Sets", value: "numSets" },
 ];
 
-const getMetricUnit = (metric: MetricType): string => {
+const getMetricUnit = (metric: MetricType, weightUnit: "kg" | "lb"): string => {
   switch (metric) {
     case "maxWeight":
     case "e1rm":
-      return "kg";
+      return weightUnit;
     case "totalVolume":
-      return "kg";
+      return weightUnit;
     case "maxReps":
       return "reps";
     case "numSets":
@@ -59,6 +61,7 @@ type VisualisationTabProps = {
 
 export default function VisualisationTab({ refreshKey }: VisualisationTabProps) {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
   const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
@@ -140,14 +143,23 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
     const filtered = filterByDateRange(allData, dateRange);
     // Sort chronologically for chart (canonical ordering)
     const sorted = [...filtered].sort((a, b) => a.date - b.date);
-    setFilteredData(sorted);
+    const shouldConvertWeightMetric =
+      selectedMetric === "maxWeight" || selectedMetric === "e1rm" || selectedMetric === "totalVolume";
+    const displayData = shouldConvertWeightMetric
+      ? sorted.map((point) => ({
+          ...point,
+          value: convertWeightFromKg(point.value, unitPreference),
+        }))
+      : sorted;
+
+    setFilteredData(displayData);
     // Compute trend line (5-session moving average)
-    setTrendLineData(computeTrendLine(sorted, 5));
+    setTrendLineData(computeTrendLine(displayData, 5));
     
     // Dev-only logging for debugging point/date alignment
-    if (__DEV__ && sorted.length > 0) {
+    if (__DEV__ && displayData.length > 0) {
       console.log('[VisualisationTab] First 5 visible points:',
-        sorted.slice(0, 5).map((p, i) => ({
+        displayData.slice(0, 5).map((p, i) => ({
           index: i,
           date: new Date(p.date).toLocaleDateString("en-US", {
             weekday: "short",
@@ -160,7 +172,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
         }))
       );
     }
-  }, [allData, dateRange]);
+  }, [allData, dateRange, selectedMetric, unitPreference]);
 
   // Fetch data on mount and metric change
   useEffect(() => {
@@ -255,7 +267,7 @@ export default function VisualisationTab({ refreshKey }: VisualisationTabProps) 
   );
 
   const selectedMetricLabel = metricOptions.find((opt) => opt.value === selectedMetric)?.label || "Select Metric";
-  const unit = getMetricUnit(selectedMetric);
+  const unit = getMetricUnit(selectedMetric, unitPreference);
   const hasData = filteredData.length > 0;
 
   // Calculate stats

@@ -10,7 +10,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { Pressable, Text, View, type ViewStyle } from "react-native";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { formatWeightFromKg } from "../../lib/utils/units";
 
 interface SetItemProps {
   /** Set index (1-based for display) */
@@ -59,6 +61,7 @@ export default function SetItem({
   rightActions,
 }: SetItemProps) {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const isCompact = variant === "compact";
 
   // Build style for best set highlighting - uses primary color with opacity for cross-theme support
@@ -95,10 +98,10 @@ export default function SetItem({
       <View className="flex-1">
         <View className="flex-row gap-3 mb-1 items-center">
           <Text className="text-base font-semibold text-foreground">
-            {weightKg !== null ? `${weightKg} kg` : "—"}
+            {formatWeightFromKg(weightKg, unitPreference)}
           </Text>
           <Text className="text-base font-semibold text-foreground">
-            {reps !== null ? `${reps} reps` : "—"}
+            {reps !== null ? `${reps} reps` : "â€”"}
           </Text>
           {isBestSet && (
             <View className="flex-row items-center ml-1">
@@ -199,3 +202,5 @@ export function SetItemList({
     </>
   );
 }
+
+

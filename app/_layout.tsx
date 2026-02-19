@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { UnitPreferenceProvider } from "../lib/contexts/UnitPreferenceContext";
 import { seedTestDataExercise } from "../lib/db/seedTestData";
 import { useNotificationHandler } from "../lib/notificationHandler";
 import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
@@ -92,7 +93,9 @@ function RootLayoutContent() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <RootLayoutContent />
+      <UnitPreferenceProvider>
+        <RootLayoutContent />
+      </UnitPreferenceProvider>
     </ThemeProvider>
   );
 }

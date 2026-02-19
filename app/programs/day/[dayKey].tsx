@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import BaseModal from "../../../components/modals/BaseModal";
+import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import {
   listProgramExercises,
@@ -27,6 +28,7 @@ import {
 import { listExercises, type Exercise } from "../../../lib/db/exercises";
 import { getExerciseById } from "../../../lib/db/exercises";
 import { parseProgramPrescription } from "../../../lib/programs/prescription";
+import { formatWeightFromKg } from "../../../lib/utils/units";
 
 type ExerciseDisplayItem = {
   programExercise: ProgramExercise;
@@ -36,6 +38,7 @@ type ExerciseDisplayItem = {
 
 export default function ProgramDayDetailScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{
     dayKey?: string;
     programId?: string;
@@ -82,7 +85,7 @@ export default function ProgramDayDetailScreen() {
                 wb.reps.type === "fixed" ? `${wb.reps.value}` : `${wb.reps.min}-${wb.reps.max}`;
               let weightStr = "";
               if (wb.target?.type === "fixed_weight_kg") {
-                weightStr = ` @ ${wb.target.value}kg`;
+                weightStr = ` @ ${formatWeightFromKg(wb.target.value, unitPreference)}`;
               }
               parts.push(`${wb.sets}x${repsStr}${weightStr}`);
             }
@@ -93,7 +96,7 @@ export default function ProgramDayDetailScreen() {
       items.push({ programExercise: pe, exercise: ex, prescriptionSummary: summary });
     }
     setExercises(items);
-  }, [currentProgramDayId]);
+  }, [currentProgramDayId, unitPreference]);
 
   const ensureProgramDayId = useCallback(async (): Promise<number | null> => {
     if (!programId || !dayKey) return null;

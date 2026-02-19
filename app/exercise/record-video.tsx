@@ -8,9 +8,11 @@ import { ActivityIndicator, PanResponder, Pressable, Text, TextInput, View } fro
 import { PinchGestureHandler, State } from "react-native-gesture-handler";
 import { runOnJS, SensorType, useAnimatedReaction, useAnimatedSensor } from "react-native-reanimated";
 import BaseModal from "../../components/modals/BaseModal";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { addMedia } from "../../lib/db/media";
 import { addSet, listSetsForWorkoutExercise } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { getWeightUnitLabel, parseWeightInputToKg } from "../../lib/utils/units";
 
 const ALBUM_NAME = "LiftingLog";
 const ZOOM_SENSITIVITY = 0.35;
@@ -52,6 +54,7 @@ function inferVideoMimeFromUri(uri: string | null): string {
 
 export default function RecordVideoScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const router = useRouter();
   const params = useLocalSearchParams<{
     id?: string;
@@ -236,11 +239,11 @@ export default function RecordVideoScreen() {
   const handleSaveSet = useCallback(async () => {
     if (!recordedUri || !exerciseId || !workoutId || !workoutExerciseId) return;
 
-    const weightValue = weight.trim() ? parseFloat(weight) : null;
+    const weightValueKg = parseWeightInputToKg(weight, unitPreference);
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
-    if (!weightValue || weightValue <= 0 || !repsValue || repsValue <= 0) {
+    if (!weightValueKg || weightValueKg <= 0 || !repsValue || repsValue <= 0) {
       return;
     }
 
@@ -317,7 +320,7 @@ export default function RecordVideoScreen() {
         workout_id: workoutId,
         exercise_id: exerciseId,
         workout_exercise_id: workoutExerciseId,
-        weight_kg: weightValue,
+        weight_kg: weightValueKg,
         reps: repsValue,
         note: noteValue,
         set_index: nextSetIndex,
@@ -356,6 +359,7 @@ export default function RecordVideoScreen() {
     performedAt,
     ensureMediaPermission,
     router,
+    unitPreference,
   ]);
 
   const flashLabel = useMemo(() => {
@@ -590,7 +594,9 @@ export default function RecordVideoScreen() {
 
         <View className="flex-row gap-3 mb-4">
           <View className="flex-1">
-            <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
+            <Text className="text-sm font-medium mb-2 text-foreground-secondary">
+              Weight ({getWeightUnitLabel(unitPreference)})
+            </Text>
             <TextInput
               className="border border-border rounded-xl p-3.5 text-base bg-surface-secondary text-foreground"
               value={weight}

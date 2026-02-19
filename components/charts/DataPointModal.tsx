@@ -2,7 +2,7 @@
  * Data Point Modal Component
  * 
  * Displays detailed session information when a data point is pressed on the chart.
- * Layout: Header → Date/Time → Summary (fixed) → Sets (scrollable)
+ * Layout: Header â†’ Date/Time â†’ Summary (fixed) â†’ Sets (scrollable)
  * Styled to match the History/Record UI patterns.
  * 
  * Layout strategy (measurement-based):
@@ -21,11 +21,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { deleteExerciseSession, deleteWorkoutExercise } from "../../lib/db/workouts";
 import { listMediaForSetIds } from "../../lib/db/media";
 import { getCurrentPREventsForExercise, type PREvent } from "../../lib/db/prEvents";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
+import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../../lib/utils/units";
 import SetItem from "../lists/SetItem";
 
 // Minimum height for the sets region (ensures 2-3 rows visible)
@@ -60,8 +62,10 @@ export default function DataPointModal({
   onDeleted,
 }: DataPointModalProps) {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
+  const weightUnitLabel = getWeightUnitLabel(unitPreference);
 
   // Track measured height of the fixed section
   const [fixedHeight, setFixedHeight] = useState(0);
@@ -140,6 +144,19 @@ export default function DataPointModal({
   // Determine which branch will be rendered
   const hasDetailsWithSets = !!(sessionDetails && sessionDetails.sets && sessionDetails.sets.length > 0);
   const isCompleted = sessionDetails ? sessionDetails.completedAt !== null : false;
+  const totalVolumeDisplay = sessionDetails
+    ? formatVolumeFromKg(sessionDetails.totalVolume, unitPreference, { maximumFractionDigits: 0 })
+    : "--";
+  const estimatedE1rmDisplay =
+    sessionDetails?.estimatedE1RM !== null && sessionDetails?.estimatedE1RM !== undefined
+      ? formatWeightFromKg(sessionDetails.estimatedE1RM, unitPreference, {
+          withUnit: false,
+          maximumFractionDigits: 0,
+        })
+      : null;
+  const bestSetDisplay = sessionDetails?.bestSet
+    ? `${formatWeightFromKg(sessionDetails.bestSet.weight, unitPreference)} x ${sessionDetails.bestSet.reps} reps`
+    : null;
 
   // onLayout handlers
   const handleCardLayout = (event: LayoutChangeEvent) => {
@@ -393,9 +410,9 @@ export default function DataPointModal({
                           Volume
                         </Text>
                         <Text style={[styles.statValue, { color: rawColors.foreground }]}>
-                          {sessionDetails.totalVolume.toFixed(0)}
+                          {totalVolumeDisplay}
                         </Text>
-                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
+                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel}</Text>
                       </View>
                       <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
                         <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
@@ -412,9 +429,9 @@ export default function DataPointModal({
                             Est. 1RM
                           </Text>
                           <Text style={[styles.statValue, { color: rawColors.primary }]}>
-                            {sessionDetails.estimatedE1RM.toFixed(0)}
+                            {estimatedE1rmDisplay}
                           </Text>
-                          <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
+                          <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel}</Text>
                         </View>
                       )}
                     </View>
@@ -426,7 +443,7 @@ export default function DataPointModal({
                           Best Set
                         </Text>
                         <Text style={[styles.bestSetValue, { color: rawColors.foreground }]}>
-                          {sessionDetails.bestSet.weight} kg × {sessionDetails.bestSet.reps} reps
+                          {bestSetDisplay}
                         </Text>
                       </View>
                     )}
@@ -588,9 +605,9 @@ export default function DataPointModal({
                         Volume
                       </Text>
                       <Text style={[styles.statValue, { color: rawColors.foreground }]}>
-                        {sessionDetails.totalVolume.toFixed(0)}
+                        {totalVolumeDisplay}
                       </Text>
-                      <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
+                      <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel}</Text>
                     </View>
                     <View style={[styles.statTile, { backgroundColor: rawColors.surfaceSecondary }]}>
                       <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>
@@ -607,9 +624,9 @@ export default function DataPointModal({
                           Est. 1RM
                         </Text>
                         <Text style={[styles.statValue, { color: rawColors.primary }]}>
-                          {sessionDetails.estimatedE1RM.toFixed(0)}
+                          {estimatedE1rmDisplay}
                         </Text>
-                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>kg</Text>
+                        <Text style={[styles.statUnit, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel}</Text>
                       </View>
                     )}
                   </View>
@@ -621,7 +638,7 @@ export default function DataPointModal({
                         Best Set
                       </Text>
                       <Text style={[styles.bestSetValue, { color: rawColors.foreground }]}>
-                        {sessionDetails.bestSet.weight} kg × {sessionDetails.bestSet.reps} reps
+                        {bestSetDisplay}
                       </Text>
                     </View>
                   )}
@@ -932,3 +949,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
+

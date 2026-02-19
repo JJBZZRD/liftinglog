@@ -7,8 +7,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { formatHistoryTime } from "../../lib/utils/formatters";
+import { formatEditableWeightFromKg, getWeightUnitLabel, parseWeightInputToKg } from "../../lib/utils/units";
 import BaseModal from "./BaseModal";
 import DatePickerModal from "./DatePickerModal";
 
@@ -48,6 +50,7 @@ export default function EditSetModal({
   showTimePicker = false,
 }: EditSetModalProps) {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [note, setNote] = useState("");
@@ -63,25 +66,25 @@ export default function EditSetModal({
   // Reset form when set changes
   useEffect(() => {
     if (set) {
-      setWeight(set.weightKg !== null ? String(set.weightKg) : "");
+      setWeight(formatEditableWeightFromKg(set.weightKg, unitPreference));
       setReps(set.reps !== null ? String(set.reps) : "");
       setNote(set.note || "");
       setDate(set.performedAt ? new Date(set.performedAt) : new Date());
     }
-  }, [set]);
+  }, [set, unitPreference]);
 
   const handleSave = useCallback(() => {
-    const weightValue = weight.trim() ? parseFloat(weight) : null;
+    const weightValueKg = parseWeightInputToKg(weight, unitPreference);
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
     // Validate: weight and reps cannot be zero or null
-    if (!weightValue || weightValue === 0 || !repsValue || repsValue === 0) {
+    if (!weightValueKg || weightValueKg === 0 || !repsValue || repsValue === 0) {
       return;
     }
 
     const updates: { weight_kg: number; reps: number; note: string | null; performed_at?: number } = {
-      weight_kg: weightValue,
+      weight_kg: weightValueKg,
       reps: repsValue,
       note: noteValue,
     };
@@ -91,7 +94,7 @@ export default function EditSetModal({
     }
 
     onSave(updates);
-  }, [weight, reps, note, date, showTimePicker, onSave]);
+  }, [weight, reps, note, date, showTimePicker, onSave, unitPreference]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -115,7 +118,9 @@ export default function EditSetModal({
           
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1">
-              <Text className="text-sm font-medium mb-2 text-foreground-secondary">Weight (kg)</Text>
+              <Text className="text-sm font-medium mb-2 text-foreground-secondary">
+                Weight ({getWeightUnitLabel(unitPreference)})
+              </Text>
               <TextInput
                 className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
                 value={weight}

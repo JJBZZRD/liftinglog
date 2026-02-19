@@ -5,6 +5,7 @@ import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, ty
 import { rebuildPREventsForExercise } from "./prEvents";
 import { getGlobalFormula } from "./settings";
 import { newUid } from "../utils/uid";
+import { convertWeightToKg } from "../utils/units";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
@@ -961,7 +962,9 @@ function parseSearchTokens(query: string): { alpha: string[]; numeric: number[] 
     // Match "100", "100kg", "100lb", "100.5"
     const numMatch = token.match(/^(\d+(?:\.\d+)?)(kg|lb)?$/i);
     if (numMatch) {
-      numeric.push(parseFloat(numMatch[1]));
+      const value = parseFloat(numMatch[1]);
+      const unit = numMatch[2]?.toLowerCase();
+      numeric.push(unit === "lb" ? convertWeightToKg(value, "lb") : value);
     } else {
       alpha.push(token);
     }

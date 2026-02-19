@@ -4,16 +4,20 @@ import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { getTotalPRCount } from "../../lib/db/prEvents";
 import { getLastWorkoutDay, getQuickStats, type LastWorkoutDayResult, type QuickStats } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../../lib/utils/units";
 
 export default function OverviewScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const [lastWorkout, setLastWorkout] = useState<LastWorkoutDayResult | null>(null);
   const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
   const [totalPRs, setTotalPRs] = useState(0);
   const [loading, setLoading] = useState(true);
+  const weightUnitLabel = getWeightUnitLabel(unitPreference);
 
   const loadData = useCallback(async () => {
     try {
@@ -108,13 +112,15 @@ export default function OverviewScreen() {
               <Text className="text-xs text-foreground-secondary">Workouts</Text>
             </View>
             <View className="items-center">
-              <MaterialCommunityIcons name="weight-kilogram" size={32} color={rawColors.warning} />
+              <MaterialCommunityIcons
+                name={unitPreference === "lb" ? "weight-pound" : "weight-kilogram"}
+                size={32}
+                color={rawColors.warning}
+              />
               <Text className="text-2xl font-bold mt-2 text-foreground">
-                {quickStats ? (quickStats.totalVolumeKg >= 1000 
-                  ? `${(quickStats.totalVolumeKg / 1000).toFixed(1)}k` 
-                  : quickStats.totalVolumeKg) : 0}
+                {quickStats ? formatVolumeFromKg(quickStats.totalVolumeKg, unitPreference, { abbreviate: true }) : 0}
               </Text>
-              <Text className="text-xs text-foreground-secondary">Volume (kg)</Text>
+              <Text className="text-xs text-foreground-secondary">Volume ({weightUnitLabel})</Text>
             </View>
             <View className="items-center">
               <MaterialCommunityIcons name="trophy" size={32} color={rawColors.success} />
@@ -207,8 +213,8 @@ export default function OverviewScreen() {
                       </Text>
                       <Text className="text-[13px] text-foreground-secondary">
                         {exercise.bestSet
-                          ? `Best set: ${exercise.bestSet.weightKg} kg × ${exercise.bestSet.reps} (e1RM ${exercise.bestSet.e1rm} kg)`
-                          : "Best set: —"}
+                          ? `Best set: ${formatWeightFromKg(exercise.bestSet.weightKg, unitPreference)} x ${exercise.bestSet.reps} (e1RM ${formatWeightFromKg(exercise.bestSet.e1rm, unitPreference)})`
+                          : "Best set: â€”"}
                       </Text>
                     </View>
                   </Pressable>
@@ -230,3 +236,4 @@ export default function OverviewScreen() {
     </SafeAreaView>
   );
 }
+
