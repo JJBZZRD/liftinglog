@@ -400,6 +400,8 @@ describe('Last Workout Day Query', () => {
     });
   });
 
+});
+	
 describe('Set CRUD Operations', () => {
   describe('addSet', () => {
     it('should add set with required fields', async () => {
