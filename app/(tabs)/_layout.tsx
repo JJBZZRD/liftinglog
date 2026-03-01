@@ -4,7 +4,7 @@ import { View } from "react-native";
 import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
-const _layout = () => {
+const TabsLayout = () => {
   const { rawColors } = useTheme();
   
   return (
@@ -58,4 +58,4 @@ const _layout = () => {
   );
 };
 
-export default _layout;
+export default TabsLayout;

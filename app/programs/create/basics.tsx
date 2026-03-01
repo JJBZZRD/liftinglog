@@ -1,68 +1,119 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  Keyboard,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+	  Keyboard,
+	  Pressable,
+	  ScrollView,
+	  StyleSheet,
+	  Text,
+	  TextInput,
+	  View,
+	} from "react-native";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 
 export default function ProgramBasicsScreen() {
   const { rawColors } = useTheme();
-  const params = useLocalSearchParams<{ pslSource?: string; templateName?: string }>();
 
-  const [name, setName] = useState(params.templateName ?? "");
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [units, setUnits] = useState<"kg" | "lb">("kg");
-  const [useCalendar, setUseCalendar] = useState(true);
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState<Date | null>(null);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-  const [useEndDate, setUseEndDate] = useState(false);
+  const [programStructure, setProgramStructure] = useState<"sessions" | "blocks">("sessions");
 
-  const preloadedPsl = params.pslSource ?? null;
+  const trimmedName = name.trim();
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString(undefined, {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  const toProgramId = useCallback((s: string) => {
+    const slug = s
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+    return slug || "my-program";
+  }, []);
 
-  const toIsoDate = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
+  const buildSessionsStarter = useCallback(() => {
+    const safeName = trimmedName || "My Program";
+    const safeDesc = description.trim();
+    const progId = toProgramId(safeName);
+
+    const lines: string[] = [];
+    lines.push('language_version: "0.2"');
+    lines.push("metadata:");
+    lines.push(`  id: ${progId}`);
+    lines.push(`  name: ${JSON.stringify(safeName)}`);
+    if (safeDesc) lines.push(`  description: ${JSON.stringify(safeDesc)}`);
+    lines.push(`units: ${units}`);
+    lines.push("sessions:");
+    lines.push("  - id: session-a");
+    lines.push("    name: Session A");
+    lines.push("    schedule:");
+    lines.push("      type: weekdays");
+    lines.push("      days: [MON, WED, FRI]");
+    lines.push("    exercises:");
+    lines.push('      - "Back Squat: 3x5 @75%"');
+    return lines.join("\n") + "\n";
+  }, [trimmedName, description, units, toProgramId]);
+
+  const buildBlocksStarter = useCallback(() => {
+    const safeName = trimmedName || "My Block Program";
+    const safeDesc = description.trim();
+    const progId = toProgramId(safeName);
+
+    const lines: string[] = [];
+    lines.push('language_version: "0.2"');
+    lines.push("metadata:");
+    lines.push(`  id: ${progId}`);
+    lines.push(`  name: ${JSON.stringify(safeName)}`);
+    if (safeDesc) lines.push(`  description: ${JSON.stringify(safeDesc)}`);
+    lines.push(`units: ${units}`);
+    lines.push("blocks:");
+    lines.push("  - id: accumulation");
+    lines.push('    duration: \"4w\"');
+    lines.push("    sessions:");
+    lines.push("      - id: a1");
+    lines.push("        name: A1");
+    lines.push('        schedule: \"MON\"');
+    lines.push("        exercises:");
+    lines.push('          - "Back Squat: 3x5 @75%"');
+    lines.push("  - id: deload");
+    lines.push('    duration: \"1w\"');
+    lines.push("    deload: true");
+    lines.push("    sessions:");
+    lines.push("      - id: d1");
+    lines.push("        name: Deload");
+    lines.push('        schedule: \"MON\"');
+    lines.push("        exercises:");
+    lines.push('          - "Back Squat: 2x5 @60%"');
+    return lines.join("\n") + "\n";
+  }, [trimmedName, description, units, toProgramId]);
 
   const handleNext = useCallback(() => {
-    if (!name.trim()) return;
+    if (!trimmedName) return;
     Keyboard.dismiss();
+
+    if (programStructure === "blocks") {
+      router.push({
+        pathname: "/programs/create/editor",
+        params: { pslSource: buildBlocksStarter() },
+      });
+      return;
+    }
 
     router.push({
       pathname: "/programs/create/schedule",
       params: {
-        name: name.trim(),
+        name: trimmedName,
         description: description.trim(),
         units,
-        useCalendar: useCalendar ? "1" : "0",
-        startDate: useCalendar ? toIsoDate(startDate) : "",
-        endDate: useCalendar && useEndDate && endDate ? toIsoDate(endDate) : "",
-        pslSource: preloadedPsl ?? "",
       },
     });
-  }, [name, description, units, useCalendar, startDate, endDate, useEndDate, preloadedPsl]);
+  }, [trimmedName, description, units, programStructure, buildBlocksStarter]);
+
+  const handleEditPslInstead = useCallback(() => {
+    Keyboard.dismiss();
+    const starter = programStructure === "blocks" ? buildBlocksStarter() : buildSessionsStarter();
+    router.push({ pathname: "/programs/create/editor", params: { pslSource: starter } });
+  }, [programStructure, buildBlocksStarter, buildSessionsStarter]);
 
   return (
     <View style={styles.container} className="bg-background">
@@ -93,12 +144,12 @@ export default function ProgramBasicsScreen() {
               },
             ]}
             value={name}
-            onChangeText={setName}
-            placeholder="e.g., My Strength Program"
-            placeholderTextColor={rawColors.foregroundMuted}
-            autoFocus={!preloadedPsl}
-          />
-        </View>
+	            onChangeText={setName}
+	            placeholder="e.g., My Strength Program"
+	            placeholderTextColor={rawColors.foregroundMuted}
+	            autoFocus
+	          />
+	        </View>
 
         {/* Description */}
         <View style={styles.field}>
@@ -172,123 +223,120 @@ export default function ProgramBasicsScreen() {
           </View>
         </View>
 
-        {/* Calendar Toggle */}
-        <View style={[styles.toggleRow, { borderColor: rawColors.borderLight }]}>
-          <View style={styles.toggleInfo}>
-            <Text style={[styles.toggleTitle, { color: rawColors.foreground }]}>
-              Calendar Schedule
-            </Text>
-            <Text style={[styles.toggleDesc, { color: rawColors.foregroundSecondary }]}>
-              Schedule sessions to specific dates
-            </Text>
-          </View>
-          <Switch
-            value={useCalendar}
-            onValueChange={setUseCalendar}
-            trackColor={{ false: rawColors.borderLight, true: rawColors.primary + "60" }}
-            thumbColor={useCalendar ? rawColors.primary : rawColors.foregroundMuted}
-          />
-        </View>
-
-        {/* Start / End dates */}
-        {useCalendar && (
-          <View style={[styles.dateSection, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}>
-            <Pressable
-              onPress={() => setShowStartPicker(true)}
-              style={styles.dateRow}
+	        {/* Program Structure */}
+	        <View style={styles.field}>
+	          <Text style={[styles.label, { color: rawColors.foregroundSecondary }]}>
+	            Program Structure
+	          </Text>
+	          <View style={styles.structureRow}>
+	            <Pressable
+	              onPress={() => setProgramStructure("sessions")}
+	              style={[
+	                styles.structureOption,
+	                {
+	                  backgroundColor: programStructure === "sessions" ? rawColors.primary + "15" : rawColors.surfaceSecondary,
+	                  borderColor: programStructure === "sessions" ? rawColors.primary : rawColors.borderLight,
+	                },
+	              ]}
+	            >
+	              <MaterialCommunityIcons
+	                name="calendar-week"
+	                size={24}
+	                color={programStructure === "sessions" ? rawColors.primary : rawColors.foregroundSecondary}
+	              />
+	              <Text
+	                style={[
+	                  styles.structureTitle,
+	                  { color: programStructure === "sessions" ? rawColors.primary : rawColors.foreground },
+	                ]}
+	              >
+	                Sessions
+	              </Text>
+	              <Text style={[styles.structureDesc, { color: rawColors.foregroundSecondary }]}>
+	                Sessions with weekday or interval schedules
+	              </Text>
+	            </Pressable>
+	            <Pressable
+	              onPress={() => setProgramStructure("blocks")}
+              style={[
+                styles.structureOption,
+                {
+                  backgroundColor: programStructure === "blocks" ? rawColors.primary + "15" : rawColors.surfaceSecondary,
+                  borderColor: programStructure === "blocks" ? rawColors.primary : rawColors.borderLight,
+                },
+              ]}
             >
-              <Text style={[styles.dateLabel, { color: rawColors.foregroundSecondary }]}>
-                Start Date
-              </Text>
-              <Text style={[styles.dateValue, { color: rawColors.foreground }]}>
-                {formatDate(startDate)}
-              </Text>
-            </Pressable>
-
-            {showStartPicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(_, date) => {
-                  setShowStartPicker(Platform.OS === "ios");
-                  if (date) setStartDate(date);
-                }}
+              <MaterialCommunityIcons
+                name="view-week-outline"
+                size={24}
+                color={programStructure === "blocks" ? rawColors.primary : rawColors.foregroundSecondary}
               />
-            )}
-
-            <View style={[styles.toggleRow, { borderTopWidth: StyleSheet.hairlineWidth, borderColor: rawColors.borderLight, paddingHorizontal: 0 }]}>
-              <Text style={[styles.dateLabel, { color: rawColors.foregroundSecondary }]}>
-                End Date
-              </Text>
-              <Switch
-                value={useEndDate}
-                onValueChange={setUseEndDate}
-                trackColor={{ false: rawColors.borderLight, true: rawColors.primary + "60" }}
-                thumbColor={useEndDate ? rawColors.primary : rawColors.foregroundMuted}
-              />
-            </View>
-
-            {useEndDate && (
-              <Pressable
-                onPress={() => setShowEndPicker(true)}
-                style={styles.dateRow}
+              <Text
+                style={[
+                  styles.structureTitle,
+                  { color: programStructure === "blocks" ? rawColors.primary : rawColors.foreground },
+                ]}
               >
-                <Text style={[styles.dateLabel, { color: rawColors.foregroundSecondary }]}>
-                  End Date
-                </Text>
-                <Text style={[styles.dateValue, { color: rawColors.foreground }]}>
-                  {endDate ? formatDate(endDate) : "Select..."}
-                </Text>
-              </Pressable>
-            )}
+                Blocks
+              </Text>
+              <Text style={[styles.structureDesc, { color: rawColors.foregroundSecondary }]}>
+                Training phases with set durations (e.g. 4-week cycles)
+              </Text>
+	            </Pressable>
+	          </View>
+	        </View>
 
-            {showEndPicker && (
-              <DateTimePicker
-                value={endDate ?? new Date()}
-                mode="date"
-                minimumDate={startDate}
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(_, date) => {
-                  setShowEndPicker(Platform.OS === "ios");
-                  if (date) setEndDate(date);
-                }}
-              />
-            )}
-          </View>
-        )}
-      </ScrollView>
+	        <Pressable
+	          onPress={handleEditPslInstead}
+	          className="flex-row items-center justify-center py-3.5 rounded-xl border border-border"
+	          style={({ pressed }) => ({
+	            backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+	          })}
+	        >
+	          <MaterialCommunityIcons name="code-tags" size={18} color={rawColors.foregroundSecondary} />
+	          <Text className="ml-2 text-sm font-semibold" style={{ color: rawColors.foregroundSecondary }}>
+	            Edit PSL instead
+	          </Text>
+	        </Pressable>
+	      </ScrollView>
 
       {/* Next Button */}
-      <View style={[styles.footer, { backgroundColor: rawColors.background }]}>
+      <View
+        className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
+        style={{
+          shadowColor: rawColors.shadow,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          elevation: 8,
+        }}
+      >
         <Pressable
           onPress={handleNext}
-          disabled={!name.trim()}
-          style={({ pressed }) => [
-            styles.nextButton,
-            {
-              backgroundColor: name.trim() ? rawColors.primary : rawColors.surfaceSecondary,
-              opacity: pressed && name.trim() ? 0.8 : 1,
-            },
-          ]}
+          disabled={!trimmedName}
+          className={`flex-row items-center justify-center py-4 rounded-xl border ${
+            trimmedName ? "bg-primary border-primary" : "bg-surface-secondary border-border"
+          }`}
+          style={({ pressed }) => ({
+            opacity: pressed && trimmedName ? 0.8 : 1,
+          })}
         >
-          <Text
-            style={[
-              styles.nextButtonText,
-              { color: name.trim() ? rawColors.primaryForeground : rawColors.foregroundMuted },
-            ]}
-          >
-            Next: Schedule
-          </Text>
           <MaterialCommunityIcons
             name="arrow-right"
-            size={20}
-            color={name.trim() ? rawColors.primaryForeground : rawColors.foregroundMuted}
+            size={22}
+            color={trimmedName ? rawColors.primaryForeground : rawColors.foregroundMuted}
           />
-        </Pressable>
-      </View>
-    </View>
-  );
+	          <Text
+	            className={`text-base font-semibold ml-2 ${
+	              trimmedName ? "text-primary-foreground" : "text-foreground-muted"
+	            }`}
+	          >
+	            {programStructure === "blocks" ? "Next: PSL Editor" : "Next: Schedule"}
+	          </Text>
+	        </Pressable>
+	      </View>
+	    </View>
+	  );
 }
 
 const styles = StyleSheet.create({
@@ -335,25 +383,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
+  structureRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  structureOption: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 14,
+    alignItems: "center",
+    gap: 6,
+  },
+  structureTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  structureDesc: {
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 15,
+  },
   toggleRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 4,
-    marginBottom: 12,
-  },
-  toggleInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  toggleTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  toggleDesc: {
-    fontSize: 13,
-    marginTop: 2,
   },
   dateSection: {
     borderRadius: 14,
@@ -374,26 +430,5 @@ const styles = StyleSheet.create({
   dateValue: {
     fontSize: 14,
     fontWeight: "600",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 36,
-  },
-  nextButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 14,
-    gap: 8,
-  },
-  nextButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
   },
 });

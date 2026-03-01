@@ -18,9 +18,10 @@ module.exports = {
         strict: false,
       },
     }],
+    '^.+\\.jsx?$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(drizzle-orm)/)',
+    'node_modules/(?!(drizzle-orm|program-specification-language)/)',
   ],
   collectCoverageFrom: [
     'lib/**/*.{ts,tsx}',

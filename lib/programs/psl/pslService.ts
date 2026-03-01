@@ -22,7 +22,18 @@ export interface PslCompileResult {
   materialized?: MaterializedSession[];
 }
 
-export function compilePslSource(source: string): PslCompileResult {
+export type PslCompileOptions = {
+  calendarOverride?: {
+    start_date: string;
+    end_date?: string;
+  };
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function compilePslSource(source: string, options: PslCompileOptions = {}): PslCompileResult {
   let raw: unknown;
   try {
     raw = parseDocument(source);
@@ -37,6 +48,10 @@ export function compilePslSource(source: string): PslCompileResult {
     };
   }
 
+  if (options.calendarOverride && isRecord(raw)) {
+    raw.calendar = { ...options.calendarOverride };
+  }
+
   const validation: ValidationResult<ProgramAst> = validateAst(raw);
   if (!validation.valid || !validation.value) {
     return {
@@ -46,8 +61,26 @@ export function compilePslSource(source: string): PslCompileResult {
   }
 
   const ast = validation.value;
-  const compiled = compileProgram(ast);
-  const materialized = materialize(compiled);
+
+  let compiled: CompiledProgram;
+  let materialized: MaterializedSession[];
+  try {
+    compiled = compileProgram(ast);
+    materialized = materialize(compiled);
+  } catch (e) {
+    return {
+      valid: false,
+      diagnostics: [
+        ...validation.diagnostics,
+        {
+          path: "",
+          message: e instanceof Error ? e.message : String(e),
+          severity: "error",
+        },
+      ],
+      ast,
+    };
+  }
 
   return {
     valid: true,

@@ -13,22 +13,21 @@ import {
 import BaseModal from "../../components/modals/BaseModal";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
-  PSL_TEMPLATES,
-  TEMPLATE_CATEGORIES,
-  searchTemplates,
-  getTemplatesByCategory,
-  type PslTemplate,
-  type TemplateCategory,
+	PSL_TEMPLATES,
+	TEMPLATE_CATEGORIES,
+	searchTemplates,
+	getTemplatesByCategory,
+	type PslTemplate,
+	type TemplateCategory,
 } from "../../lib/programs/psl/pslTemplates";
-import { createPslProgram, activatePslProgram } from "../../lib/db/pslPrograms";
+import { createPslProgram } from "../../lib/db/pslPrograms";
+import { compilePslSource } from "../../lib/programs/psl/pslService";
 import {
-  insertCalendarEntries,
-  deleteCalendarForProgram,
-} from "../../lib/db/programCalendar";
-import {
-  compilePslSource,
-  extractCalendarEntries,
-} from "../../lib/programs/psl/pslService";
+  computeEndDateIso,
+  DEFAULT_ACTIVATION_WEEKS,
+  getDefaultActivationStartDateIso,
+} from "../../lib/programs/psl/activationDates";
+import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
 
 const CATEGORY_ICONS: Record<TemplateCategory, string> = {
   Beginner: "school-outline",
@@ -43,10 +42,11 @@ export default function TemplateBrowserScreen() {
   const { rawColors } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | null>(null);
-  const [previewTemplate, setPreviewTemplate] = useState<PslTemplate | null>(null);
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [showPslSource, setShowPslSource] = useState(false);
-  const [importing, setImporting] = useState(false);
+	  const [previewTemplate, setPreviewTemplate] = useState<PslTemplate | null>(null);
+	  const [previewVisible, setPreviewVisible] = useState(false);
+	  const [showPslSource, setShowPslSource] = useState(false);
+	  const [importing, setImporting] = useState(false);
+	  const [importError, setImportError] = useState("");
 
   const displayTemplates = useMemo(() => {
     if (searchQuery) return searchTemplates(searchQuery);
@@ -54,68 +54,101 @@ export default function TemplateBrowserScreen() {
     return PSL_TEMPLATES;
   }, [searchQuery, selectedCategory]);
 
-  const handlePreview = useCallback((template: PslTemplate) => {
-    setPreviewTemplate(template);
-    setShowPslSource(false);
-    setPreviewVisible(true);
-  }, []);
+	  const handlePreview = useCallback((template: PslTemplate) => {
+	    setPreviewTemplate(template);
+	    setShowPslSource(false);
+	    setImportError("");
+	    setPreviewVisible(true);
+	  }, []);
 
-  const handleImport = useCallback(async () => {
-    if (!previewTemplate) return;
-    setImporting(true);
+	  const handleAddToMyPrograms = useCallback(async () => {
+	    if (!previewTemplate) return;
+	    setImporting(true);
+	    setImportError("");
 
-    try {
-      const result = compilePslSource(previewTemplate.pslSource);
-      if (!result.valid) {
-        console.error("Template PSL invalid:", result.diagnostics);
-        setImporting(false);
-        return;
-      }
+	    try {
+	      await createPslProgram({
+	        name: previewTemplate.name,
+	        description: previewTemplate.description,
+	        pslSource: previewTemplate.pslSource,
+	        isActive: false,
+	      });
 
-      const program = await createPslProgram({
-        name: previewTemplate.name,
-        description: previewTemplate.description,
-        pslSource: previewTemplate.pslSource,
-        compiledHash: result.compiled?.source_hash,
-        isActive: true,
-        units: result.ast?.units ?? undefined,
-        startDate: result.ast?.calendar?.start_date ?? undefined,
-        endDate: result.ast?.calendar?.end_date ?? undefined,
-      });
+	      setPreviewVisible(false);
+	      setPreviewTemplate(null);
+	      router.replace("/programs/manage");
+	    } catch (error) {
+	      console.error("Error adding template:", error);
+	      setImportError(error instanceof Error ? error.message : "Failed to add template");
+	    } finally {
+	      setImporting(false);
+	    }
+	  }, [previewTemplate]);
 
-      if (result.materialized) {
-        const entries = extractCalendarEntries(result.materialized);
-        await insertCalendarEntries(program.id, entries);
-      }
+	  const handleActivateFromTemplate = useCallback(async () => {
+	    if (!previewTemplate) return;
+	    setImporting(true);
+	    setImportError("");
 
-      setPreviewVisible(false);
-      setPreviewTemplate(null);
-      router.dismissAll();
-      router.replace("/(tabs)/programs");
-    } catch (error) {
-      console.error("Error importing template:", error);
-    } finally {
-      setImporting(false);
-    }
-  }, [previewTemplate]);
+	    try {
+	      const program = await createPslProgram({
+	        name: previewTemplate.name,
+	        description: previewTemplate.description,
+	        pslSource: previewTemplate.pslSource,
+	        isActive: false,
+	      });
 
-  const handleModifyAndImport = useCallback(() => {
-    if (!previewTemplate) return;
-    setPreviewVisible(false);
-    router.push({
-      pathname: "/programs/create/basics",
-      params: {
-        templateName: previewTemplate.name,
-        pslSource: previewTemplate.pslSource,
-      },
-    });
-  }, [previewTemplate]);
+	      setPreviewVisible(false);
+	      setPreviewTemplate(null);
+	      router.replace({
+	        pathname: "/programs/manage",
+	        params: { activateProgramId: String(program.id) },
+	      });
+	    } catch (error) {
+	      console.error("Error activating template:", error);
+	      setImportError(error instanceof Error ? error.message : "Failed to activate template");
+	    } finally {
+	      setImporting(false);
+	    }
+	  }, [previewTemplate]);
 
-  // Parse template preview info
-  const previewInfo = useMemo(() => {
-    if (!previewTemplate) return null;
-    const result = compilePslSource(previewTemplate.pslSource);
-    if (!result.valid || !result.compiled) return null;
+	  const handleEditPsl = useCallback(() => {
+	    if (!previewTemplate) return;
+	    setPreviewVisible(false);
+	    router.push({
+	      pathname: "/programs/create/editor",
+	      params: {
+	        pslSource: previewTemplate.pslSource,
+	      },
+	    });
+	  }, [previewTemplate]);
+
+	  const previewCalendarOverride = useMemo(() => {
+	    if (!previewTemplate) return null;
+
+	    const startDateIso = getDefaultActivationStartDateIso();
+	    const introspection = introspectPslSource(previewTemplate.pslSource);
+
+	    if (!introspection.ok || !introspection.usesSchedule) return null;
+
+	    if (introspection.hasBlocks) {
+	      return { start_date: startDateIso };
+	    }
+
+	    return {
+	      start_date: startDateIso,
+	      end_date: computeEndDateIso(startDateIso, DEFAULT_ACTIVATION_WEEKS),
+	    };
+	  }, [previewTemplate]);
+
+	  // Parse template preview info
+	  const previewInfo = useMemo(() => {
+	    if (!previewTemplate) return null;
+	    const result = compilePslSource(
+	      previewTemplate.pslSource,
+	      previewCalendarOverride ? { calendarOverride: previewCalendarOverride } : {}
+	    );
+	    if (!result.valid || !result.compiled) return null;
 
     const sessions = result.compiled.sessions.map((s) => ({
       name: s.name,
@@ -135,8 +168,8 @@ export default function TemplateBrowserScreen() {
       })),
     }));
 
-    return { sessions, units: result.compiled.units };
-  }, [previewTemplate]);
+	    return { sessions, units: result.compiled.units };
+	  }, [previewTemplate, previewCalendarOverride]);
 
   const renderTemplate = useCallback(
     ({ item }: { item: PslTemplate }) => (
@@ -218,11 +251,12 @@ export default function TemplateBrowserScreen() {
       </View>
 
       {/* Category Chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryScroll}
-      >
+      <View style={styles.categoryContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
         <Pressable
           onPress={() => { setSelectedCategory(null); setSearchQuery(""); }}
           style={[
@@ -269,7 +303,8 @@ export default function TemplateBrowserScreen() {
             </Text>
           </Pressable>
         ))}
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* Template List */}
       <FlatList
@@ -316,11 +351,11 @@ export default function TemplateBrowserScreen() {
             </View>
 
             {/* Session Breakdown */}
-            {previewInfo && (
-              <View style={styles.sessionsPreview}>
-                <Text style={[styles.previewSectionTitle, { color: rawColors.foreground }]}>
-                  Sessions
-                </Text>
+	            {previewInfo && (
+	              <View style={styles.sessionsPreview}>
+	                <Text style={[styles.previewSectionTitle, { color: rawColors.foreground }]}>
+	                  Sessions
+	                </Text>
                 {previewInfo.sessions.map((session, i) => (
                   <View
                     key={i}
@@ -335,17 +370,24 @@ export default function TemplateBrowserScreen() {
                         style={[styles.sessionExercise, { color: rawColors.foregroundSecondary }]}
                         numberOfLines={1}
                       >
-                        {ex.name} · {ex.totalSets} sets
+                        {ex.name} - {ex.totalSets} sets
                       </Text>
                     ))}
                   </View>
                 ))}
-              </View>
-            )}
+	              </View>
+	            )}
 
-            {/* PSL Source (collapsible) */}
-            <Pressable
-              onPress={() => setShowPslSource(!showPslSource)}
+	            {previewCalendarOverride && (
+	              <Text style={[styles.previewHint, { color: rawColors.foregroundMuted }]}>
+	                Preview dates: {previewCalendarOverride.start_date}
+	                {"end_date" in previewCalendarOverride ? ` → ${previewCalendarOverride.end_date}` : ""}
+	              </Text>
+	            )}
+
+	            {/* PSL Source (collapsible) */}
+	            <Pressable
+	              onPress={() => setShowPslSource(!showPslSource)}
               style={styles.pslToggle}
             >
               <Text style={[styles.pslToggleText, { color: rawColors.foregroundSecondary }]}>
@@ -358,42 +400,64 @@ export default function TemplateBrowserScreen() {
               />
             </Pressable>
 
-            {showPslSource && (
-              <View style={[styles.pslSourceBox, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}>
-                <Text style={[styles.pslSourceText, { color: rawColors.foreground }]}>
-                  {previewTemplate.pslSource}
-                </Text>
-              </View>
-            )}
+	            {showPslSource && (
+	              <View style={[styles.pslSourceBox, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}>
+	                <Text style={[styles.pslSourceText, { color: rawColors.foreground }]}>
+	                  {previewTemplate.pslSource}
+	                </Text>
+	              </View>
+	            )}
 
-            {/* Action Buttons */}
-            <View style={styles.previewActions}>
-              <Pressable
-                onPress={handleImport}
-                disabled={importing}
-                style={({ pressed }) => [
-                  styles.importButton,
-                  {
-                    backgroundColor: rawColors.primary,
-                    opacity: pressed || importing ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons name="download" size={20} color={rawColors.primaryForeground} />
-                <Text style={[styles.importButtonText, { color: rawColors.primaryForeground }]}>
-                  {importing ? "Importing..." : "Import & Activate"}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleModifyAndImport}
-                style={[styles.modifyButton, { borderColor: rawColors.primary }]}
-              >
-                <MaterialCommunityIcons name="pencil" size={18} color={rawColors.primary} />
-                <Text style={[styles.modifyButtonText, { color: rawColors.primary }]}>
-                  Modify & Import
-                </Text>
-              </Pressable>
-            </View>
+	            {importError ? (
+	              <Text style={[styles.importError, { color: rawColors.destructive }]}>
+	                {importError}
+	              </Text>
+	            ) : null}
+
+	            {/* Action Buttons */}
+	            <View style={styles.previewActions}>
+	              <Pressable
+	                onPress={handleAddToMyPrograms}
+	                disabled={importing}
+	                className="flex-row items-center justify-center py-4 rounded-xl border border-primary bg-primary gap-2"
+	                style={({ pressed }) => ({ opacity: pressed || importing ? 0.7 : 1 })}
+	              >
+	                <MaterialCommunityIcons name="download" size={20} color={rawColors.primaryForeground} />
+	                <Text className="text-base font-semibold text-primary-foreground">
+	                  {importing ? "Adding..." : "Add to My Programs"}
+	                </Text>
+	              </Pressable>
+	              <View style={styles.secondaryActions}>
+	                <Pressable
+	                  onPress={handleActivateFromTemplate}
+	                  disabled={importing}
+	                  className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl border border-primary gap-1.5"
+	                  style={({ pressed }) => ({
+	                    backgroundColor: pressed ? rawColors.primary + "15" : "transparent",
+	                    opacity: importing ? 0.6 : 1,
+	                  })}
+	                >
+	                  <MaterialCommunityIcons name="play" size={18} color={rawColors.primary} />
+	                  <Text className="text-sm font-semibold" style={{ color: rawColors.primary }}>
+	                    Activate
+	                  </Text>
+	                </Pressable>
+	                <Pressable
+	                  onPress={handleEditPsl}
+	                  disabled={importing}
+	                  className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl border border-border gap-1.5"
+	                  style={({ pressed }) => ({
+	                    backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+	                    opacity: importing ? 0.6 : 1,
+	                  })}
+	                >
+	                  <MaterialCommunityIcons name="code-tags" size={18} color={rawColors.foregroundSecondary} />
+	                  <Text className="text-sm font-semibold" style={{ color: rawColors.foregroundSecondary }}>
+	                    Edit PSL
+	                  </Text>
+	                </Pressable>
+	              </View>
+	            </View>
           </ScrollView>
         )}
       </BaseModal>
@@ -424,16 +488,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     padding: 0,
   },
+  categoryContainer: {
+    paddingVertical: 8,
+  },
   categoryScroll: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
     gap: 8,
+    alignItems: "center",
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
     gap: 6,
@@ -441,6 +508,7 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontSize: 13,
     fontWeight: "600",
+    lineHeight: 18,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -509,14 +577,19 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 16,
   },
-  previewSectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  sessionsPreview: {
-    marginBottom: 16,
-  },
+	  previewSectionTitle: {
+	    fontSize: 15,
+	    fontWeight: "700",
+	    marginBottom: 10,
+	  },
+	  previewHint: {
+	    fontSize: 12,
+	    marginTop: 6,
+	    marginBottom: 6,
+	  },
+	  sessionsPreview: {
+	    marginBottom: 16,
+	  },
   sessionCard: {
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
@@ -549,39 +622,24 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
   },
-  pslSourceText: {
-    fontSize: 11,
-    fontFamily: "monospace",
-    lineHeight: 16,
-  },
-  previewActions: {
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  importButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  importButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  modifyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    gap: 6,
-  },
-  modifyButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-});
+	  pslSourceText: {
+	    fontSize: 11,
+	    fontFamily: "monospace",
+	    lineHeight: 16,
+	  },
+	  importError: {
+	    marginTop: 10,
+	    marginBottom: 6,
+	    fontSize: 13,
+	    fontWeight: "600",
+	  },
+	  previewActions: {
+	    gap: 10,
+	    marginTop: 8,
+	    marginBottom: 16,
+	  },
+	  secondaryActions: {
+	    flexDirection: "row",
+	    gap: 10,
+	  },
+	});

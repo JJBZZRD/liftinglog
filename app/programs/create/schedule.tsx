@@ -1,9 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,14 +12,14 @@ import {
 } from "react-native";
 import BaseModal from "../../../components/modals/BaseModal";
 import { useTheme } from "../../../lib/theme/ThemeContext";
-import { listExercises, type Exercise } from "../../../lib/db/exercises";
-import { createPslProgram, activatePslProgram } from "../../../lib/db/pslPrograms";
-import { insertCalendarEntries, deleteCalendarForProgram } from "../../../lib/db/programCalendar";
+import { createPslProgram } from "../../../lib/db/pslPrograms";
+import { compilePslSource } from "../../../lib/programs/psl/pslService";
+import { generatePslFromConfig } from "../../../lib/programs/psl/pslGenerator";
 import {
-  compilePslSource,
-  extractCalendarEntries,
-} from "../../../lib/programs/psl/pslService";
-import { generatePslFromConfig, createId } from "../../../lib/programs/psl/pslGenerator";
+  computeEndDateIso,
+  DEFAULT_ACTIVATION_WEEKS,
+  getDefaultActivationStartDateIso,
+} from "../../../lib/programs/psl/activationDates";
 import type { Weekday } from "program-specification-language";
 
 const WEEKDAYS: { key: Weekday; label: string; short: string }[] = [
@@ -56,83 +54,61 @@ interface DayExercise {
 type DaySchedule = Record<Weekday, DayExercise[]>;
 
 export default function ProgramScheduleScreen() {
-  const { rawColors } = useTheme();
-  const params = useLocalSearchParams<{
-    name: string;
-    description: string;
-    units: string;
-    useCalendar: string;
-    startDate: string;
-    endDate: string;
-    pslSource: string;
-  }>();
+	const { rawColors } = useTheme();
+	const params = useLocalSearchParams<{
+	    name?: string;
+	    description?: string;
+	    units?: string;
+	}>();
 
-  const programName = params.name ?? "Program";
-  const programDesc = params.description ?? "";
-  const programUnits = (params.units as "kg" | "lb") ?? "kg";
-  const useCalendar = params.useCalendar === "1";
-  const startDate = params.startDate ?? "";
-  const endDate = params.endDate ?? "";
+	const programName = params.name ?? "Program";
+	const programDesc = params.description ?? "";
+	const programUnits = (params.units as "kg" | "lb") ?? "kg";
 
   const [selectedDay, setSelectedDay] = useState<Weekday>("MON");
   const [daySchedule, setDaySchedule] = useState<DaySchedule>({
     MON: [], TUE: [], WED: [], THU: [], FRI: [], SAT: [], SUN: [],
   });
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [allExercises, setAllExercises] = useState<Exercise[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedExercises, setSelectedExercises] = useState<Set<number>>(new Set());
   const [exerciseConfigVisible, setExerciseConfigVisible] = useState(false);
   const [configTarget, setConfigTarget] = useState<{ day: Weekday; index: number } | null>(null);
-  const [activateNow, setActivateNow] = useState(true);
+  const [activateNow, setActivateNow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useFocusEffect(
-    useCallback(() => {
-      listExercises().then(setAllExercises).catch(console.error);
-    }, [])
-  );
+  // Register global callback for the exercise picker page
+  useEffect(() => {
+    (globalThis as any).__exercisePickerCallback = (
+      exercises: { id: number; name: string }[],
+      day: string
+    ) => {
+      const weekday = day as Weekday;
+      const newExercises: DayExercise[] = exercises.map((ex) => ({
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        sets: [{ count: 3, reps: "5", intensity: "", intensityType: "none", role: "work", progression: "" }],
+      }));
+      setDaySchedule((prev) => ({
+        ...prev,
+        [weekday]: [...prev[weekday], ...newExercises],
+      }));
+    };
+    return () => {
+      delete (globalThis as any).__exercisePickerCallback;
+    };
+  }, []);
 
   const currentDayExercises = daySchedule[selectedDay];
   const totalExercises = Object.values(daySchedule).reduce((sum, exs) => sum + exs.length, 0);
   const daysWithExercises = Object.entries(daySchedule).filter(([, exs]) => exs.length > 0).length;
 
-  const filteredExercises = useMemo(() => {
-    if (!searchQuery) return allExercises;
-    const q = searchQuery.toLowerCase();
-    return allExercises.filter((e) => e.name.toLowerCase().includes(q));
-  }, [allExercises, searchQuery]);
-
-  const toggleExerciseSelection = useCallback((id: number) => {
-    setSelectedExercises((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const handleOpenExercisePicker = useCallback(() => {
+    const existingIds = currentDayExercises.map((e) => e.exerciseId).join(",");
+    const dayLabel = WEEKDAYS.find((w) => w.key === selectedDay)?.label ?? selectedDay;
+    router.push({
+      pathname: "/programs/create/exercise-picker",
+      params: { day: selectedDay, dayLabel, existingIds },
     });
-  }, []);
-
-  const handleAddSelectedExercises = useCallback(() => {
-    const newExercises: DayExercise[] = [];
-    for (const id of selectedExercises) {
-      const ex = allExercises.find((e) => e.id === id);
-      if (ex) {
-        newExercises.push({
-          exerciseId: ex.id,
-          exerciseName: ex.name,
-          sets: [{ count: 3, reps: "5", intensity: "", intensityType: "none", role: "work", progression: "" }],
-        });
-      }
-    }
-    setDaySchedule((prev) => ({
-      ...prev,
-      [selectedDay]: [...prev[selectedDay], ...newExercises],
-    }));
-    setSelectedExercises(new Set());
-    setSearchQuery("");
-    setPickerVisible(false);
-  }, [selectedExercises, allExercises, selectedDay]);
+  }, [selectedDay, currentDayExercises]);
 
   const handleRemoveExercise = useCallback((day: Weekday, index: number) => {
     setDaySchedule((prev) => ({
@@ -160,21 +136,19 @@ export default function ProgramScheduleScreen() {
     [configTarget]
   );
 
-  const buildPslAndSave = useCallback(async () => {
-    setSaving(true);
-    setErrorMessage("");
+	  const buildPslAndSave = useCallback(async () => {
+	    setSaving(true);
+	    setErrorMessage("");
 
-    try {
-      const config = {
-        name: programName,
-        description: programDesc || undefined,
-        units: programUnits,
-        startDate: useCalendar && startDate ? startDate : undefined,
-        endDate: useCalendar && endDate ? endDate : undefined,
-        days: WEEKDAYS
-          .filter((wd) => daySchedule[wd.key].length > 0)
-          .map((wd) => ({
-            day: wd.key,
+	    try {
+	      const config = {
+	        name: programName,
+	        description: programDesc || undefined,
+	        units: programUnits,
+	        days: WEEKDAYS
+	          .filter((wd) => daySchedule[wd.key].length > 0)
+	          .map((wd) => ({
+	            day: wd.key,
             exercises: daySchedule[wd.key].map((ex) => ({
               exerciseName: ex.exerciseName,
               sets: ex.sets.map((s) => {
@@ -225,47 +199,50 @@ export default function ProgramScheduleScreen() {
           })),
       };
 
-      const pslSource = generatePslFromConfig(config);
+	      const pslSource = generatePslFromConfig(config);
 
-      // Validate the generated PSL
-      const result = compilePslSource(pslSource);
-      if (!result.valid) {
-        const errors = result.diagnostics
-          .filter((d) => d.severity === "error")
-          .map((d) => d.message)
+	      // Validate the generated PSL
+	      const previewStartIso = getDefaultActivationStartDateIso();
+	      const override = {
+	        start_date: previewStartIso,
+	        end_date: computeEndDateIso(previewStartIso, DEFAULT_ACTIVATION_WEEKS),
+	      };
+	      const result = compilePslSource(pslSource, { calendarOverride: override });
+	      if (!result.valid) {
+	        const errors = result.diagnostics
+	          .filter((d) => d.severity === "error")
+	          .map((d) => d.message)
           .join("\n");
         setErrorMessage(errors || "Invalid program configuration");
         setSaving(false);
         return;
       }
 
-      // Save to database
-      const program = await createPslProgram({
-        name: programName,
-        description: programDesc || undefined,
-        pslSource,
-        compiledHash: result.compiled?.source_hash,
-        isActive: activateNow,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        units: programUnits,
-      });
+	      // Save to database
+	      const program = await createPslProgram({
+	        name: programName,
+	        description: programDesc || undefined,
+	        pslSource,
+	        units: programUnits,
+	        isActive: false,
+	      });
 
-      // Materialize calendar if activating
-      if (activateNow && result.materialized) {
-        const entries = extractCalendarEntries(result.materialized);
-        await insertCalendarEntries(program.id, entries);
-      }
-
-      router.dismissAll();
-      router.replace("/(tabs)/programs");
-    } catch (error) {
-      console.error("Error saving program:", error);
-      setErrorMessage(error instanceof Error ? error.message : "Failed to save program");
-    } finally {
-      setSaving(false);
-    }
-  }, [programName, programDesc, programUnits, useCalendar, startDate, endDate, daySchedule, activateNow]);
+	      router.dismissAll();
+	      if (activateNow) {
+	        router.replace({
+	          pathname: "/programs/manage",
+	          params: { activateProgramId: String(program.id) },
+	        });
+	      } else {
+	        router.replace("/programs/manage");
+	      }
+	    } catch (error) {
+	      console.error("Error saving program:", error);
+	      setErrorMessage(error instanceof Error ? error.message : "Failed to save program");
+	    } finally {
+	      setSaving(false);
+	    }
+	  }, [programName, programDesc, programUnits, daySchedule, activateNow]);
 
   const configExercise = configTarget
     ? daySchedule[configTarget.day][configTarget.index]
@@ -357,7 +334,9 @@ export default function ProgramScheduleScreen() {
               ]}
             >
               <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
-                <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                <Text style={[styles.alphabetText, { color: rawColors.primaryForeground }]}>
+                  {getAlphabetLetter(index)}
+                </Text>
               </View>
               <View style={styles.exerciseItemInfo}>
                 <Text
@@ -394,7 +373,7 @@ export default function ProgramScheduleScreen() {
 
         {/* Add Exercise Button */}
         <Pressable
-          onPress={() => setPickerVisible(true)}
+          onPress={handleOpenExercisePicker}
           style={[styles.addExerciseButton, { borderColor: rawColors.primary }]}
         >
           <MaterialCommunityIcons name="plus" size={20} color={rawColors.primary} />
@@ -404,19 +383,24 @@ export default function ProgramScheduleScreen() {
         </Pressable>
 
         {/* Save Section */}
-        {totalExercises > 0 && (
-          <View style={styles.saveSection}>
-            <View style={[styles.toggleRow, { borderColor: rawColors.borderLight }]}>
-              <Text style={[styles.toggleTitle, { color: rawColors.foreground }]}>
-                Activate Now
-              </Text>
-              <Switch
-                value={activateNow}
-                onValueChange={setActivateNow}
-                trackColor={{ false: rawColors.borderLight, true: rawColors.primary + "60" }}
-                thumbColor={activateNow ? rawColors.primary : rawColors.foregroundMuted}
-              />
-            </View>
+	        {totalExercises > 0 && (
+	          <View style={styles.saveSection}>
+	            <View style={[styles.toggleRow, { borderColor: rawColors.borderLight }]}>
+	              <View style={{ flex: 1 }}>
+	                <Text style={[styles.toggleTitle, { color: rawColors.foreground }]}>
+	                  Activate after saving
+	                </Text>
+	                <Text style={[styles.toggleDesc, { color: rawColors.foregroundMuted }]}>
+	                  {"You'll choose activation dates next."}
+	                </Text>
+	              </View>
+	              <Switch
+	                value={activateNow}
+	                onValueChange={setActivateNow}
+	                trackColor={{ false: rawColors.borderLight, true: rawColors.primary + "60" }}
+	                thumbColor={activateNow ? rawColors.primary : rawColors.foregroundMuted}
+	              />
+	            </View>
 
             {errorMessage ? (
               <Text style={[styles.errorText, { color: rawColors.destructive }]}>
@@ -427,79 +411,20 @@ export default function ProgramScheduleScreen() {
             <Pressable
               onPress={buildPslAndSave}
               disabled={saving}
-              style={({ pressed }) => [
-                styles.saveButton,
-                {
-                  backgroundColor: rawColors.primary,
-                  opacity: pressed || saving ? 0.7 : 1,
-                },
-              ]}
+              className="items-center justify-center py-4 rounded-xl border border-primary bg-primary"
+              style={({ pressed }) => ({ opacity: pressed || saving ? 0.7 : 1 })}
             >
-              <Text style={[styles.saveButtonText, { color: rawColors.primaryForeground }]}>
+              <Text className="text-base font-semibold text-primary-foreground">
                 {saving ? "Saving..." : "Save Program"}
               </Text>
             </Pressable>
 
             <Text style={[styles.summaryText, { color: rawColors.foregroundMuted }]}>
-              {daysWithExercises} day{daysWithExercises !== 1 ? "s" : ""} / week · {totalExercises} total exercise{totalExercises !== 1 ? "s" : ""}
+              {daysWithExercises} day{daysWithExercises !== 1 ? "s" : ""} / week - {totalExercises} total exercise{totalExercises !== 1 ? "s" : ""}
             </Text>
           </View>
         )}
       </ScrollView>
-
-      {/* Exercise Picker Modal */}
-      <BaseModal visible={pickerVisible} onClose={() => { setPickerVisible(false); setSelectedExercises(new Set()); setSearchQuery(""); }}>
-        <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>
-          Add Exercises
-        </Text>
-        <TextInput
-          style={[styles.searchInput, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight, color: rawColors.foreground }]}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search exercises..."
-          placeholderTextColor={rawColors.foregroundMuted}
-        />
-        <FlatList
-          data={filteredExercises}
-          keyExtractor={(item) => String(item.id)}
-          style={styles.pickerList}
-          renderItem={({ item }) => {
-            const isSelected = selectedExercises.has(item.id);
-            return (
-              <Pressable
-                onPress={() => toggleExerciseSelection(item.id)}
-                style={[
-                  styles.pickerItem,
-                  {
-                    backgroundColor: isSelected ? rawColors.primary + "15" : "transparent",
-                    borderColor: isSelected ? rawColors.primary + "40" : rawColors.borderLight,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.pickerItemName, { color: rawColors.foreground }]}
-                  numberOfLines={1}
-                >
-                  {item.name}
-                </Text>
-                {isSelected && (
-                  <MaterialCommunityIcons name="check-circle" size={22} color={rawColors.primary} />
-                )}
-              </Pressable>
-            );
-          }}
-        />
-        {selectedExercises.size > 0 && (
-          <Pressable
-            onPress={handleAddSelectedExercises}
-            style={[styles.addSelectedButton, { backgroundColor: rawColors.primary }]}
-          >
-            <Text style={[styles.addSelectedText, { color: rawColors.primaryForeground }]}>
-              Add {selectedExercises.size} Exercise{selectedExercises.size !== 1 ? "s" : ""}
-            </Text>
-          </Pressable>
-        )}
-      </BaseModal>
 
       {/* Exercise Config Modal */}
       <BaseModal
@@ -519,7 +444,7 @@ export default function ProgramScheduleScreen() {
   );
 }
 
-// ── Inline Exercise Config Editor ─────────────────────────
+// Inline Exercise Config Editor
 
 interface ExerciseConfigEditorProps {
   exercise: DayExercise;
@@ -800,7 +725,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   alphabetText: {
-    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -846,64 +770,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
+  toggleDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   errorText: {
     fontSize: 13,
     marginBottom: 12,
-  },
-  saveButton: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
   },
   summaryText: {
     fontSize: 13,
     textAlign: "center",
     marginTop: 4,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    marginBottom: 10,
-  },
-  pickerList: {
-    maxHeight: 300,
-  },
-  pickerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 4,
-  },
-  pickerItemName: {
-    fontSize: 15,
-    fontWeight: "500",
-    flex: 1,
-  },
-  addSelectedButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  addSelectedText: {
-    fontSize: 15,
-    fontWeight: "700",
   },
 });

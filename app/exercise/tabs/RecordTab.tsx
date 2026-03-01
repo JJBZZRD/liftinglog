@@ -456,32 +456,33 @@ export default function RecordTab({ onHistoryRefresh }: RecordTabProps) {
     closeClearConfirm();
     await loadWorkout();
     onHistoryRefresh?.();
-  }, [
-    workoutExerciseId,
-    clearMediaChecked,
-    clearMediaAvailable,
-    clearMediaSetIds,
-    closeClearConfirm,
-    loadWorkout,
-    onHistoryRefresh,
-  ]);
+	  }, [
+	    workoutExerciseId,
+	    clearMediaChecked,
+	    clearMediaAvailable,
+	    clearMediaSetIds,
+	    closeClearConfirm,
+	    loadWorkout,
+	    onHistoryRefresh,
+	  ]);
 
-  if (!exerciseId) {
-    return (
-      <View className="flex-1 items-center justify-center p-4 bg-background">
-        <Text className="text-base text-destructive">Invalid exercise ID</Text>
+	  // Confirm a planned set — strip the [PLANNED] marker from its note
+	  const handleConfirmPlannedSet = useCallback(async (setItem: SetRow) => {
+	    const cleanNote = (setItem.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null;
+	    await updateSet(setItem.id, { note: cleanNote });
+	    await refreshSets();
+	    onHistoryRefresh?.();
+	  }, [refreshSets, onHistoryRefresh]);
+
+	  if (!exerciseId) {
+	    return (
+	      <View className="flex-1 items-center justify-center p-4 bg-background">
+	        <Text className="text-base text-destructive">Invalid exercise ID</Text>
       </View>
     );
   }
 
   // Confirm a planned set â€” strip the [PLANNED] marker from its note
-  const handleConfirmPlannedSet = useCallback(async (setItem: SetRow) => {
-    const cleanNote = (setItem.note ?? "").replace(/^\[PLANNED\]\s*/, "").trim() || null;
-    await updateSet(setItem.id, { note: cleanNote });
-    await refreshSets();
-    onHistoryRefresh?.();
-  }, [refreshSets, onHistoryRefresh]);
-
   const renderSetItem = ({ item, index }: { item: SetRow; index: number }) => {
     const isPlanned = (item.note ?? "").startsWith("[PLANNED]");
     const displayNote = isPlanned

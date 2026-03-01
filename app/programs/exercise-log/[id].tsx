@@ -3,7 +3,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-  FlatList,
   Keyboard,
   Pressable,
   ScrollView,
@@ -37,14 +36,10 @@ import {
 } from "../../../lib/db/workouts";
 import { getExerciseByName } from "../../../lib/db/exercises";
 import {
-  formatIntensity,
-  formatReps,
-  getIntensityInputMode,
   getIntensityDefaultValue,
   getIntensityUnit,
 } from "../../../lib/programs/psl/pslMapper";
 import {
-  formatWeightFromKg,
   parseWeightInputToKg,
   getWeightUnitLabel,
   formatEditableWeightFromKg,
@@ -60,8 +55,6 @@ export default function ProgramExerciseLogScreen() {
   const [exerciseName, setExerciseName] = useState("");
   const [prescribedSets, setPrescribedSets] = useState<ProgramCalendarSetRow[]>([]);
   const [userSets, setUserSets] = useState<ProgramCalendarSetRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Per-set input state: keyed by set id
   const [weightInputs, setWeightInputs] = useState<Record<number, string>>({});
   const [repsInputs, setRepsInputs] = useState<Record<number, string>>({});
@@ -93,7 +86,6 @@ export default function ProgramExerciseLogScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
       const calEx = await getCalendarExerciseById(calendarExerciseId);
       if (!calEx) return;
 
@@ -136,8 +128,6 @@ export default function ProgramExerciseLogScreen() {
       setRepsInputs(rInputs);
     } catch (error) {
       console.error("Error loading exercise data:", error);
-    } finally {
-      setLoading(false);
     }
   }, [calendarExerciseId, unitPreference]);
 
@@ -315,7 +305,6 @@ export default function ProgramExerciseLogScreen() {
       const isFilled = wVal.length > 0 && rVal.length > 0;
       const isLogged = set.isLogged;
 
-      let intensityLabel = "";
       let intensityUnit = "";
       if (set.prescribedIntensityJson) {
         try {
@@ -358,9 +347,15 @@ export default function ProgramExerciseLogScreen() {
             ]}
           >
             {isLogged ? (
-              <MaterialCommunityIcons name="check" size={14} color="#FFFFFF" />
+              <MaterialCommunityIcons
+                name="check"
+                size={14}
+                color={rawColors.primaryForeground}
+              />
             ) : (
-              <Text style={styles.setNumberText}>{index + 1}</Text>
+              <Text style={[styles.setNumberText, { color: rawColors.primaryForeground }]}>
+                {index + 1}
+              </Text>
             )}
           </View>
 
@@ -451,7 +446,9 @@ export default function ProgramExerciseLogScreen() {
           ]}
         >
           <View style={[styles.setNumber, { backgroundColor: rawColors.foregroundSecondary }]}>
-            <Text style={styles.setNumberText}>+{index + 1}</Text>
+            <Text style={[styles.setNumberText, { color: rawColors.primaryForeground }]}>
+              +{index + 1}
+            </Text>
           </View>
 
           <View style={styles.setInputs}>
@@ -599,9 +596,10 @@ export default function ProgramExerciseLogScreen() {
             </View>
             <Pressable
               onPress={handleAddUserSet}
-              style={[styles.addSetButton, { backgroundColor: rawColors.primary }]}
+              className="items-center justify-center py-3 rounded-xl border border-primary bg-primary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
-              <Text style={[styles.addSetButtonText, { color: rawColors.primaryForeground }]}>
+              <Text className="text-base font-semibold text-primary-foreground">
                 Add Set
               </Text>
             </Pressable>
@@ -628,29 +626,31 @@ export default function ProgramExerciseLogScreen() {
       </ScrollView>
 
       {/* Complete Exercise Footer */}
-      <View style={[styles.footer, { backgroundColor: rawColors.background }]}>
+      <View
+        className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
+        style={{
+          shadowColor: rawColors.shadow,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          elevation: 8,
+        }}
+      >
         {allPrescribedComplete ? (
-          <View
-            style={[styles.footerButton, { backgroundColor: rawColors.surfaceSecondary }]}
-          >
+          <View className="flex-row items-center justify-center py-4 rounded-xl border border-border bg-surface-secondary">
             <MaterialCommunityIcons name="check-circle" size={22} color={rawColors.success} />
-            <Text style={[styles.footerButtonText, { color: rawColors.foregroundSecondary }]}>
+            <Text className="ml-2 text-base font-semibold text-foreground-secondary">
               Exercise Complete
             </Text>
           </View>
         ) : (
           <Pressable
             onPress={() => setCompleteModalVisible(true)}
-            style={({ pressed }) => [
-              styles.footerButton,
-              {
-                backgroundColor: rawColors.primary,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
+            className="flex-row items-center justify-center py-4 rounded-xl border border-primary bg-primary"
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <MaterialCommunityIcons name="check" size={22} color={rawColors.primaryForeground} />
-            <Text style={[styles.footerButtonText, { color: rawColors.primaryForeground }]}>
+            <Text className="ml-2 text-base font-semibold text-primary-foreground">
               Complete Exercise
             </Text>
           </Pressable>
@@ -663,7 +663,7 @@ export default function ProgramExerciseLogScreen() {
           Complete Exercise?
         </Text>
         <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary }]}>
-          Some programmed sets haven't been filled in yet. Are you sure you want to log this exercise as complete?
+          Some programmed sets have not been filled in yet. Are you sure you want to log this exercise as complete?
         </Text>
         <View style={styles.modalButtons}>
           <Pressable
@@ -737,15 +737,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  addSetButton: {
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  addSetButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
   userSetsSection: {
     marginTop: 12,
     marginBottom: 4,
@@ -786,7 +777,6 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   setNumberText: {
-    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -830,27 +820,6 @@ const styles = StyleSheet.create({
   deleteSetButton: {
     marginLeft: 8,
     padding: 2,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 36,
-  },
-  footerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 14,
-    gap: 8,
-  },
-  footerButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
   },
   modalTitle: {
     fontSize: 20,

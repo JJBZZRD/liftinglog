@@ -74,6 +74,10 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen
+          name="programs/create/exercise-picker"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
           name="programs/templates"
           options={{ presentation: "card" }}
         />

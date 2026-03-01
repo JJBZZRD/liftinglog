@@ -9,6 +9,7 @@ import {
   getDateIsoToday,
   formatDateForDisplay,
 } from "../../lib/programs/psl/pslService";
+import { computeEndDateIso } from "../../lib/programs/psl/activationDates";
 import {
   formatIntensity,
   formatReps,
@@ -78,8 +79,8 @@ sessions:
     expect(result.compiled!.sessions[0].exercises[0].sets.length).toBe(3);
   });
 
-  it("should compile weekday schedule with calendar", () => {
-    const source = `
+	  it("should compile weekday schedule with calendar", () => {
+	    const source = `
 language_version: "0.2"
 metadata:
   id: weekly-test
@@ -94,12 +95,63 @@ sessions:
     exercises:
       - "Barbell Bench Press: 5x5 @75%"
 `;
-    const result = compilePslSource(source);
-    expect(result.valid).toBe(true);
-    expect(result.materialized!.length).toBeGreaterThan(0);
-    expect(result.materialized![0].date_iso).toBeDefined();
-  });
-});
+	    const result = compilePslSource(source);
+	    expect(result.valid).toBe(true);
+	    expect(result.materialized!.length).toBeGreaterThan(0);
+	    expect(result.materialized![0].date_iso).toBeDefined();
+	  });
+
+	  it("should compile a schedule-based template without calendar using calendarOverride", () => {
+	    const source = `
+language_version: "0.2"
+metadata:
+  id: weekly-no-calendar
+  name: Weekly No Calendar
+sessions:
+  - id: mon
+    name: Monday
+    schedule: "MON"
+    exercises:
+      - "Barbell Bench Press: 5x5 @75%"
+`;
+
+	    const noOverride = compilePslSource(source);
+	    expect(noOverride.valid).toBe(false);
+
+	    const withOverride = compilePslSource(source, {
+	      calendarOverride: { start_date: "2026-03-02", end_date: "2026-03-22" },
+	    });
+	    expect(withOverride.valid).toBe(true);
+	    expect(withOverride.ast?.calendar?.start_date).toBe("2026-03-02");
+	    expect(withOverride.ast?.calendar?.end_date).toBe("2026-03-22");
+	    expect(withOverride.materialized![0].date_iso).toBeDefined();
+	  });
+
+	  it("calendarOverride should take precedence over embedded calendar", () => {
+	    const source = `
+language_version: "0.2"
+metadata:
+  id: override-test
+  name: Override Test
+calendar:
+  start_date: "2026-01-01"
+  end_date: "2026-01-07"
+sessions:
+  - id: mon
+    name: Monday
+    schedule: "MON"
+    exercises:
+      - "Barbell Bench Press: 5x5 @75%"
+`;
+
+	    const result = compilePslSource(source, {
+	      calendarOverride: { start_date: "2026-03-02", end_date: "2026-03-22" },
+	    });
+	    expect(result.valid).toBe(true);
+	    expect(result.ast?.calendar?.start_date).toBe("2026-03-02");
+	    expect(result.ast?.calendar?.end_date).toBe("2026-03-22");
+	  });
+	});
 
 // ============================================================================
 // Calendar Extraction Tests
@@ -201,5 +253,14 @@ describe("Date Utilities", () => {
     const result = formatDateForDisplay("2026-01-15");
     expect(result).not.toBe("Today");
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("computeEndDateIso should compute an inclusive end date", () => {
+    expect(computeEndDateIso("2026-03-02", 1)).toBe("2026-03-08");
+    expect(computeEndDateIso("2026-03-02", 2)).toBe("2026-03-15");
+  });
+
+  it("computeEndDateIso should throw for invalid weeks", () => {
+    expect(() => computeEndDateIso("2026-03-02", 0)).toThrow();
   });
 });

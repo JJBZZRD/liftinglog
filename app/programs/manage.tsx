@@ -1,22 +1,25 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFocusEffect } from "@react-navigation/native";
-import { router, Stack } from "expo-router";
-import { useCallback, useState } from "react";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  FlatList,
+  Platform,
   Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import BaseModal from "../../components/modals/BaseModal";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
   listPslPrograms,
-  activatePslProgram,
   deactivatePslProgram,
   deletePslProgram,
+  updatePslProgram,
   type PslProgramRow,
 } from "../../lib/db/pslPrograms";
 import {
@@ -27,15 +30,33 @@ import {
   compilePslSource,
   extractCalendarEntries,
 } from "../../lib/programs/psl/pslService";
+import {
+  computeEndDateIso,
+  dateToIsoLocal,
+  DEFAULT_ACTIVATION_WEEKS,
+  getDefaultActivationStartDateIso,
+  isoToDateLocal,
+} from "../../lib/programs/psl/activationDates";
+import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
+import { getPslCompatibilityWarnings } from "../../lib/programs/psl/pslCompatibility";
 
 export default function ManageProgramsScreen() {
   const { rawColors } = useTheme();
+  const params = useLocalSearchParams<{ activateProgramId?: string }>();
   const [programs, setPrograms] = useState<PslProgramRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [actionProgram, setActionProgram] = useState<PslProgramRow | null>(null);
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
+  const [activateModalVisible, setActivateModalVisible] = useState(false);
+  const [activateProgram, setActivateProgram] = useState<PslProgramRow | null>(null);
+  const [activationStartDate, setActivationStartDate] = useState<Date>(isoToDateLocal(getDefaultActivationStartDateIso()));
+  const [activationWeeks, setActivationWeeks] = useState(DEFAULT_ACTIVATION_WEEKS);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState("");
 
   const loadData = useCallback(async () => {
     try {
@@ -55,6 +76,22 @@ export default function ManageProgramsScreen() {
     }, [loadData])
   );
 
+  const handledActivateParam = useRef<string | null>(null);
+  useEffect(() => {
+    if (!params.activateProgramId) return;
+    if (handledActivateParam.current === params.activateProgramId) return;
+    const targetId = parseInt(params.activateProgramId, 10);
+    if (!Number.isFinite(targetId)) return;
+    const program = programs.find((p) => p.id === targetId);
+    if (!program) return;
+    handledActivateParam.current = params.activateProgramId;
+    setActivateProgram(program);
+    setActivationStartDate(program.startDate ? isoToDateLocal(program.startDate) : isoToDateLocal(getDefaultActivationStartDateIso()));
+    setActivationWeeks(DEFAULT_ACTIVATION_WEEKS);
+    setActivationError("");
+    setActivateModalVisible(true);
+  }, [params.activateProgramId, programs]);
+
   const activePrograms = programs.filter((p) => p.isActive);
   const inactivePrograms = programs.filter((p) => !p.isActive);
 
@@ -63,28 +100,106 @@ export default function ManageProgramsScreen() {
     { title: "All Programs", data: inactivePrograms },
   ];
 
-  const handleToggleActive = useCallback(
+  const handleDeactivate = useCallback(
     async (program: PslProgramRow) => {
       setActionModalVisible(false);
       setActionProgram(null);
-
-      if (program.isActive) {
-        await deactivatePslProgram(program.id);
-        await deleteCalendarForProgram(program.id);
-      } else {
-        await activatePslProgram(program.id);
-        // Re-materialize calendar
-        const result = compilePslSource(program.pslSource);
-        if (result.valid && result.materialized) {
-          const entries = extractCalendarEntries(result.materialized);
-          await deleteCalendarForProgram(program.id);
-          await insertCalendarEntries(program.id, entries);
-        }
-      }
+      await deactivatePslProgram(program.id);
+      await deleteCalendarForProgram(program.id);
       await loadData();
     },
     [loadData]
   );
+
+  const handleOpenActivate = useCallback((program: PslProgramRow) => {
+    setActionModalVisible(false);
+    setActionProgram(null);
+    setActivateProgram(program);
+    setActivationStartDate(program.startDate ? isoToDateLocal(program.startDate) : isoToDateLocal(getDefaultActivationStartDateIso()));
+    setActivationWeeks(DEFAULT_ACTIVATION_WEEKS);
+    setActivationError("");
+    setActivateModalVisible(true);
+  }, []);
+
+  const activationInfo = useMemo(() => {
+    if (!activateProgram) return null;
+    return introspectPslSource(activateProgram.pslSource);
+  }, [activateProgram]);
+
+  const activationStartIso = useMemo(() => dateToIsoLocal(activationStartDate), [activationStartDate]);
+
+  const requiresHorizonWeeks = useMemo(() => {
+    if (!activationInfo || !activationInfo.ok) return true;
+    return activationInfo.usesSchedule && !activationInfo.hasBlocks;
+  }, [activationInfo]);
+
+  const derivedEndIso = useMemo(() => {
+    if (!activationInfo || !activationInfo.ok) {
+      return requiresHorizonWeeks ? computeEndDateIso(activationStartIso, activationWeeks) : null;
+    }
+
+    if (activationInfo.hasBlocks) {
+      if (!activationInfo.totalBlockDays) return null;
+      const startUtc = new Date(`${activationStartIso}T00:00:00Z`);
+      const endUtc = new Date(startUtc);
+      endUtc.setUTCDate(endUtc.getUTCDate() + activationInfo.totalBlockDays - 1);
+      return endUtc.toISOString().slice(0, 10);
+    }
+
+    if (requiresHorizonWeeks) {
+      return computeEndDateIso(activationStartIso, activationWeeks);
+    }
+
+    return null;
+  }, [activationInfo, activationStartIso, activationWeeks, requiresHorizonWeeks]);
+
+  const compatibilityWarnings = useMemo(() => {
+    if (!activateProgram) return [];
+    const override = { start_date: activationStartIso, ...(derivedEndIso ? { end_date: derivedEndIso } : {}) };
+    const result = compilePslSource(activateProgram.pslSource, { calendarOverride: override });
+    if (!result.ast) return [];
+    return getPslCompatibilityWarnings(result.ast);
+  }, [activateProgram, activationStartIso, derivedEndIso]);
+
+  const handleConfirmActivate = useCallback(async () => {
+    if (!activateProgram) return;
+    setActivationError("");
+    setActivating(true);
+
+    try {
+      const override = { start_date: activationStartIso, ...(requiresHorizonWeeks && derivedEndIso ? { end_date: derivedEndIso } : {}) };
+      const result = compilePslSource(activateProgram.pslSource, { calendarOverride: override });
+      if (!result.valid || !result.materialized) {
+        const errors = result.diagnostics
+          .filter((d) => d.severity === "error")
+          .map((d) => d.message)
+          .join("\n");
+        setActivationError(errors || "Program could not be activated.");
+        return;
+      }
+
+      const storedEndDate = override.end_date ?? result.ast?.calendar?.end_date ?? null;
+      await updatePslProgram(activateProgram.id, {
+        isActive: true,
+        startDate: override.start_date,
+        endDate: storedEndDate,
+        units: result.ast?.units ?? null,
+        compiledHash: result.compiled?.source_hash ?? null,
+      });
+
+      await deleteCalendarForProgram(activateProgram.id);
+      const entries = extractCalendarEntries(result.materialized);
+      await insertCalendarEntries(activateProgram.id, entries);
+
+      setActivateModalVisible(false);
+      setActivateProgram(null);
+      await loadData();
+    } catch (e) {
+      setActivationError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setActivating(false);
+    }
+  }, [activateProgram, activationStartIso, derivedEndIso, requiresHorizonWeeks, loadData]);
 
   const handleDelete = useCallback(async () => {
     if (!actionProgram) return;
@@ -198,10 +313,11 @@ export default function ManageProgramsScreen() {
           </Text>
           <Pressable
             onPress={() => setAddModalVisible(true)}
-            style={[styles.emptyButton, { backgroundColor: rawColors.primary }]}
+            className="flex-row items-center justify-center mt-6 px-6 py-4 rounded-xl border border-primary bg-primary"
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <MaterialCommunityIcons name="plus" size={20} color={rawColors.primaryForeground} />
-            <Text style={[styles.emptyButtonText, { color: rawColors.primaryForeground }]}>
+            <Text className="ml-2 text-base font-semibold text-primary-foreground">
               Add Program
             </Text>
           </Pressable>
@@ -267,7 +383,7 @@ export default function ManageProgramsScreen() {
               {actionProgram.name}
             </Text>
             <Pressable
-              onPress={() => handleToggleActive(actionProgram)}
+              onPress={() => actionProgram.isActive ? handleDeactivate(actionProgram) : handleOpenActivate(actionProgram)}
               style={[styles.actionOption, { backgroundColor: rawColors.surfaceSecondary }]}
             >
               <MaterialCommunityIcons
@@ -277,6 +393,20 @@ export default function ManageProgramsScreen() {
               />
               <Text style={[styles.actionOptionText, { color: rawColors.foreground }]}>
                 {actionProgram.isActive ? "Deactivate" : "Activate"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {}}
+              disabled
+              style={[styles.actionOption, { backgroundColor: rawColors.surfaceSecondary, opacity: 0.5 }]}
+            >
+              <MaterialCommunityIcons
+                name="arrow-expand-right"
+                size={22}
+                color={rawColors.foregroundSecondary}
+              />
+              <Text style={[styles.actionOptionText, { color: rawColors.foregroundSecondary }]}>
+                Extend schedule (coming soon)
               </Text>
             </Pressable>
             <Pressable
@@ -295,26 +425,168 @@ export default function ManageProgramsScreen() {
         )}
       </BaseModal>
 
+      {/* Activate Program Modal */}
+      <BaseModal
+        visible={activateModalVisible}
+        onClose={() => {
+          if (activating) return;
+          setActivateModalVisible(false);
+          setActivateProgram(null);
+          setActivationError("");
+        }}
+        centerContent={false}
+      >
+        <ScrollView>
+          <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>
+            Activate Program
+          </Text>
+
+          {activateProgram ? (
+            <>
+              <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary, marginBottom: 12 }]}>
+                {activateProgram.name}
+              </Text>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.sectionTitle, { color: rawColors.foregroundSecondary }]}>
+                  Start Date
+                </Text>
+                <Pressable
+                  onPress={() => setShowStartPicker(true)}
+                  style={[styles.inputRow, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}
+                >
+                  <Text style={{ color: rawColors.foreground, fontWeight: "700" }}>
+                    {activationStartIso}
+                  </Text>
+                  <MaterialCommunityIcons name="calendar" size={20} color={rawColors.foregroundSecondary} />
+                </Pressable>
+                {showStartPicker && (
+                  <DateTimePicker
+                    value={activationStartDate}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={(_, date) => {
+                      setShowStartPicker(Platform.OS === "ios");
+                      if (date) setActivationStartDate(date);
+                    }}
+                  />
+                )}
+              </View>
+
+              {requiresHorizonWeeks && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={[styles.sectionTitle, { color: rawColors.foregroundSecondary }]}>
+                    Horizon (weeks)
+                  </Text>
+                  <TextInput
+                    value={String(activationWeeks)}
+                    onChangeText={(v) => setActivationWeeks(Math.max(1, parseInt(v, 10) || 1))}
+                    keyboardType="number-pad"
+                    placeholder="e.g. 12"
+                    placeholderTextColor={rawColors.foregroundMuted}
+                    style={[styles.input, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight, color: rawColors.foreground }]}
+                  />
+                  <View style={styles.chipRow}>
+                    {[4, 8, 12, 16].map((w) => (
+                      <Pressable
+                        key={w}
+                        onPress={() => setActivationWeeks(w)}
+                        style={[
+                          styles.chip,
+                          {
+                            backgroundColor: activationWeeks === w ? rawColors.primary : rawColors.surfaceSecondary,
+                            borderColor: activationWeeks === w ? rawColors.primary : rawColors.borderLight,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: activationWeeks === w ? rawColors.primaryForeground : rawColors.foreground, fontWeight: "700" }}>
+                          {w}w
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary, marginBottom: 12 }]}>
+                End Date: {derivedEndIso ?? "Derived from program"}
+              </Text>
+
+              {compatibilityWarnings.length > 0 ? (
+                <View style={[styles.warningBox, { backgroundColor: rawColors.warning + "12", borderColor: rawColors.warning }]}>
+                  <Text style={{ color: rawColors.warning, fontWeight: "800", marginBottom: 6 }}>
+                    Compatibility warnings
+                  </Text>
+                  {compatibilityWarnings.slice(0, 4).map((w) => (
+                    <Text key={w.code} style={{ color: rawColors.foregroundSecondary, marginBottom: 4 }}>
+                      • {w.message}
+                    </Text>
+                  ))}
+                  {compatibilityWarnings.length > 4 ? (
+                    <Text style={{ color: rawColors.foregroundMuted }}>
+                      +{compatibilityWarnings.length - 4} more…
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {activationError ? (
+                <Text style={{ color: rawColors.destructive, marginBottom: 12 }}>
+                  {activationError}
+                </Text>
+              ) : null}
+
+              <View style={styles.modalButtons}>
+                <Pressable
+                  onPress={() => {
+                    setActivateModalVisible(false);
+                    setActivateProgram(null);
+                    setActivationError("");
+                  }}
+                  disabled={activating}
+                  className="flex-1 items-center justify-center py-3.5 rounded-lg bg-surface-secondary"
+                  style={({ pressed }) => ({ opacity: pressed || activating ? 0.7 : 1 })}
+                >
+                  <Text className="text-base font-semibold text-foreground">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleConfirmActivate}
+                  disabled={activating}
+                  className="flex-1 items-center justify-center py-3.5 rounded-lg bg-primary"
+                  style={({ pressed }) => ({ opacity: pressed || activating ? 0.7 : 1 })}
+                >
+                  <Text style={[styles.modalButtonText, { color: rawColors.primaryForeground }]}>
+                    {activating ? "Activating..." : "Activate"}
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
+        </ScrollView>
+      </BaseModal>
+
       {/* Delete Confirmation */}
       <BaseModal visible={deleteModalVisible} onClose={() => { setDeleteModalVisible(false); setActionProgram(null); }}>
         <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>
           Delete Program?
         </Text>
         <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary }]}>
-          This will permanently delete "{actionProgram?.name}" and all its scheduled sessions. This cannot be undone.
+          This will permanently delete {actionProgram?.name} and all its scheduled sessions. This cannot be undone.
         </Text>
         <View style={styles.modalButtons}>
           <Pressable
             onPress={() => { setDeleteModalVisible(false); setActionProgram(null); }}
-            style={[styles.modalButton, { backgroundColor: rawColors.surfaceSecondary }]}
+            className="flex-1 items-center justify-center py-3.5 rounded-lg bg-surface-secondary"
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
-            <Text style={[styles.modalButtonText, { color: rawColors.foreground }]}>Cancel</Text>
+            <Text className="text-base font-semibold text-foreground">Cancel</Text>
           </Pressable>
           <Pressable
             onPress={handleDelete}
-            style={[styles.modalButton, { backgroundColor: rawColors.destructive }]}
+            className="flex-1 items-center justify-center py-3.5 rounded-lg bg-destructive"
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
-            <Text style={[styles.modalButtonText, { color: "#FFFFFF" }]}>Delete</Text>
+            <Text style={[styles.modalButtonText, { color: rawColors.surface }]}>Delete</Text>
           </Pressable>
         </View>
       </BaseModal>
@@ -416,19 +688,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20,
   },
-  emptyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 24,
-    gap: 8,
-  },
-  emptyButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
@@ -470,15 +729,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  inputRow: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  warningBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
   modalButtons: {
     flexDirection: "row",
     gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
   },
   modalButtonText: {
     fontSize: 15,

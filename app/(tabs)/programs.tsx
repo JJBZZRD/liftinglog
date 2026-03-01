@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -30,7 +30,7 @@ import {
   type CalendarExerciseWithSets,
 } from "../../lib/db/programCalendar";
 import { getDateIsoToday, formatDateForDisplay } from "../../lib/programs/psl/pslService";
-import { formatIntensity, formatReps } from "../../lib/programs/psl/pslMapper";
+import { formatIntensity } from "../../lib/programs/psl/pslMapper";
 
 function getAlphabetLetter(index: number): string {
   return String.fromCharCode(65 + (index % 26));
@@ -46,14 +46,13 @@ interface FlatExerciseItem {
 }
 
 export default function ProgramsScreen() {
-  const { rawColors, isDark } = useTheme();
+  const { rawColors, isDark, colorTheme } = useTheme();
 
   const [selectedDate, setSelectedDate] = useState(getDateIsoToday());
   const [markedDates, setMarkedDates] = useState<Record<string, any>>({});
   const [sessions, setSessions] = useState<(ProgramCalendarRow & { programName: string })[]>([]);
   const [exercises, setExercises] = useState<FlatExerciseItem[]>([]);
   const [programNames, setProgramNames] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(getDateIsoToday().slice(0, 7));
 
@@ -61,7 +60,7 @@ export default function ProgramsScreen() {
   const calendarExpanded = useSharedValue(1);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const CALENDAR_FULL_HEIGHT = 330;
+  const CALENDAR_FULL_HEIGHT = 340;
   const CALENDAR_BAR_HEIGHT = 44;
 
   const calendarAnimatedStyle = useAnimatedStyle(() => ({
@@ -102,6 +101,31 @@ export default function ProgramsScreen() {
       } else if (y <= 0 && !isExpanded) {
         calendarExpanded.value = 1;
         runOnJS(setIsExpanded)(true);
+      }
+    },
+    [isExpanded, calendarExpanded, lastScrollY]
+  );
+
+  const touchStartY = useRef(0);
+  const touchHandled = useRef(false);
+
+  const onListTouchStart = useCallback((e: any) => {
+    touchStartY.current = e.nativeEvent.pageY;
+    touchHandled.current = false;
+  }, []);
+
+  const onListTouchMove = useCallback(
+    (e: any) => {
+      if (touchHandled.current) return;
+      const delta = touchStartY.current - e.nativeEvent.pageY;
+      if (delta > 30 && isExpanded) {
+        touchHandled.current = true;
+        calendarExpanded.value = 0;
+        setIsExpanded(false);
+      } else if (delta < -30 && !isExpanded && lastScrollY.value <= 0) {
+        touchHandled.current = true;
+        calendarExpanded.value = 1;
+        setIsExpanded(true);
       }
     },
     [isExpanded, calendarExpanded, lastScrollY]
@@ -168,15 +192,12 @@ export default function ProgramsScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
       await markMissedSessions(getDateIsoToday());
       const marked = await loadMarkedDates(currentMonth);
       setMarkedDates(marked);
       await loadDayData(selectedDate);
     } catch (error) {
       console.error("Error loading program data:", error);
-    } finally {
-      setLoading(false);
     }
   }, [currentMonth, selectedDate, loadMarkedDates, loadDayData]);
 
@@ -283,9 +304,12 @@ export default function ProgramsScreen() {
       todayTextColor: rawColors.primary,
       monthTextColor: rawColors.foreground,
       arrowColor: rawColors.primary,
+      indicatorColor: rawColors.primary,
       textDisabledColor: rawColors.foregroundMuted,
       selectedDayBackgroundColor: rawColors.primary,
       selectedDayTextColor: rawColors.primaryForeground,
+      selectedDotColor: rawColors.primaryForeground,
+      dotColor: rawColors.primary,
     }),
     [rawColors]
   );
@@ -319,9 +343,13 @@ export default function ProgramsScreen() {
             ]}
           >
             {isComplete ? (
-              <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />
+              <MaterialCommunityIcons
+                name="check"
+                size={16}
+                color={rawColors.primaryForeground}
+              />
             ) : (
-              <Text style={styles.alphabetText}>
+              <Text style={[styles.alphabetText, { color: rawColors.primaryForeground }]}>
                 {getAlphabetLetter(item.globalIndex)}
               </Text>
             )}
@@ -377,7 +405,10 @@ export default function ProgramsScreen() {
       {/* Animated calendar section - only the calendar widget */}
       <Animated.View style={[styles.calendarContainer, calendarAnimatedStyle]}>
         {/* Collapsed bar - positioned at left like the month/year header */}
-        <Animated.View style={[styles.collapsedBar, barOpacity]}>
+        <Animated.View
+          style={[styles.collapsedBar, barOpacity]}
+          pointerEvents={isExpanded ? "none" : "auto"}
+        >
           <Pressable onPress={toggleCalendar} style={styles.collapsedBarInner}>
             <MaterialCommunityIcons
               name="calendar"
@@ -398,6 +429,7 @@ export default function ProgramsScreen() {
         {/* Full calendar */}
         <Animated.View style={[styles.fullCalendar, calendarContentOpacity]}>
           <Calendar
+            key={`${colorTheme}-${isDark ? "dark" : "light"}`}
             current={selectedDate}
             onDayPress={handleDayPress}
             onMonthChange={handleMonthChange}
@@ -405,7 +437,6 @@ export default function ProgramsScreen() {
             markingType="dot"
             theme={calendarTheme}
             enableSwipeMonths
-            style={styles.calendar}
           />
         </Animated.View>
       </Animated.View>
@@ -446,6 +477,8 @@ export default function ProgramsScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        onTouchStart={onListTouchStart}
+        onTouchMove={onListTouchMove}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
@@ -465,32 +498,33 @@ export default function ProgramsScreen() {
 
       {/* Complete Session Button (sticky footer) */}
       {showCompleteButton && (
-        <View style={[styles.footer, { backgroundColor: rawColors.background }]}>
+        <View
+          className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
+          style={{
+            shadowColor: rawColors.shadow,
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 8,
+          }}
+        >
           {allSessionsComplete || allExercisesComplete ? (
-            <View
-              style={[
-                styles.completeButton,
-                { backgroundColor: rawColors.surfaceSecondary },
-              ]}
-            >
+            <View className="flex-row items-center justify-center py-4 rounded-xl border border-border bg-surface-secondary">
               <MaterialCommunityIcons name="check-circle" size={20} color={rawColors.success} />
-              <Text style={[styles.completeButtonText, { color: rawColors.foregroundSecondary }]}>
+              <Text className="text-base font-semibold ml-2 text-foreground-secondary">
                 Session Complete
               </Text>
             </View>
           ) : (
             <Pressable
               onPress={() => setCompleteModalVisible(true)}
-              style={({ pressed }) => [
-                styles.completeButton,
-                {
-                  backgroundColor: rawColors.primary,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
+              className="flex-row items-center justify-center py-4 rounded-xl border border-primary bg-primary"
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.8 : 1,
+              })}
             >
-              <MaterialCommunityIcons name="check-all" size={20} color={rawColors.primaryForeground} />
-              <Text style={[styles.completeButtonText, { color: rawColors.primaryForeground }]}>
+              <MaterialCommunityIcons name="check-all" size={22} color={rawColors.primaryForeground} />
+              <Text className="text-base font-semibold ml-2 text-primary-foreground">
                 Complete Session
               </Text>
             </Pressable>
@@ -598,9 +632,6 @@ const styles = StyleSheet.create({
   fullCalendar: {
     paddingHorizontal: 16,
   },
-  calendar: {
-    backgroundColor: "transparent",
-  },
   dateNavigator: {
     flexDirection: "row",
     alignItems: "center",
@@ -646,7 +677,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   alphabetText: {
-    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -681,27 +711,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 32,
-  },
-  completeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 14,
-    gap: 8,
-  },
-  completeButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
   },
   modalTitle: {
     fontSize: 20,
