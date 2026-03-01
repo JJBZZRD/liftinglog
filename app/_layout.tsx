@@ -62,19 +62,15 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen
-          name="programs/[id]"
+          name="programs/manage"
           options={{ presentation: "card" }}
         />
         <Stack.Screen
-          name="programs/builder"
+          name="programs/create/basics"
           options={{ presentation: "card" }}
         />
         <Stack.Screen
-          name="programs/day/[dayKey]"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/exercise-config"
+          name="programs/create/schedule"
           options={{ presentation: "card" }}
         />
         <Stack.Screen
@@ -82,8 +78,8 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen
-          name="programs/planned/[plannedWorkoutId]"
-          options={{ presentation: "modal" }}
+          name="programs/exercise-log/[id]"
+          options={{ presentation: "card" }}
         />
       </Stack>
     </GestureHandlerRootView>

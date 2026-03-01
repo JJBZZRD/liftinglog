@@ -83,53 +83,62 @@ sqlite.execSync(`
     FOREIGN KEY(workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE SET NULL
   );
 
-  -- Programs
-  CREATE TABLE IF NOT EXISTS programs (
+  -- PSL Programs
+  CREATE TABLE IF NOT EXISTS psl_programs (
     id INTEGER PRIMARY KEY NOT NULL,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     description TEXT,
+    psl_source TEXT NOT NULL,
+    compiled_hash TEXT,
     is_active INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER
+    start_date TEXT,
+    end_date TEXT,
+    units TEXT,
+    created_at INTEGER,
+    updated_at INTEGER
   );
 
-  CREATE TABLE IF NOT EXISTS program_days (
+  CREATE TABLE IF NOT EXISTS program_calendar (
     id INTEGER PRIMARY KEY NOT NULL,
     program_id INTEGER NOT NULL,
-    schedule TEXT NOT NULL,
-    day_of_week INTEGER,
-    interval_days INTEGER,
-    note TEXT,
-    FOREIGN KEY(program_id) REFERENCES programs(id) ON DELETE CASCADE
+    psl_session_id TEXT NOT NULL,
+    session_name TEXT NOT NULL,
+    date_iso TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    completed_at INTEGER,
+    FOREIGN KEY(program_id) REFERENCES psl_programs(id) ON DELETE CASCADE
   );
 
-  CREATE TABLE IF NOT EXISTS program_exercises (
+  CREATE TABLE IF NOT EXISTS program_calendar_exercises (
     id INTEGER PRIMARY KEY NOT NULL,
-    program_day_id INTEGER NOT NULL,
-    exercise_id INTEGER NOT NULL,
-    order_index INTEGER,
-    prescription_json TEXT,
-    FOREIGN KEY(program_day_id) REFERENCES program_days(id) ON DELETE CASCADE,
-    FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
+    calendar_id INTEGER NOT NULL,
+    exercise_name TEXT NOT NULL,
+    exercise_id INTEGER,
+    order_index INTEGER NOT NULL,
+    prescribed_sets_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    workout_exercise_id INTEGER,
+    FOREIGN KEY(calendar_id) REFERENCES program_calendar(id) ON DELETE CASCADE,
+    FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE SET NULL
   );
 
-  CREATE TABLE IF NOT EXISTS progressions (
+  CREATE TABLE IF NOT EXISTS program_calendar_sets (
     id INTEGER PRIMARY KEY NOT NULL,
-    program_exercise_id INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    value REAL NOT NULL,
-    cadence TEXT NOT NULL,
-    cap_kg REAL,
-    FOREIGN KEY(program_exercise_id) REFERENCES program_exercises(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS planned_workouts (
-    id INTEGER PRIMARY KEY NOT NULL,
-    program_id INTEGER NOT NULL,
-    program_day_id INTEGER NOT NULL,
-    planned_for INTEGER NOT NULL,
-    note TEXT,
-    FOREIGN KEY(program_id) REFERENCES programs(id) ON DELETE CASCADE,
-    FOREIGN KEY(program_day_id) REFERENCES program_days(id) ON DELETE CASCADE
+    calendar_exercise_id INTEGER NOT NULL,
+    set_index INTEGER NOT NULL,
+    prescribed_reps TEXT,
+    prescribed_intensity_json TEXT,
+    prescribed_role TEXT,
+    actual_weight REAL,
+    actual_reps INTEGER,
+    actual_rpe REAL,
+    is_user_added INTEGER NOT NULL DEFAULT 0,
+    is_logged INTEGER NOT NULL DEFAULT 0,
+    set_id INTEGER,
+    logged_at INTEGER,
+    FOREIGN KEY(calendar_exercise_id) REFERENCES program_calendar_exercises(id) ON DELETE CASCADE,
+    FOREIGN KEY(set_id) REFERENCES sets(id) ON DELETE SET NULL
   );
 
   -- Analytics
@@ -197,7 +206,10 @@ sqlite.execSync(`
   CREATE INDEX IF NOT EXISTS idx_sets_workout_exercise_id ON sets(workout_exercise_id);
   CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(workout_id, order_index);
   CREATE INDEX IF NOT EXISTS idx_pr_events_exercise_time ON pr_events(exercise_id, occurred_at);
-  CREATE INDEX IF NOT EXISTS idx_planned_workouts_date ON planned_workouts(planned_for);
+  CREATE INDEX IF NOT EXISTS idx_program_calendar_date ON program_calendar(date_iso);
+  CREATE INDEX IF NOT EXISTS idx_program_calendar_program ON program_calendar(program_id);
+  CREATE INDEX IF NOT EXISTS idx_program_calendar_exercises_cal ON program_calendar_exercises(calendar_id);
+  CREATE INDEX IF NOT EXISTS idx_program_calendar_sets_exercise ON program_calendar_sets(calendar_exercise_id);
 `);
 
 // Migrations for existing databases
@@ -282,6 +294,17 @@ try {
   sqlite.execSync(`ALTER TABLE media ADD COLUMN album_name TEXT;`);
 } catch {
   // Column already exists, ignore
+}
+
+// ============================================================
+// Migration: Drop old program tables (replaced by PSL system)
+// ============================================================
+for (const oldTable of ["planned_workouts", "progressions", "program_exercises", "program_days", "programs"]) {
+  try {
+    sqlite.execSync(`DROP TABLE IF EXISTS ${oldTable};`);
+  } catch {
+    // Table may not exist, ignore
+  }
 }
 
 // ============================================================

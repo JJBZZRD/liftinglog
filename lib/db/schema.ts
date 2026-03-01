@@ -78,47 +78,57 @@ export const media = sqliteTable("media", {
   albumName: text("album_name"),
 });
 
-// Programs
-export const programs = sqliteTable("programs", {
+// PSL Programs
+export const pslPrograms = sqliteTable("psl_programs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull().unique(),
+  name: text("name").notNull(),
   description: text("description"),
+  pslSource: text("psl_source").notNull(),
+  compiledHash: text("compiled_hash"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  units: text("units"),
   createdAt: integer("created_at"),
+  updatedAt: integer("updated_at"),
 });
 
-export const programDays = sqliteTable("program_days", {
+export const programCalendar = sqliteTable("program_calendar", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   programId: integer("program_id").notNull(),
-  schedule: text("schedule").notNull(), // "weekly" | "interval"
-  dayOfWeek: integer("day_of_week"), // 0-6 for weekly
-  intervalDays: integer("interval_days"), // for interval schedule
-  note: text("note"),
+  pslSessionId: text("psl_session_id").notNull(),
+  sessionName: text("session_name").notNull(),
+  dateIso: text("date_iso").notNull(),
+  sequence: integer("sequence").notNull(),
+  status: text("status").notNull().default("pending"),
+  completedAt: integer("completed_at"),
 });
 
-export const programExercises = sqliteTable("program_exercises", {
+export const programCalendarExercises = sqliteTable("program_calendar_exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  programDayId: integer("program_day_id").notNull(),
-  exerciseId: integer("exercise_id").notNull(),
-  orderIndex: integer("order_index"),
-  prescriptionJson: text("prescription_json"),
+  calendarId: integer("calendar_id").notNull(),
+  exerciseName: text("exercise_name").notNull(),
+  exerciseId: integer("exercise_id"),
+  orderIndex: integer("order_index").notNull(),
+  prescribedSetsJson: text("prescribed_sets_json").notNull(),
+  status: text("status").notNull().default("pending"),
+  workoutExerciseId: integer("workout_exercise_id"),
 });
 
-export const progressions = sqliteTable("progressions", {
+export const programCalendarSets = sqliteTable("program_calendar_sets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  programExerciseId: integer("program_exercise_id").notNull(),
-  type: text("type").notNull(), // "kg_per_session" | "percent_per_session" | "double_progression" | "autoreg_rpe"
-  value: real("value").notNull(),
-  cadence: text("cadence").notNull(), // "every_session" | "weekly" | "every_2_exposures"
-  capKg: real("cap_kg"),
-});
-
-export const plannedWorkouts = sqliteTable("planned_workouts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  programId: integer("program_id").notNull(),
-  programDayId: integer("program_day_id").notNull(),
-  plannedFor: integer("planned_for").notNull(),
-  note: text("note"),
+  calendarExerciseId: integer("calendar_exercise_id").notNull(),
+  setIndex: integer("set_index").notNull(),
+  prescribedReps: text("prescribed_reps"),
+  prescribedIntensityJson: text("prescribed_intensity_json"),
+  prescribedRole: text("prescribed_role"),
+  actualWeight: real("actual_weight"),
+  actualReps: integer("actual_reps"),
+  actualRpe: real("actual_rpe"),
+  isUserAdded: integer("is_user_added", { mode: "boolean" }).notNull().default(false),
+  isLogged: integer("is_logged", { mode: "boolean" }).notNull().default(false),
+  setId: integer("set_id"),
+  loggedAt: integer("logged_at"),
 });
 
 export type ExerciseRow = typeof exercises.$inferSelect;
@@ -127,8 +137,7 @@ export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
 export type SetRow = typeof sets.$inferSelect;
 export type PREventRow = typeof prEvents.$inferSelect;
 export type MediaRow = typeof media.$inferSelect;
-export type ProgramRow = typeof programs.$inferSelect;
-export type ProgramDayRow = typeof programDays.$inferSelect;
-export type ProgramExerciseRow = typeof programExercises.$inferSelect;
-export type ProgressionRow = typeof progressions.$inferSelect;
-export type PlannedWorkoutRow = typeof plannedWorkouts.$inferSelect;
+export type PslProgramRow = typeof pslPrograms.$inferSelect;
+export type ProgramCalendarRow = typeof programCalendar.$inferSelect;
+export type ProgramCalendarExerciseRow = typeof programCalendarExercises.$inferSelect;
+export type ProgramCalendarSetRow = typeof programCalendarSets.$inferSelect;

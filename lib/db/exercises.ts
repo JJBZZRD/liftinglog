@@ -32,6 +32,11 @@ export async function getExerciseById(id: number): Promise<Exercise | null> {
   return rows[0] ?? null;
 }
 
+export async function getExerciseByName(name: string): Promise<Exercise | null> {
+  const rows = await db.select().from(exercises).where(eq(exercises.name, name));
+  return rows[0] ?? null;
+}
+
 export async function listExercises(): Promise<Exercise[]> {
   // order by name asc
   const rows = await db.select().from(exercises).orderBy(exercises.name);
