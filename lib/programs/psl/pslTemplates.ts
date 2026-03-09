@@ -15,7 +15,7 @@ export interface PslTemplate {
   pslSource: string;
 }
 
-export const PSL_TEMPLATES: PslTemplate[] = [
+const RAW_PSL_TEMPLATES: PslTemplate[] = [
   // ── Beginner ────────────────────────────────────────────
   {
     id: "starting-strength",
@@ -936,6 +936,15 @@ sessions:
 `,
   },
 ];
+
+function upgradeTemplateSource(pslSource: string): string {
+  return pslSource.replace('language_version: "0.2"', 'language_version: "0.3"');
+}
+
+export const PSL_TEMPLATES: PslTemplate[] = RAW_PSL_TEMPLATES.map((template) => ({
+  ...template,
+  pslSource: upgradeTemplateSource(template.pslSource),
+}));
 
 export const TEMPLATE_CATEGORIES: TemplateCategory[] = [
   "Beginner",

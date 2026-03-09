@@ -39,6 +39,7 @@ import {
 } from "../../lib/programs/psl/activationDates";
 import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
 import { getPslCompatibilityWarnings } from "../../lib/programs/psl/pslCompatibility";
+import { deserializeFlatProgramDraftFromPsl } from "../../lib/programs/psl/pslDraftMapper";
 
 export default function ManageProgramsScreen() {
   const { rawColors } = useTheme();
@@ -130,7 +131,7 @@ export default function ManageProgramsScreen() {
 
   const requiresHorizonWeeks = useMemo(() => {
     if (!activationInfo || !activationInfo.ok) return true;
-    return activationInfo.usesSchedule && !activationInfo.hasBlocks;
+    return activationInfo.requiresEndDateForActivation;
   }, [activationInfo]);
 
   const derivedEndIso = useMemo(() => {
@@ -215,69 +216,188 @@ export default function ManageProgramsScreen() {
     setActionModalVisible(true);
   }, []);
 
+  const handleEditProgram = useCallback((program: PslProgramRow) => {
+    setActionModalVisible(false);
+    setActionProgram(null);
+
+    const builderDraft = deserializeFlatProgramDraftFromPsl(program.pslSource);
+    if (builderDraft) {
+      router.push({
+        pathname: "/programs/create/basics",
+        params: {
+          editProgramId: String(program.id),
+          name: builderDraft.name,
+          description: builderDraft.description ?? "",
+          units: builderDraft.units ?? "kg",
+          programStructure: "sessions",
+          timingMode: builderDraft.timingMode,
+        },
+      });
+      return;
+    }
+
+    router.push({
+      pathname: "/programs/create/editor",
+      params: {
+        editProgramId: String(program.id),
+      },
+    });
+  }, []);
+
   const renderProgramItem = useCallback(
-    ({ item }: { item: PslProgramRow }) => (
-      <Pressable
-        onPress={() => handleProgramPress(item)}
-        style={({ pressed }) => [
-          styles.programItem,
-          {
-            backgroundColor: pressed ? rawColors.pressed : rawColors.surface,
-            borderColor: rawColors.borderLight,
-          },
-        ]}
-      >
-        <View style={styles.programInfo}>
-          <Text
-            style={[styles.programName, { color: rawColors.foreground }]}
-            numberOfLines={1}
-          >
-            {item.name}
-          </Text>
-          {item.description ? (
+    ({ item }: { item: PslProgramRow }) => {
+      const firstLetter = item.name.charAt(0).toUpperCase();
+      const isActive = item.isActive;
+
+      return (
+        <Pressable
+          onPress={() => handleProgramPress(item)}
+          className="rounded-2xl mb-2.5"
+          style={({ pressed }) => ({
+            backgroundColor: pressed
+              ? rawColors.pressed
+              : isActive
+                ? rawColors.primary + "08"
+                : rawColors.surface,
+            shadowColor: rawColors.shadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 3,
+            padding: 14,
+          })}
+        >
+          <View className="flex-row items-center">
+            <View
+              className="w-9 h-9 rounded-full items-center justify-center mr-3"
+              style={{
+                backgroundColor: isActive
+                  ? rawColors.primary
+                  : rawColors.surfaceSecondary,
+              }}
+            >
+              <Text
+                className="text-[15px] font-bold"
+                style={{
+                  color: isActive
+                    ? rawColors.primaryForeground
+                    : rawColors.foregroundSecondary,
+                }}
+              >
+                {firstLetter}
+              </Text>
+            </View>
+
             <Text
-              style={[styles.programDesc, { color: rawColors.foregroundSecondary }]}
+              className="flex-1 text-[15px] font-semibold text-foreground"
               numberOfLines={1}
             >
-              {item.description}
+              {item.name}
             </Text>
-          ) : null}
-        </View>
-        <View style={styles.programBadges}>
-          {item.isActive && (
-            <View style={[styles.activeBadge, { backgroundColor: rawColors.success + "20" }]}>
-              <View style={[styles.activeDot, { backgroundColor: rawColors.success }]} />
-              <Text style={[styles.activeBadgeText, { color: rawColors.success }]}>Active</Text>
+
+            {isActive && (
+              <View
+                className="flex-row items-center px-2 py-0.5 rounded-lg ml-2"
+                style={{ backgroundColor: rawColors.success + "18" }}
+              >
+                <View
+                  className="w-1.5 h-1.5 rounded-full mr-1"
+                  style={{ backgroundColor: rawColors.success }}
+                />
+                <Text
+                  className="text-[11px] font-bold"
+                  style={{ color: rawColors.success }}
+                >
+                  Active
+                </Text>
+              </View>
+            )}
+
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color={rawColors.foregroundSecondary}
+              style={{ marginLeft: 6 }}
+            />
+          </View>
+
+          {(item.description || (isActive && item.startDate)) ? (
+            <View style={{ marginLeft: 48, marginTop: 4 }}>
+              {item.description ? (
+                <Text
+                  className="text-[13px] text-foreground-secondary"
+                  style={{ lineHeight: 18 }}
+                  numberOfLines={2}
+                >
+                  {item.description}
+                </Text>
+              ) : null}
+              {isActive && item.startDate ? (
+                <View className="flex-row items-center mt-1" style={{ gap: 4 }}>
+                  <MaterialCommunityIcons
+                    name="calendar-range"
+                    size={12}
+                    color={rawColors.foregroundMuted}
+                  />
+                  <Text className="text-xs text-foreground-muted">
+                    {item.startDate}
+                    {item.endDate ? ` → ${item.endDate}` : ""}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-          )}
-          <MaterialCommunityIcons name="dots-vertical" size={20} color={rawColors.foregroundSecondary} />
-        </View>
-      </Pressable>
-    ),
+          ) : null}
+        </Pressable>
+      );
+    },
     [rawColors, handleProgramPress]
   );
 
   const renderSectionHeader = useCallback(
     ({ section }: { section: { title: string; data: PslProgramRow[] } }) => (
-      <View style={[styles.sectionHeader, { backgroundColor: rawColors.background }]}>
-        <Text style={[styles.sectionTitle, { color: rawColors.foregroundSecondary }]}>
+      <View
+        className="flex-row items-center justify-between pt-6 pb-2.5 mb-0.5"
+        style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rawColors.borderLight }}
+      >
+        <Text className="text-[13px] font-bold uppercase tracking-wider text-foreground-secondary">
           {section.title}
         </Text>
-        <Text style={[styles.sectionCount, { color: rawColors.foregroundMuted }]}>
-          {section.data.length}
-        </Text>
+        <View
+          className="min-w-[24px] h-6 rounded-full items-center justify-center px-2"
+          style={{ backgroundColor: rawColors.surfaceSecondary }}
+        >
+          <Text className="text-xs font-bold text-foreground-muted">
+            {section.data.length}
+          </Text>
+        </View>
       </View>
     ),
     [rawColors]
   );
 
   const renderEmptySection = useCallback(
-    ({ section }: { section: { title: string } }) => {
-      if (section.title === "Active Programs") {
+    ({ section }: { section: { title: string; data: PslProgramRow[] } }) => {
+      if (section.title === "Active Programs" && section.data.length === 0) {
         return (
-          <View style={styles.emptySection}>
-            <Text style={[styles.emptySectionText, { color: rawColors.foregroundMuted }]}>
-              No active programs. Long press a program to activate it.
+          <View
+            className="flex-row items-center rounded-xl mt-2.5 py-3.5 px-4"
+            style={{
+              backgroundColor: rawColors.surface,
+              shadowColor: rawColors.shadow,
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 4,
+              elevation: 1,
+              gap: 10,
+            }}
+          >
+            <MaterialCommunityIcons
+              name="information-outline"
+              size={18}
+              color={rawColors.foregroundMuted}
+            />
+            <Text className="flex-1 text-[13px] text-foreground-muted" style={{ lineHeight: 18 }}>
+              No active programs. Tap a program to activate it.
             </Text>
           </View>
         );
@@ -383,6 +503,19 @@ export default function ManageProgramsScreen() {
               {actionProgram.name}
             </Text>
             <Pressable
+              onPress={() => handleEditProgram(actionProgram)}
+              style={[styles.actionOption, { backgroundColor: rawColors.surfaceSecondary }]}
+            >
+              <MaterialCommunityIcons
+                name="pencil-outline"
+                size={22}
+                color={rawColors.primary}
+              />
+              <Text style={[styles.actionOptionText, { color: rawColors.foreground }]}>
+                Edit Program
+              </Text>
+            </Pressable>
+            <Pressable
               onPress={() => actionProgram.isActive ? handleDeactivate(actionProgram) : handleOpenActivate(actionProgram)}
               style={[styles.actionOption, { backgroundColor: rawColors.surfaceSecondary }]}
             >
@@ -448,7 +581,7 @@ export default function ManageProgramsScreen() {
               </Text>
 
               <View style={{ marginBottom: 12 }}>
-                <Text style={[styles.sectionTitle, { color: rawColors.foregroundSecondary }]}>
+                <Text style={{ fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, color: rawColors.foregroundSecondary }}>
                   Start Date
                 </Text>
                 <Pressable
@@ -475,7 +608,7 @@ export default function ManageProgramsScreen() {
 
               {requiresHorizonWeeks && (
                 <View style={{ marginBottom: 12 }}>
-                  <Text style={[styles.sectionTitle, { color: rawColors.foregroundSecondary }]}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, color: rawColors.foregroundSecondary }}>
                     Horizon (weeks)
                   </Text>
                   <TextInput
@@ -600,76 +733,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  sectionCount: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  programItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
-  },
-  programInfo: {
-    flex: 1,
-    marginRight: 8,
-  },
-  programName: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  programDesc: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  programBadges: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  activeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  activeBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  emptySection: {
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-  },
-  emptySectionText: {
-    fontSize: 13,
-    fontStyle: "italic",
-    textAlign: "center",
+    paddingBottom: 32,
   },
   emptyState: {
     flex: 1,
@@ -678,8 +742,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
     marginTop: 16,
   },
   emptySubtitle: {

@@ -129,14 +129,16 @@ export default function TemplateBrowserScreen() {
 	    const startDateIso = getDefaultActivationStartDateIso();
 	    const introspection = introspectPslSource(previewTemplate.pslSource);
 
-	    if (!introspection.ok || !introspection.usesSchedule) return null;
+    if (!introspection.ok) return null;
 
-	    if (introspection.hasBlocks) {
-	      return { start_date: startDateIso };
-	    }
+    if (introspection.hasBlocks) {
+      return { start_date: startDateIso };
+    }
 
-	    return {
-	      start_date: startDateIso,
+    if (!introspection.requiresEndDateForActivation) return null;
+
+    return {
+      start_date: startDateIso,
 	      end_date: computeEndDateIso(startDateIso, DEFAULT_ACTIVATION_WEEKS),
 	    };
 	  }, [previewTemplate]);

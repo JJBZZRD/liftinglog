@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -13,8 +13,16 @@ import {
 } from "react-native";
 import { parseDocument } from "program-specification-language";
 import BaseModal from "../../../components/modals/BaseModal";
-import { createPslProgram } from "../../../lib/db/pslPrograms";
-import { insertCalendarEntries } from "../../../lib/db/programCalendar";
+import {
+  createPslProgram,
+  getPslProgramById,
+  updatePslProgram,
+  type PslProgramRow,
+} from "../../../lib/db/pslPrograms";
+import {
+  deleteCalendarForProgram,
+  insertCalendarEntries,
+} from "../../../lib/db/programCalendar";
 import {
   compilePslSource,
   extractCalendarEntries,
@@ -43,7 +51,19 @@ function appendSnippet(source: string, snippet: string): string {
   return trimmed + sep + "\n" + snippet.trimStart() + "\n";
 }
 
-const SKELETON_SESSIONS = `language_version: "0.2"
+function derivePreviewWeeks(startDate: string | null, endDate: string | null): number {
+  if (!startDate || !endDate) return DEFAULT_ACTIVATION_WEEKS;
+  const startUtc = new Date(`${startDate}T00:00:00Z`);
+  const endUtc = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endUtc.getTime())) {
+    return DEFAULT_ACTIVATION_WEEKS;
+  }
+  const diffDays = Math.floor((endUtc.getTime() - startUtc.getTime()) / 86400000) + 1;
+  if (diffDays < 1) return DEFAULT_ACTIVATION_WEEKS;
+  return Math.max(1, Math.ceil(diffDays / 7));
+}
+
+const SKELETON_SESSIONS = `language_version: "0.3"
 metadata:
   id: my-program
   name: My Program
@@ -59,7 +79,37 @@ sessions:
       - "Back Squat: 3x5 @75%"
 `;
 
-const SKELETON_BLOCKS = `language_version: "0.2"
+const SKELETON_SEQUENCE = `language_version: "0.3"
+metadata:
+  id: my-sequence-program
+  name: My Sequence Program
+  description: Edit this description
+units: kg
+sessions:
+  - id: day-1
+    name: Program Day 1
+    exercises:
+      - "Back Squat: 3x5 @75%"
+  - id: day-2
+    name: Program Day 2
+    exercises:
+      - "Barbell Bench Press: 3x5 @75%"
+  - id: day-3
+    name: Program Day 3
+    exercises:
+      - "Barbell Row: 3x8 @RIR2"
+sequence:
+  repeat: true
+  items:
+    - session_id: day-1
+      rest_after_days: 1
+    - session_id: day-2
+      rest_after_days: 1
+    - session_id: day-3
+      rest_after_days: 2
+`;
+
+const SKELETON_BLOCKS = `language_version: "0.3"
 metadata:
   id: my-block-program
   name: My Block Program
@@ -96,18 +146,33 @@ const SNIPPET_SCHEDULE_INTERVAL = `schedule:
   start_offset_days: 0
 `;
 
+const SNIPPET_SEQUENCE = `sequence:
+  repeat: true
+  items:
+    - session_id: session-a
+      rest_after_days: 1
+    - session_id: session-b
+      rest_after_days: 2
+`;
+
 const SNIPPET_EXERCISE_SHORTHAND = `- "Bench Press: 3x5 @75%; +2.5kg every week if success"`;
 
 export default function ProgramPslEditorScreen() {
   const { rawColors } = useTheme();
-  const params = useLocalSearchParams<{ pslSource?: string }>();
-
-  const initialSource =
+  const params = useLocalSearchParams<{ pslSource?: string; editProgramId?: string }>();
+  const editProgramId =
+    typeof params.editProgramId === "string" ? Number.parseInt(params.editProgramId, 10) : null;
+  const explicitSource =
     typeof params.pslSource === "string" && params.pslSource.trim()
       ? params.pslSource
-      : SKELETON_SESSIONS;
+      : null;
+  const isEditing = Number.isFinite(editProgramId);
+
+  const initialSource = explicitSource ?? SKELETON_SESSIONS;
 
   const [pslSource, setPslSource] = useState(initialSource);
+  const [editingProgram, setEditingProgram] = useState<PslProgramRow | null>(null);
+  const [loadingProgram, setLoadingProgram] = useState(isEditing && !explicitSource);
   const [helpersVisible, setHelpersVisible] = useState(false);
 
   const [previewStartDate, setPreviewStartDate] = useState<Date>(
@@ -119,16 +184,65 @@ export default function ProgramPslEditorScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
+  useEffect(() => {
+    if (!isEditing || editProgramId === null) {
+      setEditingProgram(null);
+      setLoadingProgram(false);
+      if (explicitSource) {
+        setPslSource(explicitSource);
+      }
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadProgram() {
+      setLoadingProgram(!explicitSource);
+      try {
+        const program = await getPslProgramById(editProgramId);
+        if (isCancelled) return;
+        if (!program) {
+          setSaveError("Program not found.");
+          setLoadingProgram(false);
+          return;
+        }
+
+        setEditingProgram(program);
+        if (!explicitSource) {
+          setPslSource(program.pslSource);
+        }
+        setPreviewStartDate(
+          isoToDateLocal(program.startDate ?? getDefaultActivationStartDateIso())
+        );
+        setPreviewWeeks(derivePreviewWeeks(program.startDate, program.endDate));
+        setSaveError("");
+      } catch (error) {
+        if (!isCancelled) {
+          setSaveError(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingProgram(false);
+        }
+      }
+    }
+
+    loadProgram();
+    return () => {
+      isCancelled = true;
+    };
+  }, [editProgramId, explicitSource, isEditing]);
+
   const activationInfo = useMemo(() => introspectPslSource(pslSource), [pslSource]);
   const requiresHorizonWeeks = useMemo(() => {
     if (!activationInfo.ok) return true;
-    return activationInfo.usesSchedule && !activationInfo.hasBlocks;
+    return activationInfo.requiresEndDateForActivation;
   }, [activationInfo]);
 
   const previewStartIso = useMemo(() => dateToIsoLocal(previewStartDate), [previewStartDate]);
   const previewOverride = useMemo(() => {
     if (!activationInfo.ok) return null;
-    if (activationInfo.usesSchedule && !activationInfo.hasBlocks) {
+    if (activationInfo.requiresEndDateForActivation) {
       return { start_date: previewStartIso, end_date: computeEndDateIso(previewStartIso, previewWeeks) };
     }
     return { start_date: previewStartIso };
@@ -181,16 +295,56 @@ export default function ProgramPslEditorScreen() {
     setSaving(true);
     setSaveError("");
     try {
-      // Require parseable YAML for saving, but do not require full PSL validation (templates may omit calendar).
-      parseDocument(pslSource);
+      if (editingProgram?.isActive) {
+        if (!previewOverride) {
+          throw new Error("Fix YAML parse errors before saving changes.");
+        }
+        const result = compilePslSource(pslSource, { calendarOverride: previewOverride });
+        if (!result.valid || !result.materialized) {
+          const errors = result.diagnostics
+            .filter((d) => d.severity === "error")
+            .map((d) => d.message)
+            .join("\n");
+          throw new Error(errors || "Program could not be updated.");
+        }
 
-      await createPslProgram({
-        name: programMeta.name,
-        description: programMeta.description,
-        pslSource,
-        isActive: false,
-        units: programMeta.units,
-      });
+        const storedEndDate = previewOverride.end_date ?? result.ast?.calendar?.end_date ?? null;
+        await updatePslProgram(editingProgram.id, {
+          name: programMeta.name,
+          description: programMeta.description ?? null,
+          pslSource,
+          compiledHash: result.compiled?.source_hash ?? null,
+          isActive: true,
+          startDate: previewOverride.start_date,
+          endDate: storedEndDate,
+          units: result.ast?.units ?? programMeta.units ?? null,
+        });
+        await deleteCalendarForProgram(editingProgram.id);
+        await insertCalendarEntries(
+          editingProgram.id,
+          extractCalendarEntries(result.materialized)
+        );
+      } else if (editingProgram) {
+        // Require parseable YAML for saving, but do not require full PSL validation.
+        parseDocument(pslSource);
+        await updatePslProgram(editingProgram.id, {
+          name: programMeta.name,
+          description: programMeta.description ?? null,
+          pslSource,
+          compiledHash: null,
+          units: programMeta.units ?? null,
+        });
+      } else {
+        // Require parseable YAML for saving, but do not require full PSL validation (templates may omit calendar).
+        parseDocument(pslSource);
+        await createPslProgram({
+          name: programMeta.name,
+          description: programMeta.description,
+          pslSource,
+          isActive: false,
+          units: programMeta.units,
+        });
+      }
 
       router.replace("/programs/manage");
     } catch (e) {
@@ -198,7 +352,7 @@ export default function ProgramPslEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [pslSource, programMeta]);
+  }, [editingProgram, previewOverride, programMeta, pslSource]);
 
   const handleSaveAndActivate = useCallback(async () => {
     setSaving(true);
@@ -219,6 +373,26 @@ export default function ProgramPslEditorScreen() {
       }
 
       const storedEndDate = override.end_date ?? result.ast?.calendar?.end_date ?? null;
+      if (editingProgram) {
+        await updatePslProgram(editingProgram.id, {
+          name: programMeta.name,
+          description: programMeta.description ?? null,
+          pslSource,
+          compiledHash: result.compiled?.source_hash ?? null,
+          isActive: true,
+          startDate: override.start_date,
+          endDate: storedEndDate,
+          units: result.ast?.units ?? programMeta.units ?? null,
+        });
+        await deleteCalendarForProgram(editingProgram.id);
+        await insertCalendarEntries(
+          editingProgram.id,
+          extractCalendarEntries(result.materialized)
+        );
+        router.replace("/programs/manage");
+        return;
+      }
+
       const program = await createPslProgram({
         name: programMeta.name,
         description: programMeta.description,
@@ -239,7 +413,7 @@ export default function ProgramPslEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [pslSource, previewOverride, programMeta]);
+  }, [editingProgram, programMeta, pslSource, previewOverride]);
 
   const sessionsPreview = useMemo(() => {
     if (!compileResult.compiled) return null;
@@ -268,19 +442,25 @@ export default function ProgramPslEditorScreen() {
       endUtc.setUTCDate(endUtc.getUTCDate() + activationInfo.totalBlockDays - 1);
       return endUtc.toISOString().slice(0, 10);
     }
-    if (activationInfo.usesSchedule && !activationInfo.hasBlocks) {
+    if (activationInfo.requiresEndDateForActivation) {
       return computeEndDateIso(previewStartIso, previewWeeks);
     }
     return null;
   }, [activationInfo, previewStartIso, previewWeeks]);
 
   const showPreviewDatesPanel = true;
+  const secondaryActionLabel = editingProgram ? "Save Changes" : "Save as Template";
+  const primaryActionLabel = saving
+    ? "Saving..."
+    : editingProgram?.isActive
+      ? "Save & Refresh"
+      : "Save & Activate";
 
   return (
     <View style={styles.container} className="bg-background">
       <Stack.Screen
         options={{
-          title: "PSL Editor",
+          title: editingProgram ? "Edit Program" : "PSL Editor",
           headerStyle: { backgroundColor: rawColors.background },
           headerTintColor: rawColors.foreground,
           headerRight: () => (
@@ -291,6 +471,13 @@ export default function ProgramPslEditorScreen() {
         }}
       />
 
+      {loadingProgram ? (
+        <View style={styles.loadingState}>
+          <Text style={{ color: rawColors.foregroundSecondary, fontSize: 16, fontWeight: "600" }}>
+            Loading program...
+          </Text>
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Text style={[styles.sectionTitle, { color: rawColors.foregroundSecondary }]}>
           YAML
@@ -420,7 +607,7 @@ export default function ProgramPslEditorScreen() {
               </Text>
               {compatibilityWarnings.slice(0, 4).map((w, idx) => (
                 <Text key={idx} style={[styles.diagLine, { color: rawColors.warning }]}>
-                  • {w.title}
+                  • {w.message}
                 </Text>
               ))}
             </View>
@@ -465,53 +652,56 @@ export default function ProgramPslEditorScreen() {
           )}
         </View>
       </ScrollView>
+      )}
 
-      <View
-        className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
-        style={{
-          shadowColor: rawColors.shadow,
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          elevation: 8,
-        }}
-      >
-        {saveError ? (
-          <Text style={[styles.saveError, { color: rawColors.destructive }]}>
-            {saveError}
+      {!loadingProgram ? (
+        <View
+          className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
+          style={{
+            shadowColor: rawColors.shadow,
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 8,
+          }}
+        >
+          {saveError ? (
+            <Text style={[styles.saveError, { color: rawColors.destructive }]}>
+              {saveError}
+            </Text>
+          ) : null}
+
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={handleSaveTemplate}
+              disabled={saving}
+              className="flex-1 items-center justify-center py-3.5 rounded-xl border border-border"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+                opacity: saving ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ color: rawColors.foreground }}>
+                {secondaryActionLabel}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSaveAndActivate}
+              disabled={saving}
+              className="flex-1 items-center justify-center py-3.5 rounded-xl border border-primary bg-primary"
+              style={({ pressed }) => ({ opacity: pressed || saving ? 0.7 : 1 })}
+            >
+              <Text className="text-base font-semibold text-primary-foreground">
+                {primaryActionLabel}
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={[styles.metaHint, { color: rawColors.foregroundMuted }]}>
+            Program name: {programMeta.name}
           </Text>
-        ) : null}
-
-        <View style={styles.actionRow}>
-          <Pressable
-            onPress={handleSaveTemplate}
-            disabled={saving}
-            className="flex-1 items-center justify-center py-3.5 rounded-xl border border-border"
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-              opacity: saving ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ color: rawColors.foreground }}>
-              Save as Template
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleSaveAndActivate}
-            disabled={saving}
-            className="flex-1 items-center justify-center py-3.5 rounded-xl border border-primary bg-primary"
-            style={({ pressed }) => ({ opacity: pressed || saving ? 0.7 : 1 })}
-          >
-            <Text className="text-base font-semibold text-primary-foreground">
-              {saving ? "Saving..." : "Save & Activate"}
-            </Text>
-          </Pressable>
         </View>
-
-        <Text style={[styles.metaHint, { color: rawColors.foregroundMuted }]}>
-          Program name: {programMeta.name}
-        </Text>
-      </View>
+      ) : null}
 
       <BaseModal visible={helpersVisible} onClose={() => setHelpersVisible(false)}>
         <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>
@@ -525,6 +715,16 @@ export default function ProgramPslEditorScreen() {
           <MaterialCommunityIcons name="file-document-edit-outline" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
             Replace with sessions skeleton
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => handleInsert(SKELETON_SEQUENCE, { replace: true })}
+          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+        >
+          <MaterialCommunityIcons name="playlist-play" size={22} color={rawColors.primary} />
+          <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
+            Replace with sequence skeleton
           </Text>
         </Pressable>
 
@@ -559,6 +759,16 @@ export default function ProgramPslEditorScreen() {
         </Pressable>
 
         <Pressable
+          onPress={() => handleInsert(SNIPPET_SEQUENCE, { replace: false })}
+          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+        >
+          <MaterialCommunityIcons name="playlist-plus" size={22} color={rawColors.primary} />
+          <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
+            Insert sequence
+          </Text>
+        </Pressable>
+
+        <Pressable
           onPress={() => handleInsert(SNIPPET_EXERCISE_SHORTHAND, { replace: false })}
           style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
         >
@@ -575,6 +785,12 @@ export default function ProgramPslEditorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
   scrollContent: {
     padding: 16,

@@ -6,7 +6,7 @@ import { useTheme } from "../lib/theme/ThemeContext";
 type AddExerciseModalProps = {
   visible: boolean;
   onDismiss: () => void;
-  onSaved?: () => void;
+  onSaved?: (exerciseId?: number) => void | Promise<void>;
 };
 
 export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExerciseModalProps) {
@@ -23,7 +23,7 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
         setError("Name is required");
         return;
       }
-      await createExercise({
+      const exerciseId = await createExercise({
         name: name.trim(),
         description: description.trim() || null,
         muscle_group: muscle.trim() || null,
@@ -35,7 +35,7 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
       setDescription("");
       setMuscle("");
       setEquipment("");
-      onSaved?.();
+      await onSaved?.(exerciseId);
       onDismiss();
     } catch (e: any) {
       setError(e?.message ?? String(e));

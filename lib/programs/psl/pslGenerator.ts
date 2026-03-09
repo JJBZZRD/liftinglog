@@ -1,5 +1,7 @@
-import type { Weekday, IntensityTarget, ProgressionRule } from "program-specification-language";
+import type { IntensityTarget, SessionSlot, Weekday } from "program-specification-language";
 import { createId } from "program-specification-language";
+
+export type FlatProgramTimingMode = "sequence" | "weekdays" | "fixed_day" | "interval_days";
 
 export interface SetConfig {
   count: number;
@@ -19,24 +21,66 @@ export interface ProgressionConfig {
 }
 
 export interface ExerciseConfig {
+  exerciseId: number;
   exerciseName: string;
-  exerciseId?: string;
   sets: SetConfig[];
   restSeconds?: number;
 }
 
-export interface DayConfig {
-  day: Weekday;
+export interface SessionDraft {
+  clientId: string;
+  sessionId: string;
+  name: string;
   exercises: ExerciseConfig[];
+  slot?: SessionSlot;
+  weekdays: Weekday[];
+  fixedDay: number;
+  intervalEvery: number;
+  intervalStartOffsetDays: number;
+  intervalEndOffsetDays: number | null;
+  restAfterDays: number;
 }
 
-export interface ProgramConfig {
+export interface FlatProgramDraft {
   name: string;
   description?: string;
   units?: "kg" | "lb";
-  startDate?: string;
-  endDate?: string;
-  days: DayConfig[];
+  timingMode: FlatProgramTimingMode;
+  sequenceRepeat: boolean;
+  sessions: SessionDraft[];
+}
+
+const WEEKDAY_ORDER: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+function createClientId(): string {
+  return `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getAlphabetLetter(index: number): string {
+  return String.fromCharCode(65 + (index % 26));
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function yamlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function maybeYamlString(value: string | undefined): string | undefined {
+  return value?.trim() ? yamlString(value.trim()) : undefined;
+}
+
+function durationToString(seconds: number): string {
+  if (seconds >= 60 && seconds % 60 === 0) {
+    return `${seconds / 60}m`;
+  }
+  return `${seconds}s`;
 }
 
 function intensityToShorthand(intensity: IntensityTarget): string {
@@ -58,7 +102,7 @@ function intensityToShorthand(intensity: IntensityTarget): string {
     case "load_range":
       return `@[${intensity.min},${intensity.max}]${intensity.unit}`;
     case "percent_of_set":
-      return `@${intensity.value < 0 ? "" : ""}${intensity.value}% of ${intensity.role}`;
+      return `@${intensity.value}% of ${intensity.role}`;
     case "load_delta_from_set": {
       const sign = intensity.value >= 0 ? "+" : "";
       return `${sign}${intensity.value}${intensity.unit} from ${intensity.role}`;
@@ -102,11 +146,7 @@ function setToShorthand(set: SetConfig): string {
   }
 
   if (set.restSeconds) {
-    if (set.restSeconds >= 60 && set.restSeconds % 60 === 0) {
-      s += ` rest ${set.restSeconds / 60}m`;
-    } else {
-      s += ` rest ${set.restSeconds}s`;
-    }
+    s += ` rest ${durationToString(set.restSeconds)}`;
   }
 
   if (set.progression) {
@@ -116,77 +156,195 @@ function setToShorthand(set: SetConfig): string {
   return s;
 }
 
-function indent(text: string, level: number): string {
-  return "  ".repeat(level) + text;
+function resolveUniqueSessionIds(sessions: SessionDraft[]): string[] {
+  const used = new Set<string>();
+
+  return sessions.map((session, index) => {
+    const base =
+      slugify(session.sessionId) ||
+      slugify(session.name) ||
+      `session-${getAlphabetLetter(index).toLowerCase()}`;
+    let candidate = base;
+    let suffix = 2;
+
+    while (used.has(candidate)) {
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+
+    used.add(candidate);
+    return candidate;
+  });
 }
 
-export function generatePslFromConfig(config: ProgramConfig): string {
+function sortWeekdays(days: Weekday[]): Weekday[] {
+  return [...days].sort((a, b) => WEEKDAY_ORDER.indexOf(a) - WEEKDAY_ORDER.indexOf(b));
+}
+
+function buildSequenceDefaults(index: number): Pick<SessionDraft, "name" | "sessionId" | "restAfterDays"> {
+  return {
+    name: `Program Day ${index + 1}`,
+    sessionId: `day-${index + 1}`,
+    restAfterDays: index === 2 ? 2 : 1,
+  };
+}
+
+function buildWeekdayDefaults(index: number): Pick<SessionDraft, "name" | "sessionId" | "weekdays"> {
+  const weekdays: Weekday[] = ["MON", "WED", "FRI"];
+  return {
+    name: `Session ${getAlphabetLetter(index)}`,
+    sessionId: `session-${getAlphabetLetter(index).toLowerCase()}`,
+    weekdays: weekdays[index] ? [weekdays[index]] : [],
+  };
+}
+
+function buildFixedDayDefaults(index: number): Pick<SessionDraft, "name" | "sessionId" | "fixedDay"> {
+  return {
+    name: `Program Day ${index + 1}`,
+    sessionId: `day-${index + 1}`,
+    fixedDay: index * 2 + 1,
+  };
+}
+
+function buildIntervalDefaults(index: number): Pick<SessionDraft, "name" | "sessionId" | "intervalEvery" | "intervalStartOffsetDays" | "intervalEndOffsetDays"> {
+  return {
+    name: `Session ${getAlphabetLetter(index)}`,
+    sessionId: `session-${getAlphabetLetter(index).toLowerCase()}`,
+    intervalEvery: 2,
+    intervalStartOffsetDays: index * 2,
+    intervalEndOffsetDays: null,
+  };
+}
+
+export function createDefaultSessionDraft(mode: FlatProgramTimingMode, index: number): SessionDraft {
+  const base: SessionDraft = {
+    clientId: createClientId(),
+    sessionId: `session-${getAlphabetLetter(index).toLowerCase()}`,
+    name: `Session ${getAlphabetLetter(index)}`,
+    exercises: [],
+    weekdays: [],
+    fixedDay: index + 1,
+    intervalEvery: 2,
+    intervalStartOffsetDays: index * 2,
+    intervalEndOffsetDays: null,
+    restAfterDays: 1,
+  };
+
+  if (mode === "sequence") {
+    return { ...base, ...buildSequenceDefaults(index) };
+  }
+
+  if (mode === "weekdays") {
+    return { ...base, ...buildWeekdayDefaults(index) };
+  }
+
+  if (mode === "fixed_day") {
+    return { ...base, ...buildFixedDayDefaults(index) };
+  }
+
+  return { ...base, ...buildIntervalDefaults(index) };
+}
+
+export function createDefaultFlatProgramDraft(
+  timingMode: FlatProgramTimingMode,
+  options: { name?: string; description?: string; units?: "kg" | "lb" } = {}
+): FlatProgramDraft {
+  const sessionCount = timingMode === "interval_days" ? 1 : 3;
+  return {
+    name: options.name?.trim() || "My Program",
+    description: options.description?.trim() || undefined,
+    units: options.units ?? "kg",
+    timingMode,
+    sequenceRepeat: true,
+    sessions: Array.from({ length: sessionCount }, (_, index) => createDefaultSessionDraft(timingMode, index)),
+  };
+}
+
+export function serializeFlatProgramDraftToPsl(draft: FlatProgramDraft): string {
   const lines: string[] = [];
-  const progId = createId("prog", config.name);
+  const programId = createId("prog", draft.name);
+  const resolvedSessionIds = resolveUniqueSessionIds(draft.sessions);
 
-  lines.push('language_version: "0.2"');
+  lines.push('language_version: "0.3"');
   lines.push("metadata:");
-  lines.push(`  id: ${progId}`);
-  lines.push(`  name: ${config.name}`);
-  if (config.description) {
-    lines.push(`  description: ${config.description}`);
+  lines.push(`  id: ${programId}`);
+  lines.push(`  name: ${yamlString(draft.name.trim() || "My Program")}`);
+  const description = maybeYamlString(draft.description);
+  if (description) {
+    lines.push(`  description: ${description}`);
   }
 
-  if (config.units) {
-    lines.push(`units: ${config.units}`);
+  if (draft.units) {
+    lines.push(`units: ${draft.units}`);
   }
 
-  if (config.startDate) {
-    lines.push("calendar:");
-    lines.push(`  start_date: "${config.startDate}"`);
-    if (config.endDate) {
-      lines.push(`  end_date: "${config.endDate}"`);
-    }
-  }
+  if (draft.sessions.length === 0) {
+    lines.push("sessions: []");
+  } else {
+    lines.push("sessions:");
+    draft.sessions.forEach((session, index) => {
+      lines.push(`  - id: ${resolvedSessionIds[index]}`);
+      lines.push(`    name: ${yamlString(session.name.trim() || `Session ${getAlphabetLetter(index)}`)}`);
+      if (session.slot !== undefined) {
+        lines.push(`    slot: ${typeof session.slot === "string" ? session.slot : session.slot}`);
+      }
 
-  lines.push("sessions:");
-
-  for (const day of config.days) {
-    const sessionId = createId("session", `${config.name}-${day.day}`);
-    lines.push(`  - id: ${sessionId}`);
-    lines.push(`    name: ${day.day}`);
-    lines.push(`    schedule: "${day.day}"`);
-    lines.push("    exercises:");
-
-    for (const ex of day.exercises) {
-      if (ex.sets.length === 1 && !ex.exerciseId) {
-        const shorthand = setToShorthand(ex.sets[0]);
-        let exLine = `      - "${ex.exerciseName}: ${shorthand}`;
-        if (ex.restSeconds) {
-          if (ex.restSeconds >= 60 && ex.restSeconds % 60 === 0) {
-            exLine += `; rest ${ex.restSeconds / 60}m`;
-          } else {
-            exLine += `; rest ${ex.restSeconds}s`;
-          }
-        }
-        exLine += '"';
-        lines.push(exLine);
-      } else {
-        lines.push(`      - exercise: ${ex.exerciseName}`);
-        if (ex.exerciseId) {
-          lines.push(`        exercise_id: ${ex.exerciseId}`);
-        }
-        if (ex.restSeconds) {
-          if (ex.restSeconds >= 60 && ex.restSeconds % 60 === 0) {
-            lines.push(`        rest: "${ex.restSeconds / 60}m"`);
-          } else {
-            lines.push(`        rest: "${ex.restSeconds}s"`);
-          }
-        }
-        lines.push("        sets:");
-        for (const set of ex.sets) {
-          lines.push(`          - "${setToShorthand(set)}"`);
+      if (draft.timingMode === "weekdays") {
+        lines.push("    schedule:");
+        const weekdays = sortWeekdays(session.weekdays);
+        lines.push("      type: weekdays");
+        lines.push(`      days: [${weekdays.join(", ")}]`);
+      } else if (draft.timingMode === "fixed_day") {
+        lines.push(`    day: ${Math.max(1, session.fixedDay || 1)}`);
+      } else if (draft.timingMode === "interval_days") {
+        lines.push("    schedule:");
+        lines.push("      type: interval_days");
+        lines.push(`      every: ${Math.max(1, session.intervalEvery || 1)}`);
+        lines.push(`      start_offset_days: ${Math.max(0, session.intervalStartOffsetDays || 0)}`);
+        if (session.intervalEndOffsetDays !== null && session.intervalEndOffsetDays !== undefined) {
+          lines.push(`      end_offset_days: ${Math.max(0, session.intervalEndOffsetDays)}`);
         }
       }
-    }
+
+      if (session.exercises.length === 0) {
+        lines.push("    exercises: []");
+        return;
+      }
+
+      lines.push("    exercises:");
+      session.exercises.forEach((exercise) => {
+        lines.push(`      - exercise: ${yamlString(exercise.exerciseName)}`);
+        if (exercise.restSeconds) {
+          lines.push(`        rest: ${yamlString(durationToString(exercise.restSeconds))}`);
+        }
+        lines.push("        sets:");
+        exercise.sets.forEach((set) => {
+          lines.push(`          - ${yamlString(setToShorthand(set))}`);
+        });
+      });
+    });
   }
 
-  return lines.join("\n") + "\n";
+  if (draft.timingMode === "sequence") {
+    lines.push("sequence:");
+    lines.push(`  repeat: ${draft.sequenceRepeat ? "true" : "false"}`);
+    lines.push("  items:");
+    draft.sessions.forEach((session, index) => {
+      lines.push(`    - session_id: ${resolvedSessionIds[index]}`);
+      const restAfterDays =
+        !draft.sequenceRepeat && index === draft.sessions.length - 1
+          ? 0
+          : Math.max(0, session.restAfterDays || 0);
+      lines.push(`      rest_after_days: ${restAfterDays}`);
+    });
+  }
+
+  return `${lines.join("\n")}\n`;
 }
 
-export { createId };
+export function buildStarterPslSource(
+  timingMode: FlatProgramTimingMode,
+  options: { name?: string; description?: string; units?: "kg" | "lb" } = {}
+): string {
+  return serializeFlatProgramDraftToPsl(createDefaultFlatProgramDraft(timingMode, options));
+}
