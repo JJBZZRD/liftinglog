@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import type { UnitPreference } from "../db/connection";
+import type { UnitPreference } from "../db/settings";
 import {
   getUnitPreference as getUnitPreferenceDB,
   setUnitPreference as setUnitPreferenceDB,

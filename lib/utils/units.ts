@@ -1,4 +1,4 @@
-import type { UnitPreference } from "../db/connection";
+import type { UnitPreference } from "../db/settings";
 
 const KG_TO_LB = 2.2046226218487757;
 

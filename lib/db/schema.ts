@@ -1,5 +1,21 @@
 import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+export const settings = sqliteTable("settings", {
+  id: integer("id").primaryKey(),
+  e1rmFormula: text("e1rm_formula", {
+    enum: ["epley", "brzycki", "oconner", "lombardi", "mayhew", "wathan"],
+  }).notNull().default("epley"),
+  unitPreference: text("unit_preference", {
+    enum: ["kg", "lb"],
+  }).notNull().default("kg"),
+  themePreference: text("theme_preference", {
+    enum: ["system", "light", "dark"],
+  }).notNull().default("system"),
+  colorTheme: text("color_theme", {
+    enum: ["default", "ocean", "forest", "sunset", "rose", "violet", "slate"],
+  }).notNull().default("default"),
+});
+
 export const exercises = sqliteTable("exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   uid: text("uid"),
@@ -78,6 +94,13 @@ export const media = sqliteTable("media", {
   albumName: text("album_name"),
 });
 
+export const exerciseFormulaOverrides = sqliteTable("exercise_formula_overrides", {
+  exerciseId: integer("exercise_id").primaryKey().notNull(),
+  e1rmFormula: text("e1rm_formula", {
+    enum: ["epley", "brzycki", "oconner", "lombardi", "mayhew", "wathan"],
+  }).notNull(),
+});
+
 // PSL Programs
 export const pslPrograms = sqliteTable("psl_programs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -131,13 +154,29 @@ export const programCalendarSets = sqliteTable("program_calendar_sets", {
   loggedAt: integer("logged_at"),
 });
 
+export const tags = sqliteTable("tags", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+});
+
+export const taggings = sqliteTable("taggings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tagId: integer("tag_id").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: integer("target_id").notNull(),
+});
+
+export type SettingsRow = typeof settings.$inferSelect;
 export type ExerciseRow = typeof exercises.$inferSelect;
 export type WorkoutRow = typeof workouts.$inferSelect;
 export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
 export type SetRow = typeof sets.$inferSelect;
 export type PREventRow = typeof prEvents.$inferSelect;
 export type MediaRow = typeof media.$inferSelect;
+export type ExerciseFormulaOverrideRow = typeof exerciseFormulaOverrides.$inferSelect;
 export type PslProgramRow = typeof pslPrograms.$inferSelect;
 export type ProgramCalendarRow = typeof programCalendar.$inferSelect;
 export type ProgramCalendarExerciseRow = typeof programCalendarExercises.$inferSelect;
 export type ProgramCalendarSetRow = typeof programCalendarSets.$inferSelect;
+export type TagRow = typeof tags.$inferSelect;
+export type TaggingRow = typeof taggings.$inferSelect;

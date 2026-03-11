@@ -1,5 +1,4 @@
 export { db, sqlite } from "./connection";
-export type { E1RMFormulaId, UnitPreference } from "./connection";
 
 export * from "./exercises";
 export * from "./media";
@@ -8,4 +7,3 @@ export * from "./settings";
 export * from "./workouts";
 export * from "./pslPrograms";
 export * from "./programCalendar";
-

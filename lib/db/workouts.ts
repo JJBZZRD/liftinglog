@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeE1rm } from "../pr";
-import { db, sqlite, hasColumn } from "./connection";
+import { db, sqlite } from "./connection";
+import { hasColumn } from "./introspection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
 import { rebuildPREventsForExercise } from "./prEvents";
 import { getGlobalFormula } from "./settings";

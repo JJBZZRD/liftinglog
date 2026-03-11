@@ -1,61 +1,75 @@
-import type { E1RMFormulaId, UnitPreference } from "./connection";
-import { sqlite } from "./connection";
+import { eq } from "drizzle-orm";
+import { db } from "./connection";
+import { exerciseFormulaOverrides, settings } from "./schema";
+
+export type E1RMFormulaId =
+  | "epley"
+  | "brzycki"
+  | "oconner"
+  | "lombardi"
+  | "mayhew"
+  | "wathan";
+
+export type UnitPreference = "kg" | "lb";
+export type ThemePreference = "system" | "light" | "dark";
+export type ColorThemeId = "default" | "ocean" | "forest" | "sunset" | "rose" | "violet" | "slate";
+
+const SETTINGS_ID = 1;
+const DEFAULT_SETTINGS = {
+  e1rmFormula: "epley" as E1RMFormulaId,
+  unitPreference: "kg" as UnitPreference,
+  themePreference: "system" as ThemePreference,
+  colorTheme: "default" as ColorThemeId,
+};
+
+type SettingsUpdate = {
+  e1rmFormula?: E1RMFormulaId;
+  unitPreference?: UnitPreference;
+  themePreference?: ThemePreference;
+  colorTheme?: ColorThemeId;
+};
+
+function getSettingsRow() {
+  return db.select().from(settings).where(eq(settings.id, SETTINGS_ID)).get();
+}
+
+function upsertSettings(update: SettingsUpdate): void {
+  db.insert(settings)
+    .values({
+      id: SETTINGS_ID,
+      ...DEFAULT_SETTINGS,
+      ...update,
+    })
+    .onConflictDoUpdate({
+      target: settings.id,
+      set: update,
+    })
+    .run();
+}
 
 export function getGlobalFormula(): E1RMFormulaId {
-  const stmt = sqlite.prepareSync(
-    "SELECT e1rm_formula FROM settings WHERE id = 1"
-  );
-  try {
-    const res = stmt.executeSync();
-    const row = res.getFirstSync() as { e1rm_formula: E1RMFormulaId } | null;
-    return row?.e1rm_formula ?? "epley";
-  } finally {
-    stmt.finalizeSync();
-  }
+  return getSettingsRow()?.e1rmFormula ?? DEFAULT_SETTINGS.e1rmFormula;
 }
 
 export function setGlobalFormula(formula: E1RMFormulaId): void {
-  sqlite.runSync(
-    `INSERT INTO settings (id, e1rm_formula, unit_preference)
-     VALUES (1, ?, 'kg')
-     ON CONFLICT(id) DO UPDATE SET e1rm_formula=excluded.e1rm_formula;`,
-    [formula]
-  );
+  upsertSettings({ e1rmFormula: formula });
 }
 
 export function getUnitPreference(): UnitPreference {
-  const stmt = sqlite.prepareSync(
-    "SELECT unit_preference FROM settings WHERE id = 1"
-  );
-  try {
-    const res = stmt.executeSync();
-    const row = res.getFirstSync() as { unit_preference: UnitPreference } | null;
-    return row?.unit_preference ?? "kg";
-  } finally {
-    stmt.finalizeSync();
-  }
+  return getSettingsRow()?.unitPreference ?? DEFAULT_SETTINGS.unitPreference;
 }
 
 export function setUnitPreference(unit: UnitPreference): void {
-  sqlite.runSync(
-    `INSERT INTO settings (id, e1rm_formula, unit_preference)
-     VALUES (1, 'epley', ?)
-     ON CONFLICT(id) DO UPDATE SET unit_preference=excluded.unit_preference;`,
-    [unit]
-  );
+  upsertSettings({ unitPreference: unit });
 }
 
 export function getExerciseFormulaOverride(exerciseId: number): E1RMFormulaId | null {
-  const stmt = sqlite.prepareSync(
-    "SELECT e1rm_formula FROM exercise_formula_overrides WHERE exercise_id = $id"
+  return (
+    db.select()
+      .from(exerciseFormulaOverrides)
+      .where(eq(exerciseFormulaOverrides.exerciseId, exerciseId))
+      .get()?.e1rmFormula ?? null
   );
-  try {
-    const res = stmt.executeSync({ $id: exerciseId });
-    const row = res.getFirstSync() as { e1rm_formula: E1RMFormulaId } | null;
-    return row?.e1rm_formula ?? null;
-  } finally {
-    stmt.finalizeSync();
-  }
 }
 
 export function setExerciseFormulaOverride(
@@ -63,65 +77,36 @@ export function setExerciseFormulaOverride(
   formula: E1RMFormulaId | null
 ): void {
   if (formula === null) {
-    sqlite.runSync(
-      "DELETE FROM exercise_formula_overrides WHERE exercise_id = $id",
-      { $id: exerciseId }
-    );
-  } else {
-    sqlite.runSync(
-      `INSERT INTO exercise_formula_overrides (exercise_id, e1rm_formula)
-       VALUES ($id, $formula)
-       ON CONFLICT(exercise_id) DO UPDATE SET e1rm_formula=excluded.e1rm_formula;`,
-      { $id: exerciseId, $formula: formula }
-    );
+    db.delete(exerciseFormulaOverrides)
+      .where(eq(exerciseFormulaOverrides.exerciseId, exerciseId))
+      .run();
+    return;
   }
+
+  db.insert(exerciseFormulaOverrides)
+    .values({
+      exerciseId,
+      e1rmFormula: formula,
+    })
+    .onConflictDoUpdate({
+      target: exerciseFormulaOverrides.exerciseId,
+      set: { e1rmFormula: formula },
+    })
+    .run();
 }
 
-export type ThemePreference = "system" | "light" | "dark";
-
-export type ColorThemeId = "default" | "ocean" | "forest" | "sunset" | "rose" | "violet" | "slate";
-
 export function getThemePreference(): ThemePreference {
-  const stmt = sqlite.prepareSync(
-    "SELECT theme_preference FROM settings WHERE id = 1"
-  );
-  try {
-    const res = stmt.executeSync();
-    const row = res.getFirstSync() as { theme_preference: ThemePreference } | null;
-    return row?.theme_preference ?? "system";
-  } finally {
-    stmt.finalizeSync();
-  }
+  return getSettingsRow()?.themePreference ?? DEFAULT_SETTINGS.themePreference;
 }
 
 export function setThemePreference(preference: ThemePreference): void {
-  sqlite.runSync(
-    `INSERT INTO settings (id, e1rm_formula, unit_preference, theme_preference, color_theme)
-     VALUES (1, 'epley', 'kg', ?, 'default')
-     ON CONFLICT(id) DO UPDATE SET theme_preference=excluded.theme_preference;`,
-    [preference]
-  );
+  upsertSettings({ themePreference: preference });
 }
 
 export function getColorTheme(): ColorThemeId {
-  const stmt = sqlite.prepareSync(
-    "SELECT color_theme FROM settings WHERE id = 1"
-  );
-  try {
-    const res = stmt.executeSync();
-    const row = res.getFirstSync() as { color_theme: ColorThemeId } | null;
-    return row?.color_theme ?? "default";
-  } finally {
-    stmt.finalizeSync();
-  }
+  return getSettingsRow()?.colorTheme ?? DEFAULT_SETTINGS.colorTheme;
 }
 
 export function setColorTheme(theme: ColorThemeId): void {
-  sqlite.runSync(
-    `INSERT INTO settings (id, e1rm_formula, unit_preference, theme_preference, color_theme)
-     VALUES (1, 'epley', 'kg', 'system', ?)
-     ON CONFLICT(id) DO UPDATE SET color_theme=excluded.color_theme;`,
-    [theme]
-  );
+  upsertSettings({ colorTheme: theme });
 }
-

@@ -1,7 +1,8 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "./connection";
 import { exercises, type ExerciseRow, sets, workoutExercises } from "./schema";
 import { newUid } from "../utils/uid";
+import { clearLinkedProgramExercisesByWorkoutExerciseIds } from "./programCalendar";
 
 export type Exercise = ExerciseRow;
 
@@ -64,14 +65,16 @@ export async function updateExercise(
 }
 
 export async function deleteExercise(id: number): Promise<void> {
-  // Delete related records first to avoid foreign key constraint errors
-  // Delete all sets that reference this exercise
+  const linkedWorkoutExerciseRows = await db
+    .select({ id: workoutExercises.id })
+    .from(workoutExercises)
+    .where(eq(workoutExercises.exerciseId, id));
+  const linkedWorkoutExerciseIds = linkedWorkoutExerciseRows.map((row) => row.id);
+
+  await clearLinkedProgramExercisesByWorkoutExerciseIds(linkedWorkoutExerciseIds);
+
   await db.delete(sets).where(eq(sets.exerciseId, id)).run();
-  
-  // Delete all workout exercises that reference this exercise
   await db.delete(workoutExercises).where(eq(workoutExercises.exerciseId, id)).run();
-  
-  // Now delete the exercise itself
   await db.delete(exercises).where(eq(exercises.id, id)).run();
 }
 
@@ -105,10 +108,10 @@ export async function getPinnedExercises(): Promise<Exercise[]> {
 }
 
 export async function getPinnedExercisesCount(): Promise<number> {
-  const rows = await db.select()
+  const rows = await db.select({ count: sql<number>`count(*)` })
     .from(exercises)
     .where(eq(exercises.isPinned, true));
-  return rows.length;
+  return rows[0]?.count ?? 0;
 }
 
 export async function togglePinExercise(exerciseId: number): Promise<boolean> {
@@ -127,4 +130,3 @@ export async function isExercisePinned(exerciseId: number): Promise<boolean> {
   const exercise = await getExerciseById(exerciseId);
   return exercise?.isPinned ?? false;
 }
-

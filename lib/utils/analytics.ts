@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { E1RMFormulaId } from "../db/connection";
-import { db, hasColumn } from "../db/connection";
+import type { E1RMFormulaId } from "../db/settings";
+import { db } from "../db/connection";
+import { hasColumn } from "../db/introspection";
 import { sets, workoutExercises, workouts } from "../db/schema";
 import { getGlobalFormula } from "../db/settings";
 import { computeE1rm } from "../pr";

@@ -18,7 +18,7 @@ import type {
   ProgramCalendarExerciseRow,
   ProgramCalendarSetRow,
 } from "../db/schema";
-import type { UnitPreference } from "../db/connection";
+import type { UnitPreference } from "../db/settings";
 import { parseWeightInputToKg } from "../utils/units";
 
 type LinkedWorkoutExercise = {
