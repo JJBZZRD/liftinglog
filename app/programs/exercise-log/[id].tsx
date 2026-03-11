@@ -103,29 +103,17 @@ export default function ProgramExerciseLogScreen() {
       setPrescribedSets(prescribed);
       setUserSets(user);
 
-      // Populate input defaults from prescribed values or actuals
+      // Only hydrate actual entered values. Prescriptions should stay as placeholders.
       const wInputs: Record<number, string> = {};
       const rInputs: Record<number, string> = {};
 
       for (const set of allSets) {
-        if (set.isLogged && set.actualWeight != null) {
+        if (set.actualWeight != null) {
           wInputs[set.id] = formatEditableWeightFromKg(set.actualWeight, unitPreference);
-        } else if (set.prescribedIntensityJson) {
-          try {
-            const intensity = JSON.parse(set.prescribedIntensityJson);
-            wInputs[set.id] = getIntensityDefaultValue(intensity);
-          } catch {}
         }
 
-        if (set.isLogged && set.actualReps != null) {
+        if (set.actualReps != null) {
           rInputs[set.id] = String(set.actualReps);
-        } else if (set.prescribedReps) {
-          const repStr = set.prescribedReps;
-          if (repStr.includes("-")) {
-            rInputs[set.id] = repStr.split("-")[0];
-          } else {
-            rInputs[set.id] = repStr;
-          }
         }
       }
 
@@ -163,7 +151,7 @@ export default function ProgramExerciseLogScreen() {
       const wStr = weightInputs[setId] ?? "";
       const rStr = repsInputs[setId] ?? "";
       const weight = parseFloat(wStr) || null;
-      const repsVal = parseInt(rStr) || null;
+      const repsVal = parseInt(rStr, 10) || null;
 
       const isComplete = weight != null && repsVal != null;
 
@@ -183,8 +171,8 @@ export default function ProgramExerciseLogScreen() {
       } else if (latestCalendarSet.setId) {
         await deleteSet(latestCalendarSet.setId);
         await updateSetActuals(setId, {
-          actualWeight: null,
-          actualReps: null,
+          actualWeight: weightKg,
+          actualReps: repsVal,
           isLogged: false,
           setId_fk: null,
         });
@@ -253,15 +241,15 @@ export default function ProgramExerciseLogScreen() {
   }, [
     newWeight,
     newReps,
-      prescribedSets,
-      userSets,
-      calendarExercise,
-      calendarExerciseId,
-      exerciseName,
-      getPerformedAt,
-      unitPreference,
-      loadData,
-    ]);
+    prescribedSets,
+    userSets,
+    calendarExercise,
+    calendarExerciseId,
+    exerciseName,
+    getPerformedAt,
+    unitPreference,
+    loadData,
+  ]);
 
   const handleDeleteUserSet = useCallback(
     async (setId: number) => {
@@ -278,9 +266,26 @@ export default function ProgramExerciseLogScreen() {
     [userSets, calendarExerciseId, loadData]
   );
 
+  const isSetInputComplete = useCallback(
+    (setId: number) => {
+      const weightValue = (weightInputs[setId] ?? "").trim();
+      const repsValue = (repsInputs[setId] ?? "").trim();
+
+      if (!weightValue || !repsValue) {
+        return false;
+      }
+
+      const parsedWeight = parseFloat(weightValue);
+      const parsedReps = parseInt(repsValue, 10);
+
+      return Number.isFinite(parsedWeight) && parsedWeight > 0 && Number.isFinite(parsedReps) && parsedReps > 0;
+    },
+    [weightInputs, repsInputs]
+  );
+
   const allPrescribedComplete = useMemo(
-    () => prescribedSets.length > 0 && prescribedSets.every((s) => s.isLogged),
-    [prescribedSets]
+    () => prescribedSets.length > 0 && prescribedSets.every((set) => isSetInputComplete(set.id)),
+    [isSetInputComplete, prescribedSets]
   );
 
   const handleCompleteExercise = useCallback(async () => {
@@ -328,16 +333,23 @@ export default function ProgramExerciseLogScreen() {
     (set: ProgramCalendarSetRow, index: number) => {
       const wVal = weightInputs[set.id] ?? "";
       const rVal = repsInputs[set.id] ?? "";
-      const isFilled = wVal.length > 0 && rVal.length > 0;
-      const isLogged = set.isLogged;
+      const isComplete = isSetInputComplete(set.id);
 
-      let intensityUnit = "";
+      let intensityPlaceholder = "Intensity";
+      let intensityUnitLabel = weightUnitLabel;
+
       if (set.prescribedIntensityJson) {
         try {
           const intensity = JSON.parse(set.prescribedIntensityJson);
-          intensityUnit = getIntensityUnit(intensity);
+          intensityPlaceholder = getIntensityDefaultValue(intensity) || intensityPlaceholder;
+          const prescribedUnit = getIntensityUnit(intensity);
+          if (prescribedUnit === "RPE" || prescribedUnit === "RIR" || prescribedUnit === "%") {
+            intensityUnitLabel = prescribedUnit;
+          }
         } catch {}
       }
+
+      const repsPlaceholder = set.prescribedReps || "Reps";
 
       const roleLabel = set.prescribedRole && set.prescribedRole !== "work"
         ? set.prescribedRole.charAt(0).toUpperCase() + set.prescribedRole.slice(1)
@@ -349,16 +361,8 @@ export default function ProgramExerciseLogScreen() {
           style={[
             styles.setRow,
             {
-              backgroundColor: isLogged
-                ? rawColors.success + "18"
-                : isFilled
-                ? rawColors.primary + "12"
-                : rawColors.surfaceSecondary,
-              borderColor: isLogged
-                ? rawColors.success + "40"
-                : isFilled
-                ? rawColors.primary + "30"
-                : rawColors.borderLight,
+              backgroundColor: isComplete ? rawColors.success + "18" : rawColors.surfaceSecondary,
+              borderColor: isComplete ? rawColors.success + "40" : rawColors.borderLight,
             },
           ]}
         >
@@ -366,13 +370,11 @@ export default function ProgramExerciseLogScreen() {
             style={[
               styles.setNumber,
               {
-                backgroundColor: isLogged
-                  ? rawColors.success
-                  : rawColors.primary,
+                backgroundColor: isComplete ? rawColors.success : rawColors.foregroundSecondary,
               },
             ]}
           >
-            {isLogged ? (
+            {isComplete ? (
               <MaterialCommunityIcons
                 name="check"
                 size={14}
@@ -392,20 +394,20 @@ export default function ProgramExerciseLogScreen() {
                   styles.setInput,
                   {
                     backgroundColor: rawColors.surface,
-                    borderColor: rawColors.borderLight,
+                    borderColor: isComplete ? rawColors.success + "45" : rawColors.borderLight,
                     color: rawColors.foreground,
                   },
                 ]}
                 value={wVal}
                 onChangeText={(v) => handleWeightChange(set.id, v)}
                 onBlur={() => handleSetBlur(set.id)}
-                placeholder={intensityUnit === "RPE" || intensityUnit === "RIR" ? "Wt" : "Wt"}
+                placeholder={intensityPlaceholder}
                 placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="decimal-pad"
                 selectTextOnFocus
               />
               <Text style={[styles.unitLabel, { color: rawColors.foregroundSecondary }]}>
-                {weightUnitLabel}
+                {intensityUnitLabel}
               </Text>
             </View>
             <View style={styles.inputGroup}>
@@ -414,14 +416,14 @@ export default function ProgramExerciseLogScreen() {
                   styles.setInput,
                   {
                     backgroundColor: rawColors.surface,
-                    borderColor: rawColors.borderLight,
+                    borderColor: isComplete ? rawColors.success + "45" : rawColors.borderLight,
                     color: rawColors.foreground,
                   },
                 ]}
                 value={rVal}
                 onChangeText={(v) => handleRepsChange(set.id, v)}
                 onBlur={() => handleSetBlur(set.id)}
-                placeholder="Reps"
+                placeholder={repsPlaceholder}
                 placeholderTextColor={rawColors.foregroundMuted}
                 keyboardType="number-pad"
                 selectTextOnFocus
@@ -449,6 +451,7 @@ export default function ProgramExerciseLogScreen() {
       repsInputs,
       rawColors,
       weightUnitLabel,
+      isSetInputComplete,
       handleWeightChange,
       handleRepsChange,
       handleSetBlur,
