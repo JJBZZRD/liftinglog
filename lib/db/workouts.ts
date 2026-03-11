@@ -6,6 +6,11 @@ import { rebuildPREventsForExercise } from "./prEvents";
 import { getGlobalFormula } from "./settings";
 import { newUid } from "../utils/uid";
 import { convertWeightToKg } from "../utils/units";
+import {
+  clearLinkedProgramExercisesByWorkoutExerciseIds,
+  clearLinkedProgramSetsByWorkoutSetIds,
+  syncLinkedProgramSetsByWorkoutSetIds,
+} from "./programCalendar";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
@@ -109,6 +114,15 @@ export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<
     .limit(1);
   const exerciseId = we[0]?.exerciseId ?? null;
 
+  const linkedSets = await db
+    .select({ id: sets.id })
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, workoutExerciseId));
+  const linkedSetIds = linkedSets.map((row) => row.id);
+
+  await clearLinkedProgramSetsByWorkoutSetIds(linkedSetIds);
+  await clearLinkedProgramExercisesByWorkoutExerciseIds([workoutExerciseId]);
+
   // Delete associated sets first
   await db.delete(sets).where(eq(sets.workoutExerciseId, workoutExerciseId)).run();
   // Then delete the workout_exercise entry
@@ -124,6 +138,23 @@ export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<
  * Also removes the workout_exercise entry if it exists.
  */
 export async function deleteExerciseSession(workoutId: number, exerciseId: number): Promise<void> {
+  const linkedSets = await db
+    .select({ id: sets.id })
+    .from(sets)
+    .where(and(eq(sets.workoutId, workoutId), eq(sets.exerciseId, exerciseId)));
+  const linkedSetIds = linkedSets.map((row) => row.id);
+
+  const linkedWorkoutExercises = await db
+    .select({ id: workoutExercises.id })
+    .from(workoutExercises)
+    .where(
+      and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId))
+    );
+  const linkedWorkoutExerciseIds = linkedWorkoutExercises.map((row) => row.id);
+
+  await clearLinkedProgramSetsByWorkoutSetIds(linkedSetIds);
+  await clearLinkedProgramExercisesByWorkoutExerciseIds(linkedWorkoutExerciseIds);
+
   // Delete sets for this exercise in this workout
   await db.delete(sets).where(
     and(eq(sets.workoutId, workoutId), eq(sets.exerciseId, exerciseId))
@@ -169,6 +200,36 @@ export async function listWorkoutExercises(workoutId: number): Promise<WorkoutEx
     .where(eq(workoutExercises.workoutId, workoutId))
     .orderBy(workoutExercises.orderIndex);
   return rows;
+}
+
+async function maybeDeleteCompletedWorkoutExerciseIfEmpty(
+  workoutExerciseId: number | null
+): Promise<void> {
+  if (!workoutExerciseId || !canQueryWorkoutExercises("maybeDeleteCompletedWorkoutExerciseIfEmpty")) {
+    return;
+  }
+
+  const remainingSets = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, workoutExerciseId));
+
+  if ((remainingSets[0]?.count ?? 0) > 0) {
+    return;
+  }
+
+  const rows = await db
+    .select({ completedAt: workoutExercises.completedAt })
+    .from(workoutExercises)
+    .where(eq(workoutExercises.id, workoutExerciseId))
+    .limit(1);
+
+  if (rows[0]?.completedAt === null || rows.length === 0) {
+    return;
+  }
+
+  await clearLinkedProgramExercisesByWorkoutExerciseIds([workoutExerciseId]);
+  await db.delete(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId)).run();
 }
 
 /**
@@ -340,6 +401,7 @@ export async function updateSet(setId: number, updates: {
   if (updates.performed_at !== undefined) mapped.performedAt = updates.performed_at;
   if (Object.keys(mapped).length === 0) return;
   await db.update(sets).set(mapped).where(eq(sets.id, setId)).run();
+  await syncLinkedProgramSetsByWorkoutSetIds([setId]);
 
   if (affectsPR && exerciseIdForPR !== null) {
     await rebuildPREventsForExercise(exerciseIdForPR);
@@ -352,8 +414,15 @@ export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): P
     .from(sets)
     .where(eq(sets.workoutExerciseId, workoutExerciseId));
   const exerciseIds = [...new Set(exerciseRows.map((row) => row.exerciseId))];
+  const setIds = await db
+    .select({ id: sets.id })
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, workoutExerciseId));
+
+  await clearLinkedProgramSetsByWorkoutSetIds(setIds.map((row) => row.id));
 
   await db.delete(sets).where(eq(sets.workoutExerciseId, workoutExerciseId)).run();
+  await maybeDeleteCompletedWorkoutExerciseIfEmpty(workoutExerciseId);
 
   for (const exerciseId of exerciseIds) {
     await rebuildPREventsForExercise(exerciseId);
@@ -362,13 +431,19 @@ export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): P
 
 export async function deleteSet(setId: number): Promise<void> {
   const rows = await db
-    .select({ exerciseId: sets.exerciseId })
+    .select({
+      exerciseId: sets.exerciseId,
+      workoutExerciseId: sets.workoutExerciseId,
+    })
     .from(sets)
     .where(eq(sets.id, setId))
     .limit(1);
   const exerciseId = rows[0]?.exerciseId ?? null;
+  const workoutExerciseId = rows[0]?.workoutExerciseId ?? null;
 
+  await clearLinkedProgramSetsByWorkoutSetIds([setId]);
   await db.delete(sets).where(eq(sets.id, setId)).run();
+  await maybeDeleteCompletedWorkoutExerciseIfEmpty(workoutExerciseId);
 
   if (exerciseId !== null) {
     await rebuildPREventsForExercise(exerciseId);

@@ -5,6 +5,7 @@ import {
   programCalendarExercises,
   programCalendarSets,
   pslPrograms,
+  sets,
 } from "./schema";
 import type {
   ProgramCalendarRow,
@@ -267,6 +268,16 @@ export async function deleteUserSet(setId: number): Promise<void> {
     );
 }
 
+export async function linkCalendarExerciseToWorkoutExercise(
+  calendarExerciseId: number,
+  workoutExerciseId: number | null
+): Promise<void> {
+  await db
+    .update(programCalendarExercises)
+    .set({ workoutExerciseId })
+    .where(eq(programCalendarExercises.id, calendarExerciseId));
+}
+
 // ── Completion Status ───────────────────────────────────────
 
 export async function updateExerciseStatus(
@@ -283,8 +294,10 @@ export async function updateSessionStatus(
   calendarId: number,
   status: "pending" | "partial" | "complete" | "missed"
 ): Promise<void> {
-  const updateData: Record<string, unknown> = { status };
-  if (status === "complete") updateData.completedAt = Date.now();
+  const updateData: Record<string, unknown> = {
+    status,
+    completedAt: status === "complete" ? Date.now() : null,
+  };
   await db
     .update(programCalendar)
     .set(updateData)
@@ -324,6 +337,23 @@ export async function computeSessionStatus(
   return "pending";
 }
 
+export async function syncStatusesForCalendarExercise(
+  calendarExerciseId: number
+): Promise<"pending" | "partial" | "complete"> {
+  const calendarExercise = await getCalendarExerciseById(calendarExerciseId);
+  if (!calendarExercise) {
+    return "pending";
+  }
+
+  const exerciseStatus = await computeExerciseStatus(calendarExerciseId);
+  await updateExerciseStatus(calendarExerciseId, exerciseStatus);
+
+  const sessionStatus = await computeSessionStatus(calendarExercise.calendarId);
+  await updateSessionStatus(calendarExercise.calendarId, sessionStatus);
+
+  return exerciseStatus;
+}
+
 export async function markSessionComplete(calendarId: number): Promise<void> {
   const exercises = await db
     .select()
@@ -360,6 +390,16 @@ export async function getCalendarExerciseById(
   return rows[0];
 }
 
+export async function getCalendarSetById(
+  id: number
+): Promise<ProgramCalendarSetRow | undefined> {
+  const rows = await db
+    .select()
+    .from(programCalendarSets)
+    .where(eq(programCalendarSets.id, id));
+  return rows[0];
+}
+
 export async function getSetsForCalendarExercise(
   calendarExerciseId: number
 ): Promise<ProgramCalendarSetRow[]> {
@@ -378,6 +418,123 @@ export async function linkExerciseToDb(
     .update(programCalendarExercises)
     .set({ exerciseId })
     .where(eq(programCalendarExercises.id, calendarExerciseId));
+}
+
+export async function syncLinkedProgramSetsByWorkoutSetIds(
+  workoutSetIds: number[]
+): Promise<void> {
+  const uniqueSetIds = [...new Set(workoutSetIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (uniqueSetIds.length === 0) {
+    return;
+  }
+
+  const rows = await db
+    .select({
+      calendarSetId: programCalendarSets.id,
+      calendarExerciseId: programCalendarSets.calendarExerciseId,
+      existingLoggedAt: programCalendarSets.loggedAt,
+      linkedSetId: programCalendarSets.setId,
+      weightKg: sets.weightKg,
+      reps: sets.reps,
+      rpe: sets.rpe,
+    })
+    .from(programCalendarSets)
+    .leftJoin(sets, eq(programCalendarSets.setId, sets.id))
+    .where(inArray(programCalendarSets.setId, uniqueSetIds));
+
+  const calendarExerciseIds = new Set<number>();
+
+  for (const row of rows) {
+    const isLogged =
+      row.weightKg !== null &&
+      row.reps !== null &&
+      row.weightKg > 0 &&
+      row.reps > 0;
+
+    await db
+      .update(programCalendarSets)
+      .set({
+        actualWeight: isLogged ? row.weightKg : null,
+        actualReps: isLogged ? row.reps : null,
+        actualRpe: isLogged ? row.rpe : null,
+        isLogged,
+        loggedAt: isLogged ? row.existingLoggedAt ?? Date.now() : null,
+        setId: isLogged ? row.linkedSetId : null,
+      })
+      .where(eq(programCalendarSets.id, row.calendarSetId));
+
+    calendarExerciseIds.add(row.calendarExerciseId);
+  }
+
+  for (const calendarExerciseId of calendarExerciseIds) {
+    await syncStatusesForCalendarExercise(calendarExerciseId);
+  }
+}
+
+export async function clearLinkedProgramSetsByWorkoutSetIds(
+  workoutSetIds: number[]
+): Promise<void> {
+  const uniqueSetIds = [...new Set(workoutSetIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (uniqueSetIds.length === 0) {
+    return;
+  }
+
+  const rows = await db
+    .select({
+      calendarSetId: programCalendarSets.id,
+      calendarExerciseId: programCalendarSets.calendarExerciseId,
+    })
+    .from(programCalendarSets)
+    .where(inArray(programCalendarSets.setId, uniqueSetIds));
+
+  const calendarExerciseIds = new Set<number>();
+
+  for (const row of rows) {
+    await db
+      .update(programCalendarSets)
+      .set({
+        actualWeight: null,
+        actualReps: null,
+        actualRpe: null,
+        isLogged: false,
+        loggedAt: null,
+        setId: null,
+      })
+      .where(eq(programCalendarSets.id, row.calendarSetId));
+
+    calendarExerciseIds.add(row.calendarExerciseId);
+  }
+
+  for (const calendarExerciseId of calendarExerciseIds) {
+    await syncStatusesForCalendarExercise(calendarExerciseId);
+  }
+}
+
+export async function clearLinkedProgramExercisesByWorkoutExerciseIds(
+  workoutExerciseIds: number[]
+): Promise<void> {
+  const uniqueWorkoutExerciseIds = [
+    ...new Set(workoutExerciseIds.filter((id) => Number.isFinite(id) && id > 0)),
+  ];
+  if (uniqueWorkoutExerciseIds.length === 0) {
+    return;
+  }
+
+  const rows = await db
+    .select({ id: programCalendarExercises.id })
+    .from(programCalendarExercises)
+    .where(inArray(programCalendarExercises.workoutExerciseId, uniqueWorkoutExerciseIds));
+
+  for (const row of rows) {
+    await db
+      .update(programCalendarExercises)
+      .set({ workoutExerciseId: null })
+      .where(eq(programCalendarExercises.id, row.id));
+  }
+
+  for (const row of rows) {
+    await syncStatusesForCalendarExercise(row.id);
+  }
 }
 
 export async function markMissedSessions(beforeDateIso: string): Promise<void> {

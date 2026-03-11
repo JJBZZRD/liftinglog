@@ -267,6 +267,18 @@ try {
   // Column already exists, ignore
 }
 
+// Add program workout linkage columns if they don't exist
+try {
+  sqlite.execSync(`ALTER TABLE program_calendar_exercises ADD COLUMN workout_exercise_id INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  sqlite.execSync(`ALTER TABLE program_calendar_sets ADD COLUMN set_id INTEGER;`);
+} catch {
+  // Column already exists, ignore
+}
+
 // Add asset_id column to media table if it doesn't exist
 try {
   sqlite.execSync(`ALTER TABLE media ADD COLUMN asset_id TEXT;`);
@@ -484,6 +496,52 @@ function logWorkoutExerciseColumnStatus() {
 
 ensureWorkoutExerciseIndexes();
 logWorkoutExerciseColumnStatus();
+
+try {
+  sqlite.execSync(`CREATE INDEX IF NOT EXISTS idx_program_calendar_exercises_workout_exercise_id ON program_calendar_exercises(workout_exercise_id);`);
+} catch (error) {
+  if (__DEV__) {
+    console.warn("[db] Failed to create idx_program_calendar_exercises_workout_exercise_id:", error);
+  }
+}
+
+try {
+  sqlite.execSync(`CREATE INDEX IF NOT EXISTS idx_program_calendar_sets_set_id ON program_calendar_sets(set_id);`);
+} catch (error) {
+  if (__DEV__) {
+    console.warn("[db] Failed to create idx_program_calendar_sets_set_id:", error);
+  }
+}
+
+try {
+  sqlite.execSync(`
+    UPDATE workout_exercises
+    SET completed_at = COALESCE(
+      performed_at,
+      (
+        SELECT MAX(s.performed_at)
+        FROM sets s
+        WHERE s.workout_exercise_id = workout_exercises.id
+      ),
+      strftime('%s','now') * 1000
+    )
+    WHERE completed_at IS NULL
+      AND id IN (
+        SELECT DISTINCT workout_exercise_id
+        FROM program_calendar_exercises
+        WHERE workout_exercise_id IS NOT NULL
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM sets s
+        WHERE s.workout_exercise_id = workout_exercises.id
+      );
+  `);
+} catch (error) {
+  if (__DEV__) {
+    console.warn("[db] Failed to repair open program-linked workout_exercises:", error);
+  }
+}
 
 export const db = drizzle(sqlite);
 

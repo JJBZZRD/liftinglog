@@ -1,8 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   Keyboard,
   Pressable,
   ScrollView,
@@ -21,20 +22,22 @@ import { useTheme } from "../../../lib/theme/ThemeContext";
 import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import {
   getCalendarExerciseById,
+  getCalendarSetById,
   getSetsForCalendarExercise,
   updateSetActuals,
   addUserSet,
   deleteUserSet,
-  updateExerciseStatus,
-  computeExerciseStatus,
+  syncStatusesForCalendarExercise,
+  type ProgramCalendarExerciseRow,
   type ProgramCalendarSetRow,
 } from "../../../lib/db/programCalendar";
 import {
-  getOrCreateActiveWorkout,
-  addWorkoutExercise,
-  addSet,
+  deleteSet,
 } from "../../../lib/db/workouts";
-import { getExerciseByName } from "../../../lib/db/exercises";
+import {
+  persistCompletedProgramExercise,
+  persistProgramSetToWorkoutHistory,
+} from "../../../lib/programs/programExerciseHistory";
 import {
   getIntensityDefaultValue,
   getIntensityUnit,
@@ -53,6 +56,7 @@ export default function ProgramExerciseLogScreen() {
   const dateIso = params.dateIso;
 
   const [exerciseName, setExerciseName] = useState("");
+  const [calendarExercise, setCalendarExercise] = useState<ProgramCalendarExerciseRow | null>(null);
   const [prescribedSets, setPrescribedSets] = useState<ProgramCalendarSetRow[]>([]);
   const [userSets, setUserSets] = useState<ProgramCalendarSetRow[]>([]);
   // Per-set input state: keyed by set id
@@ -89,6 +93,7 @@ export default function ProgramExerciseLogScreen() {
       const calEx = await getCalendarExerciseById(calendarExerciseId);
       if (!calEx) return;
 
+      setCalendarExercise(calEx);
       setExerciseName(calEx.exerciseName);
 
       const allSets = await getSetsForCalendarExercise(calendarExerciseId);
@@ -131,6 +136,10 @@ export default function ProgramExerciseLogScreen() {
     }
   }, [calendarExerciseId, unitPreference]);
 
+  const getPerformedAt = useCallback(() => {
+    return dateIso ? new Date(dateIso + "T12:00:00").getTime() : Date.now();
+  }, [dateIso]);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -147,6 +156,10 @@ export default function ProgramExerciseLogScreen() {
 
   const handleSetBlur = useCallback(
     async (setId: number) => {
+      const calendarSet = [...prescribedSets, ...userSets].find((set) => set.id === setId);
+      if (!calendarSet) return;
+      const latestCalendarSet = (await getCalendarSetById(setId)) ?? calendarSet;
+
       const wStr = weightInputs[setId] ?? "";
       const rStr = repsInputs[setId] ?? "";
       const weight = parseFloat(wStr) || null;
@@ -156,17 +169,48 @@ export default function ProgramExerciseLogScreen() {
 
       const weightKg = weight != null ? parseWeightInputToKg(wStr, unitPreference) : null;
 
-      await updateSetActuals(setId, {
-        actualWeight: weightKg,
-        actualReps: repsVal,
-        isLogged: isComplete,
-      });
+      if (isComplete) {
+        await persistProgramSetToWorkoutHistory({
+          calendarExerciseId,
+          calendarExercise,
+          exerciseName,
+          set: latestCalendarSet,
+          weightInput: wStr,
+          repsInput: rStr,
+          unitPreference,
+          performedAt: getPerformedAt(),
+        });
+      } else if (latestCalendarSet.setId) {
+        await deleteSet(latestCalendarSet.setId);
+        await updateSetActuals(setId, {
+          actualWeight: null,
+          actualReps: null,
+          isLogged: false,
+          setId_fk: null,
+        });
+      } else {
+        await updateSetActuals(setId, {
+          actualWeight: weightKg,
+          actualReps: repsVal,
+          isLogged: false,
+        });
+      }
 
-      // Recompute exercise status
-      const status = await computeExerciseStatus(calendarExerciseId);
-      await updateExerciseStatus(calendarExerciseId, status);
+      await syncStatusesForCalendarExercise(calendarExerciseId);
+      await loadData();
     },
-    [weightInputs, repsInputs, calendarExerciseId, unitPreference]
+    [
+      weightInputs,
+      repsInputs,
+      prescribedSets,
+      userSets,
+      calendarExercise,
+      calendarExerciseId,
+      exerciseName,
+      getPerformedAt,
+      loadData,
+      unitPreference,
+    ]
   );
 
   const handleAddUserSet = useCallback(async () => {
@@ -189,17 +233,49 @@ export default function ProgramExerciseLogScreen() {
       });
     }
 
+    if (weightKg != null && repsVal != null) {
+      await persistProgramSetToWorkoutHistory({
+        calendarExerciseId,
+        calendarExercise,
+        exerciseName,
+        set: newSet,
+        weightInput: newWeight,
+        repsInput: newReps,
+        unitPreference,
+        performedAt: getPerformedAt(),
+      });
+    }
+
     setNewWeight("");
     setNewReps("");
+    await syncStatusesForCalendarExercise(calendarExerciseId);
     await loadData();
-  }, [newWeight, newReps, prescribedSets, userSets, calendarExerciseId, unitPreference, loadData]);
+  }, [
+    newWeight,
+    newReps,
+      prescribedSets,
+      userSets,
+      calendarExercise,
+      calendarExerciseId,
+      exerciseName,
+      getPerformedAt,
+      unitPreference,
+      loadData,
+    ]);
 
   const handleDeleteUserSet = useCallback(
     async (setId: number) => {
+      const setToDelete = userSets.find((set) => set.id === setId);
+      const latestCalendarSet =
+        setToDelete ? (await getCalendarSetById(setId)) ?? setToDelete : null;
+      if (latestCalendarSet?.setId) {
+        await deleteSet(latestCalendarSet.setId);
+      }
       await deleteUserSet(setId);
+      await syncStatusesForCalendarExercise(calendarExerciseId);
       await loadData();
     },
-    [loadData]
+    [userSets, calendarExerciseId, loadData]
   );
 
   const allPrescribedComplete = useMemo(
@@ -211,88 +287,38 @@ export default function ProgramExerciseLogScreen() {
     setCompleteModalVisible(false);
     Keyboard.dismiss();
 
-    // Log any filled-in but not-yet-logged sets
-    for (const set of [...prescribedSets, ...userSets]) {
-      const wStr = weightInputs[set.id] ?? "";
-      const rStr = repsInputs[set.id] ?? "";
-      const weight = parseFloat(wStr) || null;
-      const repsVal = parseInt(rStr) || null;
-
-      if (weight != null && repsVal != null && !set.isLogged) {
-        const weightKg = parseWeightInputToKg(wStr, unitPreference);
-        await updateSetActuals(set.id, {
-          actualWeight: weightKg,
-          actualReps: repsVal,
-          isLogged: true,
-        });
-      }
-    }
-
-    // Also log user-added sets that are complete
-    for (const set of userSets) {
-      const wStr = weightInputs[set.id] ?? "";
-      const rStr = repsInputs[set.id] ?? "";
-      const weight = parseFloat(wStr) || null;
-      const repsVal = parseInt(rStr) || null;
-
-      if (weight != null && repsVal != null && !set.isLogged) {
-        const weightKg = parseWeightInputToKg(wStr, unitPreference);
-        await updateSetActuals(set.id, {
-          actualWeight: weightKg,
-          actualReps: repsVal,
-          isLogged: true,
-        });
-      }
-    }
-
     // Create actual workout records for exercise history tracking
     try {
-      const exercise = await getExerciseByName(exerciseName);
-      if (exercise) {
-        const performedAt = dateIso ? new Date(dateIso + "T12:00:00").getTime() : Date.now();
-        const workout = await getOrCreateActiveWorkout();
-        const weId = await addWorkoutExercise({
-          workout_id: workout.id,
-          exercise_id: exercise.id,
-          order_index: 0,
-          performed_at: performedAt,
-        });
-
-        const allSets = [...prescribedSets, ...userSets];
-        for (let i = 0; i < allSets.length; i++) {
-          const set = allSets[i];
-          if (set.isLogged || (weightInputs[set.id] && repsInputs[set.id])) {
-            const wKg = set.actualWeight ?? parseWeightInputToKg(weightInputs[set.id] ?? "0", unitPreference);
-            const r = set.actualReps ?? parseInt(repsInputs[set.id] ?? "0");
-            if (wKg && r) {
-              const setId = await addSet({
-                workout_id: workout.id,
-                exercise_id: exercise.id,
-                workout_exercise_id: weId,
-                set_index: i,
-                weight_kg: wKg,
-                reps: r,
-                performed_at: performedAt,
-              });
-              await updateSetActuals(set.id, { setId_fk: setId });
-            }
-          }
-        }
-      }
+      await persistCompletedProgramExercise({
+        calendarExerciseId,
+        calendarExercise,
+        exerciseName,
+        sets: [...prescribedSets, ...userSets],
+        weightInputs,
+        repsInputs,
+        unitPreference,
+        performedAt: getPerformedAt(),
+      });
+      await syncStatusesForCalendarExercise(calendarExerciseId);
+      router.back();
     } catch (e) {
       console.warn("Failed to create workout records:", e);
+      Alert.alert(
+        "Save failed",
+        e instanceof Error ? e.message : "The workout could not be saved to history."
+      );
+      await loadData();
     }
-
-    await updateExerciseStatus(calendarExerciseId, "complete");
-    router.back();
   }, [
+    calendarExercise,
     prescribedSets,
     userSets,
     weightInputs,
     repsInputs,
     calendarExerciseId,
     exerciseName,
-    dateIso,
+    getPerformedAt,
+    loadData,
     unitPreference,
   ]);
 
