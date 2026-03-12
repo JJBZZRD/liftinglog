@@ -252,101 +252,99 @@ export default function ManageProgramsScreen() {
       return (
         <Pressable
           onPress={() => handleProgramPress(item)}
-          className="rounded-2xl mb-2.5"
-          style={({ pressed }) => ({
-            backgroundColor: pressed
-              ? rawColors.pressed
-              : isActive
-                ? rawColors.primary + "08"
-                : rawColors.surface,
-            shadowColor: rawColors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            elevation: 3,
-            padding: 14,
-          })}
+          style={[
+            styles.programCard,
+            {
+              backgroundColor: rawColors.surface,
+              shadowColor: rawColors.shadow,
+            },
+          ]}
         >
-          <View className="flex-row items-center">
-            <View
-              className="w-9 h-9 rounded-full items-center justify-center mr-3"
-              style={{
-                backgroundColor: isActive
-                  ? rawColors.primary
-                  : rawColors.surfaceSecondary,
-              }}
-            >
-              <Text
-                className="text-[15px] font-bold"
-                style={{
-                  color: isActive
-                    ? rawColors.primaryForeground
-                    : rawColors.foregroundSecondary,
-                }}
-              >
-                {firstLetter}
-              </Text>
-            </View>
-
-            <Text
-              className="flex-1 text-[15px] font-semibold text-foreground"
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
-
-            {isActive && (
-              <View
-                className="flex-row items-center px-2 py-0.5 rounded-lg ml-2"
-                style={{ backgroundColor: rawColors.success + "18" }}
-              >
+          {({ pressed }) => (
+            <View style={[styles.programCardInner, pressed && { opacity: 0.7 }]}>
+              <View style={styles.programCardRow}>
                 <View
-                  className="w-1.5 h-1.5 rounded-full mr-1"
-                  style={{ backgroundColor: rawColors.success }}
-                />
-                <Text
-                  className="text-[11px] font-bold"
-                  style={{ color: rawColors.success }}
+                  style={[
+                    styles.programInitialCircle,
+                    {
+                      backgroundColor: isActive
+                        ? rawColors.primary
+                        : rawColors.surfaceSecondary,
+                    },
+                  ]}
                 >
-                  Active
-                </Text>
-              </View>
-            )}
-
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={20}
-              color={rawColors.foregroundSecondary}
-              style={{ marginLeft: 6 }}
-            />
-          </View>
-
-          {(item.description || (isActive && item.startDate)) ? (
-            <View style={{ marginLeft: 48, marginTop: 4 }}>
-              {item.description ? (
-                <Text
-                  className="text-[13px] text-foreground-secondary"
-                  style={{ lineHeight: 18 }}
-                  numberOfLines={2}
-                >
-                  {item.description}
-                </Text>
-              ) : null}
-              {isActive && item.startDate ? (
-                <View className="flex-row items-center mt-1" style={{ gap: 4 }}>
-                  <MaterialCommunityIcons
-                    name="calendar-range"
-                    size={12}
-                    color={rawColors.foregroundMuted}
-                  />
-                  <Text className="text-xs text-foreground-muted">
-                    {item.startDate}
-                    {item.endDate ? ` → ${item.endDate}` : ""}
+                  <Text
+                    style={[
+                      styles.programInitialText,
+                      {
+                        color: isActive
+                          ? rawColors.primaryForeground
+                          : rawColors.foregroundSecondary,
+                      },
+                    ]}
+                  >
+                    {firstLetter}
                   </Text>
+                </View>
+
+                <Text
+                  style={[styles.programName, { color: rawColors.foreground }]}
+                  numberOfLines={1}
+                >
+                  {item.name}
+                </Text>
+
+                {isActive && (
+                  <View
+                    style={[
+                      styles.activeBadge,
+                      { backgroundColor: rawColors.success + "18" },
+                    ]}
+                  >
+                    <View
+                      style={[styles.activeDot, { backgroundColor: rawColors.success }]}
+                    />
+                    <Text style={[styles.activeText, { color: rawColors.success }]}>
+                      Active
+                    </Text>
+                  </View>
+                )}
+
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={rawColors.foregroundSecondary}
+                  style={{ marginLeft: 6 }}
+                />
+              </View>
+
+              {(item.description || (isActive && item.startDate)) ? (
+                <View style={styles.programMeta}>
+                  {item.description ? (
+                    <Text
+                      style={[styles.programDescription, { color: rawColors.foregroundSecondary }]}
+                      numberOfLines={2}
+                    >
+                      {item.description}
+                    </Text>
+                  ) : null}
+                  {isActive && item.startDate ? (
+                    <View style={styles.programDates}>
+                      <MaterialCommunityIcons
+                        name="calendar-range"
+                        size={12}
+                        color={rawColors.foregroundMuted}
+                      />
+                      <Text style={[styles.programDateText, { color: rawColors.foregroundMuted }]}>
+                        {item.startDate}
+                        {item.endDate ? ` → ${item.endDate}` : ""}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
             </View>
-          ) : null}
+          )}
         </Pressable>
       );
     },
@@ -734,6 +732,73 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 32,
+  },
+  programCard: {
+    marginBottom: 10,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  programCardInner: {
+    padding: 16,
+  },
+  programCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  programInitialCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  programInitialText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  programName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  activeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  activeText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  programMeta: {
+    marginLeft: 48,
+    marginTop: 4,
+  },
+  programDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  programDates: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    gap: 4,
+  },
+  programDateText: {
+    fontSize: 12,
   },
   emptyState: {
     flex: 1,
