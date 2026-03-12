@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, asc, desc, sql, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "./connection";
 import {
   programCalendar,
@@ -15,6 +15,13 @@ import type {
 import type { CalendarEntry } from "../programs/psl/pslService";
 
 export type { ProgramCalendarRow, ProgramCalendarExerciseRow, ProgramCalendarSetRow };
+
+export type ProgrammedExerciseForDate = {
+  calendar: ProgramCalendarRow;
+  calendarExercise: ProgramCalendarExerciseRow;
+  programName: string;
+  sets: ProgramCalendarSetRow[];
+};
 
 // ── Calendar Entries ────────────────────────────────────────
 
@@ -400,6 +407,54 @@ export async function getCalendarSetById(
   return rows[0];
 }
 
+export async function getCalendarSetByWorkoutSetId(
+  workoutSetId: number
+): Promise<ProgramCalendarSetRow | undefined> {
+  const rows = await db
+    .select()
+    .from(programCalendarSets)
+    .where(eq(programCalendarSets.setId, workoutSetId))
+    .limit(1);
+  return rows[0];
+}
+
+export async function listCalendarSetsByWorkoutSetIds(
+  workoutSetIds: number[]
+): Promise<ProgramCalendarSetRow[]> {
+  const uniqueSetIds = [...new Set(workoutSetIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (uniqueSetIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select()
+    .from(programCalendarSets)
+    .where(inArray(programCalendarSets.setId, uniqueSetIds));
+}
+
+export async function resolveWorkoutExerciseIdForCalendarExercise(
+  calendarExerciseId: number
+): Promise<number | null> {
+  const calendarExercise = await getCalendarExerciseById(calendarExerciseId);
+  if (calendarExercise?.workoutExerciseId) {
+    return calendarExercise.workoutExerciseId;
+  }
+
+  const rows = await db
+    .select({ workoutExerciseId: sets.workoutExerciseId })
+    .from(programCalendarSets)
+    .innerJoin(sets, eq(programCalendarSets.setId, sets.id))
+    .where(eq(programCalendarSets.calendarExerciseId, calendarExerciseId))
+    .limit(1);
+
+  const recoveredWorkoutExerciseId = rows[0]?.workoutExerciseId ?? null;
+  if (recoveredWorkoutExerciseId) {
+    await linkCalendarExerciseToWorkoutExercise(calendarExerciseId, recoveredWorkoutExerciseId);
+  }
+
+  return recoveredWorkoutExerciseId;
+}
+
 export async function getSetsForCalendarExercise(
   calendarExerciseId: number
 ): Promise<ProgramCalendarSetRow[]> {
@@ -408,6 +463,97 @@ export async function getSetsForCalendarExercise(
     .from(programCalendarSets)
     .where(eq(programCalendarSets.calendarExerciseId, calendarExerciseId))
     .orderBy(asc(programCalendarSets.setIndex));
+}
+
+export async function getProgrammedExercisesForExerciseOnDate(params: {
+  dateIso: string;
+  exerciseId?: number | null;
+  exerciseName?: string | null;
+  calendarExerciseId?: number | null;
+}): Promise<ProgrammedExerciseForDate[]> {
+  const normalizedExerciseName = params.exerciseName?.trim() ?? "";
+
+  const exerciseFilters = params.calendarExerciseId
+    ? [eq(programCalendarExercises.id, params.calendarExerciseId)]
+    : [
+        params.exerciseId ? eq(programCalendarExercises.exerciseId, params.exerciseId) : null,
+        normalizedExerciseName
+          ? and(
+              isNull(programCalendarExercises.exerciseId),
+              eq(programCalendarExercises.exerciseName, normalizedExerciseName)
+            )
+          : null,
+      ].filter((value): value is NonNullable<typeof value> => value !== null);
+
+  if (exerciseFilters.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      calendarId: programCalendar.id,
+      calendarProgramId: programCalendar.programId,
+      calendarPslSessionId: programCalendar.pslSessionId,
+      calendarSessionName: programCalendar.sessionName,
+      calendarDateIso: programCalendar.dateIso,
+      calendarSequence: programCalendar.sequence,
+      calendarStatus: programCalendar.status,
+      calendarCompletedAt: programCalendar.completedAt,
+      calendarExerciseId: programCalendarExercises.id,
+      calendarExerciseCalendarId: programCalendarExercises.calendarId,
+      calendarExerciseName: programCalendarExercises.exerciseName,
+      calendarExerciseExerciseId: programCalendarExercises.exerciseId,
+      calendarExerciseOrderIndex: programCalendarExercises.orderIndex,
+      calendarExercisePrescribedSetsJson: programCalendarExercises.prescribedSetsJson,
+      calendarExerciseStatus: programCalendarExercises.status,
+      calendarExerciseWorkoutExerciseId: programCalendarExercises.workoutExerciseId,
+      programName: pslPrograms.name,
+    })
+    .from(programCalendarExercises)
+    .innerJoin(programCalendar, eq(programCalendarExercises.calendarId, programCalendar.id))
+    .innerJoin(pslPrograms, eq(programCalendar.programId, pslPrograms.id))
+    .where(
+      and(
+        eq(programCalendar.dateIso, params.dateIso),
+        exerciseFilters.length === 1 ? exerciseFilters[0] : or(...exerciseFilters)
+      )
+    )
+    .orderBy(
+      asc(programCalendar.sequence),
+      asc(programCalendarExercises.orderIndex),
+      asc(programCalendarExercises.id)
+    );
+
+  const result: ProgrammedExerciseForDate[] = [];
+
+  for (const row of rows) {
+    result.push({
+      calendar: {
+        id: row.calendarId,
+        programId: row.calendarProgramId,
+        pslSessionId: row.calendarPslSessionId,
+        sessionName: row.calendarSessionName,
+        dateIso: row.calendarDateIso,
+        sequence: row.calendarSequence,
+        status: row.calendarStatus,
+        completedAt: row.calendarCompletedAt,
+      },
+      calendarExercise: {
+        id: row.calendarExerciseId,
+        calendarId: row.calendarExerciseCalendarId,
+        exerciseName: row.calendarExerciseName,
+        exerciseId: row.calendarExerciseExerciseId,
+        orderIndex: row.calendarExerciseOrderIndex,
+        prescribedSetsJson: row.calendarExercisePrescribedSetsJson,
+        status: row.calendarExerciseStatus,
+        workoutExerciseId: row.calendarExerciseWorkoutExerciseId,
+      },
+      programName: row.programName,
+      sets: await getSetsForCalendarExercise(row.calendarExerciseId),
+    });
+  }
+
+  return result;
 }
 
 export async function linkExerciseToDb(

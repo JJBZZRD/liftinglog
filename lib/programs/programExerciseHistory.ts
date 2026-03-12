@@ -178,17 +178,18 @@ function resolveLoggedSetInput(params: {
   reps: number | null;
   isComplete: boolean;
 } {
+  const canReuseStoredActuals = params.set.isLogged && params.set.setId !== null;
   const normalizedWeightInput = params.weightInput?.trim() ?? "";
   const normalizedRepsInput = params.repsInput?.trim() ?? "";
   const weightKg =
     (normalizedWeightInput
       ? parseWeightInputToKg(normalizedWeightInput, params.unitPreference)
       : null) ??
-    params.set.actualWeight ??
+    (canReuseStoredActuals ? params.set.actualWeight : null) ??
     null;
   const reps =
     (normalizedRepsInput ? parseInt(normalizedRepsInput, 10) : null) ??
-    params.set.actualReps ??
+    (canReuseStoredActuals ? params.set.actualReps : null) ??
     null;
   const isComplete = weightKg !== null && reps !== null && weightKg > 0 && reps > 0;
 
@@ -236,6 +237,28 @@ async function resolveProgramExerciseContext(
   };
 }
 
+export async function ensureProgramExerciseWorkoutSession(
+  params: {
+    calendarExerciseId: number;
+    calendarExercise: ProgramCalendarExerciseRow | null;
+    exerciseName: string;
+    performedAt: number;
+  },
+  deps: ProgramExerciseHistoryDeps = defaultDeps
+): Promise<{
+  exerciseId: number;
+  workoutId: number;
+  workoutExerciseId: number;
+}> {
+  const context = await resolveProgramExerciseContext(params, deps);
+
+  return {
+    exerciseId: context.exerciseId,
+    workoutId: context.linkedWorkoutExercise.workoutId,
+    workoutExerciseId: context.linkedWorkoutExercise.id,
+  };
+}
+
 export async function persistProgramSetToWorkoutHistory(
   params: PersistProgramSetParams,
   deps: ProgramExerciseHistoryDeps = defaultDeps
@@ -280,10 +303,6 @@ export async function persistProgramSetToWorkoutHistory(
       isLogged: true,
       setId_fk: latestCalendarSet.setId,
     });
-    await deps.completeExerciseEntry(
-      context.linkedWorkoutExercise.id,
-      params.performedAt
-    );
     return {
       workoutExerciseId: context.linkedWorkoutExercise.id,
       linkedSetId: latestCalendarSet.setId,
@@ -306,10 +325,6 @@ export async function persistProgramSetToWorkoutHistory(
     isLogged: true,
     setId_fk: linkedSetId,
   });
-  await deps.completeExerciseEntry(
-    context.linkedWorkoutExercise.id,
-    params.performedAt
-  );
 
   return {
     workoutExerciseId: context.linkedWorkoutExercise.id,
@@ -350,6 +365,8 @@ export async function persistCompletedProgramExercise(
   if (workoutExerciseId === null) {
     throw new Error("Log at least one complete set before finishing the exercise.");
   }
+
+  await deps.completeExerciseEntry(workoutExerciseId, params.performedAt);
 
   return {
     workoutExerciseId,

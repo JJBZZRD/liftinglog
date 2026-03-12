@@ -298,7 +298,8 @@ describe("persistCompletedProgramExercise", () => {
     const historyDays = buildHistoryDays(store);
 
     expect(store.workoutExercises).toHaveLength(1);
-    expect(store.workoutExercises[0].completedAt).toBe(performedAt);
+    expect(store.workoutExercises[0].completedAt).toBeNull();
+    expect(store.workoutExercises[0].performedAt).toBe(performedAt);
     expect(store.sets).toHaveLength(1);
     expect(store.sets[0]).toMatchObject({
       workoutId: store.workoutId,
@@ -311,7 +312,8 @@ describe("persistCompletedProgramExercise", () => {
     expect(store.calendarSets[0].setId).toBe(store.sets[0].id);
     expect(exerciseHistory).toHaveLength(1);
     expect(exerciseHistory[0].sets).toHaveLength(1);
-    expect(historyDays).toHaveLength(1);
+    expect(historyDays).toHaveLength(0);
+    expect(deps.completeExerciseEntry).not.toHaveBeenCalled();
   });
 
   it("does not create a workout session for incomplete program set inputs", async () => {
@@ -327,6 +329,41 @@ describe("persistCompletedProgramExercise", () => {
         set: store.calendarSets[0],
         weightInput: "100",
         repsInput: "",
+        unitPreference: "kg",
+        performedAt,
+      },
+      deps
+    );
+
+    expect(result).toEqual({
+      workoutExerciseId: null,
+      linkedSetId: null,
+    });
+    expect(store.workoutExercises).toHaveLength(0);
+    expect(store.sets).toHaveLength(0);
+  });
+
+  it("does not reuse stale partial actuals from an incomplete program row", async () => {
+    const store = createStore();
+    const deps = createDeps(store);
+    const performedAt = new Date("2026-03-09T12:00:00").getTime();
+
+    store.calendarSets[0] = {
+      ...store.calendarSets[0],
+      actualWeight: 100,
+      actualReps: null,
+      isLogged: false,
+      setId: null,
+    };
+
+    const result = await persistProgramSetToWorkoutHistory(
+      {
+        calendarExerciseId: store.calendarExercise.id,
+        calendarExercise: store.calendarExercise,
+        exerciseName: store.calendarExercise.exerciseName,
+        set: store.calendarSets[0],
+        weightInput: "",
+        repsInput: "8",
         unitPreference: "kg",
         performedAt,
       },
@@ -419,6 +456,7 @@ describe("persistCompletedProgramExercise", () => {
       actualReps: 8,
       isLogged: true,
     });
+    expect(store.workoutExercises[0].completedAt).toBe(performedAt);
     expect(deps.completeExerciseEntry).toHaveBeenCalledTimes(1);
   });
 
