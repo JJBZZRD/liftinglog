@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -14,6 +14,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
   runOnJS,
 } from "react-native-reanimated";
 import { Calendar, type DateData } from "react-native-calendars";
@@ -38,6 +39,7 @@ function getAlphabetLetter(index: number): string {
 
 interface FlatExerciseItem {
   calendarExerciseId: number;
+  exerciseId: number | null;
   exerciseName: string;
   globalIndex: number;
   sessionId: number;
@@ -77,6 +79,12 @@ export default function ProgramsScreen() {
 
   const barOpacity = useAnimatedStyle(() => ({
     opacity: withTiming(calendarExpanded.value === 0 ? 1 : 0, { duration: 200 }),
+  }));
+
+  // Animated Complete Session button slide-in
+  const completeButtonTranslateY = useSharedValue(200);
+  const completeButtonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: completeButtonTranslateY.value }],
   }));
 
   const toggleCalendar = useCallback(() => {
@@ -178,6 +186,7 @@ export default function ProgramsScreen() {
         const setsSummary = buildSetsSummary(ex);
         flatItems.push({
           calendarExerciseId: ex.id,
+          exerciseId: ex.exerciseId,
           exerciseName: ex.exerciseName,
           globalIndex: globalIdx,
           sessionId: session.id,
@@ -243,6 +252,20 @@ export default function ProgramsScreen() {
 
   const handleExercisePress = useCallback(
     (item: FlatExerciseItem) => {
+      if (item.exerciseId) {
+        router.push({
+          pathname: "/exercise/[id]",
+          params: {
+            id: String(item.exerciseId),
+            name: item.exerciseName,
+            dateIso: selectedDate,
+            programExerciseId: String(item.calendarExerciseId),
+            tab: "record",
+          },
+        });
+        return;
+      }
+
       router.push({
         pathname: "/programs/exercise-log/[id]",
         params: {
@@ -322,59 +345,65 @@ export default function ProgramsScreen() {
       return (
         <Pressable
           onPress={() => handleExercisePress(item)}
-          style={({ pressed }) => [
-            styles.exerciseRow,
+          style={[
+            styles.exerciseCard,
             {
-              backgroundColor: pressed ? rawColors.pressed : rawColors.surface,
-              borderColor: rawColors.borderLight,
+              backgroundColor: rawColors.surface,
+              shadowColor: rawColors.shadow,
             },
           ]}
         >
-          <View
-            style={[
-              styles.alphabetCircle,
-              {
-                backgroundColor: isComplete
-                  ? rawColors.success
-                  : isPartial
-                  ? rawColors.warning
-                  : rawColors.primary,
-              },
-            ]}
-          >
-            {isComplete ? (
+          {({ pressed }) => (
+            <View style={[styles.exerciseCardInner, pressed && { opacity: 0.7 }]}>
+              <View
+                style={[
+                  styles.alphabetCircle,
+                  {
+                    backgroundColor: isComplete
+                      ? rawColors.success
+                      : isPartial
+                      ? rawColors.warning
+                      : rawColors.primary,
+                  },
+                ]}
+              >
+                {isComplete ? (
+                  <MaterialCommunityIcons
+                    name="check"
+                    size={17}
+                    color={rawColors.primaryForeground}
+                  />
+                ) : (
+                  <Text style={[styles.alphabetText, { color: rawColors.primaryForeground }]}>
+                    {getAlphabetLetter(item.globalIndex)}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.exerciseInfo}>
+                <Text
+                  style={[styles.exerciseName, { color: rawColors.foreground }]}
+                  numberOfLines={1}
+                >
+                  {item.exerciseName}
+                </Text>
+                {item.setsSummary ? (
+                  <Text
+                    style={[styles.exerciseSets, { color: rawColors.foregroundSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {item.setsSummary}
+                  </Text>
+                ) : null}
+              </View>
+
               <MaterialCommunityIcons
-                name="check"
-                size={16}
-                color={rawColors.primaryForeground}
+                name="chevron-right"
+                size={20}
+                color={rawColors.foregroundSecondary}
               />
-            ) : (
-              <Text style={[styles.alphabetText, { color: rawColors.primaryForeground }]}>
-                {getAlphabetLetter(item.globalIndex)}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.exerciseInfo}>
-            <Text
-              style={[styles.exerciseName, { color: rawColors.foreground }]}
-              numberOfLines={1}
-            >
-              {item.exerciseName}
-            </Text>
-            <Text
-              style={[styles.exerciseSets, { color: rawColors.foregroundSecondary }]}
-              numberOfLines={1}
-            >
-              {item.setsSummary}
-            </Text>
-          </View>
-
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={20}
-            color={rawColors.foregroundSecondary}
-          />
+            </View>
+          )}
         </Pressable>
       );
     },
@@ -383,6 +412,14 @@ export default function ProgramsScreen() {
 
   const showCompleteButton = exercises.length > 0 && !isExpanded;
   const allSessionsComplete = sessions.length > 0 && sessions.every((s) => s.status === "complete");
+
+  useEffect(() => {
+    if (showCompleteButton) {
+      completeButtonTranslateY.value = withSpring(0, { damping: 20, stiffness: 180 });
+    } else {
+      completeButtonTranslateY.value = withTiming(200, { duration: 200 });
+    }
+  }, [showCompleteButton, completeButtonTranslateY]);
 
   return (
     <SafeAreaView style={styles.container} className="bg-background" edges={["top"]}>
@@ -471,7 +508,7 @@ export default function ProgramsScreen() {
         renderItem={renderExerciseItem}
         contentContainerStyle={[
           styles.listContent,
-          showCompleteButton && { paddingBottom: 100 },
+          showCompleteButton && { paddingBottom: 170 },
           exercises.length === 0 && styles.emptyListContainer,
         ]}
         onScroll={handleScroll}
@@ -496,17 +533,28 @@ export default function ProgramsScreen() {
         }
       />
 
-      {/* Complete Session Button (sticky footer) */}
-      {showCompleteButton && (
-        <View
-          className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
-          style={{
-            shadowColor: rawColors.shadow,
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            elevation: 8,
-          }}
+      {/* Complete Session Button (sticky footer, above floating tab bar) */}
+      {exercises.length > 0 && (
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 94,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+              backgroundColor: rawColors.background,
+              borderRadius: 16,
+              shadowColor: rawColors.shadow,
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 6,
+              elevation: 8,
+            },
+            completeButtonAnimatedStyle,
+          ]}
+          pointerEvents={showCompleteButton ? "auto" : "none"}
         >
           {allSessionsComplete || allExercisesComplete ? (
             <View className="flex-row items-center justify-center py-4 rounded-xl border border-border bg-surface-secondary">
@@ -529,7 +577,7 @@ export default function ProgramsScreen() {
               </Text>
             </Pressable>
           )}
-        </View>
+        </Animated.View>
       )}
 
       {/* Complete Session Confirmation Modal */}
@@ -656,29 +704,33 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
+    paddingTop: 10,
+    paddingBottom: 100,
   },
-  exerciseRow: {
+  exerciseCard: {
+    marginBottom: 10,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  exerciseCardInner: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
   },
   alphabetCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: 14,
   },
   alphabetText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   exerciseInfo: {
     flex: 1,
@@ -687,10 +739,10 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 15,
     fontWeight: "600",
-    marginBottom: 2,
   },
   exerciseSets: {
     fontSize: 13,
+    marginTop: 2,
   },
   emptyListContainer: {
     flexGrow: 1,
