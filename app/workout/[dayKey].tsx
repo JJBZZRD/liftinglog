@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import SetItem from "../../components/lists/SetItem";
@@ -145,6 +146,16 @@ export default function WorkoutDayScreen() {
 
   const handleSetPress = useCallback((setId: number) => {
     router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
+  }, []);
+
+  const handleExercisePress = useCallback((entry: WorkoutDayExerciseEntry) => {
+    router.push({
+      pathname: "/exercise/[id]",
+      params: {
+        id: String(entry.exerciseId),
+        name: entry.exerciseName,
+      },
+    });
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -284,22 +295,32 @@ export default function WorkoutDayScreen() {
               >
                 {/* Header Row - A-Z badge + exercise name + time */}
                 <View style={[styles.exerciseHeader, { borderBottomColor: rawColors.border }]}>
-                  <View style={styles.exerciseHeaderLeft}>
-                    <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
-                      <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
-                    </View>
-                    <View style={styles.exerciseTitleBlock}>
-                      <Text style={[styles.exerciseName, { color: rawColors.foreground }]} numberOfLines={1}>
-                        {entry.exerciseName}
-                      </Text>
-                      <View style={styles.exerciseMetaRow}>
-                        <MaterialCommunityIcons name="clock-outline" size={14} color={rawColors.foregroundSecondary} />
-                        <Text style={[styles.exerciseMetaText, { color: rawColors.foregroundSecondary }]}>
-                          {formatTime(entry.performedAt)}
+                  <TouchableWithoutFeedback
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${entry.exerciseName}`}
+                    onPress={() => handleExercisePress(entry)}
+                  >
+                    <View style={styles.exerciseHeaderLeft}>
+                      <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
+                        <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                      </View>
+                      <View style={styles.exerciseTitleBlock}>
+                        <Text style={[styles.exerciseName, { color: rawColors.foreground }]} numberOfLines={1}>
+                          {entry.exerciseName}
                         </Text>
+                        <View style={styles.exerciseMetaRow}>
+                          <MaterialCommunityIcons
+                            name="clock-outline"
+                            size={14}
+                            color={rawColors.foregroundSecondary}
+                          />
+                          <Text style={[styles.exerciseMetaText, { color: rawColors.foregroundSecondary }]}>
+                            {formatTime(entry.performedAt)}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
+                  </TouchableWithoutFeedback>
                   <View style={styles.headerActions}>
                     <Pressable
                       onPress={() => handleEdit(entry)}
@@ -548,9 +569,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+    minWidth: 0,
   },
   exerciseTitleBlock: {
     flex: 1,
+    minWidth: 0,
     justifyContent: "center",
     gap: 4,
   },
