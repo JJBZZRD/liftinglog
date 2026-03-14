@@ -23,6 +23,70 @@ export type ProgrammedExerciseForDate = {
   sets: ProgramCalendarSetRow[];
 };
 
+export function parseSessionCompletionOverrideExerciseIds(
+  value: string | null | undefined
+): number[] {
+  if (typeof value !== "string" || value.trim() === "") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return [...new Set(
+      parsed.filter(
+        (entry): entry is number =>
+          typeof entry === "number" &&
+          Number.isInteger(entry) &&
+          entry > 0
+      )
+    )];
+  } catch {
+    return [];
+  }
+}
+
+function serializeCompletionOverrideExerciseIds(
+  exerciseIds: number[] | null
+): string | null {
+  if (exerciseIds === null) {
+    return null;
+  }
+
+  return JSON.stringify(
+    [...new Set(
+      exerciseIds.filter(
+        (entry): entry is number =>
+          typeof entry === "number" &&
+          Number.isInteger(entry) &&
+          entry > 0
+      )
+    )]
+  );
+}
+
+export function resolveSessionCompletionOverrideExerciseStatus(params: {
+  calendarExerciseId: number;
+  computedStatus: "pending" | "partial" | "complete";
+  sessionStatus: ProgramCalendarRow["status"] | null | undefined;
+  completionOverrideExerciseIdsJson: string | null | undefined;
+}): "pending" | "partial" | "complete" {
+  if (params.sessionStatus !== "complete") {
+    return params.computedStatus;
+  }
+
+  const overriddenExerciseIds = parseSessionCompletionOverrideExerciseIds(
+    params.completionOverrideExerciseIdsJson
+  );
+
+  return overriddenExerciseIds.includes(params.calendarExerciseId)
+    ? "complete"
+    : params.computedStatus;
+}
+
 // ── Calendar Entries ────────────────────────────────────────
 
 export async function insertCalendarEntries(
@@ -96,6 +160,8 @@ export async function getCalendarEntriesForDateRange(
       sequence: programCalendar.sequence,
       status: programCalendar.status,
       completedAt: programCalendar.completedAt,
+      completionOverrideExerciseIdsJson:
+        programCalendar.completionOverrideExerciseIdsJson,
       programName: pslPrograms.name,
     })
     .from(programCalendar)
@@ -299,11 +365,20 @@ export async function updateExerciseStatus(
 
 export async function updateSessionStatus(
   calendarId: number,
-  status: "pending" | "partial" | "complete" | "missed"
+  status: "pending" | "partial" | "complete" | "missed",
+  options?: {
+    completionOverrideExerciseIds?: number[] | null;
+  }
 ): Promise<void> {
   const updateData: Record<string, unknown> = {
     status,
     completedAt: status === "complete" ? Date.now() : null,
+    completionOverrideExerciseIdsJson:
+      options && Object.prototype.hasOwnProperty.call(options, "completionOverrideExerciseIds")
+        ? serializeCompletionOverrideExerciseIds(
+            options.completionOverrideExerciseIds ?? null
+          )
+        : null,
   };
   await db
     .update(programCalendar)
@@ -353,6 +428,24 @@ export async function syncStatusesForCalendarExercise(
   }
 
   const exerciseStatus = await computeExerciseStatus(calendarExerciseId);
+  const calendarEntry = await getCalendarEntryById(calendarExercise.calendarId);
+  if (
+    calendarEntry?.status === "complete" &&
+    calendarEntry.completionOverrideExerciseIdsJson !== null
+  ) {
+    await updateExerciseStatus(
+      calendarExerciseId,
+      resolveSessionCompletionOverrideExerciseStatus({
+        calendarExerciseId,
+        computedStatus: exerciseStatus,
+        sessionStatus: calendarEntry.status,
+        completionOverrideExerciseIdsJson:
+          calendarEntry.completionOverrideExerciseIdsJson,
+      })
+    );
+    return exerciseStatus;
+  }
+
   await updateExerciseStatus(calendarExerciseId, exerciseStatus);
 
   const sessionStatus = await computeSessionStatus(calendarExercise.calendarId);
@@ -362,19 +455,51 @@ export async function syncStatusesForCalendarExercise(
 }
 
 export async function markSessionComplete(calendarId: number): Promise<void> {
+  const calendarEntry = await getCalendarEntryById(calendarId);
+  if (!calendarEntry) {
+    return;
+  }
+
   const exercises = await db
     .select()
     .from(programCalendarExercises)
     .where(eq(programCalendarExercises.calendarId, calendarId));
 
+  const autoCompletedExerciseIds: number[] = [];
+
   for (const ex of exercises) {
-    if (ex.status !== "complete") {
-      const status = await computeExerciseStatus(ex.id);
-      await updateExerciseStatus(ex.id, status === "pending" ? "pending" : status);
+    const status = await computeExerciseStatus(ex.id);
+    if (status === "partial") {
+      await updateExerciseStatus(ex.id, "complete");
+      autoCompletedExerciseIds.push(ex.id);
+      continue;
     }
+
+    await updateExerciseStatus(ex.id, status);
   }
 
-  await updateSessionStatus(calendarId, "complete");
+  await updateSessionStatus(calendarId, "complete", {
+    completionOverrideExerciseIds: autoCompletedExerciseIds,
+  });
+}
+
+export async function undoSessionComplete(calendarId: number): Promise<void> {
+  const calendarEntry = await getCalendarEntryById(calendarId);
+  if (!calendarEntry) {
+    return;
+  }
+
+  const overriddenExerciseIds = parseSessionCompletionOverrideExerciseIds(
+    calendarEntry.completionOverrideExerciseIdsJson
+  );
+
+  for (const exerciseId of overriddenExerciseIds) {
+    const status = await computeExerciseStatus(exerciseId);
+    await updateExerciseStatus(exerciseId, status);
+  }
+
+  const sessionStatus = await computeSessionStatus(calendarId);
+  await updateSessionStatus(calendarId, sessionStatus);
 }
 
 export async function getCalendarEntryById(
@@ -499,6 +624,8 @@ export async function getProgrammedExercisesForExerciseOnDate(params: {
       calendarSequence: programCalendar.sequence,
       calendarStatus: programCalendar.status,
       calendarCompletedAt: programCalendar.completedAt,
+      calendarCompletionOverrideExerciseIdsJson:
+        programCalendar.completionOverrideExerciseIdsJson,
       calendarExerciseId: programCalendarExercises.id,
       calendarExerciseCalendarId: programCalendarExercises.calendarId,
       calendarExerciseName: programCalendarExercises.exerciseName,
@@ -537,6 +664,8 @@ export async function getProgrammedExercisesForExerciseOnDate(params: {
         sequence: row.calendarSequence,
         status: row.calendarStatus,
         completedAt: row.calendarCompletedAt,
+        completionOverrideExerciseIdsJson:
+          row.calendarCompletionOverrideExerciseIdsJson,
       },
       calendarExercise: {
         id: row.calendarExerciseId,

@@ -91,6 +91,7 @@ const SCHEMA_BOOTSTRAP_SQL = `
     sequence INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     completed_at INTEGER,
+    completion_override_exercise_ids_json TEXT,
     FOREIGN KEY(program_id) REFERENCES psl_programs(id) ON DELETE CASCADE
   );
 
@@ -240,6 +241,7 @@ function runColumnMigrations(sqlite: SQLiteDatabase): void {
   addColumnIfMissing(sqlite, "workout_exercises", "performed_at INTEGER");
   addColumnIfMissing(sqlite, "program_calendar_exercises", "workout_exercise_id INTEGER");
   addColumnIfMissing(sqlite, "program_calendar_sets", "set_id INTEGER");
+  addColumnIfMissing(sqlite, "program_calendar", "completion_override_exercise_ids_json TEXT");
   addColumnIfMissing(sqlite, "media", "asset_id TEXT");
   addColumnIfMissing(sqlite, "media", "original_filename TEXT");
   addColumnIfMissing(sqlite, "media", "media_created_at INTEGER");

@@ -26,6 +26,7 @@ import {
   getNextProgrammedDate,
   getAllExercisesForDate,
   markSessionComplete,
+  undoSessionComplete,
   markMissedSessions,
   type ProgramCalendarRow,
   type CalendarExerciseWithSets,
@@ -55,7 +56,7 @@ export default function ProgramsScreen() {
   const [sessions, setSessions] = useState<(ProgramCalendarRow & { programName: string })[]>([]);
   const [exercises, setExercises] = useState<FlatExerciseItem[]>([]);
   const [programNames, setProgramNames] = useState<string[]>([]);
-  const [completeModalVisible, setCompleteModalVisible] = useState(false);
+  const [sessionActionModalVisible, setSessionActionModalVisible] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(getDateIsoToday().slice(0, 7));
 
   // Animated calendar collapse state
@@ -277,18 +278,28 @@ export default function ProgramsScreen() {
     [selectedDate]
   );
 
-  const allExercisesComplete = useMemo(
-    () => exercises.length > 0 && exercises.every((e) => e.status === "complete"),
-    [exercises]
-  );
+  const allSessionsComplete =
+    sessions.length > 0 && sessions.every((session) => session.status === "complete");
+  const hasUndoableSessionCompletion =
+    allSessionsComplete &&
+    sessions.some(
+      (session) => session.completionOverrideExerciseIdsJson !== null
+    );
 
-  const handleCompleteSession = useCallback(async () => {
-    setCompleteModalVisible(false);
+  const handleSessionAction = useCallback(async () => {
+    setSessionActionModalVisible(false);
+
     for (const session of sessions) {
+      if (hasUndoableSessionCompletion) {
+        await undoSessionComplete(session.id);
+        continue;
+      }
+
       await markSessionComplete(session.id);
     }
+
     await loadData();
-  }, [sessions, loadData]);
+  }, [hasUndoableSessionCompletion, loadData, sessions]);
 
   const mergedMarkedDates = useMemo(() => {
     const result = { ...markedDates };
@@ -411,8 +422,6 @@ export default function ProgramsScreen() {
   );
 
   const showCompleteButton = exercises.length > 0 && !isExpanded;
-  const allSessionsComplete = sessions.length > 0 && sessions.every((s) => s.status === "complete");
-
   useEffect(() => {
     if (showCompleteButton) {
       completeButtonTranslateY.value = withSpring(0, { damping: 20, stiffness: 180 });
@@ -556,7 +565,7 @@ export default function ProgramsScreen() {
           ]}
           pointerEvents={showCompleteButton ? "auto" : "none"}
         >
-          {allSessionsComplete || allExercisesComplete ? (
+          {allSessionsComplete && !hasUndoableSessionCompletion ? (
             <View className="flex-row items-center justify-center py-4 rounded-xl border border-border bg-surface-secondary">
               <MaterialCommunityIcons name="check-circle" size={20} color={rawColors.success} />
               <Text className="text-base font-semibold ml-2 text-foreground-secondary">
@@ -565,42 +574,81 @@ export default function ProgramsScreen() {
             </View>
           ) : (
             <Pressable
-              onPress={() => setCompleteModalVisible(true)}
-              className="flex-row items-center justify-center py-4 rounded-xl border border-primary bg-primary"
+              onPress={() => setSessionActionModalVisible(true)}
+              className={`flex-row items-center justify-center py-4 rounded-xl border ${
+                hasUndoableSessionCompletion
+                  ? "border-border bg-surface-secondary"
+                  : "border-primary bg-primary"
+              }`}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.8 : 1,
               })}
             >
-              <MaterialCommunityIcons name="check-all" size={22} color={rawColors.primaryForeground} />
-              <Text className="text-base font-semibold ml-2 text-primary-foreground">
-                Complete Session
+              <MaterialCommunityIcons
+                name={hasUndoableSessionCompletion ? "undo-variant" : "check-all"}
+                size={22}
+                color={
+                  hasUndoableSessionCompletion
+                    ? rawColors.foreground
+                    : rawColors.primaryForeground
+                }
+              />
+              <Text
+                className={`text-base font-semibold ml-2 ${
+                  hasUndoableSessionCompletion
+                    ? "text-foreground"
+                    : "text-primary-foreground"
+                }`}
+              >
+                {hasUndoableSessionCompletion ? "Undo Complete" : "Complete Session"}
               </Text>
             </Pressable>
           )}
         </Animated.View>
       )}
 
-      {/* Complete Session Confirmation Modal */}
-      <BaseModal visible={completeModalVisible} onClose={() => setCompleteModalVisible(false)}>
+      {/* Session Action Confirmation Modal */}
+      <BaseModal
+        visible={sessionActionModalVisible}
+        onClose={() => setSessionActionModalVisible(false)}
+      >
         <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>
-          Complete Session?
+          {hasUndoableSessionCompletion ? "Undo Session Complete?" : "Complete Session?"}
         </Text>
         <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary }]}>
-          This will mark the current session as complete, even if some exercises have not been fully logged.
+          {hasUndoableSessionCompletion
+            ? "This will restore any globally completed partial exercises to their actual logged state. Saved sets stay linked and will reopen in the program record view if they are still partial."
+            : "This will mark the current session as complete. Exercises with partial program progress will be marked complete for the session view, while untouched exercises stay pending."}
         </Text>
         <View style={styles.modalButtons}>
           <Pressable
-            onPress={() => setCompleteModalVisible(false)}
+            onPress={() => setSessionActionModalVisible(false)}
             style={[styles.modalButton, { backgroundColor: rawColors.surfaceSecondary }]}
           >
             <Text style={[styles.modalButtonText, { color: rawColors.foreground }]}>Cancel</Text>
           </Pressable>
           <Pressable
-            onPress={handleCompleteSession}
-            style={[styles.modalButton, { backgroundColor: rawColors.primary }]}
+            onPress={handleSessionAction}
+            style={[
+              styles.modalButton,
+              {
+                backgroundColor: hasUndoableSessionCompletion
+                  ? rawColors.surfaceSecondary
+                  : rawColors.primary,
+              },
+            ]}
           >
-            <Text style={[styles.modalButtonText, { color: rawColors.primaryForeground }]}>
-              Complete
+            <Text
+              style={[
+                styles.modalButtonText,
+                {
+                  color: hasUndoableSessionCompletion
+                    ? rawColors.foreground
+                    : rawColors.primaryForeground,
+                },
+              ]}
+            >
+              {hasUndoableSessionCompletion ? "Undo" : "Complete"}
             </Text>
           </Pressable>
         </View>

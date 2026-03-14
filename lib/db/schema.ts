@@ -125,6 +125,7 @@ export const programCalendar = sqliteTable("program_calendar", {
   sequence: integer("sequence").notNull(),
   status: text("status").notNull().default("pending"),
   completedAt: integer("completed_at"),
+  completionOverrideExerciseIdsJson: text("completion_override_exercise_ids_json"),
 });
 
 export const programCalendarExercises = sqliteTable("program_calendar_exercises", {
