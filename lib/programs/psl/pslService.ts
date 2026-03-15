@@ -12,6 +12,7 @@ import type {
   CompiledSet,
   ValidationResult,
   Diagnostic,
+  SessionCompletion,
 } from "program-specification-language";
 
 export interface PslCompileResult {
@@ -27,6 +28,7 @@ export type PslCompileOptions = {
     start_date: string;
     end_date?: string;
   };
+  completions?: SessionCompletion[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,7 +68,9 @@ export function compilePslSource(source: string, options: PslCompileOptions = {}
   let materialized: MaterializedSession[];
   try {
     compiled = compileProgram(ast);
-    materialized = materialize(compiled);
+    materialized = materialize(compiled, {
+      completions: options.completions,
+    });
   } catch (e) {
     return {
       valid: false,

@@ -7,6 +7,10 @@ export type PslCompatibilityWarning = {
     | "load_range_intensity"
     | "role_based_intensity"
     | "progression_auto_adjust"
+    | "progression_metric_rpe"
+    | "progression_metric_rir"
+    | "progression_aggregate_metric"
+    | "progression_scope"
     | "constraints"
     | "repeat_until"
     | "warmups"
@@ -139,6 +143,69 @@ export function getPslCompatibilityWarnings(ast: ProgramAst | undefined): PslCom
             message: "auto_adjust progression rules are validated/compiled but not executed in the current runtime.",
             paths: [`${setPath}.progression`],
           });
+        } else if (set.progression) {
+          if (
+            set.progression.when?.type === "metric_vs_target" &&
+            set.progression.when.metric === "rpe"
+          ) {
+            addWarning(warnings, {
+              code: "progression_metric_rpe",
+              message: "RPE-based progression checks are not currently executed in the app runtime.",
+              paths: [`${setPath}.progression.when`],
+            });
+          }
+
+          if (
+            set.progression.when?.type === "metric_vs_target" &&
+            set.progression.when.metric === "rir"
+          ) {
+            addWarning(warnings, {
+              code: "progression_metric_rir",
+              message: "RIR-based progression checks are not currently executed in the app runtime.",
+              paths: [`${setPath}.progression.when`],
+            });
+          }
+
+          if (
+            set.progression.when?.type === "aggregate_metric" ||
+            set.progression.criteria?.condition?.type === "aggregate_metric" ||
+            set.progression.criteria?.aggregation !== undefined
+          ) {
+            addWarning(warnings, {
+              code: "progression_aggregate_metric",
+              message: "Aggregate progression criteria are validated/compiled but are not currently executed in the app runtime.",
+              paths: [
+                ...(set.progression.when?.type === "aggregate_metric"
+                  ? [`${setPath}.progression.when`]
+                  : []),
+                ...(set.progression.criteria?.condition?.type === "aggregate_metric"
+                  ? [`${setPath}.progression.criteria.condition`]
+                  : []),
+                ...(set.progression.criteria?.aggregation !== undefined
+                  ? [`${setPath}.progression.criteria.aggregation`]
+                  : []),
+              ],
+            });
+          }
+
+          if (
+            set.progression.scope !== undefined ||
+            set.progression.criteria?.condition?.type === "session_success" ||
+            set.progression.criteria?.condition?.type === "metric_vs_target"
+          ) {
+            addWarning(warnings, {
+              code: "progression_scope",
+              message: "Advanced progression scope/criteria handling beyond per-set load and session-success checks is not currently executed in the app runtime.",
+              paths: [
+                ...(set.progression.scope !== undefined
+                  ? [`${setPath}.progression.scope`]
+                  : []),
+                ...(set.progression.criteria?.condition !== undefined
+                  ? [`${setPath}.progression.criteria.condition`]
+                  : []),
+              ],
+            });
+          }
         }
 
         if (set.constraints) {
@@ -174,4 +241,3 @@ export function getPslCompatibilityWarnings(ast: ProgramAst | undefined): PslCom
 
   return warnings.map((w) => ({ ...w, paths: Array.from(new Set(w.paths)) }));
 }
-

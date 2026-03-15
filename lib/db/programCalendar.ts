@@ -23,6 +23,23 @@ export type ProgrammedExerciseForDate = {
   sets: ProgramCalendarSetRow[];
 };
 
+export type ProgramCalendarSetSnapshot = ProgramCalendarSetRow & {
+  linkedSetWeightKg: number | null;
+  linkedSetReps: number | null;
+  linkedSetRpe: number | null;
+  linkedSetRir: number | null;
+};
+
+export type ProgramCalendarExerciseSnapshot = {
+  exercise: ProgramCalendarExerciseRow;
+  sets: ProgramCalendarSetSnapshot[];
+};
+
+export type ProgramCalendarEntrySnapshot = {
+  calendar: ProgramCalendarRow;
+  exercises: ProgramCalendarExerciseSnapshot[];
+};
+
 export function parseSessionCompletionOverrideExerciseIds(
   value: string | null | undefined
 ): number[] {
@@ -144,6 +161,15 @@ export async function deleteCalendarForProgram(programId: number): Promise<void>
   await db.delete(programCalendar).where(eq(programCalendar.programId, programId));
 }
 
+export async function deleteCalendarEntriesByIds(calendarIds: number[]): Promise<void> {
+  const uniqueIds = [...new Set(calendarIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (uniqueIds.length === 0) {
+    return;
+  }
+
+  await db.delete(programCalendar).where(inArray(programCalendar.id, uniqueIds));
+}
+
 // ── Queries ─────────────────────────────────────────────────
 
 export async function getCalendarEntriesForDateRange(
@@ -184,6 +210,16 @@ export async function getCalendarSessionsForDate(
   return getCalendarEntriesForDateRange(dateIso, dateIso);
 }
 
+export async function listCalendarEntriesForProgram(
+  programId: number
+): Promise<ProgramCalendarRow[]> {
+  return db
+    .select()
+    .from(programCalendar)
+    .where(eq(programCalendar.programId, programId))
+    .orderBy(asc(programCalendar.dateIso), asc(programCalendar.sequence));
+}
+
 export interface CalendarExerciseWithSets extends ProgramCalendarExerciseRow {
   sets: ProgramCalendarSetRow[];
 }
@@ -220,6 +256,62 @@ export async function getAllExercisesForDate(
     result.push({ session, exercises });
   }
   return result;
+}
+
+export async function getProgramCalendarSnapshot(
+  programId: number
+): Promise<ProgramCalendarEntrySnapshot[]> {
+  const calendars = await listCalendarEntriesForProgram(programId);
+  const snapshot: ProgramCalendarEntrySnapshot[] = [];
+
+  for (const calendar of calendars) {
+    const exercises = await db
+      .select()
+      .from(programCalendarExercises)
+      .where(eq(programCalendarExercises.calendarId, calendar.id))
+      .orderBy(asc(programCalendarExercises.orderIndex));
+
+    const exerciseSnapshots: ProgramCalendarExerciseSnapshot[] = [];
+
+    for (const exercise of exercises) {
+      const setRows = await db
+        .select({
+          id: programCalendarSets.id,
+          calendarExerciseId: programCalendarSets.calendarExerciseId,
+          setIndex: programCalendarSets.setIndex,
+          prescribedReps: programCalendarSets.prescribedReps,
+          prescribedIntensityJson: programCalendarSets.prescribedIntensityJson,
+          prescribedRole: programCalendarSets.prescribedRole,
+          actualWeight: programCalendarSets.actualWeight,
+          actualReps: programCalendarSets.actualReps,
+          actualRpe: programCalendarSets.actualRpe,
+          isUserAdded: programCalendarSets.isUserAdded,
+          isLogged: programCalendarSets.isLogged,
+          setId: programCalendarSets.setId,
+          loggedAt: programCalendarSets.loggedAt,
+          linkedSetWeightKg: sets.weightKg,
+          linkedSetReps: sets.reps,
+          linkedSetRpe: sets.rpe,
+          linkedSetRir: sets.rir,
+        })
+        .from(programCalendarSets)
+        .leftJoin(sets, eq(programCalendarSets.setId, sets.id))
+        .where(eq(programCalendarSets.calendarExerciseId, exercise.id))
+        .orderBy(asc(programCalendarSets.setIndex));
+
+      exerciseSnapshots.push({
+        exercise,
+        sets: setRows,
+      });
+    }
+
+    snapshot.push({
+      calendar,
+      exercises: exerciseSnapshots,
+    });
+  }
+
+  return snapshot;
 }
 
 // ── Date Navigation ─────────────────────────────────────────
@@ -284,6 +376,52 @@ export async function getProgrammedDatesInRange(
     }
   }
   return map;
+}
+
+export async function getProgramIdsForWorkoutSetIds(
+  workoutSetIds: number[]
+): Promise<number[]> {
+  const uniqueSetIds = [...new Set(workoutSetIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (uniqueSetIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ programId: programCalendar.programId })
+    .from(programCalendarSets)
+    .innerJoin(
+      programCalendarExercises,
+      eq(programCalendarSets.calendarExerciseId, programCalendarExercises.id)
+    )
+    .innerJoin(
+      programCalendar,
+      eq(programCalendarExercises.calendarId, programCalendar.id)
+    )
+    .where(inArray(programCalendarSets.setId, uniqueSetIds));
+
+  return [...new Set(rows.map((row) => row.programId))];
+}
+
+export async function getProgramIdsForWorkoutExerciseIds(
+  workoutExerciseIds: number[]
+): Promise<number[]> {
+  const uniqueWorkoutExerciseIds = [
+    ...new Set(workoutExerciseIds.filter((id) => Number.isFinite(id) && id > 0)),
+  ];
+  if (uniqueWorkoutExerciseIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ programId: programCalendar.programId })
+    .from(programCalendarExercises)
+    .innerJoin(
+      programCalendar,
+      eq(programCalendarExercises.calendarId, programCalendar.id)
+    )
+    .where(inArray(programCalendarExercises.workoutExerciseId, uniqueWorkoutExerciseIds));
+
+  return [...new Set(rows.map((row) => row.programId))];
 }
 
 // ── Set Logging ─────────────────────────────────────────────

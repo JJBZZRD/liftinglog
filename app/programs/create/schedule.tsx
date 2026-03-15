@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Weekday } from "program-specification-language";
 import BaseModal from "../../../components/modals/BaseModal";
 import {
@@ -32,11 +33,16 @@ import {
   isoToDateLocal,
 } from "../../../lib/programs/psl/activationDates";
 import { getPslCompatibilityWarnings } from "../../../lib/programs/psl/pslCompatibility";
-import { deserializeFlatProgramDraftFromPsl } from "../../../lib/programs/psl/pslDraftMapper";
 import {
+  createDefaultBlockDraft,
+  createDefaultBlockProgramDraft,
   createDefaultFlatProgramDraft,
   createDefaultSessionDraft,
+  serializeBlockProgramDraftToPsl,
   serializeFlatProgramDraftToPsl,
+  type BlockDraft,
+  type BlockProgramDraft,
+  type BlockTimingMode,
   type ExerciseConfig,
   type FlatProgramDraft,
   type FlatProgramTimingMode,
@@ -48,7 +54,12 @@ import {
   compilePslSource,
   extractCalendarEntries,
 } from "../../../lib/programs/psl/pslService";
+import { buildProgramCompletions } from "../../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import {
+  deserializeBlockProgramDraftFromPsl,
+  deserializeFlatProgramDraftFromPsl,
+} from "../../../lib/programs/psl/pslDraftMapper";
 
 const WEEKDAY_OPTIONS: { key: Weekday; short: string; label: string }[] = [
   { key: "MON", short: "M", label: "Monday" },
@@ -86,6 +97,15 @@ const TIMING_MODE_META: Record<
   },
 };
 
+const BLOCK_TIMING_OPTIONS: {
+  key: BlockTimingMode;
+  title: string;
+}[] = [
+  { key: "weekdays", title: "Weekdays" },
+  { key: "fixed_day", title: "Fixed days" },
+  { key: "interval_days", title: "Every N days" },
+];
+
 type EditableSetConfig = {
   count: string;
   reps: string;
@@ -93,6 +113,17 @@ type EditableSetConfig = {
   intensityValue: string;
   role: string;
   progression: string;
+};
+
+type ProgramStructure = "sessions" | "blocks";
+
+type ProgramScheduleParams = {
+  name?: string;
+  description?: string;
+  units?: string;
+  timingMode?: string;
+  editProgramId?: string;
+  programStructure?: string;
 };
 
 function normalizeTimingMode(value: string | undefined): FlatProgramTimingMode {
@@ -105,6 +136,10 @@ function normalizeTimingMode(value: string | undefined): FlatProgramTimingMode {
     return value;
   }
   return "sequence";
+}
+
+function normalizeProgramStructure(value: string | undefined): ProgramStructure {
+  return value === "blocks" ? "blocks" : "sessions";
 }
 
 function derivePreviewWeeks(startDate: string | null, endDate: string | null): number {
@@ -607,6 +642,283 @@ function SessionCard({
   );
 }
 
+interface BlockCardProps {
+  block: BlockDraft;
+  index: number;
+  totalBlocks: number;
+  rawColors: ReturnType<typeof useTheme>["rawColors"];
+  units: "kg" | "lb";
+  onNameChange: (value: string) => void;
+  onDurationValueChange: (value: string) => void;
+  onDurationUnitChange: (value: "weeks" | "days") => void;
+  onToggleDeload: (value: boolean) => void;
+  onTimingModeChange: (value: BlockTimingMode) => void;
+  onMove: (direction: -1 | 1) => void;
+  onRemove: () => void;
+  onAddSession: () => void;
+  onUpdateSession: (sessionClientId: string, patch: Partial<SessionDraft>) => void;
+  onToggleWeekday: (sessionClientId: string, day: Weekday) => void;
+  onRemoveSession: (sessionClientId: string) => void;
+  onOpenExercisePicker: (session: SessionDraft) => void;
+  onOpenExerciseConfig: (sessionClientId: string, exerciseIndex: number) => void;
+  onRemoveExercise: (sessionClientId: string, exerciseIndex: number) => void;
+}
+
+function BlockCard({
+  block,
+  index,
+  totalBlocks,
+  rawColors,
+  units,
+  onNameChange,
+  onDurationValueChange,
+  onDurationUnitChange,
+  onToggleDeload,
+  onTimingModeChange,
+  onMove,
+  onRemove,
+  onAddSession,
+  onUpdateSession,
+  onToggleWeekday,
+  onRemoveSession,
+  onOpenExercisePicker,
+  onOpenExerciseConfig,
+  onRemoveExercise,
+}: BlockCardProps) {
+  return (
+    <View
+      style={[
+        styles.panel,
+        { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+      ]}
+    >
+      <View style={styles.panelHeaderRow}>
+        <View style={styles.sessionCardHeaderLeft}>
+          <View style={[styles.orderBadge, { backgroundColor: rawColors.primary + "20" }]}>
+            <Text style={[styles.orderBadgeText, { color: rawColors.primary }]}>
+              {index + 1}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sessionLabel, { color: rawColors.foregroundSecondary }]}>
+              Block
+            </Text>
+            <TextInput
+              value={block.name}
+              onChangeText={onNameChange}
+              placeholder={`Block ${index + 1}`}
+              placeholderTextColor={rawColors.foregroundMuted}
+              style={[
+                styles.sessionNameInput,
+                {
+                  backgroundColor: rawColors.surface,
+                  borderColor: rawColors.borderLight,
+                  color: rawColors.foreground,
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        <View style={styles.sessionCardHeaderActions}>
+          <Pressable
+            onPress={() => onMove(-1)}
+            hitSlop={8}
+            disabled={index === 0}
+            style={{ opacity: index === 0 ? 0.35 : 1 }}
+          >
+            <MaterialCommunityIcons
+              name="arrow-up"
+              size={20}
+              color={rawColors.foregroundSecondary}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => onMove(1)}
+            hitSlop={8}
+            disabled={index === totalBlocks - 1}
+            style={{ opacity: index === totalBlocks - 1 ? 0.35 : 1 }}
+          >
+            <MaterialCommunityIcons
+              name="arrow-down"
+              size={20}
+              color={rawColors.foregroundSecondary}
+            />
+          </Pressable>
+          <Pressable
+            onPress={onRemove}
+            hitSlop={8}
+            disabled={totalBlocks <= 1}
+            style={{ opacity: totalBlocks <= 1 ? 0.35 : 1 }}
+          >
+            <MaterialCommunityIcons
+              name="trash-can-outline"
+              size={20}
+              color={rawColors.foregroundSecondary}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.intervalRow}>
+        <View style={styles.intervalField}>
+          <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+            Duration
+          </Text>
+          <TextInput
+            value={String(block.durationValue)}
+            onChangeText={onDurationValueChange}
+            keyboardType="number-pad"
+            placeholder="4"
+            placeholderTextColor={rawColors.foregroundMuted}
+            style={[
+              styles.input,
+              {
+                backgroundColor: rawColors.surface,
+                borderColor: rawColors.borderLight,
+                color: rawColors.foreground,
+              },
+            ]}
+          />
+        </View>
+        <View style={[styles.intervalField, { justifyContent: "flex-end" }]}>
+          <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+            Unit
+          </Text>
+          <View style={styles.unitRow}>
+            {(["weeks", "days"] as const).map((durationUnit) => {
+              const selected = block.durationUnit === durationUnit;
+              return (
+                <Pressable
+                  key={durationUnit}
+                  onPress={() => onDurationUnitChange(durationUnit)}
+                  style={[
+                    styles.unitButton,
+                    {
+                      flex: 1,
+                      backgroundColor: selected
+                        ? rawColors.primary
+                        : rawColors.surface,
+                      borderColor: selected
+                        ? rawColors.primary
+                        : rawColors.borderLight,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.unitButtonText,
+                      {
+                        color: selected
+                          ? rawColors.primaryForeground
+                          : rawColors.foreground,
+                      },
+                    ]}
+                  >
+                    {durationUnit === "weeks" ? "Weeks" : "Days"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
+            Deload block
+          </Text>
+          <Text style={[styles.helpText, { color: rawColors.foregroundMuted }]}>
+            Keep this on for reduced-volume or recovery phases.
+          </Text>
+        </View>
+        <Switch
+          value={block.deload}
+          onValueChange={onToggleDeload}
+          trackColor={{ false: rawColors.borderLight, true: rawColors.primary + "55" }}
+          thumbColor={block.deload ? rawColors.primary : rawColors.foregroundMuted}
+        />
+      </View>
+
+      <View style={styles.fieldGroup}>
+        <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+          Timing mode
+        </Text>
+        <View style={styles.timingChipRow}>
+          {BLOCK_TIMING_OPTIONS.map((option) => {
+            const selected = block.timingMode === option.key;
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => onTimingModeChange(option.key)}
+                style={[
+                  styles.weekdayChip,
+                  {
+                    paddingHorizontal: 14,
+                    backgroundColor: selected ? rawColors.primary : rawColors.surface,
+                    borderColor: selected ? rawColors.primary : rawColors.borderLight,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.weekdayChipText,
+                    {
+                      color: selected
+                        ? rawColors.primaryForeground
+                        : rawColors.foregroundSecondary,
+                    },
+                  ]}
+                >
+                  {option.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.panelHeaderRow}>
+        <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
+          Sessions
+        </Text>
+        <Pressable onPress={onAddSession} hitSlop={8} style={styles.inlineAction}>
+          <MaterialCommunityIcons name="plus" size={18} color={rawColors.primary} />
+          <Text style={{ color: rawColors.primary, fontWeight: "700" }}>Add session</Text>
+        </Pressable>
+      </View>
+
+      <View style={{ marginTop: 10, gap: 12 }}>
+        {block.sessions.map((session, sessionIndex) => (
+          <SessionCard
+            key={session.clientId}
+            session={session}
+            index={sessionIndex}
+            total={block.sessions.length}
+            timingMode={block.timingMode}
+            sequenceRepeat={true}
+            units={units}
+            rawColors={rawColors}
+            onNameChange={(value) => onUpdateSession(session.clientId, { name: value })}
+            onUpdate={(patch) => onUpdateSession(session.clientId, patch)}
+            onToggleWeekday={(day) => onToggleWeekday(session.clientId, day)}
+            onMove={() => {}}
+            onRemove={() => onRemoveSession(session.clientId)}
+            onOpenExercisePicker={() => onOpenExercisePicker(session)}
+            onOpenExerciseConfig={(exerciseIndex) =>
+              onOpenExerciseConfig(session.clientId, exerciseIndex)
+            }
+            onRemoveExercise={(exerciseIndex) =>
+              onRemoveExercise(session.clientId, exerciseIndex)
+            }
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 interface ExerciseConfigEditorProps {
   exercise: ExerciseConfig;
   units: "kg" | "lb";
@@ -885,15 +1197,25 @@ function ExerciseConfigEditor({
 }
 
 export default function ProgramScheduleScreen() {
-  const { rawColors } = useTheme();
-  const params = useLocalSearchParams<{
-    name?: string;
-    description?: string;
-    units?: string;
-    timingMode?: string;
-    editProgramId?: string;
-  }>();
+  const params = useLocalSearchParams<ProgramScheduleParams>();
+  const programStructure = normalizeProgramStructure(
+    typeof params.programStructure === "string" ? params.programStructure : undefined
+  );
 
+  if (programStructure === "blocks") {
+    return <BlockProgramBuilderScreen params={params} />;
+  }
+
+  return <FlatProgramBuilderScreen params={params} />;
+}
+
+function FlatProgramBuilderScreen({
+  params,
+}: {
+  params: ProgramScheduleParams;
+}) {
+  const { rawColors } = useTheme();
+  const insets = useSafeAreaInsets();
   const timingMode = normalizeTimingMode(
     typeof params.timingMode === "string" ? params.timingMode : undefined
   );
@@ -946,7 +1268,9 @@ export default function ProgramScheduleScreen() {
     async function loadProgram() {
       setLoadingProgram(true);
       try {
-        const program = await getPslProgramById(editProgramId);
+        const programId = editProgramId;
+        if (programId === null) return;
+        const program = await getPslProgramById(programId);
         if (isCancelled) return;
         if (!program) {
           setSaveError("Program not found.");
@@ -1235,7 +1559,20 @@ export default function ProgramScheduleScreen() {
       const nextDescription = draft.description?.trim() || undefined;
 
       if (editingProgram?.isActive) {
-        const result = validateGeneratedProgram();
+        const completions = await buildProgramCompletions(editingProgram.id);
+        const result = compilePslSource(
+          pslSource,
+          previewOverride
+            ? { calendarOverride: previewOverride, completions }
+            : { completions }
+        );
+        if (!result.valid) {
+          const message = result.diagnostics
+            .filter((diagnostic) => diagnostic.severity === "error")
+            .map((diagnostic) => diagnostic.message)
+            .join("\n");
+          throw new Error(message || "Program could not be validated.");
+        }
         if (!previewOverride || !result.materialized) {
           throw new Error("Choose valid activation dates before saving changes.");
         }
@@ -1287,28 +1624,47 @@ export default function ProgramScheduleScreen() {
     setSaveError("");
     try {
       const result = validateGeneratedProgram();
+      const activationResult = editingProgram
+        ? compilePslSource(
+            pslSource,
+            previewOverride
+              ? {
+                  calendarOverride: previewOverride,
+                  completions: await buildProgramCompletions(editingProgram.id),
+                }
+              : { completions: await buildProgramCompletions(editingProgram.id) }
+          )
+        : result;
+      if (!activationResult.valid) {
+        const message = activationResult.diagnostics
+          .filter((diagnostic) => diagnostic.severity === "error")
+          .map((diagnostic) => diagnostic.message)
+          .join("\n");
+        throw new Error(message || "Program could not be validated.");
+      }
       const nextName = draft.name.trim() || "My Program";
       const nextDescription = draft.description?.trim() || undefined;
 
       if (editingProgram) {
-        if (!previewOverride || !result.materialized) {
+        if (!previewOverride || !activationResult.materialized) {
           throw new Error("Choose valid activation dates before activating.");
         }
-        const storedEndDate = previewOverride.end_date ?? result.ast?.calendar?.end_date ?? null;
+        const storedEndDate =
+          previewOverride.end_date ?? activationResult.ast?.calendar?.end_date ?? null;
         await updatePslProgram(editingProgram.id, {
           name: nextName,
           description: nextDescription ?? null,
           pslSource,
-          compiledHash: result.compiled?.source_hash ?? null,
+          compiledHash: activationResult.compiled?.source_hash ?? null,
           isActive: true,
           startDate: previewOverride.start_date,
           endDate: storedEndDate,
-          units: result.ast?.units ?? draft.units ?? null,
+          units: activationResult.ast?.units ?? draft.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(result.materialized)
+          extractCalendarEntries(activationResult.materialized)
         );
         router.replace("/programs/manage");
         return;
@@ -1348,6 +1704,10 @@ export default function ProgramScheduleScreen() {
     : editingProgram?.isActive
       ? "Save & Refresh"
       : "Save & Activate";
+  const secondaryActionIcon = editingProgram
+    ? "content-save-edit-outline"
+    : "bookmark-plus-outline";
+  const primaryActionIcon = editingProgram?.isActive ? "refresh" : "arrow-right";
 
   return (
     <View style={styles.container} className="bg-background">
@@ -1668,7 +2028,8 @@ export default function ProgramScheduleScreen() {
             styles.bottomBar,
             {
               backgroundColor: rawColors.background,
-              borderTopColor: rawColors.borderLight,
+              borderTopColor: rawColors.border,
+              paddingBottom: Math.max(insets.bottom, 12),
               shadowColor: rawColors.shadow,
             },
           ]}
@@ -1683,31 +2044,1097 @@ export default function ProgramScheduleScreen() {
             <Pressable
               onPress={handleSaveTemplate}
               disabled={saving}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                {
-                  borderColor: rawColors.border,
-                  backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-                  opacity: saving ? 0.6 : 1,
-                },
-              ]}
+              className="flex-1 flex-row items-center justify-center py-4 rounded-xl border bg-surface-secondary border-border"
+              style={({ pressed }) => ({
+                opacity: pressed || saving ? 0.8 : 1,
+              })}
             >
-              <Text style={{ color: rawColors.foreground, fontWeight: "600" }}>
+              <MaterialCommunityIcons
+                name={secondaryActionIcon}
+                size={18}
+                color={rawColors.foreground}
+              />
+              <Text
+                className="ml-2 text-sm font-semibold"
+                style={{ color: rawColors.foreground }}
+              >
                 {secondaryActionLabel}
               </Text>
             </Pressable>
             <Pressable
               onPress={handleSaveAndActivate}
               disabled={saving}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                {
-                  backgroundColor: rawColors.primary,
-                  opacity: pressed || saving ? 0.72 : 1,
-                },
-              ]}
+              className="flex-1 flex-row items-center justify-center py-4 rounded-xl border bg-primary border-primary"
+              style={({ pressed }) => ({
+                opacity: pressed || saving ? 0.8 : 1,
+              })}
             >
-              <Text style={{ color: rawColors.primaryForeground, fontWeight: "700" }}>
+              <MaterialCommunityIcons
+                name={primaryActionIcon}
+                size={20}
+                color={rawColors.primaryForeground}
+              />
+              <Text
+                className="ml-2 text-sm font-semibold"
+                style={{ color: rawColors.primaryForeground }}
+              >
+                {primaryActionLabel}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      <BaseModal
+        visible={exerciseConfigVisible}
+        onClose={() => {
+          setExerciseConfigVisible(false);
+          setConfigTarget(null);
+        }}
+      >
+        {configExercise ? (
+          <ExerciseConfigEditor
+            exercise={configExercise}
+            units={draft.units ?? "kg"}
+            rawColors={rawColors}
+            onSave={handleSaveExerciseConfig}
+          />
+        ) : null}
+      </BaseModal>
+    </View>
+  );
+}
+
+function BlockProgramBuilderScreen({
+  params,
+}: {
+  params: ProgramScheduleParams;
+}) {
+  const { rawColors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const units = params.units === "lb" ? "lb" : "kg";
+  const editProgramId =
+    typeof params.editProgramId === "string" ? Number.parseInt(params.editProgramId, 10) : null;
+  const isEditing = Number.isFinite(editProgramId);
+  const requestedName = typeof params.name === "string" ? params.name : undefined;
+  const requestedDescription =
+    typeof params.description === "string" ? params.description : undefined;
+
+  const [draft, setDraft] = useState<BlockProgramDraft>(() =>
+    createDefaultBlockProgramDraft({
+      name: requestedName,
+      description: requestedDescription,
+      units,
+    })
+  );
+  const [editingProgram, setEditingProgram] = useState<PslProgramRow | null>(null);
+  const [loadingProgram, setLoadingProgram] = useState(isEditing);
+  const [exerciseConfigVisible, setExerciseConfigVisible] = useState(false);
+  const [configTarget, setConfigTarget] = useState<{
+    sessionClientId: string;
+    exerciseIndex: number;
+  } | null>(null);
+  const [previewStartDate, setPreviewStartDate] = useState<Date>(
+    isoToDateLocal(getDefaultActivationStartDateIso())
+  );
+  const [previewWeeks, setPreviewWeeks] = useState(DEFAULT_ACTIVATION_WEEKS);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    if (!isEditing || editProgramId === null) {
+      setEditingProgram(null);
+      setLoadingProgram(false);
+      setDraft(
+        createDefaultBlockProgramDraft({
+          name: requestedName,
+          description: requestedDescription,
+          units,
+        })
+      );
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadProgram() {
+      setLoadingProgram(true);
+      try {
+        const programId = editProgramId;
+        if (programId === null) return;
+        const program = await getPslProgramById(programId);
+        if (isCancelled) return;
+        if (!program) {
+          setSaveError("Program not found.");
+          setLoadingProgram(false);
+          return;
+        }
+
+        const existingDraft = deserializeBlockProgramDraftFromPsl(program.pslSource);
+        if (!existingDraft) {
+          router.replace({
+            pathname: "/programs/create/editor",
+            params: { editProgramId: String(program.id) },
+          });
+          return;
+        }
+
+        setEditingProgram(program);
+        setDraft({
+          ...existingDraft,
+          name: requestedName?.trim() || existingDraft.name,
+          description: requestedDescription?.trim() || existingDraft.description,
+          units,
+        });
+        setPreviewStartDate(isoToDateLocal(program.startDate ?? getDefaultActivationStartDateIso()));
+        setPreviewWeeks(derivePreviewWeeks(program.startDate, program.endDate));
+        setSaveError("");
+      } catch (error) {
+        if (!isCancelled) {
+          setSaveError(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingProgram(false);
+        }
+      }
+    }
+
+    loadProgram();
+    return () => {
+      isCancelled = true;
+    };
+  }, [editProgramId, isEditing, requestedDescription, requestedName, units]);
+
+  useEffect(() => {
+    (
+      globalThis as {
+        __exercisePickerCallback?: (
+          exercises: { id: number; name: string }[],
+          targetId: string
+        ) => void;
+      }
+    ).__exercisePickerCallback = (exercises, targetId) => {
+      setDraft((prev) => ({
+        ...prev,
+        blocks: prev.blocks.map((block) => ({
+          ...block,
+          sessions: block.sessions.map((session) =>
+            session.clientId === targetId
+              ? {
+                  ...session,
+                  exercises: [
+                    ...session.exercises,
+                    ...exercises.map((exercise) =>
+                      createExerciseDraft(exercise.id, exercise.name)
+                    ),
+                  ],
+                }
+              : session
+          ),
+        })),
+      }));
+    };
+
+    return () => {
+      delete (globalThis as { __exercisePickerCallback?: unknown }).__exercisePickerCallback;
+    };
+  }, []);
+
+  const pslSource = useMemo(() => serializeBlockProgramDraftToPsl(draft), [draft]);
+  const activationInfo = useMemo(() => introspectPslSource(pslSource), [pslSource]);
+  const requiresHorizonWeeks = activationInfo.ok
+    ? activationInfo.requiresEndDateForActivation
+    : false;
+  const previewStartIso = useMemo(() => dateToIsoLocal(previewStartDate), [previewStartDate]);
+  const previewOverride = useMemo(() => {
+    if (!activationInfo.ok) return null;
+    if (activationInfo.requiresEndDateForActivation) {
+      return {
+        start_date: previewStartIso,
+        end_date: computeEndDateIso(previewStartIso, previewWeeks),
+      };
+    }
+    return { start_date: previewStartIso };
+  }, [activationInfo, previewStartIso, previewWeeks]);
+  const compileResult = useMemo(
+    () =>
+      compilePslSource(pslSource, previewOverride ? { calendarOverride: previewOverride } : {}),
+    [previewOverride, pslSource]
+  );
+  const diagnostics = useMemo(() => compileResult.diagnostics ?? [], [compileResult.diagnostics]);
+  const errorDiagnostics = useMemo(
+    () => diagnostics.filter((diagnostic) => diagnostic.severity === "error"),
+    [diagnostics]
+  );
+  const compatibilityWarnings = useMemo(() => {
+    if (!compileResult.ast) return [];
+    return getPslCompatibilityWarnings(compileResult.ast);
+  }, [compileResult.ast]);
+  const previewDerivedEndIso = useMemo(() => {
+    if (!activationInfo.ok || !activationInfo.requiresEndDateForActivation) return null;
+    return computeEndDateIso(previewStartIso, previewWeeks);
+  }, [activationInfo, previewStartIso, previewWeeks]);
+
+  const totalSessions = useMemo(
+    () => draft.blocks.reduce((sum, block) => sum + block.sessions.length, 0),
+    [draft.blocks]
+  );
+  const totalExercises = useMemo(
+    () =>
+      draft.blocks.reduce(
+        (sum, block) =>
+          sum +
+          block.sessions.reduce(
+            (sessionSum, session) => sessionSum + session.exercises.length,
+            0
+          ),
+        0
+      ),
+    [draft.blocks]
+  );
+
+  const configExercise = useMemo(() => {
+    if (!configTarget) return null;
+    for (const block of draft.blocks) {
+      const session = block.sessions.find((item) => item.clientId === configTarget.sessionClientId);
+      if (!session) continue;
+      return session.exercises[configTarget.exerciseIndex] ?? null;
+    }
+    return null;
+  }, [configTarget, draft.blocks]);
+
+  const blockNameById = useMemo(
+    () => new Map(draft.blocks.map((block) => [block.blockId, block.name])),
+    [draft.blocks]
+  );
+
+  const compiledBlockPreview = useMemo(() => {
+    if (!compileResult.compiled) return [];
+    const grouped = new Map<
+      string,
+      { blockId: string; blockName: string; sessionCount: number; exerciseCount: number }
+    >();
+
+    compileResult.compiled.sessions.forEach((session) => {
+      const blockId = session.block_id ?? session.id.split(".")[0] ?? "block";
+      const existing = grouped.get(blockId) ?? {
+        blockId,
+        blockName: blockNameById.get(blockId) ?? blockId,
+        sessionCount: 0,
+        exerciseCount: 0,
+      };
+      existing.sessionCount += 1;
+      existing.exerciseCount += session.exercises.length;
+      grouped.set(blockId, existing);
+    });
+
+    const ordered = draft.blocks
+      .map((block) => grouped.get(block.blockId))
+      .filter((block): block is NonNullable<typeof block> => block !== undefined);
+    const seen = new Set(ordered.map((block) => block.blockId));
+    const remaining = [...grouped.values()].filter((block) => !seen.has(block.blockId));
+    return [...ordered, ...remaining];
+  }, [blockNameById, compileResult.compiled, draft.blocks]);
+
+  const materializedBlockPreview = useMemo(() => {
+    if (!compileResult.materialized) return [];
+    const grouped = new Map<
+      string,
+      {
+        blockId: string;
+        blockName: string;
+        startDateIso: string | null;
+        endDateIso: string | null;
+        occurrences: { name: string; dateIso: string }[];
+      }
+    >();
+
+    compileResult.materialized.forEach((session) => {
+      const blockId = session.block_id ?? session.id.split(".")[0] ?? "block";
+      const existing = grouped.get(blockId) ?? {
+        blockId,
+        blockName: blockNameById.get(blockId) ?? blockId,
+        startDateIso: null,
+        endDateIso: null,
+        occurrences: [],
+      };
+
+      if (session.date_iso) {
+        existing.startDateIso =
+          existing.startDateIso === null || session.date_iso < existing.startDateIso
+            ? session.date_iso
+            : existing.startDateIso;
+        existing.endDateIso =
+          existing.endDateIso === null || session.date_iso > existing.endDateIso
+            ? session.date_iso
+            : existing.endDateIso;
+      }
+
+      if (existing.occurrences.length < 4) {
+        existing.occurrences.push({
+          name: session.name,
+          dateIso: session.date_iso ?? "",
+        });
+      }
+
+      grouped.set(blockId, existing);
+    });
+
+    const ordered = draft.blocks
+      .map((block) => grouped.get(block.blockId))
+      .filter((block): block is NonNullable<typeof block> => block !== undefined);
+    const seen = new Set(ordered.map((block) => block.blockId));
+    const remaining = [...grouped.values()].filter((block) => !seen.has(block.blockId));
+    return [...ordered, ...remaining];
+  }, [blockNameById, compileResult.materialized, draft.blocks]);
+
+  const updateBlock = useCallback((blockClientId: string, patch: Partial<BlockDraft>) => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((block) =>
+        block.clientId === blockClientId ? { ...block, ...patch } : block
+      ),
+    }));
+  }, []);
+
+  const moveBlock = useCallback((blockClientId: string, direction: -1 | 1) => {
+    setDraft((prev) => {
+      const index = prev.blocks.findIndex((block) => block.clientId === blockClientId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= prev.blocks.length) {
+        return prev;
+      }
+      const blocks = [...prev.blocks];
+      const [block] = blocks.splice(index, 1);
+      blocks.splice(nextIndex, 0, block);
+      return { ...prev, blocks };
+    });
+  }, []);
+
+  const addBlock = useCallback(() => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: [...prev.blocks, createDefaultBlockDraft(prev.blocks.length)],
+    }));
+  }, []);
+
+  const removeBlock = useCallback((blockClientId: string) => {
+    setDraft((prev) => {
+      if (prev.blocks.length <= 1) return prev;
+      return {
+        ...prev,
+        blocks: prev.blocks.filter((block) => block.clientId !== blockClientId),
+      };
+    });
+  }, []);
+
+  const updateBlockTimingMode = useCallback((blockClientId: string, nextMode: BlockTimingMode) => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((block) => {
+        if (block.clientId !== blockClientId || block.timingMode === nextMode) {
+          return block;
+        }
+        return {
+          ...block,
+          timingMode: nextMode,
+          sessions: block.sessions.map((session, index) => {
+            const defaults = createDefaultSessionDraft(nextMode, index);
+            return {
+              ...defaults,
+              clientId: session.clientId,
+              sessionId: session.sessionId,
+              name: session.name,
+              exercises: session.exercises,
+              slot: session.slot,
+            };
+          }),
+        };
+      }),
+    }));
+  }, []);
+
+  const addSessionToBlock = useCallback((blockClientId: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((block) =>
+        block.clientId === blockClientId
+          ? {
+              ...block,
+              sessions: [
+                ...block.sessions,
+                createDefaultSessionDraft(block.timingMode, block.sessions.length),
+              ],
+            }
+          : block
+      ),
+    }));
+  }, []);
+
+  const updateBlockSession = useCallback(
+    (sessionClientId: string, patch: Partial<SessionDraft>) => {
+      setDraft((prev) => ({
+        ...prev,
+        blocks: prev.blocks.map((block) => ({
+          ...block,
+          sessions: block.sessions.map((session) =>
+            session.clientId === sessionClientId ? { ...session, ...patch } : session
+          ),
+        })),
+      }));
+    },
+    []
+  );
+
+  const toggleBlockWeekday = useCallback((sessionClientId: string, day: Weekday) => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((block) => ({
+        ...block,
+        sessions: block.sessions.map((session) => {
+          if (session.clientId !== sessionClientId) return session;
+          const selected = session.weekdays.includes(day);
+          return {
+            ...session,
+            weekdays: selected
+              ? session.weekdays.filter((value) => value !== day)
+              : [...session.weekdays, day],
+          };
+        }),
+      })),
+    }));
+  }, []);
+
+  const removeBlockSession = useCallback((sessionClientId: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((block) => {
+        if (!block.sessions.some((session) => session.clientId === sessionClientId)) {
+          return block;
+        }
+        if (block.sessions.length <= 1) {
+          return block;
+        }
+        return {
+          ...block,
+          sessions: block.sessions.filter((session) => session.clientId !== sessionClientId),
+        };
+      }),
+    }));
+  }, []);
+
+  const openExercisePicker = useCallback((session: SessionDraft) => {
+    const existingIds = session.exercises.map((exercise) => exercise.exerciseId).join(",");
+    router.push({
+      pathname: "/programs/create/exercise-picker",
+      params: {
+        targetId: session.clientId,
+        targetLabel: session.name || "Session",
+        existingIds,
+      },
+    });
+  }, []);
+
+  const removeExercise = useCallback((sessionClientId: string, exerciseIndex: number) => {
+    setDraft((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((block) => ({
+        ...block,
+        sessions: block.sessions.map((session) =>
+          session.clientId === sessionClientId
+            ? {
+                ...session,
+                exercises: session.exercises.filter((_, index) => index !== exerciseIndex),
+              }
+            : session
+        ),
+      })),
+    }));
+  }, []);
+
+  const handleOpenExerciseConfig = useCallback(
+    (sessionClientId: string, exerciseIndex: number) => {
+      setConfigTarget({ sessionClientId, exerciseIndex });
+      setExerciseConfigVisible(true);
+    },
+    []
+  );
+
+  const handleSaveExerciseConfig = useCallback(
+    (exercise: ExerciseConfig) => {
+      if (!configTarget) return;
+      setDraft((prev) => ({
+        ...prev,
+        blocks: prev.blocks.map((block) => ({
+          ...block,
+          sessions: block.sessions.map((session) =>
+            session.clientId === configTarget.sessionClientId
+              ? {
+                  ...session,
+                  exercises: session.exercises.map((currentExercise, index) =>
+                    index === configTarget.exerciseIndex ? exercise : currentExercise
+                  ),
+                }
+              : session
+          ),
+        })),
+      }));
+      setExerciseConfigVisible(false);
+      setConfigTarget(null);
+    },
+    [configTarget]
+  );
+
+  const validateGeneratedProgram = useCallback(() => {
+    const result = compilePslSource(
+      pslSource,
+      previewOverride ? { calendarOverride: previewOverride } : {}
+    );
+    if (!result.valid) {
+      const message = result.diagnostics
+        .filter((diagnostic) => diagnostic.severity === "error")
+        .map((diagnostic) => diagnostic.message)
+        .join("\n");
+      throw new Error(message || "Program could not be validated.");
+    }
+    return result;
+  }, [previewOverride, pslSource]);
+
+  const handleSaveTemplate = useCallback(async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const nextName = draft.name.trim() || "My Program";
+      const nextDescription = draft.description?.trim() || undefined;
+
+      if (editingProgram?.isActive) {
+        const completions = await buildProgramCompletions(editingProgram.id);
+        const result = compilePslSource(
+          pslSource,
+          previewOverride
+            ? { calendarOverride: previewOverride, completions }
+            : { completions }
+        );
+        if (!result.valid) {
+          const message = result.diagnostics
+            .filter((diagnostic) => diagnostic.severity === "error")
+            .map((diagnostic) => diagnostic.message)
+            .join("\n");
+          throw new Error(message || "Program could not be validated.");
+        }
+        if (!previewOverride || !result.materialized) {
+          throw new Error("Choose valid activation dates before saving changes.");
+        }
+        const storedEndDate = previewOverride.end_date ?? result.ast?.calendar?.end_date ?? null;
+        await updatePslProgram(editingProgram.id, {
+          name: nextName,
+          description: nextDescription ?? null,
+          pslSource,
+          compiledHash: result.compiled?.source_hash ?? null,
+          isActive: true,
+          startDate: previewOverride.start_date,
+          endDate: storedEndDate,
+          units: result.ast?.units ?? draft.units ?? null,
+        });
+        await deleteCalendarForProgram(editingProgram.id);
+        await insertCalendarEntries(
+          editingProgram.id,
+          extractCalendarEntries(result.materialized)
+        );
+      } else if (editingProgram) {
+        validateGeneratedProgram();
+        await updatePslProgram(editingProgram.id, {
+          name: nextName,
+          description: nextDescription ?? null,
+          pslSource,
+          compiledHash: null,
+          units: draft.units ?? null,
+        });
+      } else {
+        validateGeneratedProgram();
+        await createPslProgram({
+          name: nextName,
+          description: nextDescription,
+          pslSource,
+          isActive: false,
+          units: draft.units,
+        });
+      }
+      router.replace("/programs/manage");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    draft.description,
+    draft.name,
+    draft.units,
+    editingProgram,
+    previewOverride,
+    pslSource,
+    validateGeneratedProgram,
+  ]);
+
+  const handleSaveAndActivate = useCallback(async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const result = validateGeneratedProgram();
+      const activationResult = editingProgram
+        ? compilePslSource(
+            pslSource,
+            previewOverride
+              ? {
+                  calendarOverride: previewOverride,
+                  completions: await buildProgramCompletions(editingProgram.id),
+                }
+              : { completions: await buildProgramCompletions(editingProgram.id) }
+          )
+        : result;
+      if (!activationResult.valid) {
+        const message = activationResult.diagnostics
+          .filter((diagnostic) => diagnostic.severity === "error")
+          .map((diagnostic) => diagnostic.message)
+          .join("\n");
+        throw new Error(message || "Program could not be validated.");
+      }
+
+      const nextName = draft.name.trim() || "My Program";
+      const nextDescription = draft.description?.trim() || undefined;
+
+      if (editingProgram) {
+        if (!previewOverride || !activationResult.materialized) {
+          throw new Error("Choose valid activation dates before activating.");
+        }
+        const storedEndDate =
+          previewOverride.end_date ?? activationResult.ast?.calendar?.end_date ?? null;
+        await updatePslProgram(editingProgram.id, {
+          name: nextName,
+          description: nextDescription ?? null,
+          pslSource,
+          compiledHash: activationResult.compiled?.source_hash ?? null,
+          isActive: true,
+          startDate: previewOverride.start_date,
+          endDate: storedEndDate,
+          units: activationResult.ast?.units ?? draft.units ?? null,
+        });
+        await deleteCalendarForProgram(editingProgram.id);
+        await insertCalendarEntries(
+          editingProgram.id,
+          extractCalendarEntries(activationResult.materialized)
+        );
+        router.replace("/programs/manage");
+        return;
+      }
+
+      const program = await createPslProgram({
+        name: nextName,
+        description: nextDescription,
+        pslSource,
+        isActive: false,
+        units: draft.units,
+      });
+      router.replace({
+        pathname: "/programs/manage",
+        params: { activateProgramId: String(program.id) },
+      });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    draft.description,
+    draft.name,
+    draft.units,
+    editingProgram,
+    previewOverride,
+    pslSource,
+    validateGeneratedProgram,
+  ]);
+
+  const handleEditPslInstead = useCallback(() => {
+    router.push({
+      pathname: "/programs/create/editor",
+      params: {
+        pslSource,
+        ...(editingProgram ? { editProgramId: String(editingProgram.id) } : {}),
+      },
+    });
+  }, [editingProgram, pslSource]);
+
+  const secondaryActionLabel = editingProgram ? "Save Changes" : "Save as Template";
+  const primaryActionLabel = saving
+    ? "Saving..."
+    : editingProgram?.isActive
+      ? "Save & Refresh"
+      : "Save & Activate";
+  const secondaryActionIcon = editingProgram
+    ? "content-save-edit-outline"
+    : "bookmark-plus-outline";
+  const primaryActionIcon = editingProgram?.isActive ? "refresh" : "arrow-right";
+
+  return (
+    <View style={styles.container} className="bg-background">
+      <Stack.Screen
+        options={{
+          title: editingProgram ? "Edit Blocks" : "Blocks Builder",
+          headerStyle: { backgroundColor: rawColors.background },
+          headerTintColor: rawColors.foreground,
+        }}
+      />
+
+      {loadingProgram ? (
+        <View style={[styles.container, styles.emptyState]}>
+          <Text style={{ color: rawColors.foregroundSecondary, fontSize: 16, fontWeight: "600" }}>
+            Loading program...
+          </Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View
+            style={[
+              styles.heroCard,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            ]}
+          >
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: rawColors.primary + "18" }]}>
+                <MaterialCommunityIcons name="view-carousel" size={22} color={rawColors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.heroTitle, { color: rawColors.foreground }]}>
+                  {draft.name.trim() || "My Program"}
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: rawColors.foregroundSecondary }]}>
+                  Structured blocks
+                </Text>
+                <Text style={[styles.helpText, { color: rawColors.foregroundMuted }]}>
+                  Build phased programs with explicit block durations. Each block owns its timing
+                  mode and session list.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.metaRow}>
+              <View style={[styles.metaPill, { backgroundColor: rawColors.surface }]}>
+                <Text style={[styles.metaPillText, { color: rawColors.foregroundSecondary }]}>
+                  {draft.blocks.length} block{draft.blocks.length === 1 ? "" : "s"}
+                </Text>
+              </View>
+              <View style={[styles.metaPill, { backgroundColor: rawColors.surface }]}>
+                <Text style={[styles.metaPillText, { color: rawColors.foregroundSecondary }]}>
+                  {totalSessions} session{totalSessions === 1 ? "" : "s"}
+                </Text>
+              </View>
+              <View style={[styles.metaPill, { backgroundColor: rawColors.surface }]}>
+                <Text style={[styles.metaPillText, { color: rawColors.foregroundSecondary }]}>
+                  {totalExercises} exercise{totalExercises === 1 ? "" : "s"}
+                </Text>
+              </View>
+              <View style={[styles.metaPill, { backgroundColor: rawColors.surface }]}>
+                <Text style={[styles.metaPillText, { color: rawColors.foregroundSecondary }]}>
+                  {draft.units?.toUpperCase() ?? "KG"}
+                </Text>
+              </View>
+            </View>
+
+            <Pressable onPress={handleEditPslInstead} hitSlop={8} style={{ marginTop: 12 }}>
+              <Text style={{ color: rawColors.primary, fontWeight: "700" }}>
+                Edit PSL instead
+              </Text>
+            </Pressable>
+          </View>
+
+          <View
+            style={[
+              styles.panel,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            ]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>Blocks</Text>
+              <Pressable onPress={addBlock} hitSlop={8} style={styles.inlineAction}>
+                <MaterialCommunityIcons name="plus" size={18} color={rawColors.primary} />
+                <Text style={{ color: rawColors.primary, fontWeight: "700" }}>Add block</Text>
+              </Pressable>
+            </View>
+
+            <Text style={[styles.helpText, { color: rawColors.foregroundMuted }]}>
+              Sessions inside a block share the block timing mode in guided mode. Mixed timing or
+              advanced modifiers stay in the PSL editor.
+            </Text>
+
+            <View style={{ marginTop: 14, gap: 12 }}>
+              {draft.blocks.map((block, index) => (
+                <BlockCard
+                  key={block.clientId}
+                  block={block}
+                  index={index}
+                  totalBlocks={draft.blocks.length}
+                  rawColors={rawColors}
+                  units={draft.units ?? "kg"}
+                  onNameChange={(value) => updateBlock(block.clientId, { name: value })}
+                  onDurationValueChange={(value) =>
+                    updateBlock(block.clientId, {
+                      durationValue: Math.max(1, Number.parseInt(value, 10) || 1),
+                    })
+                  }
+                  onDurationUnitChange={(value) =>
+                    updateBlock(block.clientId, { durationUnit: value })
+                  }
+                  onToggleDeload={(value) => updateBlock(block.clientId, { deload: value })}
+                  onTimingModeChange={(value) => updateBlockTimingMode(block.clientId, value)}
+                  onMove={(direction) => moveBlock(block.clientId, direction)}
+                  onRemove={() => removeBlock(block.clientId)}
+                  onAddSession={() => addSessionToBlock(block.clientId)}
+                  onUpdateSession={updateBlockSession}
+                  onToggleWeekday={toggleBlockWeekday}
+                  onRemoveSession={removeBlockSession}
+                  onOpenExercisePicker={openExercisePicker}
+                  onOpenExerciseConfig={handleOpenExerciseConfig}
+                  onRemoveExercise={removeExercise}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.panel,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            ]}
+          >
+            <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
+              Preview / Activation Dates
+            </Text>
+            <Text style={[styles.helpText, { color: rawColors.foregroundMuted }]}>
+              Blocks derive their date ranges from the activation start date. Guided block programs
+              do not ask for weekday assignment at activation.
+            </Text>
+
+            <Pressable
+              onPress={() => {
+                setPreviewStartDate(isoToDateLocal(getDefaultActivationStartDateIso()));
+                setPreviewWeeks(DEFAULT_ACTIVATION_WEEKS);
+              }}
+              hitSlop={8}
+              style={{ marginTop: 10, alignSelf: "flex-start" }}
+            >
+              <Text style={{ color: rawColors.primary, fontWeight: "700" }}>
+                Use default preview dates
+              </Text>
+            </Pressable>
+
+            <View style={{ marginTop: 12 }}>
+              <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+                Start date
+              </Text>
+              <Pressable
+                onPress={() => setShowStartPicker(true)}
+                style={[
+                  styles.inputRow,
+                  { backgroundColor: rawColors.surface, borderColor: rawColors.borderLight },
+                ]}
+              >
+                <Text style={{ color: rawColors.foreground, fontWeight: "700" }}>
+                  {previewStartIso}
+                </Text>
+                <MaterialCommunityIcons
+                  name="calendar"
+                  size={20}
+                  color={rawColors.foregroundSecondary}
+                />
+              </Pressable>
+              {showStartPicker ? (
+                <DateTimePicker
+                  value={previewStartDate}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={(_, date) => {
+                    setShowStartPicker(Platform.OS === "ios");
+                    if (date) setPreviewStartDate(date);
+                  }}
+                />
+              ) : null}
+            </View>
+
+            {requiresHorizonWeeks ? (
+              <View style={{ marginTop: 12 }}>
+                <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+                  Horizon (weeks)
+                </Text>
+                <TextInput
+                  value={String(previewWeeks)}
+                  onChangeText={(value) =>
+                    setPreviewWeeks(Math.max(1, Number.parseInt(value, 10) || 1))
+                  }
+                  keyboardType="number-pad"
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: rawColors.surface,
+                      borderColor: rawColors.borderLight,
+                      color: rawColors.foreground,
+                    },
+                  ]}
+                />
+              </View>
+            ) : null}
+
+            {previewDerivedEndIso ? (
+              <Text style={[styles.helpText, { color: rawColors.foregroundMuted, marginTop: 10 }]}>
+                End date preview: {previewDerivedEndIso}
+              </Text>
+            ) : null}
+          </View>
+
+          <View
+            style={[
+              styles.panel,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            ]}
+          >
+            <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>Diagnostics</Text>
+            <Text style={[styles.helpText, { color: rawColors.foregroundMuted }]}>
+              {compileResult.valid
+                ? "Valid PSL 0.3 output"
+                : `${errorDiagnostics.length} validation error${errorDiagnostics.length === 1 ? "" : "s"}`}
+            </Text>
+
+            {errorDiagnostics.slice(0, 6).map((diagnostic, index) => (
+              <Text key={index} style={[styles.diagLine, { color: rawColors.destructive }]}>
+                - {diagnostic.message}
+              </Text>
+            ))}
+
+            {compatibilityWarnings.length > 0 ? (
+              <View style={{ marginTop: 10 }}>
+                <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+                  Logging compatibility
+                </Text>
+                {compatibilityWarnings.slice(0, 4).map((warning, index) => (
+                  <Text key={index} style={[styles.diagLine, { color: rawColors.warning }]}>
+                    - {warning.message}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          <View
+            style={[
+              styles.panel,
+              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            ]}
+          >
+            <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>Preview</Text>
+
+            {compiledBlockPreview.length > 0 ? (
+              compiledBlockPreview.map((block) => (
+                <Text
+                  key={block.blockId}
+                  style={[styles.previewLine, { color: rawColors.foregroundSecondary }]}
+                >
+                  - {block.blockName}: {block.sessionCount} session
+                  {block.sessionCount === 1 ? "" : "s"}, {block.exerciseCount} exercise
+                  {block.exerciseCount === 1 ? "" : "s"}
+                </Text>
+              ))
+            ) : (
+              <Text style={[styles.helpText, { color: rawColors.foregroundMuted }]}>
+                Add block timing data and exercises to see a compiled preview.
+              </Text>
+            )}
+
+            {materializedBlockPreview.length > 0 ? (
+              <View style={{ marginTop: 10 }}>
+                <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+                  Block date ranges
+                </Text>
+                {materializedBlockPreview.map((block) => (
+                  <View key={block.blockId} style={{ marginTop: 4 }}>
+                    <Text style={[styles.previewLine, { color: rawColors.foregroundSecondary }]}>
+                      - {block.blockName}: {block.startDateIso ?? "TBD"} to {block.endDateIso ?? "TBD"}
+                    </Text>
+                    {block.occurrences.map((occurrence, index) => (
+                      <Text
+                        key={`${block.blockId}-${index}`}
+                        style={[
+                          styles.previewLine,
+                          { color: rawColors.foregroundMuted, marginLeft: 12 },
+                        ]}
+                      >
+                        {occurrence.dateIso || "TBD"} - {occurrence.name}
+                      </Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+      )}
+
+      {!loadingProgram ? (
+        <View
+          style={[
+            styles.bottomBar,
+            {
+              backgroundColor: rawColors.background,
+              borderTopColor: rawColors.border,
+              paddingBottom: Math.max(insets.bottom, 12),
+              shadowColor: rawColors.shadow,
+            },
+          ]}
+        >
+          {saveError ? (
+            <Text style={[styles.saveError, { color: rawColors.destructive }]}>
+              {saveError}
+            </Text>
+          ) : null}
+
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={handleSaveTemplate}
+              disabled={saving}
+              className="flex-1 flex-row items-center justify-center py-4 rounded-xl border bg-surface-secondary border-border"
+              style={({ pressed }) => ({
+                opacity: pressed || saving ? 0.8 : 1,
+              })}
+            >
+              <MaterialCommunityIcons
+                name={secondaryActionIcon}
+                size={18}
+                color={rawColors.foreground}
+              />
+              <Text
+                className="ml-2 text-sm font-semibold"
+                style={{ color: rawColors.foreground }}
+              >
+                {secondaryActionLabel}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSaveAndActivate}
+              disabled={saving}
+              className="flex-1 flex-row items-center justify-center py-4 rounded-xl border bg-primary border-primary"
+              style={({ pressed }) => ({
+                opacity: pressed || saving ? 0.8 : 1,
+              })}
+            >
+              <MaterialCommunityIcons
+                name={primaryActionIcon}
+                size={20}
+                color={rawColors.primaryForeground}
+              />
+              <Text
+                className="ml-2 text-sm font-semibold"
+                style={{ color: rawColors.primaryForeground }}
+              >
                 {primaryActionLabel}
               </Text>
             </Pressable>
@@ -1902,6 +3329,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
+  timingChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   weekdayChip: {
     width: 38,
     height: 38,
@@ -1921,6 +3353,22 @@ const styles = StyleSheet.create({
   },
   intervalField: {
     flex: 1,
+  },
+  unitRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  unitButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unitButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
   },
   exerciseSectionHeader: {
     flexDirection: "row",
@@ -2018,19 +3466,6 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     gap: 10,
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  primaryButton: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
   },
   modalTitle: {
     fontSize: 18,

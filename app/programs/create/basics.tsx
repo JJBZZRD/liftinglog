@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import {
+  buildBlocksStarterPslSource,
   buildStarterPslSource,
   type FlatProgramTimingMode,
 } from "../../../lib/programs/psl/pslGenerator";
@@ -50,47 +51,6 @@ const TIMING_MODE_OPTIONS: {
   },
 ];
 
-function buildBlocksStarter(
-  name: string,
-  description: string,
-  units: "kg" | "lb"
-): string {
-  const safeName = name.trim() || "My Block Program";
-  const safeDesc = description.trim();
-  const progId = safeName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "") || "my-block-program";
-
-  const lines: string[] = [];
-  lines.push('language_version: "0.3"');
-  lines.push("metadata:");
-  lines.push(`  id: ${progId}`);
-  lines.push(`  name: ${JSON.stringify(safeName)}`);
-  if (safeDesc) lines.push(`  description: ${JSON.stringify(safeDesc)}`);
-  lines.push(`units: ${units}`);
-  lines.push("blocks:");
-  lines.push("  - id: accumulation");
-  lines.push('    duration: "4w"');
-  lines.push("    sessions:");
-  lines.push("      - id: a1");
-  lines.push("        name: A1");
-  lines.push('        schedule: "MON"');
-  lines.push("        exercises:");
-  lines.push('          - "Back Squat: 3x5 @75%"');
-  lines.push("  - id: deload");
-  lines.push('    duration: "1w"');
-  lines.push("    deload: true");
-  lines.push("    sessions:");
-  lines.push("      - id: d1");
-  lines.push("        name: Deload");
-  lines.push('        schedule: "MON"');
-  lines.push("        exercises:");
-  lines.push('          - "Back Squat: 2x5 @60%"');
-  return `${lines.join("\n")}\n`;
-}
-
 export default function ProgramBasicsScreen() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{
@@ -127,9 +87,12 @@ export default function ProgramBasicsScreen() {
 
     if (programStructure === "blocks") {
       router.push({
-        pathname: "/programs/create/editor",
+        pathname: "/programs/create/schedule",
         params: {
-          pslSource: buildBlocksStarter(trimmedName, description, units),
+          name: trimmedName,
+          description: description.trim(),
+          units,
+          programStructure: "blocks",
           ...(isEditing ? { editProgramId: params.editProgramId } : {}),
         },
       });
@@ -152,7 +115,11 @@ export default function ProgramBasicsScreen() {
     Keyboard.dismiss();
     const starter =
       programStructure === "blocks"
-        ? buildBlocksStarter(trimmedName || "My Block Program", description, units)
+        ? buildBlocksStarterPslSource({
+            name: trimmedName || "My Block Program",
+            description,
+            units,
+          })
         : buildStarterPslSource(timingMode, {
             name: trimmedName || "My Program",
             description,

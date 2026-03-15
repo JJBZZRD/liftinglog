@@ -64,6 +64,7 @@ import {
   getIntensityDefaultValue,
   getIntensityUnit,
 } from "../../lib/programs/psl/pslMapper";
+import { refreshUpcomingCalendarForProgram } from "../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../lib/timerStore";
 import { formatRelativeDate, formatTime } from "../../lib/utils/formatters";
@@ -1685,6 +1686,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
         await completeExerciseEntry(nextWorkoutExerciseId, selectedDate.getTime());
       }
       await syncStatusesForCalendarExercise(activeProgramEntry.calendarExercise.id);
+      await refreshUpcomingCalendarForProgram(activeProgramEntry.calendar.programId);
       onHistoryRefresh?.();
       router.back();
     } catch (error) {

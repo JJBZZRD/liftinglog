@@ -10,8 +10,11 @@ import { convertWeightToKg } from "../utils/units";
 import {
   clearLinkedProgramExercisesByWorkoutExerciseIds,
   clearLinkedProgramSetsByWorkoutSetIds,
+  getProgramIdsForWorkoutExerciseIds,
+  getProgramIdsForWorkoutSetIds,
   syncLinkedProgramSetsByWorkoutSetIds,
 } from "./programCalendar";
+import { refreshUpcomingCalendarForPrograms } from "../programs/psl/programRuntime";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
@@ -120,6 +123,10 @@ export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<
     .from(sets)
     .where(eq(sets.workoutExerciseId, workoutExerciseId));
   const linkedSetIds = linkedSets.map((row) => row.id);
+  const affectedProgramIds = [
+    ...(await getProgramIdsForWorkoutSetIds(linkedSetIds)),
+    ...(await getProgramIdsForWorkoutExerciseIds([workoutExerciseId])),
+  ];
 
   await clearLinkedProgramSetsByWorkoutSetIds(linkedSetIds);
   await clearLinkedProgramExercisesByWorkoutExerciseIds([workoutExerciseId]);
@@ -132,6 +139,8 @@ export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<
   if (exerciseId !== null) {
     await rebuildPREventsForExercise(exerciseId);
   }
+
+  await refreshUpcomingCalendarForPrograms(affectedProgramIds);
 }
 
 /**
@@ -152,6 +161,10 @@ export async function deleteExerciseSession(workoutId: number, exerciseId: numbe
       and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId))
     );
   const linkedWorkoutExerciseIds = linkedWorkoutExercises.map((row) => row.id);
+  const affectedProgramIds = [
+    ...(await getProgramIdsForWorkoutSetIds(linkedSetIds)),
+    ...(await getProgramIdsForWorkoutExerciseIds(linkedWorkoutExerciseIds)),
+  ];
 
   await clearLinkedProgramSetsByWorkoutSetIds(linkedSetIds);
   await clearLinkedProgramExercisesByWorkoutExerciseIds(linkedWorkoutExerciseIds);
@@ -167,6 +180,7 @@ export async function deleteExerciseSession(workoutId: number, exerciseId: numbe
   ).run();
 
   await rebuildPREventsForExercise(exerciseId);
+  await refreshUpcomingCalendarForPrograms(affectedProgramIds);
 }
 
 export async function addWorkoutExercise(args: {
@@ -403,6 +417,9 @@ export async function updateSet(setId: number, updates: {
   if (Object.keys(mapped).length === 0) return;
   await db.update(sets).set(mapped).where(eq(sets.id, setId)).run();
   await syncLinkedProgramSetsByWorkoutSetIds([setId]);
+  await refreshUpcomingCalendarForPrograms(
+    await getProgramIdsForWorkoutSetIds([setId])
+  );
 
   if (affectsPR && exerciseIdForPR !== null) {
     await rebuildPREventsForExercise(exerciseIdForPR);
@@ -419,6 +436,10 @@ export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): P
     .select({ id: sets.id })
     .from(sets)
     .where(eq(sets.workoutExerciseId, workoutExerciseId));
+  const affectedProgramIds = [
+    ...(await getProgramIdsForWorkoutSetIds(setIds.map((row) => row.id))),
+    ...(await getProgramIdsForWorkoutExerciseIds([workoutExerciseId])),
+  ];
 
   await clearLinkedProgramSetsByWorkoutSetIds(setIds.map((row) => row.id));
 
@@ -428,6 +449,8 @@ export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): P
   for (const exerciseId of exerciseIds) {
     await rebuildPREventsForExercise(exerciseId);
   }
+
+  await refreshUpcomingCalendarForPrograms(affectedProgramIds);
 }
 
 export async function deleteSet(setId: number): Promise<void> {
@@ -441,6 +464,7 @@ export async function deleteSet(setId: number): Promise<void> {
     .limit(1);
   const exerciseId = rows[0]?.exerciseId ?? null;
   const workoutExerciseId = rows[0]?.workoutExerciseId ?? null;
+  const affectedProgramIds = await getProgramIdsForWorkoutSetIds([setId]);
 
   await clearLinkedProgramSetsByWorkoutSetIds([setId]);
   await db.delete(sets).where(eq(sets.id, setId)).run();
@@ -449,6 +473,8 @@ export async function deleteSet(setId: number): Promise<void> {
   if (exerciseId !== null) {
     await rebuildPREventsForExercise(exerciseId);
   }
+
+  await refreshUpcomingCalendarForPrograms(affectedProgramIds);
 }
 
 export type WorkoutHistoryEntry = {

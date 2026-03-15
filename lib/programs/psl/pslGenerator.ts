@@ -2,6 +2,7 @@ import type { IntensityTarget, SessionSlot, Weekday } from "program-specificatio
 import { createId } from "program-specification-language";
 
 export type FlatProgramTimingMode = "sequence" | "weekdays" | "fixed_day" | "interval_days";
+export type BlockTimingMode = "weekdays" | "fixed_day" | "interval_days";
 
 export interface SetConfig {
   count: number;
@@ -49,6 +50,26 @@ export interface FlatProgramDraft {
   sequenceRepeat: boolean;
   sessions: SessionDraft[];
 }
+
+export interface BlockDraft {
+  clientId: string;
+  blockId: string;
+  name: string;
+  durationValue: number;
+  durationUnit: "weeks" | "days";
+  deload: boolean;
+  timingMode: BlockTimingMode;
+  sessions: SessionDraft[];
+}
+
+export interface BlockProgramDraft {
+  name: string;
+  description?: string;
+  units?: "kg" | "lb";
+  blocks: BlockDraft[];
+}
+
+export type GuidedProgramDraft = FlatProgramDraft | BlockProgramDraft;
 
 const WEEKDAY_ORDER: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
@@ -177,6 +198,27 @@ function resolveUniqueSessionIds(sessions: SessionDraft[]): string[] {
   });
 }
 
+function resolveUniqueBlockIds(blocks: BlockDraft[]): string[] {
+  const used = new Set<string>();
+
+  return blocks.map((block, index) => {
+    const base =
+      slugify(block.blockId) ||
+      slugify(block.name) ||
+      `block-${getAlphabetLetter(index).toLowerCase()}`;
+    let candidate = base;
+    let suffix = 2;
+
+    while (used.has(candidate)) {
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+
+    used.add(candidate);
+    return candidate;
+  });
+}
+
 function sortWeekdays(days: Weekday[]): Weekday[] {
   return [...days].sort((a, b) => WEEKDAY_ORDER.indexOf(a) - WEEKDAY_ORDER.indexOf(b));
 }
@@ -258,6 +300,121 @@ export function createDefaultFlatProgramDraft(
     sequenceRepeat: true,
     sessions: Array.from({ length: sessionCount }, (_, index) => createDefaultSessionDraft(timingMode, index)),
   };
+}
+
+export function createDefaultBlockDraft(
+  index: number,
+  options: {
+    timingMode?: BlockTimingMode;
+    name?: string;
+    deload?: boolean;
+    durationValue?: number;
+    durationUnit?: "weeks" | "days";
+  } = {}
+): BlockDraft {
+  const timingMode = options.timingMode ?? "weekdays";
+  const sessionCount = timingMode === "interval_days" ? 1 : 3;
+
+  return {
+    clientId: createClientId(),
+    blockId: options.name ? slugify(options.name) || `block-${index + 1}` : `block-${index + 1}`,
+    name: options.name ?? `Block ${index + 1}`,
+    durationValue:
+      typeof options.durationValue === "number" && options.durationValue > 0
+        ? options.durationValue
+        : options.deload
+          ? 1
+          : 4,
+    durationUnit: options.durationUnit ?? "weeks",
+    deload: options.deload ?? false,
+    timingMode,
+    sessions: Array.from({ length: sessionCount }, (_, sessionIndex) =>
+      createDefaultSessionDraft(timingMode, sessionIndex)
+    ),
+  };
+}
+
+export function createDefaultBlockProgramDraft(
+  options: { name?: string; description?: string; units?: "kg" | "lb" } = {}
+): BlockProgramDraft {
+  return {
+    name: options.name?.trim() || "My Program",
+    description: options.description?.trim() || undefined,
+    units: options.units ?? "kg",
+    blocks: [
+      createDefaultBlockDraft(0, {
+        name: "Accumulation",
+        timingMode: "weekdays",
+        durationValue: 4,
+        durationUnit: "weeks",
+      }),
+      createDefaultBlockDraft(1, {
+        name: "Deload",
+        timingMode: "weekdays",
+        durationValue: 1,
+        durationUnit: "weeks",
+        deload: true,
+      }),
+    ],
+  };
+}
+
+function appendSessionTimingLines(
+  lines: string[],
+  session: SessionDraft,
+  timingMode: BlockTimingMode | FlatProgramTimingMode
+) {
+  if (timingMode === "weekdays") {
+    lines.push("        schedule:");
+    const weekdays = sortWeekdays(session.weekdays);
+    lines.push("          type: weekdays");
+    lines.push(`          days: [${weekdays.join(", ")}]`);
+    return;
+  }
+
+  if (timingMode === "fixed_day") {
+    lines.push(`        day: ${Math.max(1, session.fixedDay || 1)}`);
+    return;
+  }
+
+  if (timingMode === "interval_days") {
+    lines.push("        schedule:");
+    lines.push("          type: interval_days");
+    lines.push(`          every: ${Math.max(1, session.intervalEvery || 1)}`);
+    lines.push(
+      `          start_offset_days: ${Math.max(0, session.intervalStartOffsetDays || 0)}`
+    );
+    if (
+      session.intervalEndOffsetDays !== null &&
+      session.intervalEndOffsetDays !== undefined
+    ) {
+      lines.push(
+        `          end_offset_days: ${Math.max(0, session.intervalEndOffsetDays)}`
+      );
+    }
+  }
+}
+
+function appendSessionExerciseLines(
+  lines: string[],
+  session: SessionDraft
+) {
+  if (session.exercises.length === 0) {
+    lines.push("        exercises: []");
+    return;
+  }
+
+  lines.push("        exercises:");
+  session.exercises.forEach((exercise) => {
+    lines.push(`          - exercise: ${yamlString(exercise.exerciseName)}`);
+    if (exercise.restSeconds) {
+      lines.push(`            rest: ${yamlString(durationToString(exercise.restSeconds))}`);
+    }
+    lines.push("            sets:");
+    exercise.sets.forEach((set) => {
+      lines.push(`              - ${yamlString(setToShorthand(set))}`);
+    });
+  });
 }
 
 export function serializeFlatProgramDraftToPsl(draft: FlatProgramDraft): string {
@@ -342,9 +499,78 @@ export function serializeFlatProgramDraftToPsl(draft: FlatProgramDraft): string 
   return `${lines.join("\n")}\n`;
 }
 
+export function serializeBlockProgramDraftToPsl(draft: BlockProgramDraft): string {
+  const lines: string[] = [];
+  const programId = createId("prog", draft.name);
+  const resolvedBlockIds = resolveUniqueBlockIds(draft.blocks);
+
+  lines.push('language_version: "0.3"');
+  lines.push("metadata:");
+  lines.push(`  id: ${programId}`);
+  lines.push(`  name: ${yamlString(draft.name.trim() || "My Program")}`);
+  const description = maybeYamlString(draft.description);
+  if (description) {
+    lines.push(`  description: ${description}`);
+  }
+
+  if (draft.units) {
+    lines.push(`units: ${draft.units}`);
+  }
+
+  if (draft.blocks.length === 0) {
+    lines.push("blocks: []");
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push("blocks:");
+
+  draft.blocks.forEach((block, blockIndex) => {
+    const resolvedBlockId = resolvedBlockIds[blockIndex];
+    const resolvedSessionIds = resolveUniqueSessionIds(block.sessions);
+
+    lines.push(`  - id: ${resolvedBlockId}`);
+    lines.push(`    name: ${yamlString(block.name.trim() || `Block ${blockIndex + 1}`)}`);
+    lines.push(
+      `    duration: ${yamlString(`${Math.max(1, block.durationValue || 1)}${block.durationUnit === "weeks" ? "w" : "d"}`)}`
+    );
+    if (block.deload) {
+      lines.push("    deload: true");
+    }
+
+    if (block.sessions.length === 0) {
+      lines.push("    sessions: []");
+      return;
+    }
+
+    lines.push("    sessions:");
+    block.sessions.forEach((session, sessionIndex) => {
+      lines.push(`      - id: ${resolvedSessionIds[sessionIndex]}`);
+      lines.push(
+        `        name: ${yamlString(session.name.trim() || `Session ${getAlphabetLetter(sessionIndex)}`)}`
+      );
+      if (session.slot !== undefined) {
+        lines.push(
+          `        slot: ${typeof session.slot === "string" ? session.slot : session.slot}`
+        );
+      }
+
+      appendSessionTimingLines(lines, session, block.timingMode);
+      appendSessionExerciseLines(lines, session);
+    });
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
 export function buildStarterPslSource(
   timingMode: FlatProgramTimingMode,
   options: { name?: string; description?: string; units?: "kg" | "lb" } = {}
 ): string {
   return serializeFlatProgramDraftToPsl(createDefaultFlatProgramDraft(timingMode, options));
+}
+
+export function buildBlocksStarterPslSource(
+  options: { name?: string; description?: string; units?: "kg" | "lb" } = {}
+): string {
+  return serializeBlockProgramDraftToPsl(createDefaultBlockProgramDraft(options));
 }

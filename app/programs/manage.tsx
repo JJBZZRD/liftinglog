@@ -39,7 +39,11 @@ import {
 } from "../../lib/programs/psl/activationDates";
 import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
 import { getPslCompatibilityWarnings } from "../../lib/programs/psl/pslCompatibility";
-import { deserializeFlatProgramDraftFromPsl } from "../../lib/programs/psl/pslDraftMapper";
+import {
+  deserializeBlockProgramDraftFromPsl,
+  deserializeFlatProgramDraftFromPsl,
+} from "../../lib/programs/psl/pslDraftMapper";
+import { buildProgramCompletions } from "../../lib/programs/psl/programRuntime";
 
 export default function ManageProgramsScreen() {
   const { rawColors } = useTheme();
@@ -169,7 +173,11 @@ export default function ManageProgramsScreen() {
 
     try {
       const override = { start_date: activationStartIso, ...(requiresHorizonWeeks && derivedEndIso ? { end_date: derivedEndIso } : {}) };
-      const result = compilePslSource(activateProgram.pslSource, { calendarOverride: override });
+      const completions = await buildProgramCompletions(activateProgram.id);
+      const result = compilePslSource(activateProgram.pslSource, {
+        calendarOverride: override,
+        completions,
+      });
       if (!result.valid || !result.materialized) {
         const errors = result.diagnostics
           .filter((d) => d.severity === "error")
@@ -231,6 +239,21 @@ export default function ManageProgramsScreen() {
           units: builderDraft.units ?? "kg",
           programStructure: "sessions",
           timingMode: builderDraft.timingMode,
+        },
+      });
+      return;
+    }
+
+    const blockDraft = deserializeBlockProgramDraftFromPsl(program.pslSource);
+    if (blockDraft) {
+      router.push({
+        pathname: "/programs/create/basics",
+        params: {
+          editProgramId: String(program.id),
+          name: blockDraft.name,
+          description: blockDraft.description ?? "",
+          units: blockDraft.units ?? "kg",
+          programStructure: "blocks",
         },
       });
       return;

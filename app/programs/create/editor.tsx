@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { parseDocument } from "program-specification-language";
 import BaseModal from "../../../components/modals/BaseModal";
 import {
@@ -36,6 +37,7 @@ import {
 } from "../../../lib/programs/psl/activationDates";
 import { introspectPslSource } from "../../../lib/programs/psl/pslIntrospection";
 import { getPslCompatibilityWarnings } from "../../../lib/programs/psl/pslCompatibility";
+import { buildProgramCompletions } from "../../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 
 type RecordValue = Record<string, unknown>;
@@ -159,6 +161,7 @@ const SNIPPET_EXERCISE_SHORTHAND = `- "Bench Press: 3x5 @75%; +2.5kg every week 
 
 export default function ProgramPslEditorScreen() {
   const { rawColors } = useTheme();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ pslSource?: string; editProgramId?: string }>();
   const editProgramId =
     typeof params.editProgramId === "string" ? Number.parseInt(params.editProgramId, 10) : null;
@@ -199,7 +202,9 @@ export default function ProgramPslEditorScreen() {
     async function loadProgram() {
       setLoadingProgram(!explicitSource);
       try {
-        const program = await getPslProgramById(editProgramId);
+        const programId = editProgramId;
+        if (programId === null) return;
+        const program = await getPslProgramById(programId);
         if (isCancelled) return;
         if (!program) {
           setSaveError("Program not found.");
@@ -299,7 +304,11 @@ export default function ProgramPslEditorScreen() {
         if (!previewOverride) {
           throw new Error("Fix YAML parse errors before saving changes.");
         }
-        const result = compilePslSource(pslSource, { calendarOverride: previewOverride });
+        const completions = await buildProgramCompletions(editingProgram.id);
+        const result = compilePslSource(pslSource, {
+          calendarOverride: previewOverride,
+          completions,
+        });
         if (!result.valid || !result.materialized) {
           const errors = result.diagnostics
             .filter((d) => d.severity === "error")
@@ -363,7 +372,13 @@ export default function ProgramPslEditorScreen() {
         throw new Error("Fix YAML parse errors before activating.");
       }
 
-      const result = compilePslSource(pslSource, { calendarOverride: override });
+      const completions = editingProgram
+        ? await buildProgramCompletions(editingProgram.id)
+        : [];
+      const result = compilePslSource(pslSource, {
+        calendarOverride: override,
+        completions,
+      });
       if (!result.valid || !result.materialized) {
         const errors = result.diagnostics
           .filter((d) => d.severity === "error")
@@ -455,6 +470,10 @@ export default function ProgramPslEditorScreen() {
     : editingProgram?.isActive
       ? "Save & Refresh"
       : "Save & Activate";
+  const secondaryActionIcon = editingProgram
+    ? "content-save-edit-outline"
+    : "bookmark-plus-outline";
+  const primaryActionIcon = editingProgram?.isActive ? "refresh" : "arrow-right";
 
   return (
     <View style={styles.container} className="bg-background">
@@ -656,14 +675,15 @@ export default function ProgramPslEditorScreen() {
 
       {!loadingProgram ? (
         <View
-          className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-border bg-background"
-          style={{
-            shadowColor: rawColors.shadow,
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            elevation: 8,
-          }}
+          style={[
+            styles.bottomBar,
+            {
+              backgroundColor: rawColors.background,
+              borderTopColor: rawColors.border,
+              paddingBottom: Math.max(insets.bottom, 12),
+              shadowColor: rawColors.shadow,
+            },
+          ]}
         >
           {saveError ? (
             <Text style={[styles.saveError, { color: rawColors.destructive }]}>
@@ -675,23 +695,40 @@ export default function ProgramPslEditorScreen() {
             <Pressable
               onPress={handleSaveTemplate}
               disabled={saving}
-              className="flex-1 items-center justify-center py-3.5 rounded-xl border border-border"
+              className="flex-1 flex-row items-center justify-center py-4 rounded-xl border bg-surface-secondary border-border"
               style={({ pressed }) => ({
-                backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-                opacity: saving ? 0.6 : 1,
+                opacity: pressed || saving ? 0.8 : 1,
               })}
             >
-              <Text style={{ color: rawColors.foreground }}>
+              <MaterialCommunityIcons
+                name={secondaryActionIcon}
+                size={18}
+                color={rawColors.foreground}
+              />
+              <Text
+                className="ml-2 text-sm font-semibold"
+                style={{ color: rawColors.foreground }}
+              >
                 {secondaryActionLabel}
               </Text>
             </Pressable>
             <Pressable
               onPress={handleSaveAndActivate}
               disabled={saving}
-              className="flex-1 items-center justify-center py-3.5 rounded-xl border border-primary bg-primary"
-              style={({ pressed }) => ({ opacity: pressed || saving ? 0.7 : 1 })}
+              className="flex-1 flex-row items-center justify-center py-4 rounded-xl border bg-primary border-primary"
+              style={({ pressed }) => ({
+                opacity: pressed || saving ? 0.8 : 1,
+              })}
             >
-              <Text className="text-base font-semibold text-primary-foreground">
+              <MaterialCommunityIcons
+                name={primaryActionIcon}
+                size={20}
+                color={rawColors.primaryForeground}
+              />
+              <Text
+                className="ml-2 text-sm font-semibold"
+                style={{ color: rawColors.primaryForeground }}
+              >
                 {primaryActionLabel}
               </Text>
             </Pressable>
@@ -861,6 +898,20 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 13,
     lineHeight: 18,
+  },
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 8,
   },
   actionRow: {
     flexDirection: "row",

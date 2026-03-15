@@ -12,10 +12,19 @@ import {
 import { computeEndDateIso } from "../../lib/programs/psl/activationDates";
 import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
 import {
+  serializeBlockProgramDraftToPsl,
   serializeFlatProgramDraftToPsl,
+  type BlockProgramDraft,
   type FlatProgramDraft,
 } from "../../lib/programs/psl/pslGenerator";
-import { deserializeFlatProgramDraftFromPsl } from "../../lib/programs/psl/pslDraftMapper";
+import {
+  deserializeBlockProgramDraftFromPsl,
+  deserializeFlatProgramDraftFromPsl,
+} from "../../lib/programs/psl/pslDraftMapper";
+import {
+  buildSessionCompletionFromSnapshot,
+  isPristineProgramCalendarEntry,
+} from "../../lib/programs/psl/programRuntimeHelpers";
 import { PSL_TEMPLATES } from "../../lib/programs/psl/pslTemplates";
 import {
   formatIntensity,
@@ -626,6 +635,176 @@ sessions:
   });
 });
 
+describe("Block Builder Serialization", () => {
+  function compileBlockDraft(draft: BlockProgramDraft) {
+    const source = serializeBlockProgramDraftToPsl(draft);
+    return {
+      source,
+      result: compilePslSource(source, {
+        calendarOverride: { start_date: "2026-03-02" },
+      }),
+    };
+  }
+
+  it("should serialize structured blocks to valid PSL 0.3", () => {
+    const { source, result } = compileBlockDraft({
+      name: "Phased Builder",
+      description: "Two blocks",
+      units: "kg",
+      blocks: [
+        {
+          clientId: "block-a",
+          blockId: "accumulation",
+          name: "Accumulation",
+          durationValue: 4,
+          durationUnit: "weeks",
+          deload: false,
+          timingMode: "weekdays",
+          sessions: [
+            {
+              clientId: "session-a",
+              sessionId: "upper-a",
+              name: "Upper A",
+              exercises: [
+                { exerciseId: 1, exerciseName: "Back Squat", sets: [{ count: 3, reps: 5 }] },
+              ],
+              weekdays: ["MON", "THU"],
+              fixedDay: 1,
+              intervalEvery: 2,
+              intervalStartOffsetDays: 0,
+              intervalEndOffsetDays: null,
+              restAfterDays: 1,
+            },
+          ],
+        },
+        {
+          clientId: "block-b",
+          blockId: "deload",
+          name: "Deload",
+          durationValue: 7,
+          durationUnit: "days",
+          deload: true,
+          timingMode: "interval_days",
+          sessions: [
+            {
+              clientId: "session-b",
+              sessionId: "deload-a",
+              name: "Deload A",
+              exercises: [
+                { exerciseId: 2, exerciseName: "Bench Press", sets: [{ count: 2, reps: 5 }] },
+              ],
+              weekdays: [],
+              fixedDay: 1,
+              intervalEvery: 3,
+              intervalStartOffsetDays: 1,
+              intervalEndOffsetDays: 6,
+              restAfterDays: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(source).toContain('language_version: "0.3"');
+    expect(source).toContain("blocks:");
+    expect(source).toContain("deload: true");
+    expect(result.valid).toBe(true);
+  });
+
+  it("should deserialize simple block PSL back into a builder draft", () => {
+    const source = serializeBlockProgramDraftToPsl({
+      name: "Block Round Trip",
+      units: "kg",
+      blocks: [
+        {
+          clientId: "block-a",
+          blockId: "accumulation",
+          name: "Accumulation",
+          durationValue: 3,
+          durationUnit: "weeks",
+          deload: false,
+          timingMode: "fixed_day",
+          sessions: [
+            {
+              clientId: "session-a",
+              sessionId: "day-1",
+              name: "Program Day 1",
+              exercises: [
+                { exerciseId: 1, exerciseName: "Back Squat", sets: [{ count: 3, reps: 5 }] },
+              ],
+              weekdays: [],
+              fixedDay: 1,
+              intervalEvery: 2,
+              intervalStartOffsetDays: 0,
+              intervalEndOffsetDays: null,
+              restAfterDays: 1,
+            },
+          ],
+        },
+        {
+          clientId: "block-b",
+          blockId: "deload",
+          name: "Deload",
+          durationValue: 1,
+          durationUnit: "weeks",
+          deload: true,
+          timingMode: "weekdays",
+          sessions: [
+            {
+              clientId: "session-b",
+              sessionId: "recovery",
+              name: "Recovery",
+              exercises: [
+                { exerciseId: 2, exerciseName: "Bench Press", sets: [{ count: 2, reps: 6 }] },
+              ],
+              weekdays: ["WED"],
+              fixedDay: 1,
+              intervalEvery: 2,
+              intervalStartOffsetDays: 0,
+              intervalEndOffsetDays: null,
+              restAfterDays: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    const draft = deserializeBlockProgramDraftFromPsl(source);
+    expect(draft).not.toBeNull();
+    expect(draft?.blocks).toHaveLength(2);
+    expect(draft?.blocks[0].timingMode).toBe("fixed_day");
+    expect(draft?.blocks[1].deload).toBe(true);
+    expect(draft?.blocks[1].sessions[0].weekdays).toEqual(["WED"]);
+  });
+
+  it("should reject incompatible block PSL for guided editing", () => {
+    const source = `
+language_version: "0.3"
+metadata:
+  id: incompatible-block
+  name: Incompatible Block
+blocks:
+  - id: block-a
+    duration: "4w"
+    sessions:
+      - id: a
+        name: A
+        schedule: "MON"
+        exercises:
+          - exercise: Back Squat
+            sets:
+              - count: 3
+                reps: 5
+                intensity:
+                  type: percent_1rm
+                  value: 75
+                rest_seconds: 120
+`;
+
+    expect(deserializeBlockProgramDraftFromPsl(source)).toBeNull();
+  });
+});
+
 describe("Bundled Templates", () => {
   it("should compile every bundled template under PSL 0.3", () => {
     PSL_TEMPLATES.forEach((template) => {
@@ -642,6 +821,337 @@ describe("Bundled Templates", () => {
       );
       expect(result.valid).toBe(true);
     });
+  });
+});
+
+describe("Progression Runtime", () => {
+  function getFirstLoadAt(
+    source: string,
+    occurrenceIndex: number,
+    completions?: NonNullable<Parameters<typeof compilePslSource>[1]>["completions"]
+  ) {
+    const result = compilePslSource(source, {
+      calendarOverride: { start_date: "2026-03-02", end_date: "2026-03-12" },
+      completions,
+    });
+    expect(result.valid).toBe(true);
+    const intensity = result.materialized?.[occurrenceIndex]?.exercises[0]?.sets[0]?.intensity;
+    expect(intensity?.type).toBe("load");
+    if (!intensity || intensity.type !== "load") {
+      throw new Error("Expected load intensity");
+    }
+    return intensity.value;
+  }
+
+  it("should increment the next occurrence after session success", () => {
+    const source = `
+language_version: "0.3"
+metadata:
+  id: success-increment
+  name: Success Increment
+sessions:
+  - id: day-a
+    name: Day A
+    schedule:
+      type: interval_days
+      every: 2
+      start_offset_days: 0
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 100
+              unit: kg
+            progression:
+              type: increment
+              cadence:
+                type: sessions
+                every: 1
+              when:
+                type: session_success
+                equals: true
+              by: 2.5
+`;
+
+    expect(getFirstLoadAt(source, 1)).toBe(100);
+    expect(
+      getFirstLoadAt(source, 1, [
+        { session_id: "day-a", date_iso: "2026-03-02", success: true },
+      ])
+    ).toBe(102.5);
+  });
+
+  it("should keep the same load after a failed session_success check", () => {
+    const source = `
+language_version: "0.3"
+metadata:
+  id: failed-success
+  name: Failed Success
+sessions:
+  - id: day-a
+    name: Day A
+    schedule:
+      type: interval_days
+      every: 2
+      start_offset_days: 0
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 100
+              unit: kg
+            progression:
+              type: increment
+              cadence:
+                type: sessions
+                every: 1
+              when:
+                type: session_success
+                equals: true
+              by: 2.5
+`;
+
+    expect(
+      getFirstLoadAt(source, 1, [
+        { session_id: "day-a", date_iso: "2026-03-02", success: false },
+      ])
+    ).toBe(100);
+  });
+
+  it("should only increment metric_vs_target progression when the achieved load meets target", () => {
+    const source = `
+language_version: "0.3"
+metadata:
+  id: metric-load
+  name: Metric Load
+sessions:
+  - id: day-a
+    name: Day A
+    schedule:
+      type: interval_days
+      every: 2
+      start_offset_days: 0
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 100
+              unit: kg
+            progression:
+              type: increment
+              cadence:
+                type: sessions
+                every: 1
+              when:
+                type: metric_vs_target
+                metric: load
+                op: ">="
+                target: value
+              by: 2.5
+`;
+
+    expect(
+      getFirstLoadAt(source, 1, [
+        {
+          session_id: "day-a",
+          date_iso: "2026-03-02",
+          exercises: [
+            {
+              exercise: "Back Squat",
+              sets: [{ index: 1, load: { value: 100, unit: "kg" } }],
+            },
+          ],
+        },
+      ])
+    ).toBe(102.5);
+
+    expect(
+      getFirstLoadAt(source, 1, [
+        {
+          session_id: "day-a",
+          date_iso: "2026-03-02",
+          exercises: [
+            {
+              exercise: "Back Squat",
+              sets: [{ index: 1, load: { value: 97.5, unit: "kg" } }],
+            },
+          ],
+        },
+      ])
+    ).toBe(100);
+  });
+
+  it("should apply weekly increments on the next eligible week", () => {
+    const source = `
+language_version: "0.3"
+metadata:
+  id: weekly-load
+  name: Weekly Load
+sessions:
+  - id: monday
+    name: Monday
+    schedule:
+      type: weekdays
+      days: [MON]
+    exercises:
+      - exercise: Bench Press
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 80
+              unit: kg
+            progression:
+              type: weekly_increment
+              by: 2.5
+`;
+
+    const result = compilePslSource(source, {
+      calendarOverride: { start_date: "2026-03-02", end_date: "2026-03-23" },
+      completions: [{ session_id: "monday", date_iso: "2026-03-02", success: true }],
+    });
+    expect(result.valid).toBe(true);
+    const first = result.materialized?.[0]?.exercises[0]?.sets[0]?.intensity;
+    const second = result.materialized?.[1]?.exercises[0]?.sets[0]?.intensity;
+    expect(first?.type).toBe("load");
+    expect(second?.type).toBe("load");
+    if (!first || first.type !== "load" || !second || second.type !== "load") {
+      throw new Error("Expected load intensity");
+    }
+    expect(first.value).toBe(80);
+    expect(second.value).toBe(82.5);
+  });
+});
+
+describe("Program Runtime Helpers", () => {
+  it("should mark completion success false when a session is force-completed", () => {
+    const entry = {
+      calendar: {
+        id: 1,
+        programId: 1,
+        pslSessionId: "day-a",
+        sessionName: "Day A",
+        dateIso: "2026-03-02",
+        sequence: 1,
+        status: "complete",
+        completedAt: null,
+        completionOverrideExerciseIdsJson: JSON.stringify([101]),
+      },
+      exercises: [
+        {
+          exercise: {
+            id: 101,
+            calendarId: 1,
+            exerciseName: "Back Squat",
+            exerciseId: null,
+            workoutExerciseId: null,
+            orderIndex: 0,
+            prescribedSetsJson: null,
+            status: "complete",
+          },
+          sets: [
+            {
+              id: 1001,
+              calendarExerciseId: 101,
+              setIndex: 1,
+              prescribedReps: "5",
+              prescribedIntensityJson: JSON.stringify({
+                type: "load",
+                value: 100,
+                unit: "kg",
+              }),
+              prescribedRole: null,
+              actualWeight: 100,
+              actualReps: 5,
+              actualRpe: null,
+              isUserAdded: false,
+              isLogged: true,
+              setId: 9001,
+              loggedAt: "2026-03-02T10:00:00.000Z",
+              linkedSetWeightKg: 100,
+              linkedSetReps: 5,
+              linkedSetRpe: null,
+              linkedSetRir: null,
+            },
+          ],
+        },
+      ],
+    } as unknown as Parameters<typeof buildSessionCompletionFromSnapshot>[0];
+
+    const completion = buildSessionCompletionFromSnapshot(entry, "kg");
+    expect(completion).not.toBeNull();
+    expect(completion?.success).toBe(false);
+    expect(completion?.exercises?.[0]?.sets?.[0]).toMatchObject({
+      index: 1,
+      reps_completed: 5,
+    });
+  });
+
+  it("should identify pristine future entries correctly", () => {
+    const pristineEntry = {
+      calendar: {
+        status: "pending",
+        completionOverrideExerciseIdsJson: null,
+      },
+      exercises: [
+        {
+          exercise: {
+            status: "pending",
+            workoutExerciseId: null,
+          },
+          sets: [
+            {
+              isUserAdded: false,
+              isLogged: false,
+              setId: null,
+              actualWeight: null,
+              actualReps: null,
+              actualRpe: null,
+              loggedAt: null,
+            },
+          ],
+        },
+      ],
+    } as unknown as Parameters<typeof isPristineProgramCalendarEntry>[0];
+
+    const startedEntry = {
+      calendar: {
+        status: "pending",
+        completionOverrideExerciseIdsJson: null,
+      },
+      exercises: [
+        {
+          exercise: {
+            status: "partial",
+            workoutExerciseId: 44,
+          },
+          sets: [
+            {
+              isUserAdded: false,
+              isLogged: true,
+              setId: 9001,
+              actualWeight: 100,
+              actualReps: 5,
+              actualRpe: null,
+              loggedAt: "2026-03-02T10:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    } as unknown as Parameters<typeof isPristineProgramCalendarEntry>[0];
+
+    expect(isPristineProgramCalendarEntry(pristineEntry)).toBe(true);
+    expect(isPristineProgramCalendarEntry(startedEntry)).toBe(false);
   });
 });
 

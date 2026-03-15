@@ -32,6 +32,7 @@ import {
   type CalendarExerciseWithSets,
 } from "../../lib/db/programCalendar";
 import { getDateIsoToday, formatDateForDisplay } from "../../lib/programs/psl/pslService";
+import { refreshUpcomingCalendarForPrograms } from "../../lib/programs/psl/programRuntime";
 import { formatIntensity } from "../../lib/programs/psl/pslMapper";
 
 function getAlphabetLetter(index: number): string {
@@ -288,6 +289,7 @@ export default function ProgramsScreen() {
 
   const handleSessionAction = useCallback(async () => {
     setSessionActionModalVisible(false);
+    const affectedProgramIds = [...new Set(sessions.map((session) => session.programId))];
 
     for (const session of sessions) {
       if (hasUndoableSessionCompletion) {
@@ -298,6 +300,7 @@ export default function ProgramsScreen() {
       await markSessionComplete(session.id);
     }
 
+    await refreshUpcomingCalendarForPrograms(affectedProgramIds);
     await loadData();
   }, [hasUndoableSessionCompletion, loadData, sessions]);
 
