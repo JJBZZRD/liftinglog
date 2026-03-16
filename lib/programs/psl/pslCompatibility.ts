@@ -128,10 +128,13 @@ export function getPslCompatibilityWarnings(ast: ProgramAst | undefined): PslCom
               message: "Role-referenced intensities are not currently realized in the logging UI/runtime.",
               paths: [`${setPath}.intensity`],
             });
-          } else if (set.intensity.type !== "load") {
+          } else if (
+            set.intensity.type === "rpe" ||
+            set.intensity.type === "rir"
+          ) {
             addWarning(warnings, {
               code: "non_load_intensity",
-              message: "Non-load intensity targets (e.g. %1RM, RPE, RIR) are not fully supported by the current logging inputs.",
+              message: "RPE and RIR targets are not fully supported by the current logging inputs.",
               paths: [`${setPath}.intensity`],
             });
           }

@@ -74,6 +74,7 @@ const SCHEMA_BOOTSTRAP_SQL = `
     description TEXT,
     psl_source TEXT NOT NULL,
     compiled_hash TEXT,
+    percent_intensity_config_json TEXT,
     is_active INTEGER NOT NULL DEFAULT 0,
     start_date TEXT,
     end_date TEXT,
@@ -242,6 +243,7 @@ function runColumnMigrations(sqlite: SQLiteDatabase): void {
   addColumnIfMissing(sqlite, "program_calendar_exercises", "workout_exercise_id INTEGER");
   addColumnIfMissing(sqlite, "program_calendar_sets", "set_id INTEGER");
   addColumnIfMissing(sqlite, "program_calendar", "completion_override_exercise_ids_json TEXT");
+  addColumnIfMissing(sqlite, "psl_programs", "percent_intensity_config_json TEXT");
   addColumnIfMissing(sqlite, "media", "asset_id TEXT");
   addColumnIfMissing(sqlite, "media", "original_filename TEXT");
   addColumnIfMissing(sqlite, "media", "media_created_at INTEGER");

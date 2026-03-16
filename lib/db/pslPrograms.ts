@@ -10,6 +10,7 @@ export async function createPslProgram(data: {
   description?: string;
   pslSource: string;
   compiledHash?: string;
+  percentIntensityConfigJson?: string | null;
   isActive?: boolean;
   startDate?: string;
   endDate?: string;
@@ -23,6 +24,7 @@ export async function createPslProgram(data: {
       description: data.description ?? null,
       pslSource: data.pslSource,
       compiledHash: data.compiledHash ?? null,
+      percentIntensityConfigJson: data.percentIntensityConfigJson ?? null,
       isActive: data.isActive ?? false,
       startDate: data.startDate ?? null,
       endDate: data.endDate ?? null,
@@ -58,6 +60,7 @@ export async function updatePslProgram(
     description: string | null;
     pslSource: string;
     compiledHash: string | null;
+    percentIntensityConfigJson: string | null;
     isActive: boolean;
     startDate: string | null;
     endDate: string | null;

@@ -108,6 +108,7 @@ export const pslPrograms = sqliteTable("psl_programs", {
   description: text("description"),
   pslSource: text("psl_source").notNull(),
   compiledHash: text("compiled_hash"),
+  percentIntensityConfigJson: text("percent_intensity_config_json"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
   startDate: text("start_date"),
   endDate: text("end_date"),

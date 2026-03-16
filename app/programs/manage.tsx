@@ -31,6 +31,16 @@ import {
   extractCalendarEntries,
 } from "../../lib/programs/psl/pslService";
 import {
+  collectPercentIntensityRequirements,
+  loadPercentIntensityHistoryOptions,
+  parseStoredPercentIntensityConfig,
+  resolvePercentIntensityMaterialized,
+  serializeStoredPercentIntensityConfig,
+  type PercentIntensityHistoryOption,
+  type PercentIntensitySelectionMode,
+  type StoredPercentIntensityConfigEntry,
+} from "../../lib/programs/psl/percentIntensity";
+import {
   computeEndDateIso,
   dateToIsoLocal,
   DEFAULT_ACTIVATION_WEEKS,
@@ -45,6 +55,64 @@ import {
 } from "../../lib/programs/psl/pslDraftMapper";
 import { buildProgramCompletions } from "../../lib/programs/psl/programRuntime";
 import { returnToProgramsTab } from "../../lib/utils/programNavigation";
+import {
+  convertWeightToKg,
+  formatEditableWeightFromKg,
+  formatWeightFromKg,
+} from "../../lib/utils/units";
+
+type PercentIntensitySelectionState = {
+  mode: PercentIntensitySelectionMode;
+  customValue: string;
+};
+
+function isPercentSelectionAvailable(
+  option: Pick<
+    PercentIntensityHistoryOption,
+    "bestEstimated1rmKg" | "bestSingleKg"
+  >,
+  mode: PercentIntensitySelectionMode
+): boolean {
+  if (mode === "history_e1rm") {
+    return option.bestEstimated1rmKg !== null;
+  }
+
+  if (mode === "history_single") {
+    return option.bestSingleKg !== null;
+  }
+
+  return true;
+}
+
+function getDefaultPercentSelection(
+  option: PercentIntensityHistoryOption,
+  previous: PercentIntensitySelectionState | undefined,
+  stored: ReturnType<typeof parseStoredPercentIntensityConfig>[number] | undefined
+): PercentIntensitySelectionState {
+  if (previous && isPercentSelectionAvailable(option, previous.mode)) {
+    return previous;
+  }
+
+  if (stored && isPercentSelectionAvailable(option, stored.mode)) {
+    return {
+      mode: stored.mode,
+      customValue:
+        stored.mode === "custom"
+          ? formatEditableWeightFromKg(stored.baselineKg, option.units)
+          : "",
+    };
+  }
+
+  if (option.bestEstimated1rmKg !== null) {
+    return { mode: "history_e1rm", customValue: "" };
+  }
+
+  if (option.bestSingleKg !== null) {
+    return { mode: "history_single", customValue: "" };
+  }
+
+  return { mode: "custom", customValue: "" };
+}
 
 export default function ManageProgramsScreen() {
   const { rawColors } = useTheme();
@@ -63,6 +131,13 @@ export default function ManageProgramsScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState("");
+  const [percentIntensityLoading, setPercentIntensityLoading] = useState(false);
+  const [percentIntensityOptions, setPercentIntensityOptions] = useState<
+    PercentIntensityHistoryOption[]
+  >([]);
+  const [percentIntensitySelections, setPercentIntensitySelections] = useState<
+    Record<string, PercentIntensitySelectionState>
+  >({});
 
   const loadData = useCallback(async () => {
     try {
@@ -95,6 +170,9 @@ export default function ManageProgramsScreen() {
     setActivationStartDate(program.startDate ? isoToDateLocal(program.startDate) : isoToDateLocal(getDefaultActivationStartDateIso()));
     setActivationWeeks(DEFAULT_ACTIVATION_WEEKS);
     setActivationError("");
+    setPercentIntensityLoading(false);
+    setPercentIntensityOptions([]);
+    setPercentIntensitySelections({});
     setActivateModalVisible(true);
   }, [params.activateProgramId, programs]);
 
@@ -124,6 +202,9 @@ export default function ManageProgramsScreen() {
     setActivationStartDate(program.startDate ? isoToDateLocal(program.startDate) : isoToDateLocal(getDefaultActivationStartDateIso()));
     setActivationWeeks(DEFAULT_ACTIVATION_WEEKS);
     setActivationError("");
+    setPercentIntensityLoading(false);
+    setPercentIntensityOptions([]);
+    setPercentIntensitySelections({});
     setActivateModalVisible(true);
   }, []);
 
@@ -159,17 +240,174 @@ export default function ManageProgramsScreen() {
     return null;
   }, [activationInfo, activationStartIso, activationWeeks, requiresHorizonWeeks]);
 
-  const compatibilityWarnings = useMemo(() => {
-    if (!activateProgram) return [];
-    const override = { start_date: activationStartIso, ...(derivedEndIso ? { end_date: derivedEndIso } : {}) };
-    const result = compilePslSource(activateProgram.pslSource, { calendarOverride: override });
-    if (!result.ast) return [];
-    return getPslCompatibilityWarnings(result.ast);
+  const activationPreviewResult = useMemo(() => {
+    if (!activateProgram) return null;
+    const override = {
+      start_date: activationStartIso,
+      ...(derivedEndIso ? { end_date: derivedEndIso } : {}),
+    };
+    return compilePslSource(activateProgram.pslSource, {
+      calendarOverride: override,
+    });
   }, [activateProgram, activationStartIso, derivedEndIso]);
+
+  const percentIntensityRequirements = useMemo(() => {
+    if (!activationPreviewResult?.materialized) {
+      return [];
+    }
+
+    return collectPercentIntensityRequirements(
+      activationPreviewResult.materialized,
+      activationPreviewResult.ast?.units === "lb" ? "lb" : "kg"
+    );
+  }, [activationPreviewResult]);
+
+  const storedPercentIntensityConfig = useMemo(
+    () =>
+      parseStoredPercentIntensityConfig(
+        activateProgram?.percentIntensityConfigJson
+      ),
+    [activateProgram?.percentIntensityConfigJson]
+  );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!activateProgram || percentIntensityRequirements.length === 0) {
+      setPercentIntensityLoading(false);
+      setPercentIntensityOptions([]);
+      setPercentIntensitySelections({});
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setPercentIntensityLoading(true);
+    loadPercentIntensityHistoryOptions(percentIntensityRequirements)
+      .then((options) => {
+        if (isCancelled) return;
+        setActivationError("");
+        setPercentIntensityOptions(options);
+        setPercentIntensitySelections((previous) => {
+          const storedByKey = new Map(
+            storedPercentIntensityConfig.map((entry) => [entry.key, entry] as const)
+          );
+          return Object.fromEntries(
+            options.map((option) => [
+              option.key,
+              getDefaultPercentSelection(
+                option,
+                previous[option.key],
+                storedByKey.get(option.key)
+              ),
+            ])
+          );
+        });
+      })
+      .catch((error) => {
+        if (isCancelled) return;
+        console.error("Error loading percent intensity history:", error);
+        setPercentIntensityOptions([]);
+        setActivationError(
+          "Exercise history could not be loaded for %1RM setup."
+        );
+      })
+      .finally(() => {
+        if (isCancelled) return;
+        setPercentIntensityLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activateProgram, percentIntensityRequirements, storedPercentIntensityConfig]);
+
+  const compatibilityWarnings = useMemo(() => {
+    if (!activationPreviewResult?.ast) return [];
+    return getPslCompatibilityWarnings(activationPreviewResult.ast);
+  }, [activationPreviewResult]);
+
+  const percentIntensitySelectionsAreValid = useMemo(() => {
+    if (percentIntensityLoading) {
+      return false;
+    }
+
+    if (percentIntensityRequirements.length === 0) {
+      return true;
+    }
+
+    if (percentIntensityOptions.length !== percentIntensityRequirements.length) {
+      return false;
+    }
+
+    return percentIntensityOptions.every((option) => {
+      const selection = percentIntensitySelections[option.key];
+      if (!selection) {
+        return false;
+      }
+
+      if (selection.mode === "custom") {
+        const parsed = Number.parseFloat(selection.customValue.trim());
+        return Number.isFinite(parsed) && parsed > 0;
+      }
+
+      return isPercentSelectionAvailable(option, selection.mode);
+    });
+  }, [
+    percentIntensityLoading,
+    percentIntensityOptions,
+    percentIntensityRequirements.length,
+    percentIntensitySelections,
+  ]);
 
   const handleConfirmActivate = useCallback(async () => {
     if (!activateProgram) return;
     setActivationError("");
+
+    if (percentIntensityLoading) {
+      setActivationError("Exercise history is still loading.");
+      return;
+    }
+
+    const percentIntensityConfigEntries: StoredPercentIntensityConfigEntry[] = [];
+    for (const option of percentIntensityOptions) {
+      const selection = percentIntensitySelections[option.key];
+      if (!selection) {
+        setActivationError(`Choose a baseline for ${option.exerciseName}.`);
+        return;
+      }
+
+      let baselineKg: number | null = null;
+      if (selection.mode === "history_e1rm") {
+        baselineKg = option.bestEstimated1rmKg;
+      } else if (selection.mode === "history_single") {
+        baselineKg = option.bestSingleKg;
+      } else {
+        const parsed = Number.parseFloat(selection.customValue.trim());
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          setActivationError(
+            `Enter a valid custom baseline for ${option.exerciseName}.`
+          );
+          return;
+        }
+        baselineKg = convertWeightToKg(parsed, option.units);
+      }
+
+      if (baselineKg === null || baselineKg <= 0) {
+        setActivationError(`Choose a valid baseline for ${option.exerciseName}.`);
+        return;
+      }
+
+      percentIntensityConfigEntries.push({
+        key: option.key,
+        exerciseName: option.exerciseName,
+        sourceExerciseId: option.libraryExerciseId,
+        sourceExerciseName: option.libraryExerciseName,
+        mode: selection.mode,
+        baselineKg,
+      });
+    }
+
     setActivating(true);
 
     try {
@@ -189,27 +427,49 @@ export default function ManageProgramsScreen() {
       }
 
       const storedEndDate = override.end_date ?? result.ast?.calendar?.end_date ?? null;
+      const resolvedMaterialized = resolvePercentIntensityMaterialized(
+        result.materialized,
+        {
+          fallbackUnit: result.ast?.units === "lb" ? "lb" : "kg",
+          configEntries: percentIntensityConfigEntries,
+        }
+      );
+
       await updatePslProgram(activateProgram.id, {
         isActive: true,
         startDate: override.start_date,
         endDate: storedEndDate,
         units: result.ast?.units ?? null,
         compiledHash: result.compiled?.source_hash ?? null,
+        percentIntensityConfigJson:
+          serializeStoredPercentIntensityConfig(percentIntensityConfigEntries),
       });
 
       await deleteCalendarForProgram(activateProgram.id);
-      const entries = extractCalendarEntries(result.materialized);
+      const entries = extractCalendarEntries(resolvedMaterialized);
       await insertCalendarEntries(activateProgram.id, entries);
 
       setActivateModalVisible(false);
       setActivateProgram(null);
+      setPercentIntensityLoading(false);
+      setPercentIntensityOptions([]);
+      setPercentIntensitySelections({});
       await loadData();
     } catch (e) {
       setActivationError(e instanceof Error ? e.message : String(e));
     } finally {
       setActivating(false);
     }
-  }, [activateProgram, activationStartIso, derivedEndIso, requiresHorizonWeeks, loadData]);
+  }, [
+    activateProgram,
+    activationStartIso,
+    derivedEndIso,
+    requiresHorizonWeeks,
+    loadData,
+    percentIntensityLoading,
+    percentIntensityOptions,
+    percentIntensitySelections,
+  ]);
 
   const handleDelete = useCallback(async () => {
     if (!actionProgram) return;
@@ -597,6 +857,9 @@ export default function ManageProgramsScreen() {
           setActivateModalVisible(false);
           setActivateProgram(null);
           setActivationError("");
+          setPercentIntensityLoading(false);
+          setPercentIntensityOptions([]);
+          setPercentIntensitySelections({});
         }}
         centerContent={false}
       >
@@ -672,11 +935,341 @@ export default function ManageProgramsScreen() {
                 </View>
               )}
 
-              <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary, marginBottom: 12 }]}>
-                End Date: {derivedEndIso ?? "Derived from program"}
-              </Text>
+	              <Text style={[styles.modalBody, { color: rawColors.foregroundSecondary, marginBottom: 12 }]}>
+	                End Date: {derivedEndIso ?? "Derived from program"}
+	              </Text>
 
-              {compatibilityWarnings.length > 0 ? (
+              {percentIntensityLoading || percentIntensityOptions.length > 0 ? (
+                <View
+                  style={[
+                    styles.percentSection,
+                    {
+                      backgroundColor: rawColors.surfaceSecondary,
+                      borderColor: rawColors.borderLight,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.percentSectionTitle,
+                      { color: rawColors.foreground },
+                    ]}
+                  >
+                    %1RM Baselines
+                  </Text>
+                  <Text
+                    style={[
+                      styles.percentSectionBody,
+                      { color: rawColors.foregroundSecondary },
+                    ]}
+                  >
+                    Choose the baseline each percentage-based exercise should
+                    use when the program is materialized.
+                  </Text>
+
+                  {percentIntensityLoading ? (
+                    <Text
+                      style={{
+                        color: rawColors.foregroundMuted,
+                        fontSize: 13,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Loading exercise history...
+                    </Text>
+                  ) : (
+                    percentIntensityOptions.map((option) => {
+                      const selection = percentIntensitySelections[option.key];
+                      const customSelected = selection?.mode === "custom";
+                      const invalidCustom =
+                        customSelected &&
+                        !(
+                          Number.isFinite(
+                            Number.parseFloat(
+                              selection.customValue.trim()
+                            )
+                          ) &&
+                          Number.parseFloat(selection.customValue.trim()) > 0
+                        );
+
+                      return (
+                        <View
+                          key={option.key}
+                          style={[
+                            styles.percentCard,
+                            {
+                              backgroundColor: rawColors.surface,
+                              borderColor: rawColors.borderLight,
+                            },
+                          ]}
+                        >
+                          <View style={styles.percentCardHeader}>
+                            <Text
+                              style={[
+                                styles.percentExerciseName,
+                                { color: rawColors.foreground },
+                              ]}
+                            >
+                              {option.exerciseName}
+                            </Text>
+                            <Text
+                              style={{
+                                color: rawColors.foregroundMuted,
+                                fontSize: 12,
+                              }}
+                            >
+                              {option.libraryExerciseName
+                                ? `Matched to ${option.libraryExerciseName}`
+                                : "No exact library match"}
+                            </Text>
+                          </View>
+
+                          <Pressable
+                            onPress={() =>
+                              setPercentIntensitySelections((previous) => ({
+                                ...previous,
+                                [option.key]: {
+                                  ...(previous[option.key] ?? {
+                                    customValue: "",
+                                  }),
+                                  mode: "history_e1rm",
+                                },
+                              }))
+                            }
+                            disabled={
+                              !isPercentSelectionAvailable(
+                                option,
+                                "history_e1rm"
+                              )
+                            }
+                            style={[
+                              styles.percentOption,
+                              {
+                                backgroundColor:
+                                  selection?.mode === "history_e1rm"
+                                    ? rawColors.primary + "14"
+                                    : rawColors.surfaceSecondary,
+                                borderColor:
+                                  selection?.mode === "history_e1rm"
+                                    ? rawColors.primary
+                                    : rawColors.borderLight,
+                                opacity: isPercentSelectionAvailable(
+                                  option,
+                                  "history_e1rm"
+                                )
+                                  ? 1
+                                  : 0.45,
+                              },
+                            ]}
+                          >
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text
+                                style={{
+                                  color: rawColors.foreground,
+                                  fontSize: 14,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Auto e1RM
+                              </Text>
+                              <Text
+                                style={{
+                                  color: rawColors.foregroundSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
+                                Best estimated 1RM from exercise history
+                              </Text>
+                            </View>
+                            <Text
+                              style={{
+                                color: rawColors.foreground,
+                                fontSize: 13,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {option.bestEstimated1rmKg !== null
+                                ? formatWeightFromKg(
+                                    option.bestEstimated1rmKg,
+                                    option.units
+                                  )
+                                : "Unavailable"}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
+                              setPercentIntensitySelections((previous) => ({
+                                ...previous,
+                                [option.key]: {
+                                  ...(previous[option.key] ?? {
+                                    customValue: "",
+                                  }),
+                                  mode: "history_single",
+                                },
+                              }))
+                            }
+                            disabled={
+                              !isPercentSelectionAvailable(
+                                option,
+                                "history_single"
+                              )
+                            }
+                            style={[
+                              styles.percentOption,
+                              {
+                                backgroundColor:
+                                  selection?.mode === "history_single"
+                                    ? rawColors.primary + "14"
+                                    : rawColors.surfaceSecondary,
+                                borderColor:
+                                  selection?.mode === "history_single"
+                                    ? rawColors.primary
+                                    : rawColors.borderLight,
+                                opacity: isPercentSelectionAvailable(
+                                  option,
+                                  "history_single"
+                                )
+                                  ? 1
+                                  : 0.45,
+                              },
+                            ]}
+                          >
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text
+                                style={{
+                                  color: rawColors.foreground,
+                                  fontSize: 14,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Best single
+                              </Text>
+                              <Text
+                                style={{
+                                  color: rawColors.foregroundSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
+                                Highest one-rep weight from exercise history
+                              </Text>
+                            </View>
+                            <Text
+                              style={{
+                                color: rawColors.foreground,
+                                fontSize: 13,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {option.bestSingleKg !== null
+                                ? formatWeightFromKg(
+                                    option.bestSingleKg,
+                                    option.units
+                                  )
+                                : "Unavailable"}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
+                              setPercentIntensitySelections((previous) => ({
+                                ...previous,
+                                [option.key]: {
+                                  ...(previous[option.key] ?? {
+                                    customValue: "",
+                                  }),
+                                  mode: "custom",
+                                },
+                              }))
+                            }
+                            style={[
+                              styles.percentOption,
+                              {
+                                backgroundColor:
+                                  selection?.mode === "custom"
+                                    ? rawColors.primary + "14"
+                                    : rawColors.surfaceSecondary,
+                                borderColor:
+                                  selection?.mode === "custom"
+                                    ? rawColors.primary
+                                    : rawColors.borderLight,
+                              },
+                            ]}
+                          >
+                            <View style={{ flex: 1, gap: 2 }}>
+                              <Text
+                                style={{
+                                  color: rawColors.foreground,
+                                  fontSize: 14,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Custom
+                              </Text>
+                              <Text
+                                style={{
+                                  color: rawColors.foregroundSecondary,
+                                  fontSize: 12,
+                                }}
+                              >
+                                Enter the baseline to use for percentage loads
+                              </Text>
+                            </View>
+                          </Pressable>
+
+                          {customSelected ? (
+                            <View
+                              style={[
+                                styles.customInputRow,
+                                {
+                                  backgroundColor: rawColors.surfaceSecondary,
+                                  borderColor: invalidCustom
+                                    ? rawColors.destructive
+                                    : rawColors.borderLight,
+                                },
+                              ]}
+                            >
+                              <TextInput
+                                value={selection.customValue}
+                                onChangeText={(value) =>
+                                  setPercentIntensitySelections((previous) => ({
+                                    ...previous,
+                                    [option.key]: {
+                                      ...(previous[option.key] ?? {
+                                        mode: "custom",
+                                      }),
+                                      customValue: value,
+                                      mode: "custom",
+                                    },
+                                  }))
+                                }
+                                keyboardType="decimal-pad"
+                                placeholder={`Enter ${option.units} baseline`}
+                                placeholderTextColor={rawColors.foregroundMuted}
+                                style={[
+                                  styles.customInput,
+                                  { color: rawColors.foreground },
+                                ]}
+                              />
+                              <Text
+                                style={{
+                                  color: rawColors.foregroundSecondary,
+                                  fontSize: 13,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                {option.units}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              ) : null}
+
+	              {compatibilityWarnings.length > 0 ? (
                 <View style={[styles.warningBox, { backgroundColor: rawColors.warning + "12", borderColor: rawColors.warning }]}>
                   <Text style={{ color: rawColors.warning, fontWeight: "800", marginBottom: 6 }}>
                     Compatibility warnings
@@ -701,26 +1294,38 @@ export default function ManageProgramsScreen() {
               ) : null}
 
               <View style={styles.modalButtons}>
-                <Pressable
-                  onPress={() => {
-                    setActivateModalVisible(false);
-                    setActivateProgram(null);
-                    setActivationError("");
-                  }}
-                  disabled={activating}
-                  className="flex-1 items-center justify-center py-3.5 rounded-lg bg-surface-secondary"
+	                <Pressable
+	                  onPress={() => {
+	                    setActivateModalVisible(false);
+	                    setActivateProgram(null);
+	                    setActivationError("");
+                      setPercentIntensityLoading(false);
+	                      setPercentIntensityOptions([]);
+	                      setPercentIntensitySelections({});
+	                  }}
+	                  disabled={activating}
+	                  className="flex-1 items-center justify-center py-3.5 rounded-lg bg-surface-secondary"
                   style={({ pressed }) => ({ opacity: pressed || activating ? 0.7 : 1 })}
                 >
                   <Text className="text-base font-semibold text-foreground">Cancel</Text>
                 </Pressable>
-                <Pressable
-                  onPress={handleConfirmActivate}
-                  disabled={activating}
-                  className="flex-1 items-center justify-center py-3.5 rounded-lg bg-primary"
-                  style={({ pressed }) => ({ opacity: pressed || activating ? 0.7 : 1 })}
-                >
-                  <Text style={[styles.modalButtonText, { color: rawColors.primaryForeground }]}>
-                    {activating ? "Activating..." : "Activate"}
+	                <Pressable
+	                  onPress={handleConfirmActivate}
+	                  disabled={
+                      activating || !percentIntensitySelectionsAreValid
+                    }
+	                  className="flex-1 items-center justify-center py-3.5 rounded-lg bg-primary"
+	                  style={({ pressed }) => ({
+                      opacity:
+                        pressed ||
+                        activating ||
+                        !percentIntensitySelectionsAreValid
+                          ? 0.7
+                          : 1,
+                    })}
+	                >
+	                  <Text style={[styles.modalButtonText, { color: rawColors.primaryForeground }]}>
+	                    {activating ? "Activating..." : "Activate"}
                   </Text>
                 </Pressable>
               </View>
@@ -918,6 +1523,58 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
+  },
+  percentSection: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    gap: 12,
+  },
+  percentSectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  percentSectionBody: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  percentCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+  },
+  percentCardHeader: {
+    gap: 2,
+  },
+  percentExerciseName: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  percentOption: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  customInputRow: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  customInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    paddingVertical: 0,
   },
   warningBox: {
     borderWidth: 1,

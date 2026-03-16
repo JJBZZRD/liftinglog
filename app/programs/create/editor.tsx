@@ -36,6 +36,10 @@ import {
   isoToDateLocal,
 } from "../../../lib/programs/psl/activationDates";
 import { introspectPslSource } from "../../../lib/programs/psl/pslIntrospection";
+import {
+  parseStoredPercentIntensityConfig,
+  resolvePercentIntensityMaterialized,
+} from "../../../lib/programs/psl/percentIntensity";
 import { getPslCompatibilityWarnings } from "../../../lib/programs/psl/pslCompatibility";
 import { buildProgramCompletions } from "../../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../../lib/theme/ThemeContext";
@@ -289,6 +293,20 @@ export default function ProgramPslEditorScreen() {
     }
   }, [pslSource]);
 
+  const resolveStoredPercentMaterialized = useCallback(
+    (
+      materialized: NonNullable<ReturnType<typeof compilePslSource>["materialized"]>,
+      units: string | null | undefined
+    ) =>
+      resolvePercentIntensityMaterialized(materialized, {
+        fallbackUnit: units === "lb" ? "lb" : "kg",
+        configEntries: parseStoredPercentIntensityConfig(
+          editingProgram?.percentIntensityConfigJson
+        ),
+      }),
+    [editingProgram?.percentIntensityConfigJson]
+  );
+
   const handleInsert = useCallback(
     (snippet: string, { replace }: { replace: boolean }) => {
       setPslSource((prev) => (replace ? snippet.trimStart() + "\n" : appendSnippet(prev, snippet)));
@@ -330,9 +348,13 @@ export default function ProgramPslEditorScreen() {
           units: result.ast?.units ?? programMeta.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
+        const resolvedMaterialized = resolveStoredPercentMaterialized(
+          result.materialized,
+          result.ast?.units ?? programMeta.units ?? null
+        );
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(result.materialized)
+          extractCalendarEntries(resolvedMaterialized)
         );
       } else if (editingProgram) {
         // Require parseable YAML for saving, but do not require full PSL validation.
@@ -362,7 +384,13 @@ export default function ProgramPslEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [editingProgram, previewOverride, programMeta, pslSource]);
+  }, [
+    editingProgram,
+    previewOverride,
+    programMeta,
+    pslSource,
+    resolveStoredPercentMaterialized,
+  ]);
 
   const handleSaveAndActivate = useCallback(async () => {
     setSaving(true);
@@ -389,7 +417,7 @@ export default function ProgramPslEditorScreen() {
       }
 
       const storedEndDate = override.end_date ?? result.ast?.calendar?.end_date ?? null;
-      if (editingProgram) {
+      if (editingProgram?.isActive) {
         await updatePslProgram(editingProgram.id, {
           name: programMeta.name,
           description: programMeta.description ?? null,
@@ -401,11 +429,30 @@ export default function ProgramPslEditorScreen() {
           units: result.ast?.units ?? programMeta.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
+        const resolvedMaterialized = resolveStoredPercentMaterialized(
+          result.materialized,
+          result.ast?.units ?? programMeta.units ?? null
+        );
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(result.materialized)
+          extractCalendarEntries(resolvedMaterialized)
         );
         returnToManagePrograms();
+        return;
+      }
+
+      if (editingProgram) {
+        await updatePslProgram(editingProgram.id, {
+          name: programMeta.name,
+          description: programMeta.description ?? null,
+          pslSource,
+          compiledHash: result.compiled?.source_hash ?? null,
+          isActive: false,
+          startDate: override.start_date,
+          endDate: storedEndDate,
+          units: result.ast?.units ?? programMeta.units ?? null,
+        });
+        returnToManagePrograms({ activateProgramId: String(editingProgram.id) });
         return;
       }
 
@@ -414,22 +461,25 @@ export default function ProgramPslEditorScreen() {
         description: programMeta.description,
         pslSource,
         compiledHash: result.compiled?.source_hash,
-        isActive: true,
+        isActive: false,
         startDate: override.start_date,
         endDate: storedEndDate ?? undefined,
         units: result.ast?.units ?? programMeta.units,
       });
 
-      const entries = extractCalendarEntries(result.materialized);
-      await insertCalendarEntries(program.id, entries);
-
-      returnToManagePrograms();
+      returnToManagePrograms({ activateProgramId: String(program.id) });
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
-  }, [editingProgram, programMeta, pslSource, previewOverride]);
+  }, [
+    editingProgram,
+    programMeta,
+    pslSource,
+    previewOverride,
+    resolveStoredPercentMaterialized,
+  ]);
 
   const sessionsPreview = useMemo(() => {
     if (!compileResult.compiled) return null;

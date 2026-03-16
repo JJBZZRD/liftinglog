@@ -51,6 +51,10 @@ import {
 } from "../../../lib/programs/psl/pslGenerator";
 import { introspectPslSource } from "../../../lib/programs/psl/pslIntrospection";
 import {
+  parseStoredPercentIntensityConfig,
+  resolvePercentIntensityMaterialized,
+} from "../../../lib/programs/psl/percentIntensity";
+import {
   compilePslSource,
   extractCalendarEntries,
 } from "../../../lib/programs/psl/pslService";
@@ -1394,6 +1398,20 @@ function FlatProgramBuilderScreen({
     return computeEndDateIso(previewStartIso, previewWeeks);
   }, [activationInfo, previewStartIso, previewWeeks]);
 
+  const resolveStoredPercentMaterialized = useCallback(
+    (
+      materialized: NonNullable<ReturnType<typeof compilePslSource>["materialized"]>,
+      resolvedUnits: string | null | undefined
+    ) =>
+      resolvePercentIntensityMaterialized(materialized, {
+        fallbackUnit: resolvedUnits === "lb" ? "lb" : "kg",
+        configEntries: parseStoredPercentIntensityConfig(
+          editingProgram?.percentIntensityConfigJson
+        ),
+      }),
+    [editingProgram?.percentIntensityConfigJson]
+  );
+
   const sessionsPreview = useMemo(() => {
     if (!compileResult.compiled) return [];
     return compileResult.compiled.sessions.slice(0, 6).map((session) => ({
@@ -1589,9 +1607,13 @@ function FlatProgramBuilderScreen({
           units: result.ast?.units ?? draft.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
+        const resolvedMaterialized = resolveStoredPercentMaterialized(
+          result.materialized,
+          result.ast?.units ?? draft.units ?? null
+        );
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(result.materialized)
+          extractCalendarEntries(resolvedMaterialized)
         );
       } else if (editingProgram) {
         validateGeneratedProgram();
@@ -1618,7 +1640,16 @@ function FlatProgramBuilderScreen({
     } finally {
       setSaving(false);
     }
-  }, [draft.description, draft.name, draft.units, editingProgram, previewOverride, pslSource, validateGeneratedProgram]);
+  }, [
+    draft.description,
+    draft.name,
+    draft.units,
+    editingProgram,
+    previewOverride,
+    pslSource,
+    resolveStoredPercentMaterialized,
+    validateGeneratedProgram,
+  ]);
 
   const handleSaveAndActivate = useCallback(async () => {
     setSaving(true);
@@ -1646,7 +1677,7 @@ function FlatProgramBuilderScreen({
       const nextName = draft.name.trim() || "My Program";
       const nextDescription = draft.description?.trim() || undefined;
 
-      if (editingProgram) {
+      if (editingProgram?.isActive) {
         if (!previewOverride || !activationResult.materialized) {
           throw new Error("Choose valid activation dates before activating.");
         }
@@ -1663,11 +1694,33 @@ function FlatProgramBuilderScreen({
           units: activationResult.ast?.units ?? draft.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
+        const resolvedMaterialized = resolveStoredPercentMaterialized(
+          activationResult.materialized,
+          activationResult.ast?.units ?? draft.units ?? null
+        );
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(activationResult.materialized)
+          extractCalendarEntries(resolvedMaterialized)
         );
         returnToManagePrograms();
+        return;
+      }
+
+      if (editingProgram) {
+        await updatePslProgram(editingProgram.id, {
+          name: nextName,
+          description: nextDescription ?? null,
+          pslSource,
+          compiledHash: activationResult.compiled?.source_hash ?? null,
+          isActive: false,
+          startDate: previewOverride?.start_date ?? null,
+          endDate:
+            previewOverride?.end_date ??
+            activationResult.ast?.calendar?.end_date ??
+            null,
+          units: activationResult.ast?.units ?? draft.units ?? null,
+        });
+        returnToManagePrograms({ activateProgramId: String(editingProgram.id) });
         return;
       }
 
@@ -1684,7 +1737,16 @@ function FlatProgramBuilderScreen({
     } finally {
       setSaving(false);
     }
-  }, [draft.description, draft.name, draft.units, editingProgram, previewOverride, pslSource, validateGeneratedProgram]);
+  }, [
+    draft.description,
+    draft.name,
+    draft.units,
+    editingProgram,
+    previewOverride,
+    pslSource,
+    resolveStoredPercentMaterialized,
+    validateGeneratedProgram,
+  ]);
 
   const handleEditPslInstead = useCallback(() => {
     router.push({
@@ -2275,6 +2337,20 @@ function BlockProgramBuilderScreen({
     return computeEndDateIso(previewStartIso, previewWeeks);
   }, [activationInfo, previewStartIso, previewWeeks]);
 
+  const resolveStoredPercentMaterialized = useCallback(
+    (
+      materialized: NonNullable<ReturnType<typeof compilePslSource>["materialized"]>,
+      resolvedUnits: string | null | undefined
+    ) =>
+      resolvePercentIntensityMaterialized(materialized, {
+        fallbackUnit: resolvedUnits === "lb" ? "lb" : "kg",
+        configEntries: parseStoredPercentIntensityConfig(
+          editingProgram?.percentIntensityConfigJson
+        ),
+      }),
+    [editingProgram?.percentIntensityConfigJson]
+  );
+
   const totalSessions = useMemo(
     () => draft.blocks.reduce((sum, block) => sum + block.sessions.length, 0),
     [draft.blocks]
@@ -2637,9 +2713,13 @@ function BlockProgramBuilderScreen({
           units: result.ast?.units ?? draft.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
+        const resolvedMaterialized = resolveStoredPercentMaterialized(
+          result.materialized,
+          result.ast?.units ?? draft.units ?? null
+        );
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(result.materialized)
+          extractCalendarEntries(resolvedMaterialized)
         );
       } else if (editingProgram) {
         validateGeneratedProgram();
@@ -2673,6 +2753,7 @@ function BlockProgramBuilderScreen({
     editingProgram,
     previewOverride,
     pslSource,
+    resolveStoredPercentMaterialized,
     validateGeneratedProgram,
   ]);
 
@@ -2703,7 +2784,7 @@ function BlockProgramBuilderScreen({
       const nextName = draft.name.trim() || "My Program";
       const nextDescription = draft.description?.trim() || undefined;
 
-      if (editingProgram) {
+      if (editingProgram?.isActive) {
         if (!previewOverride || !activationResult.materialized) {
           throw new Error("Choose valid activation dates before activating.");
         }
@@ -2720,11 +2801,33 @@ function BlockProgramBuilderScreen({
           units: activationResult.ast?.units ?? draft.units ?? null,
         });
         await deleteCalendarForProgram(editingProgram.id);
+        const resolvedMaterialized = resolveStoredPercentMaterialized(
+          activationResult.materialized,
+          activationResult.ast?.units ?? draft.units ?? null
+        );
         await insertCalendarEntries(
           editingProgram.id,
-          extractCalendarEntries(activationResult.materialized)
+          extractCalendarEntries(resolvedMaterialized)
         );
         returnToManagePrograms();
+        return;
+      }
+
+      if (editingProgram) {
+        await updatePslProgram(editingProgram.id, {
+          name: nextName,
+          description: nextDescription ?? null,
+          pslSource,
+          compiledHash: activationResult.compiled?.source_hash ?? null,
+          isActive: false,
+          startDate: previewOverride?.start_date ?? null,
+          endDate:
+            previewOverride?.end_date ??
+            activationResult.ast?.calendar?.end_date ??
+            null,
+          units: activationResult.ast?.units ?? draft.units ?? null,
+        });
+        returnToManagePrograms({ activateProgramId: String(editingProgram.id) });
         return;
       }
 
@@ -2748,6 +2851,7 @@ function BlockProgramBuilderScreen({
     editingProgram,
     previewOverride,
     pslSource,
+    resolveStoredPercentMaterialized,
     validateGeneratedProgram,
   ]);
 

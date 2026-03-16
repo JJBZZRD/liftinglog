@@ -7,6 +7,10 @@ import {
 import { getPslProgramById, type PslProgramRow } from "../../db/pslPrograms";
 import { getDateIsoToday, compilePslSource, extractCalendarEntries } from "./pslService";
 import {
+  parseStoredPercentIntensityConfig,
+  resolvePercentIntensityMaterialized,
+} from "./percentIntensity";
+import {
   buildSessionCompletionFromSnapshot,
   isPristineProgramCalendarEntry,
 } from "./programRuntimeHelpers";
@@ -107,7 +111,17 @@ export async function refreshUpcomingCalendarForProgram(
     replaceableEntries.map((entry) => entry.calendar.id)
   );
 
-  const nextEntries = extractCalendarEntries(result.materialized).filter(
+  const resolvedMaterialized = resolvePercentIntensityMaterialized(
+    result.materialized,
+    {
+      fallbackUnit: program.units === "lb" ? "lb" : "kg",
+      configEntries: parseStoredPercentIntensityConfig(
+        program.percentIntensityConfigJson
+      ),
+    }
+  );
+
+  const nextEntries = extractCalendarEntries(resolvedMaterialized).filter(
     (entry) =>
       entry.dateIso >= todayIso &&
       !preservedKeys.has(
