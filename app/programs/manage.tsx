@@ -44,6 +44,7 @@ import {
   deserializeFlatProgramDraftFromPsl,
 } from "../../lib/programs/psl/pslDraftMapper";
 import { buildProgramCompletions } from "../../lib/programs/psl/programRuntime";
+import { returnToProgramsTab } from "../../lib/utils/programNavigation";
 
 export default function ManageProgramsScreen() {
   const { rawColors } = useTheme();
@@ -435,6 +436,15 @@ export default function ManageProgramsScreen() {
           title: "Manage Programs",
           headerStyle: { backgroundColor: rawColors.background },
           headerTintColor: rawColors.foreground,
+          headerLeft: () => (
+            <Pressable onPress={returnToProgramsTab} hitSlop={8}>
+              <MaterialCommunityIcons
+                name={Platform.OS === "ios" ? "chevron-left" : "arrow-left"}
+                size={Platform.OS === "ios" ? 28 : 24}
+                color={rawColors.foreground}
+              />
+            </Pressable>
+          ),
           headerRight: () => (
             <Pressable onPress={() => setAddModalVisible(true)} hitSlop={8}>
               <MaterialCommunityIcons name="plus" size={26} color={rawColors.primary} />

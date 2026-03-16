@@ -20,7 +20,6 @@ import {
 	type PslTemplate,
 	type TemplateCategory,
 } from "../../lib/programs/psl/pslTemplates";
-import { createPslProgram } from "../../lib/db/pslPrograms";
 import { compilePslSource } from "../../lib/programs/psl/pslService";
 import {
   computeEndDateIso,
@@ -45,8 +44,6 @@ export default function TemplateBrowserScreen() {
 	  const [previewTemplate, setPreviewTemplate] = useState<PslTemplate | null>(null);
 	  const [previewVisible, setPreviewVisible] = useState(false);
 	  const [showPslSource, setShowPslSource] = useState(false);
-	  const [importing, setImporting] = useState(false);
-	  const [importError, setImportError] = useState("");
 
   const displayTemplates = useMemo(() => {
     if (searchQuery) return searchTemplates(searchQuery);
@@ -57,59 +54,33 @@ export default function TemplateBrowserScreen() {
 	  const handlePreview = useCallback((template: PslTemplate) => {
 	    setPreviewTemplate(template);
 	    setShowPslSource(false);
-	    setImportError("");
 	    setPreviewVisible(true);
 	  }, []);
 
 	  const handleAddToMyPrograms = useCallback(async () => {
 	    if (!previewTemplate) return;
-	    setImporting(true);
-	    setImportError("");
-
-	    try {
-	      await createPslProgram({
-	        name: previewTemplate.name,
-	        description: previewTemplate.description,
-	        pslSource: previewTemplate.pslSource,
-	        isActive: false,
-	      });
-
-	      setPreviewVisible(false);
-	      setPreviewTemplate(null);
-	      router.replace("/programs/manage");
-	    } catch (error) {
-	      console.error("Error adding template:", error);
-	      setImportError(error instanceof Error ? error.message : "Failed to add template");
-	    } finally {
-	      setImporting(false);
-	    }
+	    setPreviewVisible(false);
+	    setPreviewTemplate(null);
+	    router.push({
+	      pathname: "/programs/template-import",
+	      params: {
+	        templateId: previewTemplate.id,
+	        action: "save",
+	      },
+	    });
 	  }, [previewTemplate]);
 
 	  const handleActivateFromTemplate = useCallback(async () => {
 	    if (!previewTemplate) return;
-	    setImporting(true);
-	    setImportError("");
-
-	    try {
-	      const program = await createPslProgram({
-	        name: previewTemplate.name,
-	        description: previewTemplate.description,
-	        pslSource: previewTemplate.pslSource,
-	        isActive: false,
-	      });
-
-	      setPreviewVisible(false);
-	      setPreviewTemplate(null);
-	      router.replace({
-	        pathname: "/programs/manage",
-	        params: { activateProgramId: String(program.id) },
-	      });
-	    } catch (error) {
-	      console.error("Error activating template:", error);
-	      setImportError(error instanceof Error ? error.message : "Failed to activate template");
-	    } finally {
-	      setImporting(false);
-	    }
+	    setPreviewVisible(false);
+	    setPreviewTemplate(null);
+	    router.push({
+	      pathname: "/programs/template-import",
+	      params: {
+	        templateId: previewTemplate.id,
+	        action: "activate",
+	      },
+	    });
 	  }, [previewTemplate]);
 
 	  const handleEditPsl = useCallback(() => {
@@ -410,33 +381,24 @@ export default function TemplateBrowserScreen() {
 	              </View>
 	            )}
 
-	            {importError ? (
-	              <Text style={[styles.importError, { color: rawColors.destructive }]}>
-	                {importError}
-	              </Text>
-	            ) : null}
-
 	            {/* Action Buttons */}
 	            <View style={styles.previewActions}>
 	              <Pressable
 	                onPress={handleAddToMyPrograms}
-	                disabled={importing}
 	                className="flex-row items-center justify-center py-4 rounded-xl border border-primary bg-primary gap-2"
-	                style={({ pressed }) => ({ opacity: pressed || importing ? 0.7 : 1 })}
+	                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
 	              >
 	                <MaterialCommunityIcons name="download" size={20} color={rawColors.primaryForeground} />
 	                <Text className="text-base font-semibold text-primary-foreground">
-	                  {importing ? "Adding..." : "Add to My Programs"}
+	                  Add to My Programs
 	                </Text>
 	              </Pressable>
 	              <View style={styles.secondaryActions}>
 	                <Pressable
 	                  onPress={handleActivateFromTemplate}
-	                  disabled={importing}
 	                  className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl border border-primary gap-1.5"
 	                  style={({ pressed }) => ({
 	                    backgroundColor: pressed ? rawColors.primary + "15" : "transparent",
-	                    opacity: importing ? 0.6 : 1,
 	                  })}
 	                >
 	                  <MaterialCommunityIcons name="play" size={18} color={rawColors.primary} />
@@ -446,11 +408,9 @@ export default function TemplateBrowserScreen() {
 	                </Pressable>
 	                <Pressable
 	                  onPress={handleEditPsl}
-	                  disabled={importing}
 	                  className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl border border-border gap-1.5"
 	                  style={({ pressed }) => ({
 	                    backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-	                    opacity: importing ? 0.6 : 1,
 	                  })}
 	                >
 	                  <MaterialCommunityIcons name="code-tags" size={18} color={rawColors.foregroundSecondary} />
@@ -628,12 +588,6 @@ const styles = StyleSheet.create({
 	    fontSize: 11,
 	    fontFamily: "monospace",
 	    lineHeight: 16,
-	  },
-	  importError: {
-	    marginTop: 10,
-	    marginBottom: 6,
-	    fontSize: 13,
-	    fontWeight: "600",
 	  },
 	  previewActions: {
 	    gap: 10,

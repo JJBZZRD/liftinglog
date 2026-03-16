@@ -82,6 +82,10 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen
+          name="programs/template-import"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
           name="programs/exercise-log/[id]"
           options={{ presentation: "card" }}
         />

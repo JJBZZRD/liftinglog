@@ -1,3 +1,6 @@
+import { buildTemplatePslSource, type TemplateSequenceOverride } from "./pslTemplateSource";
+import type { TemplateExerciseRequirement } from "./templateExercises";
+
 export type TemplateCategory =
   | "Beginner"
   | "Strength"
@@ -13,9 +16,12 @@ export interface PslTemplate {
   description: string;
   daysPerWeek: number;
   pslSource: string;
+  exerciseRequirements: TemplateExerciseRequirement[];
 }
 
-const RAW_PSL_TEMPLATES: PslTemplate[] = [
+type RawPslTemplate = Omit<PslTemplate, "exerciseRequirements">;
+
+const RAW_PSL_TEMPLATES: RawPslTemplate[] = [
   // ── Beginner ────────────────────────────────────────────
   {
     id: "starting-strength",
@@ -937,14 +943,149 @@ sessions:
   },
 ];
 
-function upgradeTemplateSource(pslSource: string): string {
-  return pslSource.replace('language_version: "0.2"', 'language_version: "0.3"');
+const TEMPLATE_SEQUENCE_OVERRIDES: Partial<Record<RawPslTemplate["id"], TemplateSequenceOverride>> = {
+  "madcow-5x5": {
+    repeat: true,
+    items: [
+      { sessionId: "monday-heavy", restAfterDays: 1 },
+      { sessionId: "wednesday-light", restAfterDays: 1 },
+      { sessionId: "friday-pr", restAfterDays: 2 },
+    ],
+  },
+  "texas-method": {
+    repeat: true,
+    items: [
+      { sessionId: "volume-day", restAfterDays: 1 },
+      { sessionId: "recovery-day", restAfterDays: 1 },
+      { sessionId: "intensity-day", restAfterDays: 2 },
+    ],
+  },
+  "531-bbb": {
+    repeat: true,
+    items: [
+      { sessionId: "squat-day", restAfterDays: 0 },
+      { sessionId: "bench-day", restAfterDays: 1 },
+      { sessionId: "deadlift-day", restAfterDays: 0 },
+      { sessionId: "ohp-day", restAfterDays: 2 },
+    ],
+  },
+  "smolov-jr-bench": {
+    repeat: true,
+    items: [
+      { sessionId: "bench-mon", restAfterDays: 1 },
+      { sessionId: "bench-wed", restAfterDays: 1 },
+      { sessionId: "bench-fri", restAfterDays: 0 },
+      { sessionId: "bench-sat", restAfterDays: 1 },
+    ],
+  },
+  "smolov-jr-squat": {
+    repeat: true,
+    items: [
+      { sessionId: "squat-mon", restAfterDays: 1 },
+      { sessionId: "squat-wed", restAfterDays: 1 },
+      { sessionId: "squat-fri", restAfterDays: 0 },
+      { sessionId: "squat-sat", restAfterDays: 1 },
+    ],
+  },
+  "ppl-6day": {
+    repeat: true,
+    items: [
+      { sessionId: "push-a", restAfterDays: 0 },
+      { sessionId: "pull-a", restAfterDays: 0 },
+      { sessionId: "legs-a", restAfterDays: 0 },
+      { sessionId: "push-b", restAfterDays: 0 },
+      { sessionId: "pull-b", restAfterDays: 0 },
+      { sessionId: "legs-b", restAfterDays: 1 },
+    ],
+  },
+  "upper-lower-4day": {
+    repeat: true,
+    items: [
+      { sessionId: "upper-a", restAfterDays: 0 },
+      { sessionId: "lower-a", restAfterDays: 1 },
+      { sessionId: "upper-b", restAfterDays: 0 },
+      { sessionId: "lower-b", restAfterDays: 2 },
+    ],
+  },
+  "arnold-split": {
+    repeat: true,
+    items: [
+      { sessionId: "chest-back-a", restAfterDays: 0 },
+      { sessionId: "shoulders-arms-a", restAfterDays: 0 },
+      { sessionId: "legs-a", restAfterDays: 0 },
+      { sessionId: "chest-back-b", restAfterDays: 0 },
+      { sessionId: "shoulders-arms-b", restAfterDays: 0 },
+      { sessionId: "legs-b", restAfterDays: 1 },
+    ],
+  },
+  phul: {
+    repeat: true,
+    items: [
+      { sessionId: "upper-power", restAfterDays: 0 },
+      { sessionId: "lower-power", restAfterDays: 1 },
+      { sessionId: "upper-hypertrophy", restAfterDays: 0 },
+      { sessionId: "lower-hypertrophy", restAfterDays: 2 },
+    ],
+  },
+  gzclp: {
+    repeat: true,
+    items: [
+      { sessionId: "day-1", restAfterDays: 0 },
+      { sessionId: "day-2", restAfterDays: 1 },
+      { sessionId: "day-3", restAfterDays: 0 },
+      { sessionId: "day-4", restAfterDays: 2 },
+    ],
+  },
+  "nsuns-531-lp": {
+    repeat: true,
+    items: [
+      { sessionId: "bench-ohp", restAfterDays: 0 },
+      { sessionId: "squat-sumo", restAfterDays: 1 },
+      { sessionId: "ohp-bench", restAfterDays: 0 },
+      { sessionId: "deadlift-squat", restAfterDays: 2 },
+    ],
+  },
+  "rpe-autoregulated": {
+    repeat: true,
+    items: [
+      { sessionId: "heavy-day", restAfterDays: 2 },
+      { sessionId: "volume-day", restAfterDays: 3 },
+    ],
+  },
+};
+
+function buildTemplate(template: RawPslTemplate): PslTemplate {
+  const { pslSource, exerciseRequirements } = buildTemplatePslSource({
+    name: template.name,
+    rawPslSource: template.pslSource,
+    sequenceOverride: TEMPLATE_SEQUENCE_OVERRIDES[template.id],
+  });
+
+  return {
+    ...template,
+    pslSource,
+    exerciseRequirements,
+  };
 }
 
-export const PSL_TEMPLATES: PslTemplate[] = RAW_PSL_TEMPLATES.map((template) => ({
-  ...template,
-  pslSource: upgradeTemplateSource(template.pslSource),
-}));
+export function buildPersonalizedTemplateSource(
+  templateId: string,
+  exerciseNameOverrides: Record<string, string>
+): string {
+  const template = RAW_PSL_TEMPLATES.find((candidate) => candidate.id === templateId);
+  if (!template) {
+    throw new Error(`Unknown template: ${templateId}`);
+  }
+
+  return buildTemplatePslSource({
+    name: template.name,
+    rawPslSource: template.pslSource,
+    sequenceOverride: TEMPLATE_SEQUENCE_OVERRIDES[template.id],
+    exerciseNameOverrides,
+  }).pslSource;
+}
+
+export const PSL_TEMPLATES: PslTemplate[] = RAW_PSL_TEMPLATES.map(buildTemplate);
 
 export const TEMPLATE_CATEGORIES: TemplateCategory[] = [
   "Beginner",

@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./connection";
 import { exercises, type ExerciseRow, sets, workoutExercises } from "./schema";
 import { newUid } from "../utils/uid";
@@ -42,6 +42,24 @@ export async function listExercises(): Promise<Exercise[]> {
   // order by name asc
   const rows = await db.select().from(exercises).orderBy(exercises.name);
   return rows;
+}
+
+export async function listExercisesByNames(names: string[]): Promise<Exercise[]> {
+  const normalizedNames = [...new Set(
+    names
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0)
+  )];
+
+  if (normalizedNames.length === 0) {
+    return [];
+  }
+
+  return db
+    .select()
+    .from(exercises)
+    .where(inArray(exercises.name, normalizedNames))
+    .orderBy(exercises.name);
 }
 
 export async function updateExercise(

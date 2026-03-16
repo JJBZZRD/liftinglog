@@ -60,6 +60,7 @@ import {
   deserializeBlockProgramDraftFromPsl,
   deserializeFlatProgramDraftFromPsl,
 } from "../../../lib/programs/psl/pslDraftMapper";
+import { returnToManagePrograms } from "../../../lib/utils/programNavigation";
 
 const WEEKDAY_OPTIONS: { key: Weekday; short: string; label: string }[] = [
   { key: "MON", short: "M", label: "Monday" },
@@ -1611,7 +1612,7 @@ function FlatProgramBuilderScreen({
           units: draft.units,
         });
       }
-      router.replace("/programs/manage");
+      returnToManagePrograms();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1666,7 +1667,7 @@ function FlatProgramBuilderScreen({
           editingProgram.id,
           extractCalendarEntries(activationResult.materialized)
         );
-        router.replace("/programs/manage");
+        returnToManagePrograms();
         return;
       }
 
@@ -1677,10 +1678,7 @@ function FlatProgramBuilderScreen({
         isActive: false,
         units: draft.units,
       });
-      router.replace({
-        pathname: "/programs/manage",
-        params: { activateProgramId: String(program.id) },
-      });
+      returnToManagePrograms({ activateProgramId: String(program.id) });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2662,7 +2660,7 @@ function BlockProgramBuilderScreen({
           units: draft.units,
         });
       }
-      router.replace("/programs/manage");
+      returnToManagePrograms();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2726,7 +2724,7 @@ function BlockProgramBuilderScreen({
           editingProgram.id,
           extractCalendarEntries(activationResult.materialized)
         );
-        router.replace("/programs/manage");
+        returnToManagePrograms();
         return;
       }
 
@@ -2737,10 +2735,7 @@ function BlockProgramBuilderScreen({
         isActive: false,
         units: draft.units,
       });
-      router.replace({
-        pathname: "/programs/manage",
-        params: { activateProgramId: String(program.id) },
-      });
+      returnToManagePrograms({ activateProgramId: String(program.id) });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {

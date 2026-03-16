@@ -13,6 +13,7 @@ import type {
   ProgramCalendarSetRow,
 } from "./schema";
 import type { CalendarEntry } from "../programs/psl/pslService";
+import { listExercisesByNames } from "./exercises";
 
 export type { ProgramCalendarRow, ProgramCalendarExerciseRow, ProgramCalendarSetRow };
 
@@ -110,6 +111,13 @@ export async function insertCalendarEntries(
   programId: number,
   entries: CalendarEntry[]
 ): Promise<void> {
+  const exerciseRows = await listExercisesByNames(
+    entries.flatMap((entry) => entry.exercises.map((exercise) => exercise.exerciseName))
+  );
+  const exerciseIdByName = new Map(
+    exerciseRows.map((exercise) => [exercise.name, exercise.id] as const)
+  );
+
   for (const entry of entries) {
     const calRows = await db
       .insert(programCalendar)
@@ -131,7 +139,7 @@ export async function insertCalendarEntries(
         .values({
           calendarId: calId,
           exerciseName: ex.exerciseName,
-          exerciseId: null,
+          exerciseId: exerciseIdByName.get(ex.exerciseName) ?? null,
           orderIndex: ex.orderIndex,
           prescribedSetsJson: JSON.stringify(ex.sets),
           status: "pending",

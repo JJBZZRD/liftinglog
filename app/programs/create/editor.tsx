@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Platform,
@@ -39,6 +39,7 @@ import { introspectPslSource } from "../../../lib/programs/psl/pslIntrospection"
 import { getPslCompatibilityWarnings } from "../../../lib/programs/psl/pslCompatibility";
 import { buildProgramCompletions } from "../../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import { returnToManagePrograms } from "../../../lib/utils/programNavigation";
 
 type RecordValue = Record<string, unknown>;
 
@@ -355,7 +356,7 @@ export default function ProgramPslEditorScreen() {
         });
       }
 
-      router.replace("/programs/manage");
+      returnToManagePrograms();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -404,7 +405,7 @@ export default function ProgramPslEditorScreen() {
           editingProgram.id,
           extractCalendarEntries(result.materialized)
         );
-        router.replace("/programs/manage");
+        returnToManagePrograms();
         return;
       }
 
@@ -422,7 +423,7 @@ export default function ProgramPslEditorScreen() {
       const entries = extractCalendarEntries(result.materialized);
       await insertCalendarEntries(program.id, entries);
 
-      router.replace("/(tabs)/programs");
+      returnToManagePrograms();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
