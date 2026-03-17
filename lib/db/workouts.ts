@@ -574,6 +574,21 @@ export async function updateWorkoutExerciseInputs(
   await db.update(workoutExercises).set(mapped).where(eq(workoutExercises.id, workoutExerciseId)).run();
 }
 
+export async function updateWorkoutExerciseNote(
+  workoutExerciseId: number,
+  note: string | null
+): Promise<void> {
+  if (!canQueryWorkoutExercises("updateWorkoutExerciseNote")) {
+    return;
+  }
+
+  await db
+    .update(workoutExercises)
+    .set({ note })
+    .where(eq(workoutExercises.id, workoutExerciseId))
+    .run();
+}
+
 /**
  * Complete an exercise entry by setting its completed_at timestamp.
  * This is the semantic "Complete Exercise" action.

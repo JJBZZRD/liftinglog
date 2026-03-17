@@ -290,6 +290,22 @@ describe('WorkoutExercise Operations', () => {
     });
   });
 
+  describe('updateWorkoutExerciseNote', () => {
+    it('should update session note on workout_exercise', async () => {
+      const mockUpdateWorkoutExerciseNote = jest.fn().mockResolvedValue(undefined);
+
+      await mockUpdateWorkoutExerciseNote(1, 'Strong session');
+      expect(mockUpdateWorkoutExerciseNote).toHaveBeenCalledWith(1, 'Strong session');
+    });
+
+    it('should clear session note when passed null', async () => {
+      const mockUpdateWorkoutExerciseNote = jest.fn().mockResolvedValue(undefined);
+
+      await mockUpdateWorkoutExerciseNote(1, null);
+      expect(mockUpdateWorkoutExerciseNote).toHaveBeenCalledWith(1, null);
+    });
+  });
+
   describe('completeExerciseEntry', () => {
     it('should set completedAt timestamp on workout_exercise', async () => {
       const mockCompleteExerciseEntry = jest.fn().mockResolvedValue(undefined);
