@@ -1,5 +1,6 @@
 import * as MediaLibrary from "expo-media-library";
 import { listMediaForAssetIds, listMediaForLocalUris, listMediaForSetIds } from "../db/media";
+import { deleteManagedVideoUri, isManagedVideoUri } from "./videoStorage";
 
 const ALBUM_NAME = "LiftingLog";
 const PAGE_SIZE = 200;
@@ -184,6 +185,35 @@ async function resolveMissingAssetIds(missing: MediaTarget[]): Promise<string[]>
   return Array.from(resolvedIds);
 }
 
+async function deleteManagedLocalUrisForSets(setIds: number[], mediaRows: Awaited<ReturnType<typeof listMediaForSetIds>>) {
+  const managedUris = Array.from(
+    new Set(
+      mediaRows
+        .map((row) => row.localUri)
+        .filter((uri): uri is string => isManagedVideoUri(uri))
+    )
+  );
+
+  if (managedUris.length === 0) {
+    return;
+  }
+
+  const targetSetIds = new Set(setIds);
+  const rowsWithMatchingUri = await listMediaForLocalUris(managedUris);
+  const sharedManagedUris = new Set(
+    rowsWithMatchingUri
+      .filter((row) => row.setId === null || !targetSetIds.has(row.setId))
+      .map((row) => row.localUri)
+  );
+
+  for (const uri of managedUris) {
+    if (sharedManagedUris.has(uri)) {
+      continue;
+    }
+    await deleteManagedVideoUri(uri);
+  }
+}
+
 export async function deleteAssociatedMediaForSets(setIds: number[]): Promise<void> {
   if (setIds.length === 0) return;
 
@@ -201,6 +231,8 @@ export async function deleteAssociatedMediaForSets(setIds: number[]): Promise<vo
     });
   }
   if (mediaRows.length === 0) return;
+
+  await deleteManagedLocalUrisForSets(setIds, mediaRows);
 
   const permission = await ensureMediaPermission();
   if (!permission.granted || permission.accessPrivileges === "none") {

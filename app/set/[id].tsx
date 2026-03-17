@@ -1,7 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,98 +13,37 @@ import {
   Text,
   View,
 } from "react-native";
-import { addMedia, getLatestMediaForSet, unlinkMediaForSet, updateMedia, type Media } from "../../lib/db/media";
+import {
+  addMedia,
+  getLatestMediaForSet,
+  listMediaForLocalUris,
+  unlinkMediaForSet,
+  updateMedia,
+  type Media,
+} from "../../lib/db/media";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import {
+  DEFAULT_MEDIA_ALBUM_NAME,
+  deleteManagedVideoUri,
+  doesFileUriExist,
+  getUriScheme,
+  inferVideoMimeFromUri,
+  isFileUri,
+  isLikelyTransientUri,
+  persistVideoForSetLink,
+  persistVideoUriToAppStorage,
+  toMillis,
+} from "../../lib/utils/videoStorage";
 
-const DEFAULT_MEDIA_ALBUM_NAME = "LiftingLog";
-const APP_VIDEO_STORAGE_DIR = "set-videos";
 const REDISCOVERY_PAGE_SIZE = 200;
 const REDISCOVERY_MAX_SCAN_COUNT = 1500;
 const REDISCOVERY_TIME_WINDOW_MS = 60_000;
 const REDISCOVERY_MATCH_WINDOW_MS = 2000;
 
-function toMillis(value?: number | null): number | null {
-  if (value === undefined || value === null || Number.isNaN(value)) return null;
-  return value < 1_000_000_000_000 ? value * 1000 : value;
-}
-
 function toDisplayMillis(value?: number): number {
   return toMillis(value) ?? Date.now();
 }
 
-function getUriScheme(uri: string | null | undefined): string {
-  if (!uri) return "unknown";
-  const match = uri.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
-  return match?.[1]?.toLowerCase() ?? "unknown";
-}
-
-function isFileUri(uri: string | null | undefined): uri is string {
-  return typeof uri === "string" && uri.length > 0 && getUriScheme(uri) === "file";
-}
-
-function isLikelyTransientUri(uri: string | null | undefined): boolean {
-  if (!uri) return false;
-  const normalized = uri.toLowerCase();
-  return (
-    normalized.includes("/cache/") ||
-    normalized.includes("\\cache\\") ||
-    normalized.includes("/tmp/") ||
-    normalized.includes("\\tmp\\") ||
-    normalized.includes("imagepicker")
-  );
-}
-
-function extractExtension(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const withoutQuery = value.split("?")[0] ?? value;
-  const filename = withoutQuery.split("/").pop() ?? withoutQuery;
-  const dotIndex = filename.lastIndexOf(".");
-  if (dotIndex <= 0 || dotIndex === filename.length - 1) return null;
-  return filename.slice(dotIndex + 1);
-}
-
-function sanitizeExtension(extension: string | null | undefined): string {
-  const sanitized = (extension ?? "mp4").toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (sanitized.length === 0) return "mp4";
-  return sanitized.slice(0, 10);
-}
-
-async function doesFileUriExist(uri: string | null | undefined): Promise<boolean> {
-  if (!isFileUri(uri)) return false;
-  try {
-    const info = await FileSystem.getInfoAsync(uri);
-    return !!info.exists;
-  } catch {
-    return false;
-  }
-}
-
-async function persistVideoUriToAppStorage(sourceUri: string, filenameHint?: string | null): Promise<string | null> {
-  const documentDirectory = FileSystem.documentDirectory;
-  if (!documentDirectory) return null;
-
-  const directoryUri = `${documentDirectory}${APP_VIDEO_STORAGE_DIR}/`;
-
-  try {
-    const directoryInfo = await FileSystem.getInfoAsync(directoryUri);
-    if (!directoryInfo.exists) {
-      await FileSystem.makeDirectoryAsync(directoryUri, { intermediates: true });
-    }
-
-    const extension = sanitizeExtension(extractExtension(filenameHint) ?? extractExtension(sourceUri));
-    const targetUri = `${directoryUri}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
-    await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
-    return targetUri;
-  } catch (error) {
-    if (__DEV__) {
-      console.warn("[SetInfo] Failed to persist URI to app storage:", {
-        sourceUri,
-        error: String(error),
-      });
-    }
-    return null;
-  }
-}
 
 /**
  * Attempt to re-discover a video in the MediaLibrary by matching metadata.
@@ -337,6 +275,8 @@ export default function SetInfoScreen() {
       if (storedFileMissing) {
         nextUri = null;
       }
+      const needsLibraryRepair =
+        !nextUri || !isFileUri(nextUri) || isLikelyTransientUri(nextUri);
 
       let canReadMediaLibrary = false;
       try {
@@ -346,7 +286,7 @@ export default function SetInfoScreen() {
         canReadMediaLibrary = false;
       }
 
-      if (canReadMediaLibrary && media.assetId) {
+      if (needsLibraryRepair && canReadMediaLibrary && media.assetId) {
         const assetId = String(media.assetId);
         try {
           const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
@@ -407,7 +347,12 @@ export default function SetInfoScreen() {
       }
 
       // If asset resolution failed, attempt re-discovery from metadata.
-      if (!assetResolved && canReadMediaLibrary && (media.originalFilename || media.mediaCreatedAt != null)) {
+      if (
+        needsLibraryRepair &&
+        !assetResolved &&
+        canReadMediaLibrary &&
+        (media.originalFilename || media.mediaCreatedAt != null)
+      ) {
         if (__DEV__) {
           console.log("[SetInfo] Attempting video re-discovery...", {
             originalFilename: media.originalFilename,
@@ -544,127 +489,79 @@ export default function SetInfoScreen() {
       if (result.canceled || result.assets.length === 0) return;
 
       const selectedAsset = result.assets[0];
-      let localUri: string | null = selectedAsset.uri ?? null;
-      let assetId: string | null = selectedAsset.assetId ?? null;
-      let albumName: string | null = null;
-
-      // Capture metadata for re-discovery after reinstall
-      let originalFilename: string | null = selectedAsset.fileName ?? null;
-      let mediaCreatedAt: number | null = null;
-      let durationMs: number | null = selectedAsset.duration != null
-        ? Math.round(selectedAsset.duration * 1000)
-        : null;
-
-      // Some pickers return transient URIs without an assetId.
-      // Create a MediaLibrary asset so the link survives app restarts.
-      if (!assetId && localUri) {
-        try {
-          const createdAsset = await MediaLibrary.createAssetAsync(localUri);
-          assetId = createdAsset?.id != null ? String(createdAsset.id) : null;
-
-          if (assetId) {
-            albumName = DEFAULT_MEDIA_ALBUM_NAME;
-            try {
-              const album = await MediaLibrary.getAlbumAsync(DEFAULT_MEDIA_ALBUM_NAME);
-              if (album) {
-                await MediaLibrary.addAssetsToAlbumAsync([createdAsset], album, false);
-              } else {
-                await MediaLibrary.createAlbumAsync(DEFAULT_MEDIA_ALBUM_NAME, createdAsset, false);
-              }
-            } catch (albumError) {
-              if (__DEV__) {
-                console.warn("[SetInfo] Failed to attach created asset to album:", albumError);
-              }
-            }
-          }
-        } catch (createAssetError) {
-          if (__DEV__) {
-            console.warn("[SetInfo] Failed creating MediaLibrary asset from picker URI:", createAssetError);
-          }
-        }
-      }
-
-      // If we have an assetId, use MediaLibrary metadata and prefer resolved URI.
-      if (assetId) {
-        try {
-          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
-          if (assetInfo?.localUri) {
-            localUri = assetInfo.localUri;
-          } else if (assetInfo?.uri) {
-            localUri = assetInfo.uri;
-          }
-          if (!originalFilename && assetInfo?.filename) {
-            originalFilename = assetInfo.filename;
-          }
-          if (assetInfo?.creationTime != null) {
-            mediaCreatedAt = assetInfo.creationTime;
-          }
-          if (durationMs == null && assetInfo?.duration != null) {
-            durationMs = Math.round(assetInfo.duration * 1000);
-          }
-          if (!albumName) {
-            albumName = DEFAULT_MEDIA_ALBUM_NAME;
-          }
-        } catch (metadataError) {
-          if (__DEV__) {
-            console.warn("[SetInfo] Failed to get asset metadata:", metadataError);
-          }
-        }
-      }
-
-      // Stabilize transient/non-file URIs into app-owned storage.
-      if (localUri && (!isFileUri(localUri) || isLikelyTransientUri(localUri))) {
-        const persistedUri = await persistVideoUriToAppStorage(localUri, originalFilename);
-        if (persistedUri) {
-          localUri = persistedUri;
-        }
-      }
-
-      if (!localUri) {
+      if (!selectedAsset.uri) {
         Alert.alert("Error", "Failed to resolve selected video.");
+        return;
+      }
+
+      const persistedVideo = await persistVideoForSetLink({
+        sourceUri: selectedAsset.uri,
+        assetId: selectedAsset.assetId ?? null,
+        filenameHint: selectedAsset.fileName ?? null,
+        durationMs:
+          selectedAsset.duration != null
+            ? Math.round(selectedAsset.duration * 1000)
+            : null,
+        saveToLibrary: false,
+      });
+
+      if (!persistedVideo) {
+        Alert.alert("Error", "Failed to save a durable copy of the selected video.");
         return;
       }
 
       setSavingSelection(true);
       try {
+        const previousLocalUri = videoMedia?.localUri ?? null;
+
         if (videoMedia) {
           await updateMedia(videoMedia.id, {
-            local_uri: localUri,
-            asset_id: assetId,
-            mime: selectedAsset.mimeType ?? "video/mp4",
+            local_uri: persistedVideo.localUri,
+            asset_id: persistedVideo.assetId,
+            mime: selectedAsset.mimeType ?? inferVideoMimeFromUri(persistedVideo.localUri),
             set_id: setId,
             created_at: Date.now(),
-            original_filename: originalFilename,
-            media_created_at: mediaCreatedAt,
-            duration_ms: durationMs,
-            album_name: albumName,
+            original_filename: persistedVideo.originalFilename,
+            media_created_at: persistedVideo.mediaCreatedAt,
+            duration_ms: persistedVideo.durationMs,
+            album_name: persistedVideo.albumName,
           });
         } else {
           await addMedia({
-            local_uri: localUri,
-            asset_id: assetId,
-            mime: selectedAsset.mimeType ?? "video/mp4",
+            local_uri: persistedVideo.localUri,
+            asset_id: persistedVideo.assetId,
+            mime: selectedAsset.mimeType ?? inferVideoMimeFromUri(persistedVideo.localUri),
             set_id: setId,
             created_at: Date.now(),
-            original_filename: originalFilename,
-            media_created_at: mediaCreatedAt,
-            duration_ms: durationMs,
-            album_name: albumName,
+            original_filename: persistedVideo.originalFilename,
+            media_created_at: persistedVideo.mediaCreatedAt,
+            duration_ms: persistedVideo.durationMs,
+            album_name: persistedVideo.albumName,
           });
+        }
+
+        if (
+          previousLocalUri &&
+          previousLocalUri !== persistedVideo.localUri
+        ) {
+          const remainingRows = await listMediaForLocalUris([previousLocalUri]);
+          if (remainingRows.length === 0) {
+            await deleteManagedVideoUri(previousLocalUri);
+          }
         }
 
         if (__DEV__) {
           console.log("[SetInfo] Linked picked video to set:", {
             setId,
             mediaId: videoMedia?.id ?? null,
-            assetId,
+            assetId: persistedVideo.assetId,
             assetUri: selectedAsset.uri,
-            fileName: originalFilename,
-            mediaCreatedAt,
-            durationMs,
-            albumName,
-            resolvedUri: localUri,
-            uriScheme: getUriScheme(localUri),
+            fileName: persistedVideo.originalFilename,
+            mediaCreatedAt: persistedVideo.mediaCreatedAt,
+            durationMs: persistedVideo.durationMs,
+            albumName: persistedVideo.albumName,
+            resolvedUri: persistedVideo.localUri,
+            uriScheme: getUriScheme(persistedVideo.localUri),
           });
         }
 

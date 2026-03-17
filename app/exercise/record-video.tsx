@@ -4,52 +4,61 @@ import type { CameraType, FlashMode } from "expo-camera";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as MediaLibrary from "expo-media-library";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, PanResponder, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
 import { PinchGestureHandler, State } from "react-native-gesture-handler";
-import { runOnJS, SensorType, useAnimatedReaction, useAnimatedSensor } from "react-native-reanimated";
+import { runOnJS, SensorType, useAnimatedReaction, useAnimatedSensor, useSharedValue } from "react-native-reanimated";
 import BaseModal from "../../components/modals/BaseModal";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { addMedia } from "../../lib/db/media";
 import { addSet, listSetsForWorkoutExercise } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { DEFAULT_MEDIA_ALBUM_NAME, inferVideoMimeFromUri, persistVideoForSetLink } from "../../lib/utils/videoStorage";
 import { getWeightUnitLabel, parseWeightInputToKg } from "../../lib/utils/units";
 
-const ALBUM_NAME = "LiftingLog";
+const ALBUM_NAME = DEFAULT_MEDIA_ALBUM_NAME;
 const ZOOM_SENSITIVITY = 0.35;
-const DEFAULT_SLIDER_WIDTH = 180;
+const ORIENTATION_SENSOR_INTERVAL_MS = 50;
 
 const clampZoom = (value: number) => Math.min(1, Math.max(0, value));
 
-function gravityToRotationDeg(x: number, y: number, z: number): number | null {
+function gravityToRotationDeg(x: number, y: number, z: number, currentRotationDeg: number): number | null {
   "worklet";
   const absX = Math.abs(x);
   const absY = Math.abs(y);
   const absZ = Math.abs(z);
-  const axisDeltaThreshold = 0.2;
+  const switchAxisMagnitude = 0.62;
+  const holdAxisMagnitude = 0.52;
+  const axisDominanceThreshold = 0.08;
 
   // If the phone is mostly flat, keep the previous control rotation.
-  if (absZ > 0.85) {
+  if (absZ > 0.9) {
     return null;
   }
 
-  if (absX - absY > axisDeltaThreshold) {
-    return x > 0 ? -90 : 90;
+  const landscapeCandidate = x > 0 ? -90 : 90;
+  const portraitCandidate = y < 0 ? 0 : 180;
+  const xDominant = absX >= absY + axisDominanceThreshold;
+  const yDominant = absY >= absX + axisDominanceThreshold;
+  const currentIsLandscape = currentRotationDeg === 90 || currentRotationDeg === -90;
+  const currentIsPortrait = currentRotationDeg === 0 || currentRotationDeg === 180;
+
+  if (currentIsLandscape && xDominant && absX >= holdAxisMagnitude) {
+    return landscapeCandidate;
   }
 
-  if (absY - absX > axisDeltaThreshold) {
-    return 0;
+  if (currentIsPortrait && yDominant && absY >= holdAxisMagnitude) {
+    return portraitCandidate;
+  }
+
+  if (xDominant && absX >= switchAxisMagnitude) {
+    return landscapeCandidate;
+  }
+
+  if (yDominant && absY >= switchAxisMagnitude) {
+    return portraitCandidate;
   }
 
   return null;
-}
-
-function inferVideoMimeFromUri(uri: string | null): string {
-  const lower = (uri ?? "").split("?")[0].toLowerCase();
-  if (lower.endsWith(".mov") || lower.endsWith(".qt")) return "video/quicktime";
-  if (lower.endsWith(".m4v")) return "video/x-m4v";
-  if (lower.endsWith(".webm")) return "video/webm";
-  if (lower.endsWith(".3gp") || lower.endsWith(".3gpp")) return "video/3gpp";
-  return "video/mp4";
 }
 
 export default function RecordVideoScreen() {
@@ -100,11 +109,12 @@ export default function RecordVideoScreen() {
   const [reps, setReps] = useState("");
   const [note, setNote] = useState("");
   const [nextSetIndex, setNextSetIndex] = useState(initialSetIndex);
-  const [sliderWidth, setSliderWidth] = useState(DEFAULT_SLIDER_WIDTH);
   const [controlsRotationDeg, setControlsRotationDeg] = useState(0);
+  const [zoomIndicatorSize, setZoomIndicatorSize] = useState({ width: 0, height: 0 });
   const pinchStartZoom = useRef(0);
+  const stableControlsRotation = useSharedValue(0);
   const gravitySensor = useAnimatedSensor(SensorType.GRAVITY, {
-    interval: 150,
+    interval: ORIENTATION_SENSOR_INTERVAL_MS,
     adjustToInterfaceOrientation: false,
   });
 
@@ -133,15 +143,16 @@ export default function RecordVideoScreen() {
   useAnimatedReaction(
     () => {
       const { x, y, z } = gravitySensor.sensor.value;
-      return gravityToRotationDeg(x, y, z);
+      return gravityToRotationDeg(x, y, z, stableControlsRotation.value);
     },
-    (nextDeg, prevDeg) => {
-      if (nextDeg === null || nextDeg === prevDeg) {
+    (nextDeg) => {
+      if (nextDeg === null || nextDeg === stableControlsRotation.value) {
         return;
       }
+      stableControlsRotation.value = nextDeg;
       runOnJS(applyControlsRotation)(nextDeg, "gravity");
     },
-    [applyControlsRotation]
+    [applyControlsRotation, stableControlsRotation]
   );
 
   const handleRequestPermissions = useCallback(async () => {
@@ -188,26 +199,6 @@ export default function RecordVideoScreen() {
     setZoom(Number(nextZoom.toFixed(3)));
   }, []);
 
-  const updateZoomFromX = useCallback(
-    (x: number) => {
-      if (!sliderWidth) return;
-      const ratio = clampZoom(x / sliderWidth);
-      setZoom(Number(ratio.toFixed(3)));
-    },
-    [sliderWidth]
-  );
-
-  const sliderPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: (_event, gestureState) => gestureState.numberActiveTouches === 1,
-        onMoveShouldSetPanResponder: (_event, gestureState) => gestureState.numberActiveTouches === 1,
-        onPanResponderGrant: (event) => updateZoomFromX(event.nativeEvent.locationX),
-        onPanResponderMove: (event) => updateZoomFromX(event.nativeEvent.locationX),
-      }),
-    [updateZoomFromX]
-  );
-
   const handleRecordPress = useCallback(async () => {
     if (!cameraRef.current || isRecording) return;
     setRecordedUri(null);
@@ -250,70 +241,16 @@ export default function RecordVideoScreen() {
     setIsSaving(true);
     try {
       const mediaStatus = await ensureMediaPermission();
-      if (!mediaStatus?.granted || mediaStatus.accessPrivileges === "none") {
+      const canSaveToLibrary = !!mediaStatus?.granted && mediaStatus.accessPrivileges !== "none";
+      const persistedVideo = await persistVideoForSetLink({
+        sourceUri: recordedUri,
+        albumName: ALBUM_NAME,
+        saveToLibrary: canSaveToLibrary,
+      });
+
+      if (!persistedVideo) {
+        Alert.alert("Error", "Failed to save a durable copy of the recorded video.");
         return;
-      }
-
-      const existingAlbum = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
-      const asset = existingAlbum
-        ? await MediaLibrary.createAssetAsync(recordedUri, existingAlbum)
-        : await MediaLibrary.createAssetAsync(recordedUri);
-
-      if (!existingAlbum && asset) {
-        await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
-      }
-
-      const assetId = asset?.id != null ? String(asset.id) : null;
-
-      // CRITICAL: After creating the asset, we must get its localUri (file://) for playback.
-      // The asset.uri from createAssetAsync is often a MediaLibrary reference (ph:// on iOS,
-      // content:// on Android) which expo-video cannot play directly in release builds.
-      // getAssetInfoAsync returns both .uri (MediaLibrary ref) and .localUri (actual file path).
-      // We also capture metadata for re-discovery after reinstall.
-      let storedLocalUri = recordedUri; // fallback to original recording URI
-      let originalFilename: string | null = null;
-      let mediaCreatedAt: number | null = null;
-      let durationMs: number | null = null;
-
-      if (assetId) {
-        try {
-          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
-          // Prefer localUri (file://) which is the actual playable file path
-          if (assetInfo?.localUri) {
-            storedLocalUri = assetInfo.localUri;
-          } else if (assetInfo?.uri) {
-            storedLocalUri = assetInfo.uri;
-          }
-
-          // Capture metadata for re-discovery after app reinstall
-          originalFilename = assetInfo?.filename ?? null;
-          mediaCreatedAt = assetInfo?.creationTime != null ? assetInfo.creationTime : null;
-          durationMs = assetInfo?.duration != null ? Math.round(assetInfo.duration * 1000) : null;
-
-          if (__DEV__) {
-            console.log("[RecordVideo] Resolved asset URI and metadata for storage:", {
-              assetId,
-              assetUri: assetInfo?.uri ?? null,
-              assetLocalUri: assetInfo?.localUri ?? null,
-              storedUri: storedLocalUri,
-              originalFilename,
-              mediaCreatedAt,
-              durationMs,
-            });
-          }
-        } catch (infoError) {
-          // If getAssetInfoAsync fails, fall back to asset.uri or recordedUri
-          storedLocalUri = asset?.uri ?? recordedUri;
-          if (__DEV__) {
-            console.warn("[RecordVideo] Failed to get asset info, using fallback:", {
-              assetId,
-              fallbackUri: storedLocalUri,
-              error: String(infoError),
-            });
-          }
-        }
-      } else {
-        storedLocalUri = asset?.uri ?? recordedUri;
       }
 
       const setId = await addSet({
@@ -328,16 +265,16 @@ export default function RecordVideoScreen() {
       });
 
       await addMedia({
-        local_uri: storedLocalUri,
-        asset_id: assetId,
-        mime: inferVideoMimeFromUri(storedLocalUri),
+        local_uri: persistedVideo.localUri,
+        asset_id: persistedVideo.assetId,
+        mime: inferVideoMimeFromUri(persistedVideo.localUri),
         set_id: setId,
         workout_id: workoutId,
         note: noteValue,
-        original_filename: originalFilename,
-        media_created_at: mediaCreatedAt,
-        duration_ms: durationMs,
-        album_name: ALBUM_NAME,
+        original_filename: persistedVideo.originalFilename,
+        media_created_at: persistedVideo.mediaCreatedAt,
+        duration_ms: persistedVideo.durationMs,
+        album_name: persistedVideo.albumName,
       });
 
       setShowAddSetModal(false);
@@ -375,18 +312,52 @@ export default function RecordVideoScreen() {
   }, [flashMode]);
 
   const zoomLabel = useMemo(() => `Zoom ${Math.round(zoom * 100)}%`, [zoom]);
-  const thumbSize = 14;
-  const thumbLeft = useMemo(() => {
-    if (!sliderWidth) return 0;
-    const rawLeft = zoom * sliderWidth - thumbSize / 2;
-    return Math.max(-thumbSize / 2, Math.min(sliderWidth - thumbSize / 2, rawLeft));
-  }, [sliderWidth, thumbSize, zoom]);
 
   const permissionReady = cameraPermission?.granted && micPermission?.granted;
-  const iconRotationStyle = useMemo(
+  const rotatingIconStyle = useMemo(
     () => ({ transform: [{ rotate: `${controlsRotationDeg}deg` }] }),
     [controlsRotationDeg]
   );
+  const zoomIndicatorContainerStyle = useMemo(() => {
+    if (controlsRotationDeg === 90 || controlsRotationDeg === -90) {
+      return { justifyContent: "center" as const };
+    }
+    if (controlsRotationDeg === 180) {
+      return { justifyContent: "flex-start" as const };
+    }
+    return { justifyContent: "flex-end" as const };
+  }, [controlsRotationDeg]);
+  const zoomIndicatorContentStyle = useMemo(() => {
+    const edgeInset = 16;
+    const landscapeOffset = Math.max(0, (zoomIndicatorSize.width - zoomIndicatorSize.height) / 2);
+
+    if (controlsRotationDeg === 90) {
+      return {
+        alignSelf: "flex-start" as const,
+        marginLeft: edgeInset,
+        transform: [{ translateX: -landscapeOffset }, { rotate: "90deg" }],
+      };
+    }
+    if (controlsRotationDeg === -90) {
+      return {
+        alignSelf: "flex-end" as const,
+        marginRight: edgeInset,
+        transform: [{ translateX: landscapeOffset }, { rotate: "-90deg" }],
+      };
+    }
+    if (controlsRotationDeg === 180) {
+      return {
+        alignSelf: "center" as const,
+        marginTop: edgeInset,
+        transform: [{ rotate: "180deg" }],
+      };
+    }
+    return {
+      alignSelf: "center" as const,
+      marginBottom: edgeInset,
+      transform: [{ rotate: "0deg" }],
+    };
+  }, [controlsRotationDeg, zoomIndicatorSize.height, zoomIndicatorSize.width]);
 
   if (!isReadyForSet) {
     return (
@@ -451,6 +422,7 @@ export default function RecordVideoScreen() {
                 enableTorch={enableTorch}
                 zoom={zoom}
                 mode="video"
+                responsiveOrientationWhenOrientationLocked
               />
 
               <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between">
@@ -459,10 +431,15 @@ export default function RecordVideoScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={flashLabel}
                     className="px-3 py-2 rounded-full bg-surface-secondary border border-border"
-                    style={({ pressed }) => [iconRotationStyle, { opacity: pressed ? 0.7 : 1 }]}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                     onPress={handleCycleFlash}
                   >
-                    <MaterialCommunityIcons name={flashIcon} size={18} color={rawColors.foreground} />
+                    <MaterialCommunityIcons
+                      name={flashIcon}
+                      size={18}
+                      color={rawColors.foreground}
+                      style={rotatingIconStyle}
+                    />
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
@@ -475,6 +452,7 @@ export default function RecordVideoScreen() {
                       name={enableTorch ? "flashlight" : "flashlight-off"}
                       size={18}
                       color={rawColors.foreground}
+                      style={rotatingIconStyle}
                     />
                   </Pressable>
                 </View>
@@ -483,10 +461,15 @@ export default function RecordVideoScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Flip camera"
                   className="px-3 py-2 rounded-full bg-surface-secondary border border-border"
-                  style={({ pressed }) => [iconRotationStyle, { opacity: pressed ? 0.7 : 1 }]}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                   onPress={handleToggleFacing}
                 >
-                  <MaterialCommunityIcons name="camera-switch-outline" size={18} color={rawColors.foreground} />
+                  <MaterialCommunityIcons
+                    name="camera-switch-outline"
+                    size={18}
+                    color={rawColors.foreground}
+                    style={rotatingIconStyle}
+                  />
                 </Pressable>
               </View>
 
@@ -497,34 +480,38 @@ export default function RecordVideoScreen() {
                 </View>
               )}
 
-              <View className="absolute bottom-4 left-0 right-0 items-center">
+              <View
+                pointerEvents="none"
+                className="absolute inset-0"
+                style={zoomIndicatorContainerStyle}
+              >
                 <View
                   className="px-4 py-2 rounded-full border border-border"
-                  style={{ backgroundColor: rawColors.surfaceSecondary }}
+                  style={[
+                    { backgroundColor: rawColors.surfaceSecondary },
+                    zoomIndicatorContentStyle,
+                  ]}
+                  onLayout={(event) => {
+                    const { width, height } = event.nativeEvent.layout;
+                    setZoomIndicatorSize((current) =>
+                      current.width === width && current.height === height
+                        ? current
+                        : { width, height }
+                    );
+                  }}
                 >
-                  <View className="flex-row items-center gap-3">
-                    <Text className="text-xs font-semibold text-foreground-secondary">{zoomLabel}</Text>
-                    <View
-                      className="h-2 rounded-full"
-                      style={{ width: DEFAULT_SLIDER_WIDTH, backgroundColor: rawColors.border }}
-                      onLayout={(event) => setSliderWidth(event.nativeEvent.layout.width)}
-                      {...sliderPanResponder.panHandlers}
-                    >
-                      <View
-                        className="h-full rounded-full"
-                        style={{ width: `${zoom * 100}%`, backgroundColor: rawColors.primary }}
-                      />
-                      <View
-                        className="absolute rounded-full border border-border"
-                        style={{
-                          width: thumbSize,
-                          height: thumbSize,
-                          left: thumbLeft,
-                          top: -(thumbSize / 2 - 1),
-                          backgroundColor: rawColors.surface,
-                        }}
-                      />
-                    </View>
+                  <View className="flex-row items-center gap-2">
+                    <MaterialCommunityIcons
+                      name="gesture-pinch"
+                      size={16}
+                      color={rawColors.primary}
+                    />
+                    <Text className="text-xs font-semibold text-foreground-secondary">
+                      {zoomLabel}
+                    </Text>
+                    <Text className="text-xs text-foreground-muted">
+                      Pinch to zoom
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -589,7 +576,8 @@ export default function RecordVideoScreen() {
       >
         <Text className="text-xl font-bold mb-2 text-foreground">Add Set</Text>
         <Text className="text-sm mb-4 text-foreground-secondary">
-          Save this video to the LiftingLog album and log Set #{nextSetIndex}.
+          Save this video and log Set #{nextSetIndex}. If library access is available, it will also be copied to
+          {" "}the {ALBUM_NAME} album.
         </Text>
 
         <View className="flex-row gap-3 mb-4">
