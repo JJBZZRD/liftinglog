@@ -7,6 +7,7 @@
     "start:tunnel": "expo start --tunnel",
     "start:lan": "expo start --lan",
     "start:localhost": "expo start --localhost",
+    "postinstall": "node ./scripts/patch-expo-camera-orientation.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
