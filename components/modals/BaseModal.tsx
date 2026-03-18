@@ -10,7 +10,7 @@
  * - HistoryTab.tsx
  */
 import { ReactNode } from "react";
-import { Modal, Pressable, View, ViewStyle } from "react-native";
+import { Modal, Pressable, StyleSheet, View, ViewStyle } from "react-native";
 
 interface BaseModalProps {
   /** Whether the modal is visible */
@@ -53,22 +53,33 @@ export default function BaseModal({
       presentationStyle="overFullScreen"
       onRequestClose={onClose}
     >
-      <Pressable
-        className={`flex-1 p-4 bg-overlay ${centerContent ? "justify-center items-center" : ""}`}
-        onPress={onClose}
-      >
+      <View style={styles.container}>
         <Pressable
-          className="w-full rounded-xl p-4 bg-surface"
-          style={[{ maxWidth }, contentStyle]}
-          // Prevent closing when pressing on content
-          onPress={(e) => e.stopPropagation()}
+          style={StyleSheet.absoluteFill}
+          className="bg-overlay"
+          onPress={onClose}
+        />
+        <View
+          pointerEvents="box-none"
+          className={`flex-1 p-4 ${centerContent ? "justify-center items-center" : ""}`}
         >
-          {children}
-        </Pressable>
-      </Pressable>
+          <View
+            className="w-full rounded-xl p-4 bg-surface"
+            style={[{ maxWidth }, contentStyle]}
+          >
+            {children}
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
 
 /**
  * ConfirmModal - A specialized modal for confirmation dialogs
