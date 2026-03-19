@@ -2,13 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { timerStore, type Timer } from "../lib/timerStore";
 import { useTheme } from "../lib/theme/ThemeContext";
-
-// Helper function to format seconds as MM:SS
-const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-};
+import { formatTime, parseTimerDurationSeconds } from "../lib/utils/formatters";
 
 interface TimerModalProps {
   visible: boolean;
@@ -47,9 +41,7 @@ export default function TimerModal({
   const { rawColors } = useTheme();
 
   const handleStartTimer = async () => {
-    const mins = parseInt(minutes, 10) || 0;
-    const secs = parseInt(seconds, 10) || 0;
-    const totalSeconds = mins * 60 + secs;
+    const totalSeconds = parseTimerDurationSeconds(minutes, seconds);
 
     if (totalSeconds <= 0) return;
 

@@ -3,10 +3,12 @@
 // Includes persistent notification support
 
 import * as Notifications from "expo-notifications";
-import { AppState, type AppStateStatus, Platform } from "react-native";
+import { Alert, AppState, type AppStateStatus, Platform } from "react-native";
 import {
+  canScheduleExactAlarms as canUseExactAlarms,
   cancelCompletionNotification as cancelNativeCompletionNotification,
   dismissCountdownNotification as dismissNativeCountdownNotification,
+  openExactAlarmSettings as openNativeExactAlarmSettings,
   showCountdownNotification as showNativeCountdownNotification,
 } from "./native/restTimerNotifications";
 import type { TimerNotificationData } from "./restTimerNotificationTypes";
@@ -61,6 +63,7 @@ export class TimerStore {
   private tick = 0;
   private appStateSubscription: { remove: () => void } | null = null;
   private appState: AppStateStatus = AppState.currentState ?? "active";
+  private exactAlarmPermissionPromptShown = false;
 
   constructor() {
     if (ENABLE_NOTIFICATIONS) {
@@ -256,6 +259,7 @@ export class TimerStore {
     timer.endAt = timer.startedAt + timer.remainingSeconds * 1000;
 
     await this.syncRunningTimerNotifications(timer);
+    void this.maybePromptForExactAlarmPermission();
     this.notify();
 
     timer.intervalId = setInterval(() => {
@@ -296,6 +300,14 @@ export class TimerStore {
     await this.stopTimer(id, {
       cancelCompletionNotification: immediateShown,
     });
+
+    const completedTimer = this.timers.get(id);
+    if (!completedTimer) {
+      return;
+    }
+
+    completedTimer.remainingSeconds = completedTimer.durationSeconds;
+    this.notify();
   }
 
   private async syncRunningTimerNotifications(timer: InternalTimer): Promise<void> {
@@ -422,6 +434,7 @@ export class TimerStore {
       timer.intervalId = null;
     }
     timer.isRunning = false;
+    timer.startedAt = null;
     timer.endAt = null;
 
     await this.dismissRunningTimerNotification(timer);
@@ -507,7 +520,11 @@ export class TimerStore {
     const updates: Array<Promise<void>> = [];
     this.timers.forEach((timer) => {
       if (!timer.isRunning) return;
-      if (timer.usesNativeCountdown && Platform.OS === "android") {
+      if (Platform.OS === "android") {
+        updates.push(this.showRunningTimerNotification(timer));
+        return;
+      }
+      if (timer.usesNativeCountdown) {
         return;
       }
       updates.push(this.showRunningTimerNotification(timer));
@@ -587,6 +604,42 @@ export class TimerStore {
 
   private shouldRefreshForegroundNotification(timer: InternalTimer): boolean {
     return this.appState === "active" && !timer.usesNativeCountdown;
+  }
+
+  private async maybePromptForExactAlarmPermission(): Promise<void> {
+    if (Platform.OS !== "android" || this.exactAlarmPermissionPromptShown) {
+      return;
+    }
+
+    if (!(await this.waitForNotificationsReady())) {
+      return;
+    }
+
+    try {
+      if (await canUseExactAlarms()) {
+        return;
+      }
+
+      this.exactAlarmPermissionPromptShown = true;
+      Alert.alert(
+        "Allow Timer Alerts",
+        "Allow this permission so rest timers keep working properly in the background.",
+        [
+          {
+            text: "Not now",
+            style: "cancel",
+          },
+          {
+            text: "Allow",
+            onPress: () => {
+              void openNativeExactAlarmSettings();
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.log("Error checking exact alarm access:", error);
+    }
   }
 
   private getNotificationData(timer: InternalTimer): TimerNotificationData {

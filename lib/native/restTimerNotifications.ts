@@ -15,6 +15,8 @@ type NativeRestTimerNotificationsModule = {
     exerciseName: string,
     endAtMillis: number
   ): Promise<void>;
+  canScheduleExactAlarms(): Promise<boolean>;
+  openExactAlarmSettings(): Promise<boolean>;
 };
 
 type CountdownPayload = {
@@ -80,4 +82,20 @@ export async function cancelCompletionNotification(
 
   await nativeModule.cancelCompletionNotification(timerId, exerciseId);
   return true;
+}
+
+export async function canScheduleExactAlarms(): Promise<boolean> {
+  if (!supportsNativeCountdownNotifications() || !nativeModule) {
+    return false;
+  }
+
+  return nativeModule.canScheduleExactAlarms();
+}
+
+export async function openExactAlarmSettings(): Promise<boolean> {
+  if (!supportsNativeCountdownNotifications() || !nativeModule) {
+    return false;
+  }
+
+  return nativeModule.openExactAlarmSettings();
 }

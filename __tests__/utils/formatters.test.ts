@@ -7,6 +7,7 @@ import {
   formatHistoryDate,
   formatHistoryTime,
   formatDate,
+  parseTimerDurationSeconds,
 } from '../../lib/utils/formatters';
 
 describe('formatTime (seconds to MM:SS)', () => {
@@ -48,6 +49,20 @@ describe('formatTime (seconds to MM:SS)', () => {
 
   it('pads single digit seconds with leading zero', () => {
     expect(formatTime(5)).toBe('00:05');
+  });
+});
+
+describe('parseTimerDurationSeconds', () => {
+  it('parses a standard minute and second duration', () => {
+    expect(parseTimerDurationSeconds('1', '30')).toBe(90);
+  });
+
+  it('preserves zero minutes instead of falling back to one minute', () => {
+    expect(parseTimerDurationSeconds('0', '10')).toBe(10);
+  });
+
+  it('treats blank inputs as zero', () => {
+    expect(parseTimerDurationSeconds('', '')).toBe(0);
   });
 });
 

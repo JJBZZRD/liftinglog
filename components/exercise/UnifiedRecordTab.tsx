@@ -68,7 +68,11 @@ import {
 import { refreshUpcomingCalendarForProgram } from "../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { timerStore, type Timer } from "../../lib/timerStore";
-import { formatRelativeDate, formatTime } from "../../lib/utils/formatters";
+import {
+  formatRelativeDate,
+  formatTime,
+  parseTimerDurationSeconds,
+} from "../../lib/utils/formatters";
 import { deleteAssociatedMediaForSets } from "../../lib/utils/mediaCleanup";
 import {
   formatEditableWeightFromKg,
@@ -1949,9 +1953,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       return;
     }
 
-    const mins = parseInt(timerMinutes, 10) || 1;
-    const secs = parseInt(timerSeconds, 10) || 30;
-    const totalSeconds = mins * 60 + secs;
+    const totalSeconds = parseTimerDurationSeconds(timerMinutes, timerSeconds);
+
+    if (totalSeconds <= 0) {
+      return;
+    }
 
     await setLastRestSeconds(exerciseId, totalSeconds);
 
@@ -2297,10 +2303,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
 
   const timerDisplayText = currentTimer
     ? formatTime(currentTimer.remainingSeconds)
-    : formatTime(
-        (parseInt(timerMinutes, 10) || 1) * 60 +
-          (parseInt(timerSeconds, 10) || 30)
-      );
+    : formatTime(parseTimerDurationSeconds(timerMinutes, timerSeconds));
 
   const canOpenCamera =
     !!exerciseId && (inProgramMode || (!!workoutId && !!workoutExerciseId));

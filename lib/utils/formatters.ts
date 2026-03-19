@@ -28,6 +28,17 @@ export function formatTime(seconds: number): string {
 }
 
 /**
+ * Parse timer text inputs into a total duration in seconds.
+ * Unlike `value || fallback`, this preserves legitimate zero values such as "0" minutes.
+ */
+export function parseTimerDurationSeconds(minutesText: string, secondsText: string): number {
+  const minutes = Number.parseInt(minutesText, 10);
+  const seconds = Number.parseInt(secondsText, 10);
+
+  return (Number.isNaN(minutes) ? 0 : minutes) * 60 + (Number.isNaN(seconds) ? 0 : seconds);
+}
+
+/**
  * Format a date relative to today
  * Returns "Today", "Yesterday", or formatted date
  * 

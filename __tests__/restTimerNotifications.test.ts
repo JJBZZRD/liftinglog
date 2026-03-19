@@ -6,6 +6,8 @@ function loadAdapter(platformOS: "android" | "ios", withNativeModule = true) {
     dismissCountdownNotification: jest.fn().mockResolvedValue(null),
     cancelCompletionNotification: jest.fn().mockResolvedValue(null),
     showCompletionNotification: jest.fn().mockResolvedValue(null),
+    canScheduleExactAlarms: jest.fn().mockResolvedValue(true),
+    openExactAlarmSettings: jest.fn().mockResolvedValue(true),
   };
 
   jest.doMock("react-native", () => ({
@@ -39,6 +41,8 @@ describe("restTimerNotifications adapter", () => {
       adapter.cancelCompletionNotification(payload.timerId, payload.exerciseId)
     ).resolves.toBe(true);
     await expect(adapter.showCompletionNotification(payload)).resolves.toBe(true);
+    await expect(adapter.canScheduleExactAlarms()).resolves.toBe(true);
+    await expect(adapter.openExactAlarmSettings()).resolves.toBe(true);
 
     expect(nativeModule.showCountdownNotification).toHaveBeenCalledWith(
       "timer-1",
@@ -54,6 +58,8 @@ describe("restTimerNotifications adapter", () => {
       "Bench Press",
       1_234_567
     );
+    expect(nativeModule.canScheduleExactAlarms).toHaveBeenCalledTimes(1);
+    expect(nativeModule.openExactAlarmSettings).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to a no-op on unsupported platforms", async () => {
@@ -73,6 +79,8 @@ describe("restTimerNotifications adapter", () => {
       adapter.cancelCompletionNotification(payload.timerId, payload.exerciseId)
     ).resolves.toBe(false);
     await expect(adapter.showCompletionNotification(payload)).resolves.toBe(false);
+    await expect(adapter.canScheduleExactAlarms()).resolves.toBe(false);
+    await expect(adapter.openExactAlarmSettings()).resolves.toBe(false);
     expect(adapter.supportsNativeCountdownNotifications()).toBe(false);
 
     expect(nativeModule.showCountdownNotification).not.toHaveBeenCalled();

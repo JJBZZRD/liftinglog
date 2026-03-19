@@ -5,7 +5,7 @@ function withAndroidRestTimerNative(config) {
   return withDangerousMod(config, [
     "android",
     async (modConfig) => {
-      syncAndroidRestTimerNative(modConfig.modRequest.projectRoot);
+      await syncAndroidRestTimerNative(modConfig.modRequest.projectRoot);
       return modConfig;
     },
   ]);

@@ -7,6 +7,7 @@ type LoadedTimerStore = {
   TimerStore: typeof import("../lib/timerStore").TimerStore;
   notifications: any;
   nativeModule: any;
+  alert: any;
   emitAppState: (state: string) => Promise<void>;
 };
 
@@ -47,12 +48,18 @@ function loadTimerStore(
     dismissCountdownNotification: jest.fn().mockResolvedValue(null),
     cancelCompletionNotification: jest.fn().mockResolvedValue(null),
     showCompletionNotification: jest.fn().mockResolvedValue(null),
+    canScheduleExactAlarms: jest.fn().mockResolvedValue(true),
+    openExactAlarmSettings: jest.fn().mockResolvedValue(true),
+  };
+  const alert = {
+    alert: jest.fn(),
   };
 
   jest.doMock("expo-notifications", () => notifications);
   jest.doMock("react-native", () => ({
     Platform: { OS: platformOS },
     NativeModules: withNativeModule ? { RestTimerNotifications: nativeModule } : {},
+    Alert: alert,
     AppState: {
       currentState: "active",
       addEventListener: jest.fn((_event: string, listener: (state: string) => void) => {
@@ -76,6 +83,7 @@ function loadTimerStore(
     TimerStore: timerStoreModule.TimerStore,
     notifications,
     nativeModule,
+    alert,
     emitAppState: async (state: string) => {
       listeners.forEach((listener) => listener(state));
       await flushPromises();
@@ -95,7 +103,7 @@ describe("TimerStore", () => {
   });
 
   it("starts Android timers with a native countdown notification and leaves completion scheduling to native Android", async () => {
-    const { TimerStore, notifications, nativeModule } = loadTimerStore("android");
+    const { TimerStore, notifications, nativeModule, alert } = loadTimerStore("android");
     const store = new TimerStore();
     await flushPromises();
 
@@ -115,6 +123,7 @@ describe("TimerStore", () => {
         identifier: "rest-timer-complete-1",
       })
     );
+    expect(alert.alert).not.toHaveBeenCalled();
 
     store.dispose();
   });
@@ -144,6 +153,26 @@ describe("TimerStore", () => {
       7,
       "Incline Press",
       Date.now() + 75_000
+    );
+
+    store.dispose();
+  });
+
+  it("prompts for exact alarm access on the first Android timer start when Android reports inexact delivery", async () => {
+    const { TimerStore, nativeModule, alert } = loadTimerStore("android");
+    nativeModule.canScheduleExactAlarms.mockResolvedValue(false);
+    const store = new TimerStore();
+    await flushPromises();
+
+    const timerId = await store.createTimer(8, "Paused Squat", 45);
+    await store.startTimer(timerId);
+    await flushPromises();
+
+    expect(nativeModule.canScheduleExactAlarms).toHaveBeenCalledTimes(1);
+    expect(alert.alert).toHaveBeenCalledWith(
+      "Allow Timer Alerts",
+      "Allow this permission so rest timers keep working properly in the background.",
+      expect.any(Array)
     );
 
     store.dispose();
@@ -227,7 +256,7 @@ describe("TimerStore", () => {
     await emitAppState("active");
 
     expect(store.getTimer(timerId)?.isRunning).toBe(false);
-    expect(store.getTimer(timerId)?.remainingSeconds).toBe(0);
+    expect(store.getTimer(timerId)?.remainingSeconds).toBe(30);
     expect(nativeModule.dismissCountdownNotification).toHaveBeenCalledWith(timerId, 5);
     expect(nativeModule.showCompletionNotification).not.toHaveBeenCalled();
     expect(nativeModule.cancelCompletionNotification).not.toHaveBeenCalled();
@@ -235,6 +264,23 @@ describe("TimerStore", () => {
     expect(notifications.dismissNotificationAsync).not.toHaveBeenCalledWith(
       "rest-timer-complete-5"
     );
+
+    store.dispose();
+  });
+
+  it("resets completed timers back to their configured duration", async () => {
+    const { TimerStore } = loadTimerStore("ios", false);
+    const store = new TimerStore();
+    await flushPromises();
+
+    const timerId = await store.createTimer(9, "Hammer Curl", 10);
+    await store.startTimer(timerId);
+
+    await jest.advanceTimersByTimeAsync(10_000);
+    await flushPromises();
+
+    expect(store.getTimer(timerId)?.isRunning).toBe(false);
+    expect(store.getTimer(timerId)?.remainingSeconds).toBe(10);
 
     store.dispose();
   });
