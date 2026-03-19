@@ -1955,7 +1955,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
 
     await setLastRestSeconds(exerciseId, totalSeconds);
 
-    const timerId = timerStore.createTimer(
+    const timerId = await timerStore.createTimer(
       exerciseId,
       displayExerciseName,
       totalSeconds

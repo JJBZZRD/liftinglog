@@ -1,593 +1,306 @@
-/**
- * Unit tests for TimerStore state management
- * 
- * These tests verify the timer creation, state transitions,
- * subscriber notifications, and cleanup functionality.
- */
-
-// Mock expo-notifications before importing timerStore
-jest.mock('expo-notifications', () => ({
-  setNotificationHandler: jest.fn(),
-  getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-  setNotificationChannelAsync: jest.fn().mockResolvedValue(null),
-  scheduleNotificationAsync: jest.fn().mockResolvedValue('mock-notification-id'),
-  dismissNotificationAsync: jest.fn().mockResolvedValue(null),
-  AndroidImportance: { LOW: 2, HIGH: 4 },
-  AndroidNotificationPriority: { LOW: 'low', HIGH: 'high' },
-}));
-
-// Mock Platform
-jest.mock('react-native', () => ({
-  Platform: { OS: 'ios' },
-}));
-
-// We need to create a minimal mock of the TimerStore class to test its logic
-// since the actual module has native dependencies
-
-type Timer = {
-  id: string;
-  exerciseId: number;
-  exerciseName: string;
-  durationSeconds: number;
-  remainingSeconds: number;
-  isRunning: boolean;
-  startedAt: number | null;
-  notificationId: string | null;
+const flushPromises = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
 };
 
-type TimerListener = (timers: Map<number, Timer>, tick: number) => void;
+type LoadedTimerStore = {
+  TimerStore: typeof import("../lib/timerStore").TimerStore;
+  notifications: any;
+  nativeModule: any;
+  emitAppState: (state: string) => Promise<void>;
+};
 
-// Recreate the TimerStore logic for testing
-class MockTimerStore {
-  private timers: Map<string, Timer & { intervalId: ReturnType<typeof setInterval> | null }> = new Map();
-  private listeners: Set<TimerListener> = new Set();
-  private tick = 0;
-  private idCounter = 0; // Use counter for unique IDs in tests
+function loadTimerStore(
+  platformOS: "android" | "ios",
+  withNativeModule = true,
+  options: {
+    getPermissionsAsync?: () => Promise<{ status: string }>;
+    requestPermissionsAsync?: () => Promise<{ status: string }>;
+    setNotificationChannelAsync?: () => Promise<unknown>;
+  } = {}
+): LoadedTimerStore {
+  jest.resetModules();
 
-  subscribe(listener: TimerListener): () => void {
-    this.listeners.add(listener);
-    listener(this.getTimersByExercise(), this.tick);
-    return () => this.listeners.delete(listener);
-  }
+  const listeners: Array<(state: string) => void> = [];
+  const notifications = {
+    setNotificationHandler: jest.fn(),
+    getPermissionsAsync: jest
+      .fn()
+      .mockImplementation(options.getPermissionsAsync ?? (async () => ({ status: "granted" }))),
+    requestPermissionsAsync: jest
+      .fn()
+      .mockImplementation(options.requestPermissionsAsync ?? (async () => ({ status: "granted" }))),
+    setNotificationChannelAsync: jest
+      .fn()
+      .mockImplementation(options.setNotificationChannelAsync ?? (async () => null)),
+    scheduleNotificationAsync: jest
+      .fn()
+      .mockImplementation(async (request: { identifier?: string }) => request.identifier ?? "notification-id"),
+    dismissNotificationAsync: jest.fn().mockResolvedValue(null),
+    cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(null),
+    AndroidImportance: { LOW: 2, HIGH: 4 },
+    AndroidNotificationPriority: { LOW: "low", HIGH: "high" },
+    SchedulableTriggerInputTypes: { DATE: "date" },
+  };
+  const nativeModule = {
+    showCountdownNotification: jest.fn().mockResolvedValue(null),
+    dismissCountdownNotification: jest.fn().mockResolvedValue(null),
+    cancelCompletionNotification: jest.fn().mockResolvedValue(null),
+    showCompletionNotification: jest.fn().mockResolvedValue(null),
+  };
 
-  private notify() {
-    this.tick += 1;
-    const timersByExercise = this.getTimersByExercise();
-    this.listeners.forEach((listener) => listener(timersByExercise, this.tick));
-  }
+  jest.doMock("expo-notifications", () => notifications);
+  jest.doMock("react-native", () => ({
+    Platform: { OS: platformOS },
+    NativeModules: withNativeModule ? { RestTimerNotifications: nativeModule } : {},
+    AppState: {
+      currentState: "active",
+      addEventListener: jest.fn((_event: string, listener: (state: string) => void) => {
+        listeners.push(listener);
+        return {
+          remove: () => {
+            const index = listeners.indexOf(listener);
+            if (index >= 0) {
+              listeners.splice(index, 1);
+            }
+          },
+        };
+      }),
+    },
+  }));
 
-  private getTimersByExercise(): Map<number, Timer> {
-    const result = new Map<number, Timer>();
-    this.timers.forEach((timer) => {
-      result.set(timer.exerciseId, {
-        id: timer.id,
-        exerciseId: timer.exerciseId,
-        exerciseName: timer.exerciseName,
-        durationSeconds: timer.durationSeconds,
-        remainingSeconds: timer.remainingSeconds,
-        isRunning: timer.isRunning,
-        startedAt: timer.startedAt,
-        notificationId: timer.notificationId,
-      });
-    });
-    return result;
-  }
+  const timerStoreModule = require("../lib/timerStore") as typeof import("../lib/timerStore");
+  timerStoreModule.timerStore.dispose();
 
-  getTimers(): Timer[] {
-    return Array.from(this.timers.values()).map((t) => ({
-      id: t.id,
-      exerciseId: t.exerciseId,
-      exerciseName: t.exerciseName,
-      durationSeconds: t.durationSeconds,
-      remainingSeconds: t.remainingSeconds,
-      isRunning: t.isRunning,
-      startedAt: t.startedAt,
-      notificationId: t.notificationId,
-    }));
-  }
-
-  getTimer(id: string): Timer | undefined {
-    const timer = this.timers.get(id);
-    if (!timer) return undefined;
-    return {
-      id: timer.id,
-      exerciseId: timer.exerciseId,
-      exerciseName: timer.exerciseName,
-      durationSeconds: timer.durationSeconds,
-      remainingSeconds: timer.remainingSeconds,
-      isRunning: timer.isRunning,
-      startedAt: timer.startedAt,
-      notificationId: timer.notificationId,
-    };
-  }
-
-  getTimerForExercise(exerciseId: number): Timer | undefined {
-    const timer = Array.from(this.timers.values()).find((t) => t.exerciseId === exerciseId);
-    if (!timer) return undefined;
-    return {
-      id: timer.id,
-      exerciseId: timer.exerciseId,
-      exerciseName: timer.exerciseName,
-      durationSeconds: timer.durationSeconds,
-      remainingSeconds: timer.remainingSeconds,
-      isRunning: timer.isRunning,
-      startedAt: timer.startedAt,
-      notificationId: timer.notificationId,
-    };
-  }
-
-  createTimer(exerciseId: number, exerciseName: string, durationSeconds: number): string {
-    // Delete existing timer for this exercise
-    const existingTimer = Array.from(this.timers.values()).find((t) => t.exerciseId === exerciseId);
-    if (existingTimer) {
-      // Synchronously delete for testing
-      if (existingTimer.intervalId) {
-        clearInterval(existingTimer.intervalId);
-      }
-      this.timers.delete(existingTimer.id);
-    }
-
-    this.idCounter++;
-    const id = `timer-${exerciseId}-${this.idCounter}`;
-    const notificationId = `rest-timer-${exerciseId}`;
-    
-    const timer = {
-      id,
-      exerciseId,
-      exerciseName,
-      durationSeconds,
-      remainingSeconds: durationSeconds,
-      isRunning: false,
-      startedAt: null,
-      intervalId: null,
-      notificationId,
-    };
-    this.timers.set(id, timer);
-    this.notify();
-    return id;
-  }
-
-  async startTimer(id: string): Promise<void> {
-    const timer = this.timers.get(id);
-    if (!timer || timer.isRunning) return;
-
-    if (timer.remainingSeconds <= 0) {
-      timer.remainingSeconds = timer.durationSeconds;
-    }
-
-    timer.isRunning = true;
-    timer.startedAt = Date.now();
-    this.notify();
-
-    // In real implementation, this would set up an interval
-    // For testing, we just mark it as running
-  }
-
-  async stopTimer(id: string): Promise<void> {
-    const timer = this.timers.get(id);
-    if (!timer) return;
-
-    if (timer.intervalId) {
-      clearInterval(timer.intervalId);
-      timer.intervalId = null;
-    }
-    timer.isRunning = false;
-    this.notify();
-  }
-
-  async resetTimer(id: string): Promise<void> {
-    const timer = this.timers.get(id);
-    if (!timer) return;
-
-    await this.stopTimer(id);
-    timer.remainingSeconds = timer.durationSeconds;
-    this.notify();
-  }
-
-  updateTimerDuration(id: string, durationSeconds: number): void {
-    const timer = this.timers.get(id);
-    if (!timer) return;
-
-    timer.durationSeconds = durationSeconds;
-    if (!timer.isRunning) {
-      timer.remainingSeconds = durationSeconds;
-    }
-    this.notify();
-  }
-
-  async deleteTimer(id: string): Promise<void> {
-    const timer = this.timers.get(id);
-    if (!timer) return;
-
-    if (timer.intervalId) {
-      clearInterval(timer.intervalId);
-    }
-    this.timers.delete(id);
-    this.notify();
-  }
-
-  // Test helper to simulate timer tick
-  simulateTick(id: string): void {
-    const timer = this.timers.get(id);
-    if (!timer || !timer.isRunning) return;
-
-    if (timer.remainingSeconds > 0) {
-      timer.remainingSeconds -= 1;
-      this.notify();
-    }
-  }
-
-  static formatTime(seconds: number): string {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
+  return {
+    TimerStore: timerStoreModule.TimerStore,
+    notifications,
+    nativeModule,
+    emitAppState: async (state: string) => {
+      listeners.forEach((listener) => listener(state));
+      await flushPromises();
+    },
+  };
 }
 
-describe('TimerStore', () => {
-  let timerStore: MockTimerStore;
-
+describe("TimerStore", () => {
   beforeEach(() => {
-    timerStore = new MockTimerStore();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-03-18T12:00:00.000Z"));
   });
 
-  describe('Timer Creation', () => {
-    it('should create a timer with correct initial state', () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      const timer = timerStore.getTimer(id);
-      
-      expect(timer).toBeDefined();
-      expect(timer?.exerciseId).toBe(1);
-      expect(timer?.exerciseName).toBe('Bench Press');
-      expect(timer?.durationSeconds).toBe(90);
-      expect(timer?.remainingSeconds).toBe(90);
-      expect(timer?.isRunning).toBe(false);
-      expect(timer?.startedAt).toBeNull();
-    });
-
-    it('should generate unique timer ID', () => {
-      const id1 = timerStore.createTimer(1, 'Bench Press', 90);
-      const id2 = timerStore.createTimer(2, 'Squat', 120);
-      
-      expect(id1).not.toBe(id2);
-      expect(id1).toContain('timer-1-');
-      expect(id2).toContain('timer-2-');
-    });
-
-    it('should replace existing timer for same exercise', () => {
-      const id1 = timerStore.createTimer(1, 'Bench Press', 90);
-      const id2 = timerStore.createTimer(1, 'Bench Press', 120);
-      
-      expect(timerStore.getTimer(id1)).toBeUndefined();
-      expect(timerStore.getTimer(id2)).toBeDefined();
-      expect(timerStore.getTimer(id2)?.durationSeconds).toBe(120);
-    });
-
-    it('should set notification ID based on exercise ID', () => {
-      const id = timerStore.createTimer(5, 'Deadlift', 180);
-      const timer = timerStore.getTimer(id);
-      
-      expect(timer?.notificationId).toBe('rest-timer-5');
-    });
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
   });
 
-  describe('Timer Retrieval', () => {
-    it('should get timer by ID', () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      const timer = timerStore.getTimer(id);
-      
-      expect(timer).toBeDefined();
-      expect(timer?.id).toBe(id);
-    });
+  it("starts Android timers with a native countdown notification and leaves completion scheduling to native Android", async () => {
+    const { TimerStore, notifications, nativeModule } = loadTimerStore("android");
+    const store = new TimerStore();
+    await flushPromises();
 
-    it('should return undefined for non-existent timer', () => {
-      const timer = timerStore.getTimer('non-existent-id');
-      expect(timer).toBeUndefined();
-    });
+    const timerId = await store.createTimer(1, "Bench Press", 90);
+    const expectedEndAt = Date.now() + 90_000;
 
-    it('should get timer by exercise ID', () => {
-      timerStore.createTimer(5, 'Deadlift', 180);
-      const timer = timerStore.getTimerForExercise(5);
-      
-      expect(timer).toBeDefined();
-      expect(timer?.exerciseId).toBe(5);
-    });
+    await store.startTimer(timerId);
 
-    it('should return undefined when no timer for exercise', () => {
-      const timer = timerStore.getTimerForExercise(999);
-      expect(timer).toBeUndefined();
-    });
+    expect(nativeModule.showCountdownNotification).toHaveBeenCalledWith(
+      timerId,
+      1,
+      "Bench Press",
+      expectedEndAt
+    );
+    expect(notifications.scheduleNotificationAsync).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: "rest-timer-complete-1",
+      })
+    );
 
-    it('should get all timers', () => {
-      timerStore.createTimer(1, 'Bench Press', 90);
-      timerStore.createTimer(2, 'Squat', 120);
-      timerStore.createTimer(3, 'Deadlift', 180);
-      
-      const timers = timerStore.getTimers();
-      expect(timers).toHaveLength(3);
-    });
+    store.dispose();
   });
 
-  describe('Timer State Transitions', () => {
-    it('should start timer', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      
-      const timer = timerStore.getTimer(id);
-      expect(timer?.isRunning).toBe(true);
-      expect(timer?.startedAt).not.toBeNull();
+  it("waits for notification initialization before attaching the first Android background notification flow", async () => {
+    let resolvePermissions: ((value: { status: string }) => void) | null = null;
+    const permissionsPromise = new Promise<{ status: string }>((resolve) => {
+      resolvePermissions = resolve;
     });
 
-    it('should not restart already running timer', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      
-      const startedAt = timerStore.getTimer(id)?.startedAt;
-      await timerStore.startTimer(id);
-      
-      expect(timerStore.getTimer(id)?.startedAt).toBe(startedAt);
+    const { TimerStore, nativeModule } = loadTimerStore("android", true, {
+      getPermissionsAsync: () => permissionsPromise,
     });
+    const store = new TimerStore();
 
-    it('should stop timer', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      await timerStore.stopTimer(id);
-      
-      const timer = timerStore.getTimer(id);
-      expect(timer?.isRunning).toBe(false);
-    });
+    const timerId = await store.createTimer(7, "Incline Press", 75);
+    const startPromise = store.startTimer(timerId);
+    await flushPromises();
 
-    it('should reset timer to initial duration', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      
-      // Simulate some time passing
-      timerStore.simulateTick(id);
-      timerStore.simulateTick(id);
-      expect(timerStore.getTimer(id)?.remainingSeconds).toBe(88);
-      
-      await timerStore.resetTimer(id);
-      
-      const timer = timerStore.getTimer(id);
-      expect(timer?.remainingSeconds).toBe(90);
-      expect(timer?.isRunning).toBe(false);
-    });
+    expect(nativeModule.showCountdownNotification).not.toHaveBeenCalled();
 
-    it('should restore remaining seconds when starting timer at 0', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      
-      // Manually set remaining to 0 (simulating timer completion)
-      const timer = timerStore.getTimer(id);
-      // We need to access internal state for this test
-      await timerStore.startTimer(id);
-      await timerStore.stopTimer(id);
-      
-      // Start again should work
-      await timerStore.startTimer(id);
-      expect(timerStore.getTimer(id)?.isRunning).toBe(true);
-    });
+    resolvePermissions?.({ status: "granted" });
+    await startPromise;
+
+    expect(nativeModule.showCountdownNotification).toHaveBeenCalledWith(
+      timerId,
+      7,
+      "Incline Press",
+      Date.now() + 75_000
+    );
+
+    store.dispose();
   });
 
-  describe('Timer Duration Update', () => {
-    it('should update duration of stopped timer', () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      timerStore.updateTimerDuration(id, 120);
-      
-      const timer = timerStore.getTimer(id);
-      expect(timer?.durationSeconds).toBe(120);
-      expect(timer?.remainingSeconds).toBe(120);
-    });
+  it("stopping an Android timer dismisses the native countdown and cancels the completion alert", async () => {
+    const { TimerStore, notifications, nativeModule } = loadTimerStore("android");
+    const store = new TimerStore();
+    await flushPromises();
 
-    it('should update duration of running timer without affecting remaining', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      
-      // Simulate some time passing
-      timerStore.simulateTick(id);
-      const remainingBefore = timerStore.getTimer(id)?.remainingSeconds;
-      
-      timerStore.updateTimerDuration(id, 120);
-      
-      const timer = timerStore.getTimer(id);
-      expect(timer?.durationSeconds).toBe(120);
-      expect(timer?.remainingSeconds).toBe(remainingBefore);
-    });
+    const timerId = await store.createTimer(2, "Squat", 120);
+    await store.startTimer(timerId);
+    nativeModule.dismissCountdownNotification.mockClear();
+    notifications.cancelScheduledNotificationAsync.mockClear();
+
+    await store.stopTimer(timerId);
+
+    expect(nativeModule.dismissCountdownNotification).toHaveBeenCalledWith(timerId, 2);
+    expect(nativeModule.cancelCompletionNotification).toHaveBeenCalledWith(
+      timerId,
+      2
+    );
+    expect(notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+    expect(notifications.dismissNotificationAsync).not.toHaveBeenCalledWith(
+      "rest-timer-complete-2"
+    );
+
+    store.dispose();
   });
 
-  describe('Timer Deletion', () => {
-    it('should delete timer', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.deleteTimer(id);
-      
-      expect(timerStore.getTimer(id)).toBeUndefined();
-    });
+  it("resetting and deleting Android timers clean up native countdown notifications", async () => {
+    const { TimerStore, notifications, nativeModule } = loadTimerStore("android");
+    const store = new TimerStore();
+    await flushPromises();
 
-    it('should handle deleting non-existent timer gracefully', async () => {
-      await expect(timerStore.deleteTimer('non-existent')).resolves.not.toThrow();
-    });
+    const resetTimerId = await store.createTimer(3, "Deadlift", 60);
+    await store.startTimer(resetTimerId);
+    nativeModule.dismissCountdownNotification.mockClear();
 
-    it('should stop running timer before deletion', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      await timerStore.deleteTimer(id);
-      
-      expect(timerStore.getTimer(id)).toBeUndefined();
-    });
+    await store.resetTimer(resetTimerId);
+
+    expect(nativeModule.dismissCountdownNotification).toHaveBeenCalledWith(resetTimerId, 3);
+    expect(store.getTimer(resetTimerId)?.remainingSeconds).toBe(60);
+    expect(store.getTimer(resetTimerId)?.isRunning).toBe(false);
+
+    const deleteTimerId = await store.createTimer(4, "Row", 45);
+    await store.startTimer(deleteTimerId);
+    nativeModule.dismissCountdownNotification.mockClear();
+    notifications.cancelScheduledNotificationAsync.mockClear();
+    notifications.dismissNotificationAsync.mockClear();
+
+    await store.deleteTimer(deleteTimerId);
+
+    expect(nativeModule.dismissCountdownNotification).toHaveBeenCalledWith(deleteTimerId, 4);
+    expect(nativeModule.cancelCompletionNotification).toHaveBeenCalledWith(
+      deleteTimerId,
+      4
+    );
+    expect(notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+    expect(notifications.dismissNotificationAsync).not.toHaveBeenCalledWith(
+      "rest-timer-complete-4"
+    );
+    expect(store.getTimer(deleteTimerId)).toBeUndefined();
+
+    store.dispose();
   });
 
-  describe('Subscriber Notifications', () => {
-    it('should notify subscriber immediately on subscribe', () => {
-      const listener = jest.fn();
-      timerStore.subscribe(listener);
-      
-      expect(listener).toHaveBeenCalledTimes(1);
-    });
+  it("reconciles expired Android timers on app resume without canceling the native completion alert", async () => {
+    const { TimerStore, notifications, nativeModule, emitAppState } = loadTimerStore("android");
+    const store = new TimerStore();
+    await flushPromises();
 
-    it('should notify subscribers when timer created', () => {
-      const listener = jest.fn();
-      timerStore.subscribe(listener);
-      
-      listener.mockClear();
-      timerStore.createTimer(1, 'Bench Press', 90);
-      
-      expect(listener).toHaveBeenCalled();
-    });
+    const timerId = await store.createTimer(5, "Overhead Press", 30);
+    await store.startTimer(timerId);
+    nativeModule.dismissCountdownNotification.mockClear();
+    notifications.cancelScheduledNotificationAsync.mockClear();
+    notifications.dismissNotificationAsync.mockClear();
 
-    it('should notify subscribers when timer started', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      
-      const listener = jest.fn();
-      timerStore.subscribe(listener);
-      listener.mockClear();
-      
-      await timerStore.startTimer(id);
-      
-      expect(listener).toHaveBeenCalled();
-    });
+    await emitAppState("background");
+    jest.setSystemTime(new Date("2026-03-18T12:00:45.000Z"));
+    await emitAppState("active");
 
-    it('should notify subscribers when timer stopped', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      await timerStore.startTimer(id);
-      
-      const listener = jest.fn();
-      timerStore.subscribe(listener);
-      listener.mockClear();
-      
-      await timerStore.stopTimer(id);
-      
-      expect(listener).toHaveBeenCalled();
-    });
+    expect(store.getTimer(timerId)?.isRunning).toBe(false);
+    expect(store.getTimer(timerId)?.remainingSeconds).toBe(0);
+    expect(nativeModule.dismissCountdownNotification).toHaveBeenCalledWith(timerId, 5);
+    expect(nativeModule.showCompletionNotification).not.toHaveBeenCalled();
+    expect(nativeModule.cancelCompletionNotification).not.toHaveBeenCalled();
+    expect(notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+    expect(notifications.dismissNotificationAsync).not.toHaveBeenCalledWith(
+      "rest-timer-complete-5"
+    );
 
-    it('should notify subscribers when timer deleted', async () => {
-      const id = timerStore.createTimer(1, 'Bench Press', 90);
-      
-      const listener = jest.fn();
-      timerStore.subscribe(listener);
-      listener.mockClear();
-      
-      await timerStore.deleteTimer(id);
-      
-      expect(listener).toHaveBeenCalled();
-    });
-
-    it('should unsubscribe correctly', () => {
-      const listener = jest.fn();
-      const unsubscribe = timerStore.subscribe(listener);
-      
-      listener.mockClear();
-      unsubscribe();
-      
-      timerStore.createTimer(1, 'Bench Press', 90);
-      
-      expect(listener).not.toHaveBeenCalled();
-    });
-
-    it('should pass timers map to subscriber', () => {
-      timerStore.createTimer(1, 'Bench Press', 90);
-      timerStore.createTimer(2, 'Squat', 120);
-      
-      const listener = jest.fn();
-      timerStore.subscribe(listener);
-      
-      const [timersMap] = listener.mock.calls[0];
-      expect(timersMap.get(1)).toBeDefined();
-      expect(timersMap.get(2)).toBeDefined();
-    });
-
-    it('should increment tick on each notification', () => {
-      const ticks: number[] = [];
-      const listener = jest.fn((_, tick) => ticks.push(tick));
-      
-      timerStore.subscribe(listener);
-      timerStore.createTimer(1, 'Bench Press', 90);
-      timerStore.createTimer(2, 'Squat', 120);
-      
-      expect(ticks[0]).toBeLessThan(ticks[1]);
-      expect(ticks[1]).toBeLessThan(ticks[2]);
-    });
+    store.dispose();
   });
 
-  describe('Multiple Concurrent Timers', () => {
-    it('should support multiple timers for different exercises', () => {
-      timerStore.createTimer(1, 'Bench Press', 90);
-      timerStore.createTimer(2, 'Squat', 120);
-      timerStore.createTimer(3, 'Deadlift', 180);
-      
-      expect(timerStore.getTimerForExercise(1)).toBeDefined();
-      expect(timerStore.getTimerForExercise(2)).toBeDefined();
-      expect(timerStore.getTimerForExercise(3)).toBeDefined();
-    });
+  it("uses iOS fallback notifications with a live foreground body and a background end-time summary", async () => {
+    const { TimerStore, notifications, emitAppState } = loadTimerStore("ios", false);
+    const store = new TimerStore();
+    await flushPromises();
 
-    it('should allow starting multiple timers', async () => {
-      const id1 = timerStore.createTimer(1, 'Bench Press', 90);
-      const id2 = timerStore.createTimer(2, 'Squat', 120);
-      
-      await timerStore.startTimer(id1);
-      await timerStore.startTimer(id2);
-      
-      expect(timerStore.getTimer(id1)?.isRunning).toBe(true);
-      expect(timerStore.getTimer(id2)?.isRunning).toBe(true);
-    });
+    const timerId = await store.createTimer(6, "Lunge", 90);
+    const expectedEndAt = Date.now() + 90_000;
 
-    it('should stop individual timers independently', async () => {
-      const id1 = timerStore.createTimer(1, 'Bench Press', 90);
-      const id2 = timerStore.createTimer(2, 'Squat', 120);
-      
-      await timerStore.startTimer(id1);
-      await timerStore.startTimer(id2);
-      await timerStore.stopTimer(id1);
-      
-      expect(timerStore.getTimer(id1)?.isRunning).toBe(false);
-      expect(timerStore.getTimer(id2)?.isRunning).toBe(true);
-    });
+    await store.startTimer(timerId);
+
+    expect(notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: "rest-timer-6",
+        content: expect.objectContaining({
+          title: "Lunge",
+          body: "Rest: 01:30 remaining",
+          data: expect.objectContaining({
+            timerId,
+            exerciseId: 6,
+            exerciseName: "Lunge",
+            endAt: expectedEndAt,
+          }),
+        }),
+        trigger: null,
+      })
+    );
+    expect(notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: "rest-timer-complete-6",
+        trigger: expect.objectContaining({
+          type: "date",
+          date: new Date(expectedEndAt),
+        }),
+      })
+    );
+
+    notifications.scheduleNotificationAsync.mockClear();
+    await emitAppState("background");
+
+    const expectedEndTime = new Date(expectedEndAt);
+    const expectedBody = `Rest ends at ${expectedEndTime
+      .getHours()
+      .toString()
+      .padStart(2, "0")}:${expectedEndTime.getMinutes().toString().padStart(2, "0")}`;
+
+    expect(notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: "rest-timer-6",
+        content: expect.objectContaining({
+          body: expectedBody,
+        }),
+      })
+    );
+
+    store.dispose();
   });
 
-  describe('formatTime Static Method', () => {
-    it('should format 0 seconds as 00:00', () => {
-      expect(MockTimerStore.formatTime(0)).toBe('00:00');
-    });
+  it("formats timer values as MM:SS", () => {
+    const { TimerStore } = loadTimerStore("ios", false);
 
-    it('should format 90 seconds as 01:30', () => {
-      expect(MockTimerStore.formatTime(90)).toBe('01:30');
-    });
-
-    it('should format 3599 seconds as 59:59', () => {
-      expect(MockTimerStore.formatTime(3599)).toBe('59:59');
-    });
-
-    it('should format 3600 seconds as 60:00', () => {
-      expect(MockTimerStore.formatTime(3600)).toBe('60:00');
-    });
-
-    it('should pad single digit values', () => {
-      expect(MockTimerStore.formatTime(5)).toBe('00:05');
-      expect(MockTimerStore.formatTime(65)).toBe('01:05');
-    });
+    expect(TimerStore.formatTime(0)).toBe("00:00");
+    expect(TimerStore.formatTime(90)).toBe("01:30");
+    expect(TimerStore.formatTime(3600)).toBe("60:00");
   });
 });
-
-describe('Timer Type', () => {
-  it('should have correct Timer type structure', () => {
-    const timer: Timer = {
-      id: 'timer-1-123456',
-      exerciseId: 1,
-      exerciseName: 'Bench Press',
-      durationSeconds: 90,
-      remainingSeconds: 45,
-      isRunning: true,
-      startedAt: Date.now(),
-      notificationId: 'rest-timer-1',
-    };
-    
-    expect(timer).toHaveProperty('id');
-    expect(timer).toHaveProperty('exerciseId');
-    expect(timer).toHaveProperty('exerciseName');
-    expect(timer).toHaveProperty('durationSeconds');
-    expect(timer).toHaveProperty('remainingSeconds');
-    expect(timer).toHaveProperty('isRunning');
-    expect(timer).toHaveProperty('startedAt');
-    expect(timer).toHaveProperty('notificationId');
-  });
-});
-

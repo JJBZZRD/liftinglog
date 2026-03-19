@@ -2,13 +2,7 @@
 import * as Notifications from "expo-notifications";
 import { router, usePathname } from "expo-router";
 import { useEffect, useRef } from "react";
-
-// Type for notification data
-interface TimerNotificationData {
-  timerId?: string;
-  exerciseId?: number;
-  exerciseName?: string;
-}
+import type { TimerNotificationData } from "./restTimerNotificationTypes";
 
 // Hook to set up notification response handling
 export function useNotificationHandler() {

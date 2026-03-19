@@ -4,6 +4,12 @@
 
 import * as Notifications from "expo-notifications";
 import { AppState, type AppStateStatus, Platform } from "react-native";
+import {
+  cancelCompletionNotification as cancelNativeCompletionNotification,
+  dismissCountdownNotification as dismissNativeCountdownNotification,
+  showCountdownNotification as showNativeCountdownNotification,
+} from "./native/restTimerNotifications";
+import type { TimerNotificationData } from "./restTimerNotificationTypes";
 
 // ============================================================
 // TOGGLE THIS FLAG FOR EXPO GO vs DEV BUILD TESTING
@@ -11,6 +17,8 @@ import { AppState, type AppStateStatus, Platform } from "react-native";
 // Set to true when testing notifications in a development build
 // ============================================================
 const ENABLE_NOTIFICATIONS = true;
+const RUNNING_NOTIFICATION_CHANNEL_ID = "rest-timer";
+const COMPLETION_NOTIFICATION_CHANNEL_ID = "rest-timer-complete";
 
 // Configure notifications (only if enabled)
 if (ENABLE_NOTIFICATIONS) {
@@ -39,29 +47,44 @@ export type Timer = {
 type InternalTimer = Timer & {
   intervalId: ReturnType<typeof setInterval> | null;
   endAt: number | null;
+  completionNotificationId: string | null;
+  usesNativeCountdown: boolean;
 };
 
 type TimerListener = (timers: Map<number, Timer>, tick: number) => void;
 
-class TimerStore {
+export class TimerStore {
   private timers: Map<string, InternalTimer> = new Map();
   private listeners: Set<TimerListener> = new Set();
   private notificationsReady = false;
+  private notificationsInitPromise: Promise<void> | null = null;
   private tick = 0;
   private appStateSubscription: { remove: () => void } | null = null;
   private appState: AppStateStatus = AppState.currentState ?? "active";
 
   constructor() {
     if (ENABLE_NOTIFICATIONS) {
-      this.initNotifications();
+      this.notificationsInitPromise = this.initNotifications();
     }
     this.appStateSubscription = AppState.addEventListener("change", (state) => {
       this.appState = state;
-      void this.refreshRunningTimerNotifications();
       if (state === "active") {
         void this.syncRunningTimers();
       }
+      void this.refreshRunningTimerNotifications();
     });
+  }
+
+  dispose(): void {
+    this.appStateSubscription?.remove();
+    this.appStateSubscription = null;
+    this.timers.forEach((timer) => {
+      if (timer.intervalId) {
+        clearInterval(timer.intervalId);
+      }
+    });
+    this.timers.clear();
+    this.listeners.clear();
   }
 
   private async initNotifications() {
@@ -81,7 +104,7 @@ class TimerStore {
 
       // Android-specific channel
       if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("rest-timer", {
+        await Notifications.setNotificationChannelAsync(RUNNING_NOTIFICATION_CHANNEL_ID, {
           name: "Rest Timer",
           importance: Notifications.AndroidImportance.LOW, // LOW = no sound, no popup, just shows in tray
           vibrationPattern: [0],
@@ -89,13 +112,35 @@ class TimerStore {
           sound: undefined,
           enableVibrate: false,
         });
+        await Notifications.setNotificationChannelAsync(COMPLETION_NOTIFICATION_CHANNEL_ID, {
+          name: "Rest Timer Complete",
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#007AFF",
+          sound: "default",
+          enableVibrate: true,
+        });
       }
 
       this.notificationsReady = true;
-      console.log("✅ Notifications initialized successfully");
+      await this.refreshRunningTimerNotifications();
+      await this.rescheduleRunningTimerCompletions();
     } catch (error) {
-      console.log("❌ Error initializing notifications:", error);
+      console.log("Error initializing notifications:", error);
     }
+  }
+
+  private async waitForNotificationsReady(): Promise<boolean> {
+    if (!ENABLE_NOTIFICATIONS) {
+      return false;
+    }
+
+    if (this.notificationsReady) {
+      return true;
+    }
+
+    await this.notificationsInitPromise;
+    return this.notificationsReady;
   }
 
   subscribe(listener: TimerListener): () => void {
@@ -170,14 +215,13 @@ class TimerStore {
     };
   }
 
-  createTimer(exerciseId: number, exerciseName: string, durationSeconds: number): string {
+  async createTimer(exerciseId: number, exerciseName: string, durationSeconds: number): Promise<string> {
     const existingTimer = Array.from(this.timers.values()).find((t) => t.exerciseId === exerciseId);
     if (existingTimer) {
-      this.deleteTimer(existingTimer.id);
+      await this.deleteTimer(existingTimer.id);
     }
 
     const id = `timer-${exerciseId}-${Date.now()}`;
-    // Use a stable notification ID based on exercise ID (so updates replace instead of create new)
     const notificationId = `rest-timer-${exerciseId}`;
     
     const timer: InternalTimer = {
@@ -191,6 +235,8 @@ class TimerStore {
       intervalId: null,
       endAt: null,
       notificationId,
+      completionNotificationId: TimerStore.buildCompletionNotificationIdentifier(exerciseId),
+      usesNativeCountdown: false,
     };
     this.timers.set(id, timer);
     this.notify();
@@ -209,86 +255,161 @@ class TimerStore {
     timer.startedAt = Date.now();
     timer.endAt = timer.startedAt + timer.remainingSeconds * 1000;
 
-    // Show initial notification
-    await this.showTimerNotification(timer);
+    await this.syncRunningTimerNotifications(timer);
     this.notify();
 
-    timer.intervalId = setInterval(async () => {
-      const t = this.timers.get(id);
-      if (!t) return;
-
-      const remaining = TimerStore.computeRemainingSeconds(t);
-      if (remaining > 0) {
-        if (t.remainingSeconds !== remaining) {
-          t.remainingSeconds = remaining;
-          await this.showTimerNotification(t);
-          this.notify();
-        }
-      } else {
-        await this.timerComplete(id);
-      }
+    timer.intervalId = setInterval(() => {
+      void this.handleIntervalTick(id);
     }, 1000);
   }
 
-  private async timerComplete(id: string): Promise<void> {
+  private async handleIntervalTick(id: string): Promise<void> {
     const timer = this.timers.get(id);
     if (!timer) return;
 
-    const exerciseName = timer.exerciseName;
-    await this.stopTimer(id);
-
-    // Send completion notification
-    if (ENABLE_NOTIFICATIONS && this.notificationsReady) {
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Rest Complete! 💪",
-            body: `Time to continue ${exerciseName}`,
-            sound: true,
-            priority: Notifications.AndroidNotificationPriority.HIGH,
-            data: { 
-              exerciseId: timer.exerciseId, 
-              exerciseName: exerciseName,
-            },
-          },
-          trigger: null,
-        });
-        console.log("✅ Sent completion notification");
-      } catch (error) {
-        console.log("❌ Error sending completion notification:", error);
+    const remaining = TimerStore.computeRemainingSeconds(timer);
+    if (remaining > 0) {
+      if (timer.remainingSeconds !== remaining) {
+        timer.remainingSeconds = remaining;
+        if (this.shouldRefreshForegroundNotification(timer)) {
+          await this.showRunningTimerNotification(timer);
+        }
+        this.notify();
       }
+      return;
+    }
+
+    await this.timerComplete(id, { notifyImmediately: this.appState === "active" });
+  }
+
+  private async timerComplete(
+    id: string,
+    options: { notifyImmediately: boolean }
+  ): Promise<void> {
+    const timer = this.timers.get(id);
+    if (!timer) return;
+
+    const immediateShown = options.notifyImmediately
+      ? await this.showImmediateCompletionNotification(timer)
+      : false;
+
+    await this.stopTimer(id, {
+      cancelCompletionNotification: immediateShown,
+    });
+  }
+
+  private async syncRunningTimerNotifications(timer: InternalTimer): Promise<void> {
+    await this.showRunningTimerNotification(timer);
+    if (Platform.OS !== "android") {
+      await this.scheduleCompletionNotification(timer);
     }
   }
 
-  private async showTimerNotification(timer: InternalTimer): Promise<void> {
-    if (!ENABLE_NOTIFICATIONS || !this.notificationsReady) return;
+  private async showRunningTimerNotification(timer: InternalTimer): Promise<void> {
+    if (!ENABLE_NOTIFICATIONS || !timer.endAt) return;
+    if (!(await this.waitForNotificationsReady())) return;
+    if (!timer.isRunning || !timer.endAt) return;
 
+    const data = this.getNotificationData(timer);
     try {
-      const body = this.getNotificationBody(timer);
-      // Use scheduleNotificationAsync with a fixed identifier to update in place
-      // By using the same identifier, the notification is replaced instead of creating a new one
+      timer.usesNativeCountdown = await showNativeCountdownNotification({
+        timerId: timer.id,
+        exerciseId: timer.exerciseId,
+        exerciseName: timer.exerciseName,
+        endAt: timer.endAt,
+      });
+      if (timer.usesNativeCountdown) {
+        return;
+      }
+
       await Notifications.scheduleNotificationAsync({
-        identifier: timer.notificationId!, // Fixed ID per exercise - replaces existing
+        identifier: timer.notificationId!,
         content: {
-          title: `⏱️ ${timer.exerciseName}`,
-          body,
-          sticky: true,
-          autoDismiss: false,
-          priority: Notifications.AndroidNotificationPriority.LOW, // Low = silent update
-          data: { 
-            timerId: timer.id, 
-            exerciseId: timer.exerciseId,
-            exerciseName: timer.exerciseName,
-          },
+          title: timer.exerciseName,
+          body: this.getRunningNotificationBody(timer),
+          sound: false,
+          sticky: Platform.OS === "android" ? true : undefined,
+          autoDismiss: Platform.OS === "android" ? false : undefined,
+          priority:
+            Platform.OS === "android"
+              ? Notifications.AndroidNotificationPriority.LOW
+              : undefined,
+          data,
         },
-        trigger: null,
+        trigger: this.getImmediateTrigger(RUNNING_NOTIFICATION_CHANNEL_ID),
       });
     } catch (error) {
-      console.log("❌ Error showing timer notification:", error);
+      console.log("Error showing timer notification:", error);
     }
   }
 
-  async stopTimer(id: string): Promise<void> {
+  private async scheduleCompletionNotification(timer: InternalTimer): Promise<void> {
+    if (!ENABLE_NOTIFICATIONS || !timer.endAt) return;
+    if (!(await this.waitForNotificationsReady())) return;
+    if (!timer.isRunning || !timer.endAt) return;
+
+    try {
+      await this.cancelCompletionNotification(timer);
+      timer.completionNotificationId = await Notifications.scheduleNotificationAsync({
+        identifier:
+          timer.completionNotificationId ??
+          TimerStore.buildCompletionNotificationIdentifier(timer.exerciseId),
+        content: {
+          title: `${timer.exerciseName} Timer finished`,
+          body: "Tap to return to this exercise",
+          sound: true,
+          priority:
+            Platform.OS === "android"
+              ? Notifications.AndroidNotificationPriority.HIGH
+              : undefined,
+          data: this.getNotificationData(timer),
+        },
+        trigger:
+          Platform.OS === "android"
+            ? {
+                type: Notifications.SchedulableTriggerInputTypes.DATE,
+                channelId: COMPLETION_NOTIFICATION_CHANNEL_ID,
+                date: new Date(timer.endAt),
+              }
+            : {
+                type: Notifications.SchedulableTriggerInputTypes.DATE,
+                date: new Date(timer.endAt),
+              },
+      });
+    } catch (error) {
+      console.log("Error scheduling completion notification:", error);
+    }
+  }
+
+  private async showImmediateCompletionNotification(timer: InternalTimer): Promise<boolean> {
+    if (!ENABLE_NOTIFICATIONS || !this.notificationsReady) return false;
+
+    if (Platform.OS === "android") {
+      return false;
+    }
+
+    const data = this.getNotificationData(timer);
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `${timer.exerciseName} Timer finished`,
+          body: "Tap to return to this exercise",
+          sound: true,
+          data,
+        },
+        trigger: this.getImmediateTrigger(COMPLETION_NOTIFICATION_CHANNEL_ID),
+      });
+      return true;
+    } catch (error) {
+      console.log("Error sending completion notification:", error);
+      return false;
+    }
+  }
+
+  async stopTimer(
+    id: string,
+    options: { cancelCompletionNotification?: boolean } = {}
+  ): Promise<void> {
     const timer = this.timers.get(id);
     if (!timer) return;
 
@@ -303,13 +424,10 @@ class TimerStore {
     timer.isRunning = false;
     timer.endAt = null;
 
-    // Dismiss notification
-    if (timer.notificationId && ENABLE_NOTIFICATIONS) {
-      try {
-        await Notifications.dismissNotificationAsync(timer.notificationId);
-      } catch (error) {
-        console.log("Error dismissing notification:", error);
-      }
+    await this.dismissRunningTimerNotification(timer);
+
+    if (options.cancelCompletionNotification ?? true) {
+      await this.cancelCompletionNotification(timer);
     }
 
     this.notify();
@@ -325,7 +443,7 @@ class TimerStore {
     this.notify();
   }
 
-  updateTimerDuration(id: string, durationSeconds: number): void {
+  async updateTimerDuration(id: string, durationSeconds: number): Promise<void> {
     const timer = this.timers.get(id);
     if (!timer) return;
 
@@ -334,6 +452,7 @@ class TimerStore {
       timer.remainingSeconds = durationSeconds;
       timer.startedAt = Date.now();
       timer.endAt = timer.startedAt + durationSeconds * 1000;
+      await this.syncRunningTimerNotifications(timer);
     } else {
       timer.remainingSeconds = durationSeconds;
       timer.endAt = null;
@@ -349,13 +468,8 @@ class TimerStore {
       clearInterval(timer.intervalId);
     }
 
-    if (timer.notificationId && ENABLE_NOTIFICATIONS) {
-      try {
-        await Notifications.dismissNotificationAsync(timer.notificationId);
-      } catch (error) {
-        console.log("Error dismissing notification:", error);
-      }
-    }
+    await this.dismissRunningTimerNotification(timer);
+    await this.cancelCompletionNotification(timer);
 
     this.timers.delete(id);
     this.notify();
@@ -363,20 +477,26 @@ class TimerStore {
 
   private async syncRunningTimers(): Promise<void> {
     const updates: Array<Promise<void>> = [];
+    let shouldNotify = false;
     this.timers.forEach((timer) => {
       if (!timer.isRunning) return;
       const remaining = TimerStore.computeRemainingSeconds(timer);
       if (remaining <= 0) {
-        updates.push(this.timerComplete(timer.id));
+        updates.push(this.timerComplete(timer.id, { notifyImmediately: false }));
         return;
       }
       if (timer.remainingSeconds !== remaining) {
         timer.remainingSeconds = remaining;
-        updates.push(this.showTimerNotification(timer));
+        if (this.shouldRefreshForegroundNotification(timer)) {
+          updates.push(this.showRunningTimerNotification(timer));
+        }
+        shouldNotify = true;
       }
     });
     if (updates.length > 0) {
       await Promise.all(updates);
+    }
+    if (shouldNotify) {
       this.notify();
     }
   }
@@ -387,14 +507,71 @@ class TimerStore {
     const updates: Array<Promise<void>> = [];
     this.timers.forEach((timer) => {
       if (!timer.isRunning) return;
-      updates.push(this.showTimerNotification(timer));
+      if (timer.usesNativeCountdown && Platform.OS === "android") {
+        return;
+      }
+      updates.push(this.showRunningTimerNotification(timer));
     });
     if (updates.length > 0) {
       await Promise.all(updates);
     }
   }
 
-  private getNotificationBody(timer: InternalTimer): string {
+  private async rescheduleRunningTimerCompletions(): Promise<void> {
+    if (!ENABLE_NOTIFICATIONS || !this.notificationsReady) return;
+    if (Platform.OS === "android") return;
+    const updates: Array<Promise<void>> = [];
+    this.timers.forEach((timer) => {
+      if (!timer.isRunning || !timer.endAt) return;
+      updates.push(this.scheduleCompletionNotification(timer));
+    });
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+  }
+
+  private async dismissRunningTimerNotification(timer: InternalTimer): Promise<void> {
+    if (!timer.notificationId || !ENABLE_NOTIFICATIONS) return;
+
+    try {
+      if (timer.usesNativeCountdown) {
+        await dismissNativeCountdownNotification(timer.id, timer.exerciseId);
+        timer.usesNativeCountdown = false;
+        return;
+      }
+
+      await Notifications.dismissNotificationAsync(timer.notificationId);
+    } catch (error) {
+      console.log("Error dismissing timer notification:", error);
+    }
+  }
+
+  private async cancelCompletionNotification(timer: InternalTimer): Promise<void> {
+    if (!timer.completionNotificationId || !ENABLE_NOTIFICATIONS) return;
+
+    if (Platform.OS === "android") {
+      try {
+        await cancelNativeCompletionNotification(timer.id, timer.exerciseId);
+      } catch (error) {
+        console.log("Error canceling native completion notification:", error);
+      }
+      return;
+    }
+
+    try {
+      await Notifications.cancelScheduledNotificationAsync(timer.completionNotificationId);
+    } catch (error) {
+      console.log("Error canceling scheduled completion notification:", error);
+    }
+
+    try {
+      await Notifications.dismissNotificationAsync(timer.completionNotificationId);
+    } catch (error) {
+      console.log("Error dismissing completion notification:", error);
+    }
+  }
+
+  private getRunningNotificationBody(timer: InternalTimer): string {
     const remaining = TimerStore.computeRemainingSeconds(timer);
     if (this.appState === "active") {
       return `Rest: ${TimerStore.formatTime(remaining)} remaining`;
@@ -408,10 +585,31 @@ class TimerStore {
     return `Rest ends at ${hours}:${minutes}`;
   }
 
+  private shouldRefreshForegroundNotification(timer: InternalTimer): boolean {
+    return this.appState === "active" && !timer.usesNativeCountdown;
+  }
+
+  private getNotificationData(timer: InternalTimer): TimerNotificationData {
+    return {
+      timerId: timer.id,
+      exerciseId: timer.exerciseId,
+      exerciseName: timer.exerciseName,
+      endAt: timer.endAt ?? undefined,
+    };
+  }
+
+  private getImmediateTrigger(channelId: string) {
+    return Platform.OS === "android" ? { channelId } : null;
+  }
+
   private static computeRemainingSeconds(timer: InternalTimer): number {
     if (!timer.endAt) return timer.remainingSeconds;
     const remainingMs = timer.endAt - Date.now();
     return Math.max(0, Math.ceil(remainingMs / 1000));
+  }
+
+  private static buildCompletionNotificationIdentifier(exerciseId: number): string {
+    return `rest-timer-complete-${exerciseId}`;
   }
 
   static formatTime(seconds: number): string {

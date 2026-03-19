@@ -25,6 +25,29 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Regenerating Android Native Files
+
+This project includes a local Expo config plugin that restores the Android rest timer native module during `expo prebuild`. If the `android/` directory is deleted and regenerated to fix build issues, prebuild should re-apply the native timer files automatically.
+
+1. Regenerate the Android project:
+
+   ```bash
+   npx expo prebuild --platform android --clean
+   ```
+
+2. Rebuild the development app:
+
+   ```bash
+   npx expo run:android
+   ```
+
+The plugin is registered in `app.json` and uses the source-of-truth native templates in `scripts/android-rest-timer-native/`.
+If you ever need to repair an existing `android/` tree without rerunning prebuild, you can still run:
+
+```bash
+npm run sync:android-rest-timer-native
+```
+
 ## Get a fresh project
 
 When you're ready, run:

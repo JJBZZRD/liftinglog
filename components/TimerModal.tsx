@@ -60,10 +60,10 @@ export default function TimerModal({
 
     let timerId: string;
     if (currentTimer) {
-      timerStore.updateTimerDuration(currentTimer.id, totalSeconds);
+      await timerStore.updateTimerDuration(currentTimer.id, totalSeconds);
       timerId = currentTimer.id;
     } else {
-      timerId = timerStore.createTimer(exerciseId, exerciseName, totalSeconds);
+      timerId = await timerStore.createTimer(exerciseId, exerciseName, totalSeconds);
     }
 
     await timerStore.startTimer(timerId);
