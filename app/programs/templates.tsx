@@ -74,8 +74,8 @@ export default function TemplateBrowserScreen() {
   const summaryDescription = hasActiveSearch
     ? `Results for "${trimmedSearchQuery}". Tap any program to preview it before importing.`
     : selectedCategory
-      ? `${selectedCategory} programs ready to preview, edit, and add to your library.`
-      : "Ready-made programs you can preview, edit, and add to your library.";
+      ? `${selectedCategory} programs ready to preview and import into your library.`
+      : "Ready-made programs you can preview and import into your library.";
 
   const handlePreview = useCallback((template: PslTemplate) => {
     setPreviewTemplate(template);
@@ -105,17 +105,6 @@ export default function TemplateBrowserScreen() {
       params: {
         templateId: previewTemplate.id,
         action: "activate",
-      },
-    });
-  }, [previewTemplate]);
-
-  const handleEditPsl = useCallback(() => {
-    if (!previewTemplate) return;
-    setPreviewVisible(false);
-    router.push({
-      pathname: "/programs/create/editor",
-      params: {
-        pslSource: previewTemplate.pslSource,
       },
     });
   }, [previewTemplate]);
@@ -711,18 +700,6 @@ export default function TemplateBrowserScreen() {
 	                  <MaterialCommunityIcons name="play" size={18} color={rawColors.primary} />
 	                  <Text className="text-sm font-semibold" style={{ color: rawColors.primary }}>
 	                    Activate
-	                  </Text>
-	                </Pressable>
-	                <Pressable
-	                  onPress={handleEditPsl}
-	                  className="flex-1 flex-row items-center justify-center py-3.5 rounded-xl border border-border gap-1.5"
-	                  style={({ pressed }) => ({
-	                    backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-	                  })}
-	                >
-	                  <MaterialCommunityIcons name="code-tags" size={18} color={rawColors.foregroundSecondary} />
-	                  <Text className="text-sm font-semibold" style={{ color: rawColors.foregroundSecondary }}>
-	                    Edit PSL
 	                  </Text>
 	                </Pressable>
 	              </View>

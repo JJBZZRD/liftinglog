@@ -1,5 +1,6 @@
 import { compilePslSource } from "../../lib/programs/psl/pslService";
 import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
+import { deserializeFlatProgramDraftFromPsl } from "../../lib/programs/psl/pslDraftMapper";
 import {
   buildImportedTemplateName,
   buildPersonalizedTemplateSource,
@@ -92,5 +93,35 @@ describe("pslTemplates", () => {
 
     expect(personalizedSource).toContain('name: "Smolov Jr (Bench Press)"');
     expect(personalizedSource).toContain('exercise: "Bench Press"');
+  });
+
+  it("lets imported single-exercise templates load into the guided editor", () => {
+    const personalizedSource = buildPersonalizedTemplateSource(
+      "smolov-jr",
+      { target_exercise: "Bench Press" },
+      "Smolov Jr (Bench Press)"
+    );
+
+    const draft = deserializeFlatProgramDraftFromPsl(personalizedSource);
+    expect(draft).not.toBeNull();
+    expect(draft?.timingMode).toBe("sequence");
+    expect(draft?.sessions[0]?.exercises[0]).toMatchObject({
+      exerciseName: "Bench Press",
+      restSeconds: 180,
+    });
+    expect(draft?.sessions[0]?.exercises[0]?.sets[0]?.progression).toMatchObject({
+      by: 2.5,
+      cadence: "every week",
+    });
+  });
+
+  it("maps session rest defaults into builder-editable exercise rest", () => {
+    const template = getTemplateById("phul");
+    expect(template).toBeDefined();
+
+    const draft = deserializeFlatProgramDraftFromPsl(template!.pslSource);
+    expect(draft).not.toBeNull();
+    expect(draft?.sessions[0]?.exercises[2]?.restSeconds).toBe(120);
+    expect(draft?.sessions[2]?.exercises[2]?.restSeconds).toBe(90);
   });
 });

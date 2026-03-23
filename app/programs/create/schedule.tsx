@@ -46,6 +46,7 @@ import {
   type ExerciseConfig,
   type FlatProgramDraft,
   type FlatProgramTimingMode,
+  type ProgressionConfig,
   type SetConfig,
   type SessionDraft,
 } from "../../../lib/programs/psl/pslGenerator";
@@ -116,8 +117,11 @@ type EditableSetConfig = {
   reps: string;
   intensityType: "none" | "percent_1rm" | "rpe" | "rir" | "load";
   intensityValue: string;
+  restSeconds: string;
   role: string;
   progression: string;
+  progressionCadence: NonNullable<ProgressionConfig["cadence"]>;
+  progressionCondition: "none" | "if success";
 };
 
 type ProgramStructure = "sessions" | "blocks";
@@ -196,14 +200,47 @@ function getIntensityDisplay(set: SetConfig): string {
   }
 }
 
+function formatSeconds(seconds: number): string {
+  if (seconds >= 60 && seconds % 60 === 0) {
+    return `${seconds / 60}m`;
+  }
+
+  return `${seconds}s`;
+}
+
+function getProgressionDisplay(
+  progression: SetConfig["progression"] | undefined
+): string {
+  if (!progression?.by) {
+    return "";
+  }
+
+  const sign = progression.by >= 0 ? "+" : "";
+  let label = `${sign}${progression.by}${progression.unit}`;
+  if (progression.cadence === "every week") {
+    label += " weekly";
+  } else if (progression.cadence === "every 2 weeks") {
+    label += " every 2 weeks";
+  }
+
+  if (progression.condition === "if success") {
+    label += " if success";
+  }
+
+  return label;
+}
+
 function formatSetSummary(set: SetConfig): string {
   const parts = [`${set.count}x${formatReps(set.reps)}${getIntensityDisplay(set)}`];
   if (set.role) {
     parts.push(`role ${set.role}`);
   }
-  if (set.progression?.by) {
-    const sign = set.progression.by >= 0 ? "+" : "";
-    parts.push(`${sign}${set.progression.by}${set.progression.unit}`);
+  if (set.restSeconds) {
+    parts.push(`rest ${formatSeconds(set.restSeconds)}`);
+  }
+  const progressionDisplay = getProgressionDisplay(set.progression);
+  if (progressionDisplay) {
+    parts.push(progressionDisplay);
   }
   return parts.join(" ");
 }
@@ -223,6 +260,9 @@ function parseRepsInput(value: string): SetConfig["reps"] {
 function editableSetFromConfig(set: SetConfig): EditableSetConfig {
   let intensityType: EditableSetConfig["intensityType"] = "none";
   let intensityValue = "";
+  const progressionCadence =
+    set.progression?.cadence ??
+    (set.progression?.type === "weekly_increment" ? "every week" : "every session");
 
   if (set.intensity) {
     switch (set.intensity.type) {
@@ -250,8 +290,12 @@ function editableSetFromConfig(set: SetConfig): EditableSetConfig {
     reps: formatReps(set.reps),
     intensityType,
     intensityValue,
+    restSeconds: set.restSeconds ? String(set.restSeconds) : "",
     role: set.role ?? "work",
     progression: set.progression?.by ? String(set.progression.by) : "",
+    progressionCadence,
+    progressionCondition:
+      set.progression?.condition === "if success" ? "if success" : "none",
   };
 }
 
@@ -264,6 +308,11 @@ function setConfigFromEditable(editable: EditableSetConfig, units: "kg" | "lb"):
 
   if (editable.role && editable.role !== "work") {
     set.role = editable.role;
+  }
+
+  const restSeconds = Number.parseInt(editable.restSeconds, 10);
+  if (Number.isFinite(restSeconds) && restSeconds > 0) {
+    set.restSeconds = restSeconds;
   }
 
   const intensityValue = Number.parseFloat(editable.intensityValue);
@@ -282,11 +331,15 @@ function setConfigFromEditable(editable: EditableSetConfig, units: "kg" | "lb"):
   const progression = Number.parseFloat(editable.progression);
   if (Number.isFinite(progression) && progression !== 0) {
     set.progression = {
-      type: "increment",
+      type:
+        editable.progressionCadence === "every session"
+          ? "increment"
+          : "weekly_increment",
       by: progression,
       unit: units,
-      cadence: "every session",
-      condition: "if success",
+      cadence: editable.progressionCadence,
+      condition:
+        editable.progressionCondition === "if success" ? "if success" : undefined,
     };
   }
 
@@ -937,6 +990,9 @@ function ExerciseConfigEditor({
   rawColors,
   onSave,
 }: ExerciseConfigEditorProps) {
+  const [exerciseRestSeconds, setExerciseRestSeconds] = useState(
+    exercise.restSeconds ? String(exercise.restSeconds) : ""
+  );
   const [sets, setSets] = useState<EditableSetConfig[]>(
     exercise.sets.length > 0
       ? exercise.sets.map(editableSetFromConfig)
@@ -960,8 +1016,11 @@ function ExerciseConfigEditor({
         reps: "5",
         intensityType: "none",
         intensityValue: "",
+        restSeconds: "",
         role: "work",
         progression: "",
+        progressionCadence: "every session",
+        progressionCondition: "none",
       },
     ]);
   }, []);
@@ -973,17 +1032,42 @@ function ExerciseConfigEditor({
   }, []);
 
   const handleSave = useCallback(() => {
+    const parsedExerciseRestSeconds = Number.parseInt(exerciseRestSeconds, 10);
     onSave({
       ...exercise,
+      restSeconds:
+        Number.isFinite(parsedExerciseRestSeconds) && parsedExerciseRestSeconds > 0
+          ? parsedExerciseRestSeconds
+          : undefined,
       sets: sets.map((set) => setConfigFromEditable(set, units)),
     });
-  }, [exercise, onSave, sets, units]);
+  }, [exercise, exerciseRestSeconds, onSave, sets, units]);
 
   return (
     <ScrollView style={{ maxHeight: 540 }} keyboardShouldPersistTaps="handled">
       <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>
         {exercise.exerciseName}
       </Text>
+
+      <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary }]}>
+        Exercise Rest (seconds)
+      </Text>
+      <TextInput
+        value={exerciseRestSeconds}
+        onChangeText={setExerciseRestSeconds}
+        keyboardType="number-pad"
+        placeholder="180"
+        placeholderTextColor={rawColors.foregroundMuted}
+        style={[
+          styles.input,
+          {
+            backgroundColor: rawColors.surface,
+            borderColor: rawColors.borderLight,
+            color: rawColors.foreground,
+            marginBottom: 12,
+          },
+        ]}
+      />
 
       {sets.map((set, index) => (
         <View
@@ -1044,6 +1128,25 @@ function ExerciseConfigEditor({
               />
             </View>
           </View>
+
+          <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary, marginTop: 10 }]}>
+            Set Rest (seconds)
+          </Text>
+          <TextInput
+            value={set.restSeconds}
+            onChangeText={(value) => handleSetChange(index, { restSeconds: value })}
+            keyboardType="number-pad"
+            placeholder="90"
+            placeholderTextColor={rawColors.foregroundMuted}
+            style={[
+              styles.input,
+              {
+                backgroundColor: rawColors.surface,
+                borderColor: rawColors.borderLight,
+                color: rawColors.foreground,
+              },
+            ]}
+          />
 
           <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary, marginTop: 10 }]}>
             Intensity
@@ -1159,7 +1262,7 @@ function ExerciseConfigEditor({
           </View>
 
           <Text style={[styles.fieldLabel, { color: rawColors.foregroundSecondary, marginTop: 10 }]}>
-            Progression ({units}/session)
+            Progression Increment
           </Text>
           <TextInput
             value={set.progression}
@@ -1176,6 +1279,103 @@ function ExerciseConfigEditor({
               },
             ]}
           />
+
+          {set.progression.trim().length > 0 ? (
+            <>
+              <Text
+                style={[styles.fieldLabel, { color: rawColors.foregroundSecondary, marginTop: 10 }]}
+              >
+                Progression Cadence
+              </Text>
+              <View style={styles.filterRow}>
+                {([
+                  { key: "every session", label: "Every Session" },
+                  { key: "every week", label: "Every Week" },
+                  { key: "every 2 weeks", label: "Every 2 Weeks" },
+                ] as const).map((option) => {
+                  const selected = set.progressionCadence === option.key;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() =>
+                        handleSetChange(index, { progressionCadence: option.key })
+                      }
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: selected
+                            ? rawColors.primary
+                            : rawColors.surface,
+                          borderColor: selected
+                            ? rawColors.primary
+                            : rawColors.borderLight,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          {
+                            color: selected
+                              ? rawColors.primaryForeground
+                              : rawColors.foregroundSecondary,
+                          },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text
+                style={[styles.fieldLabel, { color: rawColors.foregroundSecondary, marginTop: 10 }]}
+              >
+                Progression Condition
+              </Text>
+              <View style={styles.filterRow}>
+                {([
+                  { key: "none", label: "Always" },
+                  { key: "if success", label: "If Success" },
+                ] as const).map((option) => {
+                  const selected = set.progressionCondition === option.key;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() =>
+                        handleSetChange(index, { progressionCondition: option.key })
+                      }
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: selected
+                            ? rawColors.primary
+                            : rawColors.surface,
+                          borderColor: selected
+                            ? rawColors.primary
+                            : rawColors.borderLight,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          {
+                            color: selected
+                              ? rawColors.primaryForeground
+                              : rawColors.foregroundSecondary,
+                          },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
         </View>
       ))}
 

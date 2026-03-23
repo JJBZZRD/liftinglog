@@ -628,7 +628,7 @@ sessions:
         sets:
           - count: 3
             reps: 5
-            rest_seconds: 120
+            rest_before_seconds: 30
 `;
 
     expect(deserializeFlatProgramDraftFromPsl(source)).toBeNull();
@@ -798,7 +798,7 @@ blocks:
                 intensity:
                   type: percent_1rm
                   value: 75
-                rest_seconds: 120
+                rest_before_seconds: 30
 `;
 
     expect(deserializeBlockProgramDraftFromPsl(source)).toBeNull();

@@ -388,7 +388,7 @@ export default function ProgramBasicsScreen() {
               trimmedName ? "text-primary-foreground" : "text-foreground-muted"
             }`}
           >
-            {programStructure === "blocks" ? "Next: PSL Editor" : "Next: Build Sessions"}
+            {programStructure === "blocks" ? "Next: Build Blocks" : "Next: Build Sessions"}
           </Text>
         </Pressable>
       </View>
