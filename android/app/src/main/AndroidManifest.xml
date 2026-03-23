@@ -5,7 +5,6 @@
   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
   <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
@@ -32,7 +31,7 @@
         <data android:scheme="LiftingLog"/>
       </intent-filter>
     </activity>
-    <receiver android:name=".notifications.RestTimerCountdownDismissedReceiver" android:exported="false"/>
     <receiver android:name=".notifications.RestTimerCompletionReceiver" android:exported="false"/>
+    <receiver android:name=".notifications.RestTimerCountdownDismissedReceiver" android:exported="false"/>
   </application>
 </manifest>

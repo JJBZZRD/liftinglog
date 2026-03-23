@@ -46,7 +46,6 @@ export default function ExercisePickerScreen() {
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [showSearchPopup, setShowSearchPopup] = useState(false);
   const [isAddModalVisible, setAddModalVisible] = useState(false);
-  const [fabActive, setFabActive] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const existingIdSet = useMemo(() => {
@@ -54,7 +53,7 @@ export default function ExercisePickerScreen() {
     return new Set(params.existingIds.split(",").map(Number).filter(Boolean));
   }, [params.existingIds]);
 
-  const headerHeight = 108 + insets.top;
+  const headerHeight = 82;
 
   const headerShadowOpacity = scrollY.interpolate({
     inputRange: [0, 20],
@@ -148,31 +147,19 @@ export default function ExercisePickerScreen() {
       return (
         <Pressable
           onPress={() => toggleSelection(item.id)}
-          style={({ pressed }) => [
-            styles.exerciseCard,
-            {
-              backgroundColor: isSelected
-                ? rawColors.primary + "12"
-                : pressed
-                  ? rawColors.pressed
-                  : rawColors.surface,
-              borderColor: isSelected ? rawColors.primary : rawColors.borderLight,
-              shadowColor: rawColors.shadow,
-            },
-          ]}
+          className={`rounded-[32px] px-6 py-5 border ${
+            isSelected ? 'border-primary bg-primary/10' : 'border-transparent bg-surface'
+          }`}
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.7 : 1,
+          })}
         >
-          <View style={styles.exerciseCardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[styles.exerciseName, { color: rawColors.foreground }]}
-                numberOfLines={1}
-              >
+          <View className="flex-row items-center justify-between gap-3">
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text
-                style={[styles.exerciseMeta, { color: rawColors.foregroundSecondary }]}
-                numberOfLines={1}
-              >
+              <Text className="mt-1 text-xs text-foreground-secondary" numberOfLines={1}>
                 {lastCompletedAt
                   ? `Last completed ${new Date(lastCompletedAt).toLocaleDateString()}`
                   : "Never completed"}
@@ -180,13 +167,9 @@ export default function ExercisePickerScreen() {
             </View>
 
             <View
-              style={[
-                styles.checkbox,
-                {
-                  backgroundColor: isSelected ? rawColors.primary : "transparent",
-                  borderColor: isSelected ? rawColors.primary : rawColors.borderLight,
-                },
-              ]}
+              className={`w-[26px] h-[26px] rounded-[13px] border-2 items-center justify-center ${
+                isSelected ? 'bg-primary border-primary' : 'bg-transparent border-border-light'
+              }`}
             >
               {isSelected ? (
                 <MaterialCommunityIcons
@@ -199,41 +182,24 @@ export default function ExercisePickerScreen() {
           </View>
 
           {(item.muscleGroup || item.equipment || isAlreadyAdded) ? (
-            <View style={styles.tagRow}>
+            <View className="flex-row flex-wrap gap-2 mt-3">
               {item.muscleGroup ? (
-                <View
-                  style={[
-                    styles.tag,
-                    { backgroundColor: rawColors.primary + "15" },
-                  ]}
-                >
-                  <Text style={[styles.tagText, { color: rawColors.primary }]}>
+                <View className="px-2.5 py-1.5 rounded-full bg-primary/10">
+                  <Text className="text-xs font-semibold text-primary">
                     {item.muscleGroup}
                   </Text>
                 </View>
               ) : null}
               {item.equipment ? (
-                <View
-                  style={[
-                    styles.tag,
-                    { backgroundColor: rawColors.surfaceSecondary },
-                  ]}
-                >
-                  <Text
-                    style={[styles.tagText, { color: rawColors.foregroundSecondary }]}
-                  >
+                <View className="px-2.5 py-1.5 rounded-full bg-surface-secondary">
+                  <Text className="text-xs font-semibold text-foreground-secondary">
                     {item.equipment}
                   </Text>
                 </View>
               ) : null}
               {isAlreadyAdded ? (
-                <View
-                  style={[
-                    styles.tag,
-                    { backgroundColor: rawColors.surfaceSecondary },
-                  ]}
-                >
-                  <Text style={[styles.tagText, { color: rawColors.foregroundMuted }]}>
+                <View className="px-2.5 py-1.5 rounded-full bg-surface-secondary">
+                  <Text className="text-xs font-semibold text-foreground-muted">
                     Already added
                   </Text>
                 </View>
@@ -266,7 +232,7 @@ export default function ExercisePickerScreen() {
       <Animated.View
         style={[
           styles.headerContainer,
-          { paddingTop: insets.top, backgroundColor: rawColors.background },
+          { backgroundColor: rawColors.background },
           {
             shadowColor: rawColors.shadow,
             shadowOffset: { width: 0, height: 2 },
@@ -281,13 +247,10 @@ export default function ExercisePickerScreen() {
         ]}
       >
         <View style={styles.headerContent}>
-          <Text style={[styles.headerTitle, { color: rawColors.foreground }]}>
-            Add Exercises
-          </Text>
           <Text style={[styles.headerSubtitle, { color: rawColors.foregroundSecondary }]}>
             {targetLabel}
           </Text>
-          <View style={styles.headerIcons}>
+          <View style={[styles.headerIcons, { alignItems: 'center' }]}>
             <Pressable
               style={styles.headerIconButton}
               onPress={() => setShowFilterPopup(true)}
@@ -312,6 +275,20 @@ export default function ExercisePickerScreen() {
                 color={searchQuery ? rawColors.primary : rawColors.foregroundSecondary}
               />
             </Pressable>
+
+            <Pressable
+              onPress={() => setAddModalVisible(true)}
+              className="flex-row items-center px-4 py-2 rounded-full border ml-auto"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+                borderColor: rawColors.borderLight,
+              })}
+            >
+              <MaterialCommunityIcons name="plus" size={16} color={rawColors.foregroundSecondary} />
+              <Text className="ml-1.5 text-sm font-semibold" style={{ color: rawColors.foregroundSecondary }}>
+                Create
+              </Text>
+            </Pressable>
           </View>
         </View>
         <LinearGradient
@@ -326,8 +303,8 @@ export default function ExercisePickerScreen() {
         contentContainerStyle={{
           padding: 16,
           gap: 12,
-          paddingTop: headerHeight + 42,
-          paddingBottom: selectedIds.size > 0 ? 176 : 108,
+          paddingTop: headerHeight + 16,
+          paddingBottom: selectedIds.size > 0 ? 116 : 32,
         }}
         bounces
         alwaysBounceVertical
@@ -365,55 +342,31 @@ export default function ExercisePickerScreen() {
         }
       />
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add exercise to library"
-        onPressIn={() => setFabActive(true)}
-        onPress={() => setAddModalVisible(true)}
-        style={[
-          styles.fab,
-          {
-            bottom: selectedIds.size > 0 ? 156 : 94,
-            backgroundColor: rawColors.surface,
-            borderColor: fabActive ? rawColors.foregroundSecondary : rawColors.primary,
-            shadowColor: rawColors.shadow,
-          },
-        ]}
-      >
-        <MaterialCommunityIcons
-          name="plus"
-          size={28}
-          color={fabActive ? rawColors.foregroundSecondary : rawColors.primary}
-        />
-      </Pressable>
-
       {selectedIds.size > 0 ? (
         <View
-          style={[
-            styles.bottomBar,
-            {
-              backgroundColor: rawColors.background,
-              borderTopColor: rawColors.borderLight,
-              shadowColor: rawColors.shadow,
-            },
-          ]}
+          className="absolute bottom-0 left-0 right-0 px-4 py-4 border-t bg-background"
+          style={{
+            borderColor: rawColors.borderLight,
+            shadowColor: rawColors.shadow,
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 8,
+          }}
         >
           <Pressable
             onPress={handleAdd}
-            style={({ pressed }) => [
-              styles.bottomButton,
-              {
-                backgroundColor: rawColors.primary,
-                opacity: pressed ? 0.82 : 1,
-              },
-            ]}
+            className="flex-row items-center justify-center py-4 rounded-xl border bg-primary border-primary"
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.8 : 1,
+            })}
           >
             <MaterialCommunityIcons
               name="plus"
-              size={20}
+              size={22}
               color={rawColors.primaryForeground}
             />
-            <Text style={[styles.bottomButtonText, { color: rawColors.primaryForeground }]}>
+            <Text className="text-base font-semibold ml-2 text-primary-foreground">
               Add {selectedIds.size} Exercise{selectedIds.size === 1 ? "" : "s"}
             </Text>
           </Pressable>
@@ -424,7 +377,6 @@ export default function ExercisePickerScreen() {
         visible={isAddModalVisible}
         onDismiss={() => {
           setAddModalVisible(false);
-          setFabActive(false);
         }}
         onSaved={reloadExercises}
       />
@@ -656,14 +608,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 4,
   },
-  headerTitle: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: "700",
-  },
   headerSubtitle: {
     fontSize: 16,
-    marginTop: 4,
   },
   headerIcons: {
     flexDirection: "row",
@@ -676,52 +622,6 @@ const styles = StyleSheet.create({
   },
   headerFade: {
     height: 8,
-  },
-  exerciseCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 12,
-  },
-  exerciseCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  exerciseMeta: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tagRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
-  },
-  tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: "600",
   },
   emptyState: {
     alignItems: "center",
@@ -743,46 +643,6 @@ const styles = StyleSheet.create({
   },
   emptyActionText: {
     fontSize: 14,
-    fontWeight: "700",
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  bottomBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  bottomButton: {
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  bottomButtonText: {
-    fontSize: 16,
     fontWeight: "700",
   },
   popupOverlay: {
