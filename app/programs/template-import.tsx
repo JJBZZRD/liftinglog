@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import BaseModal from "../../components/modals/BaseModal";
+import AppModal from "../../components/modals/BaseModal";
 import {
   createExercise,
   getExerciseByName,
@@ -19,6 +19,7 @@ import {
 } from "../../lib/db/exercises";
 import { createPslProgram } from "../../lib/db/pslPrograms";
 import {
+  buildImportedTemplateName,
   buildPersonalizedTemplateSource,
   getTemplateById,
 } from "../../lib/programs/psl/pslTemplates";
@@ -35,6 +36,9 @@ type ImportMode = "save" | "activate";
 
 type TemplateImportResolution =
   | {
+      kind: "pending";
+    }
+  | {
       kind: "existing";
       exercise: Exercise;
       source: "exact" | "suggested" | "manual";
@@ -44,8 +48,33 @@ type TemplateImportResolution =
       name: string;
     };
 
+type PickerOption = {
+  exercise: Exercise;
+  detail: string;
+  source: "library" | "exact" | "alias" | "fuzzy";
+};
+
 function resolveImportMode(value: string | undefined): ImportMode {
   return value === "activate" ? "activate" : "save";
+}
+
+function requiresExplicitExerciseSelection(
+  requirement: TemplateExerciseRequirement
+): boolean {
+  return requirement.resolutionStrategy === "select_or_create";
+}
+
+function getDefaultResolution(
+  requirement: TemplateExerciseRequirement
+): TemplateImportResolution {
+  if (requiresExplicitExerciseSelection(requirement)) {
+    return { kind: "pending" };
+  }
+
+  return {
+    kind: "create",
+    name: requirement.canonicalName,
+  };
 }
 
 export default function TemplateImportScreen() {
@@ -94,16 +123,14 @@ export default function TemplateImportScreen() {
         const initialResolutions = Object.fromEntries(
           initialMatches.map((match) => [
             match.requirement.exerciseId,
-            match.exactMatch
+            match.exactMatch &&
+            !requiresExplicitExerciseSelection(match.requirement)
               ? {
                   kind: "existing",
                   exercise: match.exactMatch.exercise,
                   source: "exact",
                 }
-              : {
-                  kind: "create",
-                  name: match.requirement.canonicalName,
-                },
+              : getDefaultResolution(match.requirement),
           ])
         ) as Record<string, TemplateImportResolution>;
 
@@ -149,8 +176,32 @@ export default function TemplateImportScreen() {
     [pickerRequirementId, template]
   );
 
-  const pickerSuggestions = useMemo(() => {
+  const pickerOptions = useMemo<PickerOption[]>(() => {
     if (!pickerRequirement) return [];
+
+    if (requiresExplicitExerciseSelection(pickerRequirement)) {
+      const query = pickerQuery.trim().toLowerCase();
+      return [...libraryExercises]
+        .filter((exercise) =>
+          query.length === 0 ? true : exercise.name.toLowerCase().includes(query)
+        )
+        .sort((left, right) => {
+          if (query.length > 0) {
+            const leftStartsWith = left.name.toLowerCase().startsWith(query);
+            const rightStartsWith = right.name.toLowerCase().startsWith(query);
+            if (leftStartsWith !== rightStartsWith) {
+              return leftStartsWith ? -1 : 1;
+            }
+          }
+
+          return left.name.localeCompare(right.name);
+        })
+        .map((exercise) => ({
+          exercise,
+          detail: "Existing exercise",
+          source: "library" as const,
+        }));
+    }
 
     const suggestions = getTemplateExerciseSuggestions(
       pickerRequirement,
@@ -162,16 +213,47 @@ export default function TemplateImportScreen() {
     );
 
     if (!pickerQuery.trim()) {
-      return suggestions;
+      return suggestions.map((suggestion) => ({
+        exercise: suggestion.exercise,
+        detail:
+          suggestion.matchType === "alias"
+            ? `Alias match on "${suggestion.matchedName}"`
+            : suggestion.matchType === "exact"
+              ? "Exact template name match"
+              : `Similarity ${Math.round(suggestion.score * 100)}%`,
+        source: suggestion.matchType,
+      }));
     }
 
     const query = pickerQuery.trim().toLowerCase();
-    return suggestions.filter(
-      (suggestion) =>
-        suggestion.exercise.name.toLowerCase().includes(query) ||
-        suggestion.matchedName.toLowerCase().includes(query)
-    );
+    return suggestions
+      .filter(
+        (suggestion) =>
+          suggestion.exercise.name.toLowerCase().includes(query) ||
+          suggestion.matchedName.toLowerCase().includes(query)
+      )
+      .map((suggestion) => ({
+        exercise: suggestion.exercise,
+        detail:
+          suggestion.matchType === "alias"
+            ? `Alias match on "${suggestion.matchedName}"`
+            : suggestion.matchType === "exact"
+              ? "Exact template name match"
+              : `Similarity ${Math.round(suggestion.score * 100)}%`,
+        source: suggestion.matchType,
+      }));
   }, [libraryExercises, pickerQuery, pickerRequirement]);
+
+  const pickerCreateName = useMemo(() => {
+    if (!pickerRequirement) return "";
+    const trimmedQuery = pickerQuery.trim();
+    if (trimmedQuery.length > 0) {
+      return trimmedQuery;
+    }
+    return requiresExplicitExerciseSelection(pickerRequirement)
+      ? ""
+      : pickerRequirement.canonicalName;
+  }, [pickerQuery, pickerRequirement]);
 
   const counts = useMemo(() => {
     if (!template) {
@@ -179,12 +261,14 @@ export default function TemplateImportScreen() {
         existing: 0,
         creating: 0,
         suggested: 0,
+        pending: 0,
       };
     }
 
     let existing = 0;
     let creating = 0;
     let suggested = 0;
+    let pending = 0;
 
     template.exerciseRequirements.forEach((requirement) => {
       const resolution = resolutions[requirement.exerciseId];
@@ -195,13 +279,18 @@ export default function TemplateImportScreen() {
         return;
       }
 
+      if (resolution?.kind === "pending") {
+        pending += 1;
+        return;
+      }
+
       creating += 1;
       if (match?.suggestions.some((suggestion) => suggestion.matchType !== "exact")) {
         suggested += 1;
       }
     });
 
-    return { existing, creating, suggested };
+    return { existing, creating, suggested, pending };
   }, [matchesByRequirementId, resolutions, template]);
 
   const setExistingResolution = useCallback(
@@ -222,15 +311,19 @@ export default function TemplateImportScreen() {
     []
   );
 
-  const setCreateResolution = useCallback((requirement: TemplateExerciseRequirement) => {
-    setResolutions((current) => ({
-      ...current,
-      [requirement.exerciseId]: {
-        kind: "create",
-        name: requirement.canonicalName,
-      },
-    }));
-  }, []);
+  const setCreateResolution = useCallback(
+    (requirement: TemplateExerciseRequirement, name?: string) => {
+      const nextName = name?.trim() || requirement.canonicalName;
+      setResolutions((current) => ({
+        ...current,
+        [requirement.exerciseId]: {
+          kind: "create",
+          name: nextName,
+        },
+      }));
+    },
+    []
+  );
 
   const handleConfirmImport = useCallback(async () => {
     if (!template) return;
@@ -243,32 +336,41 @@ export default function TemplateImportScreen() {
 
       for (const requirement of template.exerciseRequirements) {
         const resolution =
-          resolutions[requirement.exerciseId] ??
-          ({
-            kind: "create",
-            name: requirement.canonicalName,
-          } satisfies TemplateImportResolution);
+          resolutions[requirement.exerciseId] ?? getDefaultResolution(requirement);
+
+        if (resolution.kind === "pending") {
+          throw new Error(
+            `Choose a target exercise for ${requirement.canonicalName} before importing.`
+          );
+        }
 
         if (resolution.kind === "existing") {
           exerciseNameOverrides[requirement.exerciseId] = resolution.exercise.name;
           continue;
         }
 
-        const existingExercise = await getExerciseByName(resolution.name);
-        if (!existingExercise) {
-          await createExercise({ name: resolution.name });
+        const nextName = resolution.name.trim();
+        if (!nextName) {
+          throw new Error(`Enter a name for ${requirement.canonicalName} before importing.`);
         }
 
-        exerciseNameOverrides[requirement.exerciseId] = resolution.name;
+        const existingExercise = await getExerciseByName(nextName);
+        if (!existingExercise) {
+          await createExercise({ name: nextName });
+        }
+
+        exerciseNameOverrides[requirement.exerciseId] = nextName;
       }
 
+      const programName = buildImportedTemplateName(template.id, exerciseNameOverrides);
       const pslSource = buildPersonalizedTemplateSource(
         template.id,
-        exerciseNameOverrides
+        exerciseNameOverrides,
+        programName
       );
 
       const program = await createPslProgram({
-        name: template.name,
+        name: programName,
         description: template.description,
         pslSource,
         isActive: false,
@@ -294,11 +396,10 @@ export default function TemplateImportScreen() {
   const renderMatchRow = useCallback(
     (match: TemplateExerciseMatch<Exercise>) => {
       const resolution =
-        resolutions[match.requirement.exerciseId] ??
-        ({
-          kind: "create",
-          name: match.requirement.canonicalName,
-        } satisfies TemplateImportResolution);
+        resolutions[match.requirement.exerciseId] ?? getDefaultResolution(match.requirement);
+      const explicitSelectionRequired = requiresExplicitExerciseSelection(
+        match.requirement
+      );
       const topSuggestion =
         match.suggestions.find((suggestion) => suggestion.matchType !== "exact") ?? null;
 
@@ -326,6 +427,8 @@ export default function TemplateImportScreen() {
               >
                 {resolution.kind === "existing"
                   ? `Using ${resolution.exercise.name}`
+                  : resolution.kind === "pending"
+                    ? "Choose the target exercise before import."
                   : `Will add ${resolution.name} to your library on import`}
               </Text>
             </View>
@@ -350,8 +453,10 @@ export default function TemplateImportScreen() {
                         : rawColors.foregroundSecondary,
                   },
                 ]}
-              >
-                {resolution.kind === "existing"
+                  >
+                {resolution.kind === "pending"
+                  ? "Pending"
+                  : resolution.kind === "existing"
                   ? resolution.source === "exact"
                     ? "Exact"
                     : resolution.source === "suggested"
@@ -362,7 +467,9 @@ export default function TemplateImportScreen() {
             </View>
           </View>
 
-          {topSuggestion && resolution.kind === "create" ? (
+          {topSuggestion &&
+          resolution.kind !== "existing" &&
+          !explicitSelectionRequired ? (
             <View
               style={[
                 styles.suggestionBox,
@@ -390,7 +497,9 @@ export default function TemplateImportScreen() {
           ) : null}
 
           <View style={styles.matchActions}>
-            {topSuggestion && resolution.kind === "create" ? (
+            {topSuggestion &&
+            resolution.kind !== "existing" &&
+            !explicitSelectionRequired ? (
               <Pressable
                 onPress={() =>
                   setExistingResolution(
@@ -432,11 +541,15 @@ export default function TemplateImportScreen() {
                   { color: rawColors.foregroundSecondary },
                 ]}
               >
-                {resolution.kind === "existing" ? "Choose Different" : "Choose Existing"}
+                {resolution.kind === "existing"
+                  ? "Choose Different"
+                  : explicitSelectionRequired
+                    ? "Choose Exercise"
+                    : "Choose Existing"}
               </Text>
             </Pressable>
 
-            {resolution.kind === "existing" ? (
+            {resolution.kind === "existing" && !explicitSelectionRequired ? (
               <Pressable
                 onPress={() => setCreateResolution(match.requirement)}
                 style={({ pressed }) => [
@@ -510,8 +623,9 @@ export default function TemplateImportScreen() {
                 ]}
               >
                 Review template exercises before import. Exact name matches are already
-                selected. Anything left unresolved will be added to your exercise
-                library automatically.
+                selected. Any target-exercise placeholders must be chosen explicitly.
+                Everything else left unresolved will be added to your exercise library
+                automatically.
               </Text>
               <View style={styles.summaryStats}>
                 <View
@@ -539,6 +653,18 @@ export default function TemplateImportScreen() {
                     {counts.creating} to add
                   </Text>
                 </View>
+                {counts.pending > 0 ? (
+                  <View
+                    style={[
+                      styles.summaryChip,
+                      { backgroundColor: rawColors.warning + "14" },
+                    ]}
+                  >
+                    <Text style={[styles.summaryChipText, { color: rawColors.warning }]}>
+                      {counts.pending} pending
+                    </Text>
+                  </View>
+                ) : null}
                 {counts.suggested > 0 ? (
                   <View
                     style={[
@@ -608,7 +734,7 @@ export default function TemplateImportScreen() {
         </>
       )}
 
-      <BaseModal
+      <AppModal
         visible={pickerRequirement !== null}
         onClose={() => {
           setPickerRequirementId(null);
@@ -619,7 +745,7 @@ export default function TemplateImportScreen() {
         {pickerRequirement ? (
           <View style={styles.pickerContent}>
             <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>
-              Choose existing exercise
+              Choose exercise
             </Text>
             <Text
               style={[
@@ -627,13 +753,19 @@ export default function TemplateImportScreen() {
                 { color: rawColors.foregroundSecondary },
               ]}
             >
-              {pickerRequirement.canonicalName}
+              {requiresExplicitExerciseSelection(pickerRequirement)
+                ? "Choose an existing exercise or type a new one to create it."
+                : pickerRequirement.canonicalName}
             </Text>
 
             <TextInput
               value={pickerQuery}
               onChangeText={setPickerQuery}
-              placeholder="Search your library..."
+              placeholder={
+                requiresExplicitExerciseSelection(pickerRequirement)
+                  ? "Search or type a new exercise name..."
+                  : "Search your library..."
+              }
               placeholderTextColor={rawColors.foregroundMuted}
               style={[
                 styles.pickerInput,
@@ -646,15 +778,15 @@ export default function TemplateImportScreen() {
             />
 
             <ScrollView style={styles.pickerList}>
-              {pickerSuggestions.length > 0 ? (
-                pickerSuggestions.slice(0, 20).map((suggestion) => (
+              {pickerOptions.length > 0 ? (
+                pickerOptions.slice(0, 20).map((option) => (
                   <Pressable
-                    key={suggestion.exercise.id}
+                    key={option.exercise.id}
                     onPress={() => {
                       setExistingResolution(
                         pickerRequirement,
-                        suggestion.exercise,
-                        suggestion.matchType === "exact" ? "exact" : "manual"
+                        option.exercise,
+                        option.source === "exact" ? "exact" : "manual"
                       );
                       setPickerRequirementId(null);
                       setPickerQuery("");
@@ -669,9 +801,9 @@ export default function TemplateImportScreen() {
                       },
                     ]}
                   >
-                    <View style={{ flex: 1, gap: 4 }}>
+                    <View style={styles.pickerItemBody}>
                       <Text style={[styles.pickerItemName, { color: rawColors.foreground }]}>
-                        {suggestion.exercise.name}
+                        {option.exercise.name}
                       </Text>
                       <Text
                         style={[
@@ -679,18 +811,16 @@ export default function TemplateImportScreen() {
                           { color: rawColors.foregroundSecondary },
                         ]}
                       >
-                        {suggestion.matchType === "alias"
-                          ? `Alias match on "${suggestion.matchedName}"`
-                          : suggestion.matchType === "exact"
-                            ? "Exact template name match"
-                            : `Similarity ${Math.round(suggestion.score * 100)}%`}
+                        {option.detail}
                       </Text>
                     </View>
-                    <MaterialCommunityIcons
-                      name="chevron-right"
-                      size={18}
-                      color={rawColors.foregroundSecondary}
-                    />
+                    <View style={styles.pickerChevronWrap}>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={18}
+                        color={rawColors.foregroundSecondary}
+                      />
+                    </View>
                   </Pressable>
                 ))
               ) : (
@@ -701,7 +831,9 @@ export default function TemplateImportScreen() {
                       { color: rawColors.foregroundMuted },
                     ]}
                   >
-                    No library exercises matched your search.
+                    {requiresExplicitExerciseSelection(pickerRequirement)
+                      ? "No library exercises matched your search. Type a name below to create one."
+                      : "No library exercises matched your search."}
                   </Text>
                 </View>
               )}
@@ -710,15 +842,18 @@ export default function TemplateImportScreen() {
             <View style={styles.pickerActions}>
               <Pressable
                 onPress={() => {
-                  setCreateResolution(pickerRequirement);
+                  if (!pickerCreateName) return;
+                  setCreateResolution(pickerRequirement, pickerCreateName);
                   setPickerRequirementId(null);
                   setPickerQuery("");
                 }}
+                disabled={!pickerCreateName}
                 style={({ pressed }) => [
                   styles.secondaryButton,
                   {
                     borderColor: rawColors.borderLight,
                     backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+                    opacity: pickerCreateName ? 1 : 0.5,
                   },
                 ]}
               >
@@ -728,13 +863,15 @@ export default function TemplateImportScreen() {
                     { color: rawColors.foregroundSecondary },
                   ]}
                 >
-                  Create New Instead
+                  {pickerCreateName
+                    ? `Create "${pickerCreateName}"`
+                    : "Type a name to create"}
                 </Text>
               </Pressable>
             </View>
           </View>
         ) : null}
-      </BaseModal>
+      </AppModal>
     </View>
   );
 }
@@ -879,6 +1016,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 8,
   },
+  pickerItemBody: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
   pickerItemName: {
     fontSize: 14,
     fontWeight: "700",
@@ -886,6 +1028,10 @@ const styles = StyleSheet.create({
   pickerItemMeta: {
     fontSize: 12,
     lineHeight: 17,
+  },
+  pickerChevronWrap: {
+    flexShrink: 0,
+    alignSelf: "center",
   },
   emptyPickerState: {
     paddingVertical: 12,

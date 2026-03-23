@@ -17,10 +17,10 @@ import {
 
 export type TemplateSequenceOverride = {
   repeat: boolean;
-  items: Array<{
+  items: {
     sessionId: string;
     restAfterDays: number;
-  }>;
+  }[];
 };
 
 export type TemplateSourceBuildResult = {
@@ -231,6 +231,11 @@ export function buildTemplatePslSource(params: {
   rawPslSource: string;
   sequenceOverride?: TemplateSequenceOverride;
   exerciseNameOverrides?: Record<string, string>;
+  programNameOverride?: string;
+  exerciseRequirementOverrides?: Record<
+    string,
+    Partial<TemplateExerciseRequirement>
+  >;
 }): TemplateSourceBuildResult {
   const compileResult = compilePslSource(params.rawPslSource, {
     calendarOverride: getTemplateCalendarOverride(params.rawPslSource),
@@ -252,12 +257,17 @@ export function buildTemplatePslSource(params: {
     params.sequenceOverride
   );
   const exerciseRequirementsMap = new Map<string, TemplateExerciseRequirement>();
+  const applyRequirementOverrides = (
+    requirement: TemplateExerciseRequirement
+  ): TemplateExerciseRequirement => ({
+    ...requirement,
+    ...(params.exerciseRequirementOverrides?.[requirement.exerciseId] ?? {}),
+  });
 
   ast.sessions.forEach((session) => {
     session.exercises.forEach((exercise) => {
-      const requirement = buildTemplateExerciseRequirement(
-        exercise.exercise,
-        exercise.aliases ?? []
+      const requirement = applyRequirementOverrides(
+        buildTemplateExerciseRequirement(exercise.exercise, exercise.aliases ?? [])
       );
       if (!exerciseRequirementsMap.has(requirement.exerciseId)) {
         exerciseRequirementsMap.set(requirement.exerciseId, requirement);
@@ -271,12 +281,14 @@ export function buildTemplatePslSource(params: {
     exerciseRequirements,
     activeExerciseNamesById
   );
+  const resolvedProgramName =
+    params.programNameOverride?.trim() || ast.metadata.name || params.name;
   const lines: string[] = [];
 
   lines.push('language_version: "0.3"');
   lines.push("metadata:");
   lines.push(`  id: ${ast.metadata.id || createId("prog", params.name)}`);
-  lines.push(`  name: ${yamlString(ast.metadata.name || params.name)}`);
+  lines.push(`  name: ${yamlString(resolvedProgramName)}`);
   if (ast.metadata.description?.trim()) {
     lines.push(`  description: ${yamlString(ast.metadata.description.trim())}`);
   }
@@ -334,15 +346,17 @@ export function buildTemplatePslSource(params: {
 
     lines.push("    exercises:");
     session.exercises.forEach((exercise) => {
-      const requirement = buildTemplateExerciseRequirement(
-        exercise.exercise,
-        exercise.aliases ?? []
+      const requirement = applyRequirementOverrides(
+        buildTemplateExerciseRequirement(exercise.exercise, exercise.aliases ?? [])
       );
       const activeExerciseName =
         activeExerciseNamesById[requirement.exerciseId]?.trim() ||
         requirement.canonicalName;
       const aliases = [...requirement.aliases];
-      if (activeExerciseName !== requirement.canonicalName) {
+      if (
+        activeExerciseName !== requirement.canonicalName &&
+        requirement.includeCanonicalAliasOnOverride !== false
+      ) {
         aliases.unshift(requirement.canonicalName);
       }
       const dedupedAliases = Array.from(
@@ -396,4 +410,3 @@ export function buildTemplatePslSource(params: {
     exerciseRequirements,
   };
 }
-

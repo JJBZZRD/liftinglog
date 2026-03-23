@@ -1,8 +1,10 @@
 import { compilePslSource } from "../../lib/programs/psl/pslService";
 import { introspectPslSource } from "../../lib/programs/psl/pslIntrospection";
 import {
+  buildImportedTemplateName,
   buildPersonalizedTemplateSource,
   getTemplateById,
+  getRecommendedActivationWeeksForPslSource,
   PSL_TEMPLATES,
 } from "../../lib/programs/psl/pslTemplates";
 
@@ -56,5 +58,39 @@ describe("pslTemplates", () => {
     });
 
     expect(result.valid).toBe(true);
+  });
+
+  it("marks single-exercise templates as explicit exercise selections", () => {
+    const template = getTemplateById("smolov-jr");
+    expect(template).toBeDefined();
+    expect(template?.defaultActivationWeeks).toBe(3);
+    expect(template?.exerciseRequirements).toHaveLength(1);
+    expect(template?.exerciseRequirements[0]?.canonicalName).toBe("Target Exercise");
+    expect(template?.exerciseRequirements[0]?.resolutionStrategy).toBe(
+      "select_or_create"
+    );
+  });
+
+  it("returns the bundled recommended activation horizon from template-backed PSL", () => {
+    const template = getTemplateById("smolov-jr");
+    expect(template).toBeDefined();
+    expect(getRecommendedActivationWeeksForPslSource(template!.pslSource)).toBe(3);
+  });
+
+  it("builds imported names from explicit exercise selections", () => {
+    expect(
+      buildImportedTemplateName("smolov-jr", { target_exercise: "Bench Press" })
+    ).toBe("Smolov Jr (Bench Press)");
+  });
+
+  it("can personalize the stored PSL metadata name for imported templates", () => {
+    const personalizedSource = buildPersonalizedTemplateSource(
+      "smolov-jr",
+      { target_exercise: "Bench Press" },
+      "Smolov Jr (Bench Press)"
+    );
+
+    expect(personalizedSource).toContain('name: "Smolov Jr (Bench Press)"');
+    expect(personalizedSource).toContain('exercise: "Bench Press"');
   });
 });

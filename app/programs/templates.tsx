@@ -134,9 +134,12 @@ export default function TemplateBrowserScreen() {
 
     if (!introspection.requiresEndDateForActivation) return null;
 
+    const previewWeeks =
+      previewTemplate.defaultActivationWeeks ?? DEFAULT_ACTIVATION_WEEKS;
+
     return {
       start_date: startDateIso,
-      end_date: computeEndDateIso(startDateIso, DEFAULT_ACTIVATION_WEEKS),
+      end_date: computeEndDateIso(startDateIso, previewWeeks),
     };
   }, [previewTemplate]);
 
@@ -618,6 +621,13 @@ export default function TemplateBrowserScreen() {
                   {previewTemplate.daysPerWeek} days/week
                 </Text>
               </View>
+              {previewTemplate.defaultActivationWeeks ? (
+                <View style={[styles.tag, { backgroundColor: rawColors.surfaceSecondary }]}>
+                  <Text style={[styles.tagText, { color: rawColors.foregroundSecondary }]}>
+                    {previewTemplate.defaultActivationWeeks} week cycle
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Session Breakdown */}

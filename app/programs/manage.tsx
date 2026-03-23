@@ -53,6 +53,7 @@ import {
   deserializeBlockProgramDraftFromPsl,
   deserializeFlatProgramDraftFromPsl,
 } from "../../lib/programs/psl/pslDraftMapper";
+import { getRecommendedActivationWeeksForPslSource } from "../../lib/programs/psl/pslTemplates";
 import { buildProgramCompletions } from "../../lib/programs/psl/programRuntime";
 import { returnToProgramsTab } from "../../lib/utils/programNavigation";
 import {
@@ -114,6 +115,26 @@ function getDefaultPercentSelection(
   return { mode: "custom", customValue: "" };
 }
 
+function deriveActivationWeeks(
+  source: string,
+  startDate: string | null,
+  endDate: string | null
+): number {
+  if (startDate && endDate) {
+    const startUtc = new Date(`${startDate}T00:00:00Z`);
+    const endUtc = new Date(`${endDate}T00:00:00Z`);
+    if (!Number.isNaN(startUtc.getTime()) && !Number.isNaN(endUtc.getTime())) {
+      const diffDays =
+        Math.floor((endUtc.getTime() - startUtc.getTime()) / 86400000) + 1;
+      if (diffDays >= 1) {
+        return Math.max(1, Math.ceil(diffDays / 7));
+      }
+    }
+  }
+
+  return getRecommendedActivationWeeksForPslSource(source) ?? DEFAULT_ACTIVATION_WEEKS;
+}
+
 export default function ManageProgramsScreen() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ activateProgramId?: string }>();
@@ -168,7 +189,9 @@ export default function ManageProgramsScreen() {
     handledActivateParam.current = params.activateProgramId;
     setActivateProgram(program);
     setActivationStartDate(program.startDate ? isoToDateLocal(program.startDate) : isoToDateLocal(getDefaultActivationStartDateIso()));
-    setActivationWeeks(DEFAULT_ACTIVATION_WEEKS);
+    setActivationWeeks(
+      deriveActivationWeeks(program.pslSource, program.startDate, program.endDate)
+    );
     setActivationError("");
     setPercentIntensityLoading(false);
     setPercentIntensityOptions([]);
@@ -200,7 +223,9 @@ export default function ManageProgramsScreen() {
     setActionProgram(null);
     setActivateProgram(program);
     setActivationStartDate(program.startDate ? isoToDateLocal(program.startDate) : isoToDateLocal(getDefaultActivationStartDateIso()));
-    setActivationWeeks(DEFAULT_ACTIVATION_WEEKS);
+    setActivationWeeks(
+      deriveActivationWeeks(program.pslSource, program.startDate, program.endDate)
+    );
     setActivationError("");
     setPercentIntensityLoading(false);
     setPercentIntensityOptions([]);
@@ -697,7 +722,7 @@ export default function ManageProgramsScreen() {
           headerStyle: { backgroundColor: rawColors.background },
           headerTintColor: rawColors.foreground,
           headerLeft: () => (
-            <Pressable onPress={returnToProgramsTab} hitSlop={8}>
+            <Pressable onPress={returnToProgramsTab} hitSlop={8} style={{ marginRight: 16 }}>
               <MaterialCommunityIcons
                 name={Platform.OS === "ios" ? "chevron-left" : "arrow-left"}
                 size={Platform.OS === "ios" ? 28 : 24}

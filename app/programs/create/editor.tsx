@@ -44,6 +44,7 @@ import { getPslCompatibilityWarnings } from "../../../lib/programs/psl/pslCompat
 import { buildProgramCompletions } from "../../../lib/programs/psl/programRuntime";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import { returnToManagePrograms } from "../../../lib/utils/programNavigation";
+import { getRecommendedActivationWeeksForPslSource } from "../../../lib/programs/psl/pslTemplates";
 
 type RecordValue = Record<string, unknown>;
 
@@ -58,16 +59,24 @@ function appendSnippet(source: string, snippet: string): string {
   return trimmed + sep + "\n" + snippet.trimStart() + "\n";
 }
 
-function derivePreviewWeeks(startDate: string | null, endDate: string | null): number {
-  if (!startDate || !endDate) return DEFAULT_ACTIVATION_WEEKS;
-  const startUtc = new Date(`${startDate}T00:00:00Z`);
-  const endUtc = new Date(`${endDate}T00:00:00Z`);
-  if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endUtc.getTime())) {
-    return DEFAULT_ACTIVATION_WEEKS;
+function derivePreviewWeeks(
+  source: string,
+  startDate: string | null,
+  endDate: string | null
+): number {
+  if (startDate && endDate) {
+    const startUtc = new Date(`${startDate}T00:00:00Z`);
+    const endUtc = new Date(`${endDate}T00:00:00Z`);
+    if (!Number.isNaN(startUtc.getTime()) && !Number.isNaN(endUtc.getTime())) {
+      const diffDays =
+        Math.floor((endUtc.getTime() - startUtc.getTime()) / 86400000) + 1;
+      if (diffDays >= 1) {
+        return Math.max(1, Math.ceil(diffDays / 7));
+      }
+    }
   }
-  const diffDays = Math.floor((endUtc.getTime() - startUtc.getTime()) / 86400000) + 1;
-  if (diffDays < 1) return DEFAULT_ACTIVATION_WEEKS;
-  return Math.max(1, Math.ceil(diffDays / 7));
+
+  return getRecommendedActivationWeeksForPslSource(source) ?? DEFAULT_ACTIVATION_WEEKS;
 }
 
 const SKELETON_SESSIONS = `language_version: "0.3"
@@ -186,7 +195,9 @@ export default function ProgramPslEditorScreen() {
   const [previewStartDate, setPreviewStartDate] = useState<Date>(
     isoToDateLocal(getDefaultActivationStartDateIso())
   );
-  const [previewWeeks, setPreviewWeeks] = useState(DEFAULT_ACTIVATION_WEEKS);
+  const [previewWeeks, setPreviewWeeks] = useState(
+    getRecommendedActivationWeeksForPslSource(initialSource) ?? DEFAULT_ACTIVATION_WEEKS
+  );
   const [showStartPicker, setShowStartPicker] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -198,6 +209,10 @@ export default function ProgramPslEditorScreen() {
       setLoadingProgram(false);
       if (explicitSource) {
         setPslSource(explicitSource);
+        setPreviewWeeks(
+          getRecommendedActivationWeeksForPslSource(explicitSource) ??
+            DEFAULT_ACTIVATION_WEEKS
+        );
       }
       return;
     }
@@ -224,7 +239,9 @@ export default function ProgramPslEditorScreen() {
         setPreviewStartDate(
           isoToDateLocal(program.startDate ?? getDefaultActivationStartDateIso())
         );
-        setPreviewWeeks(derivePreviewWeeks(program.startDate, program.endDate));
+        setPreviewWeeks(
+          derivePreviewWeeks(program.pslSource, program.startDate, program.endDate)
+        );
         setSaveError("");
       } catch (error) {
         if (!isCancelled) {
@@ -584,7 +601,10 @@ export default function ProgramPslEditorScreen() {
             <Pressable
               onPress={() => {
                 setPreviewStartDate(isoToDateLocal(getDefaultActivationStartDateIso()));
-                setPreviewWeeks(DEFAULT_ACTIVATION_WEEKS);
+                setPreviewWeeks(
+                  getRecommendedActivationWeeksForPslSource(pslSource) ??
+                    DEFAULT_ACTIVATION_WEEKS
+                );
               }}
               hitSlop={8}
               style={{ marginTop: 10, alignSelf: "flex-start" }}

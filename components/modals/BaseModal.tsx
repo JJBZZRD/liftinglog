@@ -11,6 +11,7 @@
  */
 import { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, View, ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface BaseModalProps {
   /** Whether the modal is visible */
@@ -45,6 +46,8 @@ export default function BaseModal({
   maxWidth = 420,
   centerContent = true,
 }: BaseModalProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal
       visible={visible}
@@ -61,7 +64,15 @@ export default function BaseModal({
         />
         <View
           pointerEvents="box-none"
-          className={`flex-1 p-4 ${centerContent ? "justify-center items-center" : ""}`}
+          style={[
+            styles.contentContainer,
+            centerContent ? styles.centeredContent : null,
+            {
+              paddingTop: centerContent ? 16 : Math.max(insets.top + 20, 36),
+              paddingBottom: Math.max(insets.bottom + 16, 16),
+              paddingHorizontal: 16,
+            },
+          ]}
         >
           <View
             className="w-full rounded-xl p-4 bg-surface"
@@ -79,20 +90,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  contentContainer: {
+    flex: 1,
+    alignItems: "center",
+  },
+  centeredContent: {
+    justifyContent: "center",
+  },
 });
-
-/**
- * ConfirmModal - A specialized modal for confirmation dialogs
- */
-interface ConfirmModalProps {
-  visible: boolean;
-  onClose: () => void;
-  title: string;
-  message?: string;
-  confirmText?: string;
-  cancelText?: string;
-  onConfirm: () => void;
-  destructive?: boolean;
-}
 
 export { BaseModal };

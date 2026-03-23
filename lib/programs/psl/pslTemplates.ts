@@ -1,3 +1,4 @@
+import { parseDocument } from "program-specification-language";
 import { buildTemplatePslSource, type TemplateSequenceOverride } from "./pslTemplateSource";
 import type { TemplateExerciseRequirement } from "./templateExercises";
 
@@ -15,11 +16,26 @@ export interface PslTemplate {
   category: TemplateCategory;
   description: string;
   daysPerWeek: number;
+  defaultActivationWeeks?: number;
   pslSource: string;
   exerciseRequirements: TemplateExerciseRequirement[];
 }
 
-type RawPslTemplate = Omit<PslTemplate, "exerciseRequirements">;
+type RawPslTemplate = Omit<PslTemplate, "exerciseRequirements"> & {
+  exerciseRequirementOverrides?: Record<
+    string,
+    Partial<TemplateExerciseRequirement>
+  >;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const EXPLICIT_EXERCISE_SELECTION: Partial<TemplateExerciseRequirement> = {
+  resolutionStrategy: "select_or_create",
+  includeCanonicalAliasOnOverride: false,
+};
 
 const RAW_PSL_TEMPLATES: RawPslTemplate[] = [
   // ── Beginner ────────────────────────────────────────────
@@ -301,97 +317,55 @@ sessions:
 `,
   },
   {
-    id: "smolov-jr-bench",
-    name: "Smolov Jr (Bench Press)",
+    id: "smolov-jr",
+    name: "Smolov Jr",
     category: "Powerlifting",
-    description: "3-week intensive bench press peaking program. Four sessions per week with increasing volume and weekly load jumps.",
+    description:
+      "3-week intensive single-lift specialization cycle. Four sessions per week with escalating volume and default weekly load jumps.",
     daysPerWeek: 4,
+    defaultActivationWeeks: 3,
+    exerciseRequirementOverrides: {
+      target_exercise: EXPLICIT_EXERCISE_SELECTION,
+    },
     pslSource: `language_version: "0.2"
 metadata:
-  id: smolov-jr-bench
-  name: Smolov Jr (Bench Press)
-  description: 3-week intensive bench peaking program
+  id: smolov-jr
+  name: Smolov Jr
+  description: 3-week intensive single-lift specialization cycle
 units: kg
 sessions:
-  - id: bench-mon
+  - id: day-1
     name: Day 1 - 6x6 @70%
     schedule: "MON"
     exercises:
-      - exercise: Barbell Bench Press
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "6x6 @70%; +2.5kg every week"
-  - id: bench-wed
+  - id: day-2
     name: Day 2 - 7x5 @75%
     schedule: "WED"
     exercises:
-      - exercise: Barbell Bench Press
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "7x5 @75%; +2.5kg every week"
-  - id: bench-fri
+  - id: day-3
     name: Day 3 - 8x4 @80%
     schedule: "FRI"
     exercises:
-      - exercise: Barbell Bench Press
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "8x4 @80%; +2.5kg every week"
-  - id: bench-sat
+  - id: day-4
     name: Day 4 - 10x3 @85%
     schedule: "SAT"
     exercises:
-      - exercise: Barbell Bench Press
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "10x3 @85%; +2.5kg every week"
-`,
-  },
-  {
-    id: "smolov-jr-squat",
-    name: "Smolov Jr (Squat)",
-    category: "Powerlifting",
-    description: "3-week intensive squat peaking program. Same structure as bench variant but for Back Squat.",
-    daysPerWeek: 4,
-    pslSource: `language_version: "0.2"
-metadata:
-  id: smolov-jr-squat
-  name: Smolov Jr (Squat)
-  description: 3-week intensive squat peaking program
-units: kg
-sessions:
-  - id: squat-mon
-    name: Day 1 - 6x6 @70%
-    schedule: "MON"
-    exercises:
-      - exercise: Back Squat
-        rest: "3m"
-        sets:
-          - "6x6 @70%; +5kg every week"
-  - id: squat-wed
-    name: Day 2 - 7x5 @75%
-    schedule: "WED"
-    exercises:
-      - exercise: Back Squat
-        rest: "3m"
-        sets:
-          - "7x5 @75%; +5kg every week"
-  - id: squat-fri
-    name: Day 3 - 8x4 @80%
-    schedule: "FRI"
-    exercises:
-      - exercise: Back Squat
-        rest: "3m"
-        sets:
-          - "8x4 @80%; +5kg every week"
-  - id: squat-sat
-    name: Day 4 - 10x3 @85%
-    schedule: "SAT"
-    exercises:
-      - exercise: Back Squat
-        rest: "3m"
-        sets:
-          - "10x3 @85%; +5kg every week"
 `,
   },
 
@@ -837,6 +811,9 @@ sessions:
     category: "Single-Exercise",
     description: "Simple 3x5 linear progression scheme. Add weight every session. Suitable for any compound lift.",
     daysPerWeek: 3,
+    exerciseRequirementOverrides: {
+      target_exercise: EXPLICIT_EXERCISE_SELECTION,
+    },
     pslSource: `language_version: "0.2"
 metadata:
   id: linear-progression
@@ -848,7 +825,7 @@ sessions:
     name: Session A
     schedule: "MON"
     exercises:
-      - exercise: Back Squat
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "3x5 @60kg; +2.5kg every session if success"
@@ -856,7 +833,7 @@ sessions:
     name: Session B
     schedule: "WED"
     exercises:
-      - exercise: Back Squat
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "3x5 @60kg; +2.5kg every session if success"
@@ -864,7 +841,7 @@ sessions:
     name: Session C
     schedule: "FRI"
     exercises:
-      - exercise: Back Squat
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "3x5 @60kg; +2.5kg every session if success"
@@ -876,6 +853,9 @@ sessions:
     category: "Single-Exercise",
     description: "Rep-range based progression. Hit the top of your rep range on all sets, then increase the weight and start from the bottom of the range.",
     daysPerWeek: 3,
+    exerciseRequirementOverrides: {
+      target_exercise: EXPLICIT_EXERCISE_SELECTION,
+    },
     pslSource: `language_version: "0.2"
 metadata:
   id: double-progression
@@ -887,7 +867,7 @@ sessions:
     name: Session A
     schedule: "MON"
     exercises:
-      - exercise: Dumbbell Bench Press
+      - exercise: Target Exercise
         rest: "2m"
         sets:
           - "3x8-12 @RIR2"
@@ -895,7 +875,7 @@ sessions:
     name: Session B
     schedule: "WED"
     exercises:
-      - exercise: Dumbbell Bench Press
+      - exercise: Target Exercise
         rest: "2m"
         sets:
           - "3x8-12 @RIR2"
@@ -903,7 +883,7 @@ sessions:
     name: Session C
     schedule: "FRI"
     exercises:
-      - exercise: Dumbbell Bench Press
+      - exercise: Target Exercise
         rest: "2m"
         sets:
           - "3x8-12 @RIR2"
@@ -915,6 +895,9 @@ sessions:
     category: "Single-Exercise",
     description: "Top set at RPE 8, backoff sets at 88%. Autoregulates intensity based on daily readiness.",
     daysPerWeek: 2,
+    exerciseRequirementOverrides: {
+      target_exercise: EXPLICIT_EXERCISE_SELECTION,
+    },
     pslSource: `language_version: "0.2"
 metadata:
   id: rpe-autoregulated
@@ -926,7 +909,7 @@ sessions:
     name: Heavy Day
     schedule: "MON"
     exercises:
-      - exercise: Back Squat
+      - exercise: Target Exercise
         rest: "3m"
         sets:
           - "1x3 @RPE8 role top"
@@ -935,7 +918,7 @@ sessions:
     name: Volume Day
     schedule: "THU"
     exercises:
-      - exercise: Back Squat
+      - exercise: Target Exercise
         rest: "2m30s"
         sets:
           - "4x6 @RPE7"
@@ -969,22 +952,13 @@ const TEMPLATE_SEQUENCE_OVERRIDES: Partial<Record<RawPslTemplate["id"], Template
       { sessionId: "ohp-day", restAfterDays: 2 },
     ],
   },
-  "smolov-jr-bench": {
+  "smolov-jr": {
     repeat: true,
     items: [
-      { sessionId: "bench-mon", restAfterDays: 1 },
-      { sessionId: "bench-wed", restAfterDays: 1 },
-      { sessionId: "bench-fri", restAfterDays: 0 },
-      { sessionId: "bench-sat", restAfterDays: 1 },
-    ],
-  },
-  "smolov-jr-squat": {
-    repeat: true,
-    items: [
-      { sessionId: "squat-mon", restAfterDays: 1 },
-      { sessionId: "squat-wed", restAfterDays: 1 },
-      { sessionId: "squat-fri", restAfterDays: 0 },
-      { sessionId: "squat-sat", restAfterDays: 1 },
+      { sessionId: "day-1", restAfterDays: 1 },
+      { sessionId: "day-2", restAfterDays: 1 },
+      { sessionId: "day-3", restAfterDays: 0 },
+      { sessionId: "day-4", restAfterDays: 1 },
     ],
   },
   "ppl-6day": {
@@ -1059,6 +1033,7 @@ function buildTemplate(template: RawPslTemplate): PslTemplate {
     name: template.name,
     rawPslSource: template.pslSource,
     sequenceOverride: TEMPLATE_SEQUENCE_OVERRIDES[template.id],
+    exerciseRequirementOverrides: template.exerciseRequirementOverrides,
   });
 
   return {
@@ -1070,7 +1045,8 @@ function buildTemplate(template: RawPslTemplate): PslTemplate {
 
 export function buildPersonalizedTemplateSource(
   templateId: string,
-  exerciseNameOverrides: Record<string, string>
+  exerciseNameOverrides: Record<string, string>,
+  programNameOverride?: string
 ): string {
   const template = RAW_PSL_TEMPLATES.find((candidate) => candidate.id === templateId);
   if (!template) {
@@ -1082,6 +1058,8 @@ export function buildPersonalizedTemplateSource(
     rawPslSource: template.pslSource,
     sequenceOverride: TEMPLATE_SEQUENCE_OVERRIDES[template.id],
     exerciseNameOverrides,
+    programNameOverride,
+    exerciseRequirementOverrides: template.exerciseRequirementOverrides,
   }).pslSource;
 }
 
@@ -1112,4 +1090,55 @@ export function searchTemplates(query: string): PslTemplate[] {
       t.description.toLowerCase().includes(q) ||
       t.category.toLowerCase().includes(q)
   );
+}
+
+export function getRecommendedActivationWeeksForPslSource(
+  source: string
+): number | null {
+  try {
+    const raw = parseDocument(source);
+    if (!isRecord(raw) || !isRecord(raw.metadata)) {
+      return null;
+    }
+
+    const metadataId =
+      typeof raw.metadata.id === "string" ? raw.metadata.id.trim().toLowerCase() : "";
+    const metadataName =
+      typeof raw.metadata.name === "string"
+        ? raw.metadata.name.trim().toLowerCase()
+        : "";
+
+    const matchedTemplate = RAW_PSL_TEMPLATES.find((template) => {
+      const matchesId = metadataId.length > 0 && template.id.toLowerCase() === metadataId;
+      const matchesName =
+        metadataName.length > 0 && template.name.trim().toLowerCase() === metadataName;
+      return matchesId || matchesName;
+    });
+
+    return matchedTemplate?.defaultActivationWeeks ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildImportedTemplateName(
+  templateId: string,
+  exerciseNameOverrides: Record<string, string>
+): string {
+  const template = getTemplateById(templateId);
+  if (!template) {
+    throw new Error(`Unknown template: ${templateId}`);
+  }
+
+  const selectedExerciseNames = template.exerciseRequirements
+    .filter((requirement) => requirement.resolutionStrategy === "select_or_create")
+    .map((requirement) => exerciseNameOverrides[requirement.exerciseId]?.trim() ?? "")
+    .filter((name) => name.length > 0);
+
+  const uniqueExerciseNames = Array.from(new Set(selectedExerciseNames));
+  if (uniqueExerciseNames.length === 0) {
+    return template.name;
+  }
+
+  return `${template.name} (${uniqueExerciseNames.join(", ")})`;
 }

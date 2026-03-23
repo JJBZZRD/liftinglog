@@ -7,6 +7,8 @@ export type TemplateExerciseRequirement = {
   exerciseId: string;
   canonicalName: string;
   aliases: string[];
+  resolutionStrategy?: "match_or_create" | "select_or_create";
+  includeCanonicalAliasOnOverride?: boolean;
 };
 
 export type TemplateExerciseSuggestion<TExercise extends ExerciseLike = ExerciseLike> = {
@@ -216,7 +218,7 @@ const TEMPLATE_EXERCISE_BY_CANONICAL_NAME = new Map(
   TEMPLATE_EXERCISE_DEFINITIONS.map((exercise) => [exercise.canonicalName, exercise])
 );
 
-const PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
+const PHRASE_REPLACEMENTS: [RegExp, string][] = [
   [/\bcgbp\b/g, "close grip bench press"],
   [/\bohp\b/g, "overhead press"],
   [/\brdl\b/g, "romanian deadlift"],
@@ -442,7 +444,8 @@ export function buildTemplateExerciseAliasesMap(
 
     dedupeAliases(activeExerciseName, [
       ...requirement.aliases,
-      ...(activeExerciseName !== requirement.canonicalName
+      ...(activeExerciseName !== requirement.canonicalName &&
+      requirement.includeCanonicalAliasOnOverride !== false
         ? [requirement.canonicalName]
         : []),
     ]).forEach((alias) => {
@@ -467,7 +470,8 @@ export function buildTemplateExerciseAliasesMap(
 
     dedupeAliases(activeExerciseName, [
       ...requirement.aliases,
-      ...(activeExerciseName !== requirement.canonicalName
+      ...(activeExerciseName !== requirement.canonicalName &&
+      requirement.includeCanonicalAliasOnOverride !== false
         ? [requirement.canonicalName]
         : []),
     ]).forEach((alias) => {
@@ -583,4 +587,3 @@ export function matchTemplateExercises<
     };
   });
 }
-

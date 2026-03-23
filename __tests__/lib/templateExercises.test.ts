@@ -41,4 +41,18 @@ describe("templateExercises", () => {
 
     expect(aliases["Bench Press"]).toBeUndefined();
   });
+
+  it("can omit placeholder canonical aliases after a user picks a real exercise", () => {
+    const aliases = buildTemplateExerciseAliasesMap(
+      [
+        {
+          ...buildTemplateExerciseRequirement("Target Exercise"),
+          includeCanonicalAliasOnOverride: false,
+        },
+      ],
+      { target_exercise: "Bench Press" }
+    );
+
+    expect(aliases["Target Exercise"]).toBeUndefined();
+  });
 });
