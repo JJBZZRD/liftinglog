@@ -192,15 +192,21 @@ export default function SettingsScreen() {
         result.workouts.inserted +
         result.workoutExercises.inserted +
         result.sets.inserted +
-        result.prEvents.inserted;
+        result.prEvents.inserted +
+        result.media.inserted;
       const totalUpdated =
         result.exercises.updated +
         result.workouts.updated +
-        result.workoutExercises.updated;
+        result.workoutExercises.updated +
+        result.sets.updated +
+        result.media.updated;
 
-      let message = `Imported: ${result.exercises.inserted} exercises, ${result.workouts.inserted} workouts, ${result.sets.inserted} sets.`;
+      let message = `Imported: ${result.exercises.inserted} exercises, ${result.workouts.inserted} workouts, ${result.sets.inserted} sets, ${result.media.inserted} media links.`;
       if (totalUpdated > 0) {
         message += ` Updated ${totalUpdated} existing records.`;
+      }
+      if (result.media.relinked > 0) {
+        message += ` Repaired ${result.media.relinked} video links.`;
       }
       message += " Your existing data has been preserved.";
 

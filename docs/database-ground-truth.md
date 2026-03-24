@@ -211,7 +211,7 @@ These rules are mandatory.
 
 15. `program_calendar*` rows are materialized schedule rows and can be deleted/rebuilt when a program is rescheduled or reactivated.
 16. Because of that, durable logged history must live in the main history tables, not only in `program_calendar*`.
-17. Backup/import currently merges only the main history tables plus PR events. Program tables are not merged.
+17. Backup/import merges the durable history tables plus `media`, then rebuilds `pr_events` from the merged `sets`. Program tables are not merged.
 
 ## 6. Foreign Keys vs Soft Links
 
@@ -412,19 +412,23 @@ Rule:
 
 ### Backup/import
 
+Backup export should produce a current whole-database snapshot by checkpointing SQLite WAL state and copying the app database file.
+
 Current import merge order is:
 
 1. `exercises`
 2. `workouts`
 3. `workout_exercises`
 4. `sets`
-5. `pr_events`
+5. `media`
+6. rebuild `pr_events` from merged `sets`
 
 Program tables are not part of this merge.
 
 Implication:
 
 - durable logged training data must not depend on `program_calendar*`
+- durable video/media linkage can survive backup/import only if it remains anchored to real `sets`/`workouts` and enough metadata exists to re-discover gallery assets
 - if program provenance ever needs to survive backup/import, that provenance must also exist in the durable side of the model
 
 ## 9. Deletion and Cleanup Rules

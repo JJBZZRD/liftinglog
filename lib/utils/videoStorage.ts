@@ -4,6 +4,11 @@ import * as MediaLibrary from "expo-media-library";
 export const DEFAULT_MEDIA_ALBUM_NAME = "LiftingLog";
 export const APP_VIDEO_STORAGE_DIR = "set-videos";
 const isDevEnv = typeof __DEV__ !== "undefined" && __DEV__;
+const REDISCOVERY_PAGE_SIZE = 200;
+const REDISCOVERY_MAX_SCAN_COUNT = 1500;
+const REDISCOVERY_TIME_WINDOW_MS = 60_000;
+const REDISCOVERY_MATCH_WINDOW_MS = 2_000;
+const REDISCOVERY_DURATION_WINDOW_MS = 2_000;
 
 export type PersistedVideoDescriptor = {
   localUri: string;
@@ -12,6 +17,25 @@ export type PersistedVideoDescriptor = {
   mediaCreatedAt: number | null;
   durationMs: number | null;
   albumName: string | null;
+};
+
+export type VideoRediscoveryMetadata = {
+  assetId?: string | null;
+  originalFilename?: string | null;
+  mediaCreatedAt?: number | null;
+  durationMs?: number | null;
+  albumName?: string | null;
+};
+
+export type RediscoveredVideoReference = {
+  assetId: string;
+  localUri: string | null;
+  uri: string | null;
+  originalFilename: string | null;
+  mediaCreatedAt: number | null;
+  durationMs: number | null;
+  albumName: string | null;
+  source: "asset_id" | "album_search" | "library_search";
 };
 
 export function toMillis(value?: number | null): number | null {
@@ -128,6 +152,214 @@ async function getSafeAssetInfo(assetId: string): Promise<MediaLibrary.AssetInfo
     }
     return null;
   }
+}
+
+export async function ensureVideoLibraryPermission(): Promise<boolean> {
+  try {
+    let permission = await MediaLibrary.getPermissionsAsync(false, ["video"]);
+    if (!permission.granted) {
+      permission = await MediaLibrary.requestPermissionsAsync(false, ["video"]);
+    }
+    return permission.granted && permission.accessPrivileges !== "none";
+  } catch (error) {
+    if (isDevEnv) {
+      console.warn("[videoStorage] Failed checking video library permission:", {
+        error: String(error),
+      });
+    }
+    return false;
+  }
+}
+
+function getDurationDeltaMs(
+  expectedDurationMs: number | null,
+  assetDurationSeconds?: number | null
+): number | null {
+  if (expectedDurationMs == null || assetDurationSeconds == null) {
+    return null;
+  }
+
+  return Math.abs(Math.round(assetDurationSeconds * 1000) - expectedDurationMs);
+}
+
+function buildResolvedReference(
+  assetId: string,
+  assetInfo: MediaLibrary.AssetInfo | null,
+  source: RediscoveredVideoReference["source"],
+  fallbackAlbumName: string | null
+): RediscoveredVideoReference | null {
+  if (!assetInfo) {
+    return null;
+  }
+
+  return {
+    assetId,
+    localUri: assetInfo.localUri ?? null,
+    uri: assetInfo.uri ?? null,
+    originalFilename: assetInfo.filename ?? null,
+    mediaCreatedAt: assetInfo.creationTime ?? null,
+    durationMs:
+      assetInfo.duration != null ? Math.round(assetInfo.duration * 1000) : null,
+    albumName: fallbackAlbumName,
+    source,
+  };
+}
+
+async function resolveVideoByAssetId(
+  assetId: string,
+  fallbackAlbumName: string | null
+): Promise<RediscoveredVideoReference | null> {
+  const assetInfo = await getSafeAssetInfo(assetId);
+  return buildResolvedReference(assetId, assetInfo, "asset_id", fallbackAlbumName);
+}
+
+async function searchVideoScope(
+  metadata: Required<Pick<VideoRediscoveryMetadata, "originalFilename" | "mediaCreatedAt" | "durationMs">> & {
+    albumName: string | null;
+  },
+  scope: "album" | "library"
+): Promise<RediscoveredVideoReference | null> {
+  const hasFilename = !!metadata.originalFilename;
+  const mediaCreatedAtMs = toMillis(metadata.mediaCreatedAt);
+  const hasCreationTime = mediaCreatedAtMs !== null;
+
+  if (!hasFilename && !hasCreationTime) {
+    return null;
+  }
+
+  let album: MediaLibrary.Album | null = null;
+  if (scope === "album" && metadata.albumName) {
+    album = await MediaLibrary.getAlbumAsync(metadata.albumName);
+    if (!album) {
+      return null;
+    }
+  }
+
+  const searchOptions: MediaLibrary.AssetsOptions = {
+    mediaType: MediaLibrary.MediaType.video,
+    first: REDISCOVERY_PAGE_SIZE,
+    sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+    ...(album ? { album } : {}),
+  };
+
+  if (mediaCreatedAtMs !== null) {
+    searchOptions.createdAfter = mediaCreatedAtMs - REDISCOVERY_TIME_WINDOW_MS;
+    searchOptions.createdBefore = mediaCreatedAtMs + REDISCOVERY_TIME_WINDOW_MS;
+  }
+
+  let after: string | undefined;
+  let scannedCount = 0;
+  let bestMatch:
+    | {
+        score: number;
+        reference: RediscoveredVideoReference;
+      }
+    | null = null;
+
+  while (scannedCount < REDISCOVERY_MAX_SCAN_COUNT) {
+    const page = await MediaLibrary.getAssetsAsync({
+      ...searchOptions,
+      ...(after ? { after } : {}),
+    });
+    scannedCount += page.assets.length;
+
+    for (const candidate of page.assets) {
+      const candidateCreationTimeMs = toMillis(candidate.creationTime);
+      const filenameMatches =
+        hasFilename && candidate.filename === metadata.originalFilename;
+      const creationTimeMatches =
+        hasCreationTime &&
+        candidateCreationTimeMs !== null &&
+        mediaCreatedAtMs !== null &&
+        Math.abs(candidateCreationTimeMs - mediaCreatedAtMs) <= REDISCOVERY_MATCH_WINDOW_MS;
+
+      if (!filenameMatches && !creationTimeMatches) {
+        continue;
+      }
+
+      const assetInfo = await getSafeAssetInfo(candidate.id);
+      if (!assetInfo) {
+        continue;
+      }
+
+      let score = 0;
+      if (filenameMatches) score += 5;
+      if (creationTimeMatches) score += 4;
+
+      const durationDeltaMs = getDurationDeltaMs(metadata.durationMs, assetInfo.duration);
+      if (durationDeltaMs !== null) {
+        if (durationDeltaMs <= REDISCOVERY_DURATION_WINDOW_MS) {
+          score += 3;
+        } else if (durationDeltaMs <= REDISCOVERY_TIME_WINDOW_MS) {
+          score += 1;
+        }
+      }
+
+      if (!bestMatch || score > bestMatch.score) {
+        const reference = buildResolvedReference(
+          candidate.id,
+          assetInfo,
+          scope === "album" ? "album_search" : "library_search",
+          metadata.albumName
+        );
+        if (reference) {
+          bestMatch = { score, reference };
+        }
+      }
+    }
+
+    if (!page.hasNextPage || !page.endCursor || page.assets.length === 0) {
+      break;
+    }
+    after = page.endCursor;
+  }
+
+  return bestMatch?.reference ?? null;
+}
+
+export async function resolveVideoLibraryReference(
+  metadata: VideoRediscoveryMetadata
+): Promise<RediscoveredVideoReference | null> {
+  const preferredAlbumNames = [...new Set(
+    [metadata.albumName, DEFAULT_MEDIA_ALBUM_NAME].filter(
+      (value): value is string => typeof value === "string" && value.trim().length > 0
+    )
+  )];
+
+  if (metadata.assetId) {
+    const direct = await resolveVideoByAssetId(
+      String(metadata.assetId),
+      preferredAlbumNames[0] ?? null
+    );
+    if (direct) {
+      return direct;
+    }
+  }
+
+  for (const albumName of preferredAlbumNames) {
+    const match = await searchVideoScope(
+      {
+        originalFilename: metadata.originalFilename ?? null,
+        mediaCreatedAt: metadata.mediaCreatedAt ?? null,
+        durationMs: metadata.durationMs ?? null,
+        albumName,
+      },
+      "album"
+    );
+    if (match) {
+      return match;
+    }
+  }
+
+  return await searchVideoScope(
+    {
+      originalFilename: metadata.originalFilename ?? null,
+      mediaCreatedAt: metadata.mediaCreatedAt ?? null,
+      durationMs: metadata.durationMs ?? null,
+      albumName: preferredAlbumNames[0] ?? null,
+    },
+    "library"
+  );
 }
 
 async function createLibraryAssetFromManagedVideo(

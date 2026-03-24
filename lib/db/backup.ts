@@ -4,7 +4,21 @@ import * as LegacyFileSystem from "expo-file-system/legacy";
 import { openDatabaseSync, type SQLiteDatabase } from "expo-sqlite";
 import { Platform } from "react-native";
 import { newUid } from "../utils/uid";
+import {
+  pickMatchingMediaId,
+  pickMatchingSetId,
+  pickMatchingWorkoutExerciseId,
+  pickMatchingWorkoutId,
+} from "./backupMatching";
 import { sqlite } from "./connection";
+import { updateMedia } from "./media";
+import {
+  doesFileUriExist,
+  ensureVideoLibraryPermission,
+  isFileUri,
+  isLikelyTransientUri,
+  resolveVideoLibraryReference,
+} from "../utils/videoStorage";
 
 const LOG_PREFIX = "[backup]";
 const DB_NAME = "LiftingLog.db";
@@ -16,8 +30,9 @@ export interface MergeResult {
   exercises: { inserted: number; updated: number };
   workouts: { inserted: number; updated: number };
   workoutExercises: { inserted: number; updated: number };
-  sets: { inserted: number };
+  sets: { inserted: number; updated: number };
   prEvents: { inserted: number };
+  media: { inserted: number; updated: number; relinked: number };
   durationMs: number;
 }
 
@@ -115,6 +130,18 @@ function getDatabaseFile(): File {
   return dbFile;
 }
 
+function checkpointDatabaseForBackup(): void {
+  try {
+    sqlite.execSync("PRAGMA wal_checkpoint(TRUNCATE);");
+    if (__DEV__) {
+      console.log(`${LOG_PREFIX} WAL checkpoint completed before backup export.`);
+    }
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} Failed to checkpoint WAL before backup export:`, error);
+    throw error;
+  }
+}
+
 /**
  * Copy the database to a temporary location for export
  */
@@ -132,6 +159,8 @@ function copyDatabaseToTemp(backupFilename: string): File {
       "Database file not found. Please ensure the app has been used at least once."
     );
   }
+
+  checkpointDatabaseForBackup();
 
   const tempFile = new File(cacheDir, backupFilename);
   console.log(`${LOG_PREFIX} Copying database to:`, tempFile.uri);
@@ -374,14 +403,76 @@ interface BackupSet {
   performed_at: number | null;
 }
 
-interface BackupPREvent {
+interface LiveWorkoutCandidate {
   id: number;
-  uid: string | null;
-  set_id: number;
-  exercise_id: number;
-  type: string;
-  metric_value: number;
-  occurred_at: number;
+  completed_at: number | null;
+  note: string | null;
+}
+
+interface LiveWorkoutExerciseCandidate {
+  id: number;
+  order_index: number | null;
+  note: string | null;
+  completed_at: number | null;
+  performed_at: number | null;
+}
+
+interface LiveSetCandidate {
+  id: number;
+  workout_exercise_id: number | null;
+  set_group_id: string | null;
+  set_index: number | null;
+  weight_kg: number | null;
+  reps: number | null;
+  rpe: number | null;
+  rir: number | null;
+  is_warmup: number;
+  note: string | null;
+  superset_group_id: string | null;
+  performed_at: number | null;
+}
+
+interface BackupMedia {
+  id: number;
+  local_uri: string;
+  asset_id: string | null;
+  mime: string | null;
+  set_id: number | null;
+  workout_id: number | null;
+  note: string | null;
+  created_at: number | null;
+  original_filename: string | null;
+  media_created_at: number | null;
+  duration_ms: number | null;
+  album_name: string | null;
+}
+
+interface LiveMediaCandidate {
+  id: number;
+  asset_id: string | null;
+  local_uri: string;
+  original_filename: string | null;
+  media_created_at: number | null;
+  duration_ms: number | null;
+  album_name: string | null;
+  note: string | null;
+}
+
+interface ImportedVideoMediaCandidate {
+  mediaId: number;
+  localUri: string;
+  assetId: string | null;
+  originalFilename: string | null;
+  mediaCreatedAt: number | null;
+  durationMs: number | null;
+  albumName: string | null;
+}
+
+interface PRSourceSet {
+  id: number;
+  weight_kg: number | null;
+  reps: number | null;
+  performed_at: number | null;
 }
 
 /**
@@ -417,6 +508,280 @@ function readBackupTable<T>(backupDb: SQLiteDatabase, table: string, columns: st
   }
 }
 
+function escapeSqlString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function sqlLiteral(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "NULL";
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "NULL";
+  }
+
+  return `'${escapeSqlString(value)}'`;
+}
+
+function queryLiveRows<T>(query: string): T[] {
+  const stmt = sqlite.prepareSync(query);
+  try {
+    const result = stmt.executeSync([]);
+    return result.getAllSync() as T[];
+  } finally {
+    stmt.finalizeSync();
+  }
+}
+
+function findExistingExerciseId(backupUid: string, row: BackupExercise): number | null {
+  const directRows = queryLiveRows<{ id: number }>(
+    `SELECT id FROM exercises WHERE uid = ${sqlLiteral(backupUid)} LIMIT 1;`
+  );
+  if (directRows[0]?.id) {
+    return directRows[0].id;
+  }
+
+  const nameRows = queryLiveRows<{ id: number }>(
+    `SELECT id FROM exercises WHERE name = ${sqlLiteral(row.name)} LIMIT 1;`
+  );
+  return nameRows[0]?.id ?? null;
+}
+
+function findExistingWorkoutId(backupUid: string, row: BackupWorkout): number | null {
+  const directRows = queryLiveRows<{ id: number }>(
+    `SELECT id FROM workouts WHERE uid = ${sqlLiteral(backupUid)} LIMIT 1;`
+  );
+  if (directRows[0]?.id) {
+    return directRows[0].id;
+  }
+
+  const candidates = queryLiveRows<LiveWorkoutCandidate>(
+    `SELECT id, completed_at, note FROM workouts WHERE started_at = ${sqlLiteral(row.started_at)};`
+  );
+  return pickMatchingWorkoutId(row, candidates);
+}
+
+function findExistingWorkoutExerciseId(
+  backupUid: string,
+  row: BackupWorkoutExercise,
+  liveWorkoutId: number,
+  liveExerciseId: number
+): number | null {
+  const directRows = queryLiveRows<{ id: number }>(
+    `SELECT id FROM workout_exercises WHERE uid = ${sqlLiteral(backupUid)} LIMIT 1;`
+  );
+  if (directRows[0]?.id) {
+    return directRows[0].id;
+  }
+
+  const candidates = queryLiveRows<LiveWorkoutExerciseCandidate>(`
+    SELECT id, order_index, note, completed_at, performed_at
+    FROM workout_exercises
+    WHERE workout_id = ${sqlLiteral(liveWorkoutId)}
+      AND exercise_id = ${sqlLiteral(liveExerciseId)};
+  `);
+  return pickMatchingWorkoutExerciseId(row, candidates);
+}
+
+function findExistingSetId(
+  backupUid: string,
+  row: BackupSet,
+  liveWorkoutId: number,
+  liveExerciseId: number,
+  liveWorkoutExerciseId: number | null
+): number | null {
+  const directRows = queryLiveRows<{ id: number }>(
+    `SELECT id FROM sets WHERE uid = ${sqlLiteral(backupUid)} LIMIT 1;`
+  );
+  if (directRows[0]?.id) {
+    return directRows[0].id;
+  }
+
+  const candidates = queryLiveRows<LiveSetCandidate>(`
+    SELECT
+      id,
+      workout_exercise_id,
+      set_group_id,
+      set_index,
+      weight_kg,
+      reps,
+      rpe,
+      rir,
+      is_warmup,
+      note,
+      superset_group_id,
+      performed_at
+    FROM sets
+    WHERE workout_id = ${sqlLiteral(liveWorkoutId)}
+      AND exercise_id = ${sqlLiteral(liveExerciseId)};
+  `);
+  return pickMatchingSetId(
+    {
+      ...row,
+      workout_exercise_id: liveWorkoutExerciseId,
+    },
+    candidates
+  );
+}
+
+function findExistingMediaId(
+  row: BackupMedia,
+  liveSetId: number | null,
+  liveWorkoutId: number | null
+): number | null {
+  const whereClauses: string[] = [];
+
+  if (liveSetId !== null) {
+    whereClauses.push(`set_id = ${sqlLiteral(liveSetId)}`);
+  } else {
+    whereClauses.push("set_id IS NULL");
+  }
+
+  if (liveWorkoutId !== null) {
+    whereClauses.push(`workout_id = ${sqlLiteral(liveWorkoutId)}`);
+  } else {
+    whereClauses.push("workout_id IS NULL");
+  }
+
+  const candidates = queryLiveRows<LiveMediaCandidate>(`
+    SELECT id, asset_id, local_uri, original_filename, media_created_at, duration_ms, album_name, note
+    FROM media
+    WHERE ${whereClauses.join(" AND ")};
+  `);
+
+  return pickMatchingMediaId(row, candidates);
+}
+
+function isValidSetForPR(set: PRSourceSet): set is {
+  id: number;
+  weight_kg: number;
+  reps: number;
+  performed_at: number;
+} {
+  return (
+    set.weight_kg !== null &&
+    set.reps !== null &&
+    set.performed_at !== null &&
+    set.weight_kg > 0 &&
+    set.reps > 0
+  );
+}
+
+function rebuildImportedPREvents(exerciseIds: Iterable<number>): { inserted: number } {
+  const uniqueExerciseIds = [...new Set(exerciseIds)].filter((exerciseId) => Number.isFinite(exerciseId));
+  if (uniqueExerciseIds.length === 0) {
+    return { inserted: 0 };
+  }
+
+  const inClause = uniqueExerciseIds.join(", ");
+  sqlite.execSync(`DELETE FROM pr_events WHERE exercise_id IN (${inClause});`);
+
+  const insertStmt = sqlite.prepareSync(`
+    INSERT INTO pr_events (uid, set_id, exercise_id, type, metric_value, occurred_at)
+    VALUES (?, ?, ?, ?, ?, ?);
+  `);
+
+  let inserted = 0;
+
+  try {
+    for (const exerciseId of uniqueExerciseIds) {
+      const rows = queryLiveRows<PRSourceSet>(`
+        SELECT id, weight_kg, reps, performed_at
+        FROM sets
+        WHERE exercise_id = ${sqlLiteral(exerciseId)}
+        ORDER BY performed_at, id;
+      `);
+
+      const bestByReps = new Map<number, number>();
+
+      for (const row of rows) {
+        if (!isValidSetForPR(row)) {
+          continue;
+        }
+
+        const bestSoFar = bestByReps.get(row.reps);
+        if (bestSoFar !== undefined && row.weight_kg <= bestSoFar) {
+          continue;
+        }
+
+        bestByReps.set(row.reps, row.weight_kg);
+        insertStmt.executeSync([
+          newUid(),
+          row.id,
+          exerciseId,
+          `${row.reps}rm`,
+          row.weight_kg,
+          row.performed_at,
+        ]);
+        inserted++;
+      }
+    }
+  } finally {
+    insertStmt.finalizeSync();
+  }
+
+  return { inserted };
+}
+
+async function repairImportedVideoLinks(
+  candidates: ImportedVideoMediaCandidate[]
+): Promise<number> {
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  const canReadLibrary = await ensureVideoLibraryPermission();
+  if (!canReadLibrary) {
+    return 0;
+  }
+
+  let relinked = 0;
+
+  for (const candidate of candidates) {
+    const storedFileMissing =
+      isFileUri(candidate.localUri) && !(await doesFileUriExist(candidate.localUri));
+    const needsRepair =
+      storedFileMissing ||
+      !candidate.localUri ||
+      !isFileUri(candidate.localUri) ||
+      isLikelyTransientUri(candidate.localUri);
+
+    if (!needsRepair && candidate.assetId) {
+      continue;
+    }
+
+    const resolved = await resolveVideoLibraryReference({
+      assetId: candidate.assetId,
+      originalFilename: candidate.originalFilename,
+      mediaCreatedAt: candidate.mediaCreatedAt,
+      durationMs: candidate.durationMs,
+      albumName: candidate.albumName,
+    });
+
+    if (!resolved) {
+      continue;
+    }
+
+    const resolvedUri = resolved.localUri ?? resolved.uri;
+    if (!resolvedUri) {
+      continue;
+    }
+
+    await updateMedia(candidate.mediaId, {
+      local_uri: resolvedUri,
+      asset_id: resolved.assetId,
+      original_filename: resolved.originalFilename,
+      media_created_at: resolved.mediaCreatedAt,
+      duration_ms: resolved.durationMs,
+      album_name: resolved.albumName,
+    });
+    relinked++;
+  }
+
+  return relinked;
+}
+
 /**
  * Merge exercises from backup into live DB
  */
@@ -433,38 +798,16 @@ function mergeExercises(
   for (const row of rows) {
     // Determine uid for this row (generate if missing)
     const backupUid = row.uid || newUid();
-
-    // Try to find existing by uid first
-    let liveId: number | null = null;
-    const uidStmt = sqlite.prepareSync(`SELECT id FROM exercises WHERE uid = ?;`);
-    try {
-      const result = uidStmt.executeSync([backupUid]);
-      const liveRows = result.getAllSync() as Array<{ id: number }>;
-      liveId = liveRows[0]?.id ?? null;
-    } finally {
-      uidStmt.finalizeSync();
-    }
-
-    // Fallback: match by name (unique) if no uid match
-    if (liveId === null) {
-      const nameStmt = sqlite.prepareSync(`SELECT id FROM exercises WHERE name = ?;`);
-      try {
-        const result = nameStmt.executeSync([row.name]);
-        const liveRows = result.getAllSync() as Array<{ id: number }>;
-        liveId = liveRows[0]?.id ?? null;
-      } finally {
-        nameStmt.finalizeSync();
-      }
-    }
+    const liveId = findExistingExerciseId(backupUid, row);
 
     if (liveId !== null) {
       // Existing row: fill missing fields only (COALESCE logic)
       sqlite.execSync(`
         UPDATE exercises SET
-          uid = COALESCE(uid, '${backupUid}'),
-          description = COALESCE(description, ${row.description ? `'${row.description.replace(/'/g, "''")}'` : "NULL"}),
-          muscle_group = COALESCE(muscle_group, ${row.muscle_group ? `'${row.muscle_group.replace(/'/g, "''")}'` : "NULL"}),
-          equipment = COALESCE(equipment, ${row.equipment ? `'${row.equipment.replace(/'/g, "''")}'` : "NULL"}),
+          uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
+          description = COALESCE(description, ${sqlLiteral(row.description)}),
+          muscle_group = COALESCE(muscle_group, ${sqlLiteral(row.muscle_group)}),
+          equipment = COALESCE(equipment, ${sqlLiteral(row.equipment)}),
           created_at = COALESCE(created_at, ${row.created_at ?? "NULL"}),
           last_rest_seconds = COALESCE(last_rest_seconds, ${row.last_rest_seconds ?? "NULL"})
         WHERE id = ${liveId};
@@ -476,11 +819,11 @@ function mergeExercises(
       sqlite.execSync(`
         INSERT INTO exercises (uid, name, description, muscle_group, equipment, is_bodyweight, created_at, last_rest_seconds, is_pinned)
         VALUES (
-          '${backupUid}',
-          '${row.name.replace(/'/g, "''")}',
-          ${row.description ? `'${row.description.replace(/'/g, "''")}'` : "NULL"},
-          ${row.muscle_group ? `'${row.muscle_group.replace(/'/g, "''")}'` : "NULL"},
-          ${row.equipment ? `'${row.equipment.replace(/'/g, "''")}'` : "NULL"},
+          ${sqlLiteral(backupUid)},
+          ${sqlLiteral(row.name)},
+          ${sqlLiteral(row.description)},
+          ${sqlLiteral(row.muscle_group)},
+          ${sqlLiteral(row.equipment)},
           ${row.is_bodyweight ?? 0},
           ${row.created_at ?? "NULL"},
           ${row.last_rest_seconds ?? "NULL"},
@@ -518,26 +861,14 @@ function mergeWorkouts(
 
   for (const row of rows) {
     const backupUid = row.uid || newUid();
-
-    // Try to find existing by uid
-    let liveId: number | null = null;
-    const uidStmt = sqlite.prepareSync(`SELECT id FROM workouts WHERE uid = ?;`);
-    try {
-      const result = uidStmt.executeSync([backupUid]);
-      const liveRows = result.getAllSync() as Array<{ id: number }>;
-      liveId = liveRows[0]?.id ?? null;
-    } finally {
-      uidStmt.finalizeSync();
-    }
-
-    // No fallback matching for workouts (too risky)
+    const liveId = findExistingWorkoutId(backupUid, row);
 
     if (liveId !== null) {
       // Fill missing fields only
       sqlite.execSync(`
         UPDATE workouts SET
-          uid = COALESCE(uid, '${backupUid}'),
-          note = COALESCE(note, ${row.note ? `'${row.note.replace(/'/g, "''")}'` : "NULL"}),
+          uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
+          note = COALESCE(note, ${sqlLiteral(row.note)}),
           completed_at = COALESCE(completed_at, ${row.completed_at ?? "NULL"})
         WHERE id = ${liveId};
       `);
@@ -548,10 +879,10 @@ function mergeWorkouts(
       sqlite.execSync(`
         INSERT INTO workouts (uid, started_at, completed_at, note)
         VALUES (
-          '${backupUid}',
+          ${sqlLiteral(backupUid)},
           ${row.started_at},
           ${row.completed_at ?? "NULL"},
-          ${row.note ? `'${row.note.replace(/'/g, "''")}'` : "NULL"}
+          ${sqlLiteral(row.note)}
         );
       `);
       const lastIdStmt = sqlite.prepareSync(`SELECT last_insert_rowid() as id;`);
@@ -598,24 +929,19 @@ function mergeWorkoutExercises(
     }
 
     const backupUid = row.uid || newUid();
-
-    // Try to find existing by uid
-    let liveId: number | null = null;
-    const uidStmt = sqlite.prepareSync(`SELECT id FROM workout_exercises WHERE uid = ?;`);
-    try {
-      const result = uidStmt.executeSync([backupUid]);
-      const liveRows = result.getAllSync() as Array<{ id: number }>;
-      liveId = liveRows[0]?.id ?? null;
-    } finally {
-      uidStmt.finalizeSync();
-    }
+    const liveId = findExistingWorkoutExerciseId(
+      backupUid,
+      row,
+      liveWorkoutId,
+      liveExerciseId
+    );
 
     if (liveId !== null) {
       // Fill missing fields only
       sqlite.execSync(`
         UPDATE workout_exercises SET
-          uid = COALESCE(uid, '${backupUid}'),
-          note = COALESCE(note, ${row.note ? `'${row.note.replace(/'/g, "''")}'` : "NULL"}),
+          uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
+          note = COALESCE(note, ${sqlLiteral(row.note)}),
           order_index = COALESCE(order_index, ${row.order_index ?? "NULL"}),
           current_weight = COALESCE(current_weight, ${row.current_weight ?? "NULL"}),
           current_reps = COALESCE(current_reps, ${row.current_reps ?? "NULL"}),
@@ -630,11 +956,11 @@ function mergeWorkoutExercises(
       sqlite.execSync(`
         INSERT INTO workout_exercises (uid, workout_id, exercise_id, order_index, note, current_weight, current_reps, completed_at, performed_at)
         VALUES (
-          '${backupUid}',
+          ${sqlLiteral(backupUid)},
           ${liveWorkoutId},
           ${liveExerciseId},
           ${row.order_index ?? "NULL"},
-          ${row.note ? `'${row.note.replace(/'/g, "''")}'` : "NULL"},
+          ${sqlLiteral(row.note)},
           ${row.current_weight ?? "NULL"},
           ${row.current_reps ?? "NULL"},
           ${row.completed_at ?? "NULL"},
@@ -665,11 +991,12 @@ function mergeSets(
   workoutUidMap: Map<number, number>,
   workoutExerciseUidMap: Map<number, number>,
   uidMap: Map<number, number> // backup.id -> live.id
-): { inserted: number } {
+): { inserted: number; updated: number } {
   const columns = ["id", "uid", "workout_id", "exercise_id", "workout_exercise_id", "set_group_id", "set_index", "weight_kg", "reps", "rpe", "rir", "is_warmup", "note", "superset_group_id", "performed_at"];
   const rows = readBackupTable<BackupSet>(backupDb, "sets", columns);
 
   let inserted = 0;
+  let updated = 0;
 
   for (const row of rows) {
     // Resolve foreign keys
@@ -685,21 +1012,32 @@ function mergeSets(
     }
 
     const backupUid = row.uid || newUid();
-
-    // Check if already exists by uid (insert-only for sets)
-    const uidStmt = sqlite.prepareSync(`SELECT id FROM sets WHERE uid = ?;`);
-    let liveId: number | null = null;
-    try {
-      const result = uidStmt.executeSync([backupUid]);
-      const liveRows = result.getAllSync() as Array<{ id: number }>;
-      liveId = liveRows[0]?.id ?? null;
-    } finally {
-      uidStmt.finalizeSync();
-    }
+    const liveId = findExistingSetId(
+      backupUid,
+      row,
+      liveWorkoutId,
+      liveExerciseId,
+      liveWorkoutExerciseId ?? null
+    );
 
     if (liveId !== null) {
-      // Already exists, just map
+      sqlite.execSync(`
+        UPDATE sets SET
+          uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
+          workout_exercise_id = COALESCE(workout_exercise_id, ${sqlLiteral(liveWorkoutExerciseId)}),
+          set_group_id = COALESCE(set_group_id, ${sqlLiteral(row.set_group_id)}),
+          set_index = COALESCE(set_index, ${sqlLiteral(row.set_index)}),
+          weight_kg = COALESCE(weight_kg, ${sqlLiteral(row.weight_kg)}),
+          reps = COALESCE(reps, ${sqlLiteral(row.reps)}),
+          rpe = COALESCE(rpe, ${sqlLiteral(row.rpe)}),
+          rir = COALESCE(rir, ${sqlLiteral(row.rir)}),
+          note = COALESCE(note, ${sqlLiteral(row.note)}),
+          superset_group_id = COALESCE(superset_group_id, ${sqlLiteral(row.superset_group_id)}),
+          performed_at = COALESCE(performed_at, ${sqlLiteral(row.performed_at)})
+        WHERE id = ${liveId};
+      `);
       uidMap.set(row.id, liveId);
+      updated++;
       continue;
     }
 
@@ -707,20 +1045,20 @@ function mergeSets(
     sqlite.execSync(`
       INSERT INTO sets (uid, workout_id, exercise_id, workout_exercise_id, set_group_id, set_index, weight_kg, reps, rpe, rir, is_warmup, note, superset_group_id, performed_at)
       VALUES (
-        '${backupUid}',
+        ${sqlLiteral(backupUid)},
         ${liveWorkoutId},
         ${liveExerciseId},
-        ${liveWorkoutExerciseId ?? "NULL"},
-        ${row.set_group_id ? `'${row.set_group_id.replace(/'/g, "''")}'` : "NULL"},
-        ${row.set_index ?? "NULL"},
-        ${row.weight_kg ?? "NULL"},
-        ${row.reps ?? "NULL"},
-        ${row.rpe ?? "NULL"},
-        ${row.rir ?? "NULL"},
+        ${sqlLiteral(liveWorkoutExerciseId)},
+        ${sqlLiteral(row.set_group_id)},
+        ${sqlLiteral(row.set_index)},
+        ${sqlLiteral(row.weight_kg)},
+        ${sqlLiteral(row.reps)},
+        ${sqlLiteral(row.rpe)},
+        ${sqlLiteral(row.rir)},
         ${row.is_warmup ?? 0},
-        ${row.note ? `'${row.note.replace(/'/g, "''")}'` : "NULL"},
-        ${row.superset_group_id ? `'${row.superset_group_id.replace(/'/g, "''")}'` : "NULL"},
-        ${row.performed_at ?? "NULL"}
+        ${sqlLiteral(row.note)},
+        ${sqlLiteral(row.superset_group_id)},
+        ${sqlLiteral(row.performed_at)}
       );
     `);
     const lastIdStmt = sqlite.prepareSync(`SELECT last_insert_rowid() as id;`);
@@ -734,67 +1072,137 @@ function mergeSets(
     inserted++;
   }
 
-  return { inserted };
+  return { inserted, updated };
 }
 
-/**
- * Merge pr_events from backup into live DB
- */
-function mergePREvents(
+function mergeMedia(
   backupDb: SQLiteDatabase,
-  exerciseUidMap: Map<number, number>,
-  setUidMap: Map<number, number>
-): { inserted: number } {
-  const columns = ["id", "uid", "set_id", "exercise_id", "type", "metric_value", "occurred_at"];
-  const rows = readBackupTable<BackupPREvent>(backupDb, "pr_events", columns);
+  workoutUidMap: Map<number, number>,
+  setUidMap: Map<number, number>,
+  relinkCandidates: ImportedVideoMediaCandidate[]
+): { inserted: number; updated: number } {
+  const columns = [
+    "id",
+    "local_uri",
+    "asset_id",
+    "mime",
+    "set_id",
+    "workout_id",
+    "note",
+    "created_at",
+    "original_filename",
+    "media_created_at",
+    "duration_ms",
+    "album_name",
+  ];
+  const rows = readBackupTable<BackupMedia>(backupDb, "media", columns);
 
   let inserted = 0;
+  let updated = 0;
 
   for (const row of rows) {
-    const liveSetId = setUidMap.get(row.set_id);
-    const liveExerciseId = exerciseUidMap.get(row.exercise_id);
+    const liveSetId =
+      row.set_id !== null ? setUidMap.get(row.set_id) ?? null : null;
+    const liveWorkoutId =
+      row.workout_id !== null ? workoutUidMap.get(row.workout_id) ?? null : null;
 
-    if (liveSetId === undefined || liveExerciseId === undefined) {
+    if (row.set_id !== null && liveSetId === null) {
       if (__DEV__) {
-        console.warn(`${LOG_PREFIX} Skipping pr_event ${row.id}: missing FK mapping`);
+        console.warn(`${LOG_PREFIX} Skipping media ${row.id}: missing set mapping`);
       }
       continue;
     }
 
-    const backupUid = row.uid || newUid();
-
-    // Check if already exists by uid (insert-only)
-    const uidStmt = sqlite.prepareSync(`SELECT id FROM pr_events WHERE uid = ?;`);
-    let liveId: number | null = null;
-    try {
-      const result = uidStmt.executeSync([backupUid]);
-      const liveRows = result.getAllSync() as Array<{ id: number }>;
-      liveId = liveRows[0]?.id ?? null;
-    } finally {
-      uidStmt.finalizeSync();
-    }
-
-    if (liveId !== null) {
-      // Already exists, skip
+    if (row.workout_id !== null && liveWorkoutId === null) {
+      if (__DEV__) {
+        console.warn(`${LOG_PREFIX} Skipping media ${row.id}: missing workout mapping`);
+      }
       continue;
     }
 
-    // Insert new row
-    sqlite.execSync(`
-      INSERT INTO pr_events (uid, set_id, exercise_id, type, metric_value, occurred_at)
-      VALUES (
-        '${backupUid}',
-        ${liveSetId},
-        ${liveExerciseId},
-        '${row.type.replace(/'/g, "''")}',
-        ${row.metric_value},
-        ${row.occurred_at}
+    const liveId = findExistingMediaId(row, liveSetId, liveWorkoutId);
+
+    if (liveId !== null) {
+      sqlite.execSync(`
+        UPDATE media SET
+          local_uri = COALESCE(local_uri, ${sqlLiteral(row.local_uri)}),
+          asset_id = COALESCE(asset_id, ${sqlLiteral(row.asset_id)}),
+          mime = COALESCE(mime, ${sqlLiteral(row.mime)}),
+          set_id = COALESCE(set_id, ${sqlLiteral(liveSetId)}),
+          workout_id = COALESCE(workout_id, ${sqlLiteral(liveWorkoutId)}),
+          note = COALESCE(note, ${sqlLiteral(row.note)}),
+          created_at = COALESCE(created_at, ${sqlLiteral(row.created_at)}),
+          original_filename = COALESCE(original_filename, ${sqlLiteral(row.original_filename)}),
+          media_created_at = COALESCE(media_created_at, ${sqlLiteral(row.media_created_at)}),
+          duration_ms = COALESCE(duration_ms, ${sqlLiteral(row.duration_ms)}),
+          album_name = COALESCE(album_name, ${sqlLiteral(row.album_name)})
+        WHERE id = ${liveId};
+      `);
+      updated++;
+    } else {
+      sqlite.execSync(`
+        INSERT INTO media (
+          local_uri,
+          asset_id,
+          mime,
+          set_id,
+          workout_id,
+          note,
+          created_at,
+          original_filename,
+          media_created_at,
+          duration_ms,
+          album_name
+        )
+        VALUES (
+          ${sqlLiteral(row.local_uri)},
+          ${sqlLiteral(row.asset_id)},
+          ${sqlLiteral(row.mime)},
+          ${sqlLiteral(liveSetId)},
+          ${sqlLiteral(liveWorkoutId)},
+          ${sqlLiteral(row.note)},
+          ${sqlLiteral(row.created_at)},
+          ${sqlLiteral(row.original_filename)},
+          ${sqlLiteral(row.media_created_at)},
+          ${sqlLiteral(row.duration_ms)},
+          ${sqlLiteral(row.album_name)}
+        );
+      `);
+      const lastIdRows = queryLiveRows<{ id: number }>(
+        "SELECT last_insert_rowid() as id;"
       );
-    `);
-    inserted++;
+      if (
+        lastIdRows[0]?.id &&
+        (row.mime ?? "video/unknown").toLowerCase().startsWith("video/")
+      ) {
+        relinkCandidates.push({
+          mediaId: lastIdRows[0].id,
+          localUri: row.local_uri,
+          assetId: row.asset_id,
+          originalFilename: row.original_filename,
+          mediaCreatedAt: row.media_created_at,
+          durationMs: row.duration_ms,
+          albumName: row.album_name,
+        });
+      }
+      inserted++;
+      continue;
+    }
+
+    if ((row.mime ?? "video/unknown").toLowerCase().startsWith("video/")) {
+      relinkCandidates.push({
+        mediaId: liveId,
+        localUri: row.local_uri,
+        assetId: row.asset_id,
+        originalFilename: row.original_filename,
+        mediaCreatedAt: row.media_created_at,
+        durationMs: row.duration_ms,
+        albumName: row.album_name,
+      });
+    }
   }
 
-  return { inserted };
+  return { inserted, updated };
 }
 
 /**
@@ -845,6 +1253,7 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
   const workoutUidMap = new Map<number, number>();
   const workoutExerciseUidMap = new Map<number, number>();
   const setUidMap = new Map<number, number>();
+  const importedVideoCandidates: ImportedVideoMediaCandidate[] = [];
 
   let mergeResult: MergeResult;
 
@@ -853,14 +1262,17 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
     sqlite.execSync("BEGIN TRANSACTION;");
 
     try {
-      // Merge in FK order: exercises -> workouts -> workout_exercises -> sets -> pr_events
+      // Merge in FK order, then rebuild derived PR events from merged sets.
       const exercisesResult = mergeExercises(backupDb, exerciseUidMap);
       const workoutsResult = mergeWorkouts(backupDb, workoutUidMap);
       const workoutExercisesResult = mergeWorkoutExercises(backupDb, exerciseUidMap, workoutUidMap, workoutExerciseUidMap);
       const setsResult = mergeSets(backupDb, exerciseUidMap, workoutUidMap, workoutExerciseUidMap, setUidMap);
-      const prEventsResult = mergePREvents(backupDb, exerciseUidMap, setUidMap);
+      const mediaResult = mergeMedia(backupDb, workoutUidMap, setUidMap, importedVideoCandidates);
+      const prEventsResult = rebuildImportedPREvents(exerciseUidMap.values());
 
       sqlite.execSync("COMMIT;");
+
+      const relinkedMediaCount = await repairImportedVideoLinks(importedVideoCandidates);
 
       mergeResult = {
         exercises: exercisesResult,
@@ -868,6 +1280,10 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
         workoutExercises: workoutExercisesResult,
         sets: setsResult,
         prEvents: prEventsResult,
+        media: {
+          ...mediaResult,
+          relinked: relinkedMediaCount,
+        },
         durationMs: Date.now() - startTime,
       };
 
