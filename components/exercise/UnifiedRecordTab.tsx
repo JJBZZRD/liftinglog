@@ -95,6 +95,13 @@ type ProgrammedSetsPanelProps = {
   repsInputs: Record<number, string>;
   onWeightChange: (setId: number, value: string) => void;
   onRepsChange: (setId: number, value: string) => void;
+  onAutofillSet: (
+    setId: number,
+    values: {
+      weight: string;
+      reps: string;
+    }
+  ) => void | Promise<void>;
   onSetFocus: (setId: number) => void;
   onSetBlur: (setId: number) => void;
   onOpenSetInfo: (setId: number, calendarSetId: number) => void;
@@ -150,6 +157,42 @@ function hasLoggedProgramSet(set: ProgramCalendarSetRow): boolean {
   return set.isLogged && set.setId != null;
 }
 
+function getProgramSetInputPresentation(
+  set: ProgramCalendarSetRow,
+  weightUnitLabel: string
+) {
+  let autofillWeight = "";
+  let intensityPlaceholder = "Intensity";
+  let intensityUnitLabel: string = weightUnitLabel;
+
+  if (set.prescribedIntensityJson) {
+    try {
+      const intensity = JSON.parse(set.prescribedIntensityJson);
+      autofillWeight = getIntensityDefaultValue(intensity) || "";
+      intensityPlaceholder = autofillWeight || intensityPlaceholder;
+      const prescribedUnit = getIntensityUnit(intensity);
+      if (
+        prescribedUnit === "RPE" ||
+        prescribedUnit === "RIR" ||
+        prescribedUnit === "%"
+      ) {
+        intensityUnitLabel = prescribedUnit;
+      }
+    } catch {}
+  }
+
+  const autofillReps = set.prescribedReps || "";
+  const repsPlaceholder = autofillReps || "Reps";
+
+  return {
+    autofillWeight,
+    autofillReps,
+    intensityPlaceholder,
+    intensityUnitLabel,
+    repsPlaceholder,
+  };
+}
+
 function ProgrammedSetsPanel({
   programEntries,
   selectedProgramExerciseId,
@@ -160,6 +203,7 @@ function ProgrammedSetsPanel({
   repsInputs,
   onWeightChange,
   onRepsChange,
+  onAutofillSet,
   onSetFocus,
   onSetBlur,
   onOpenSetInfo,
@@ -186,27 +230,14 @@ function ProgrammedSetsPanel({
       const isComplete = hasLoggedProgramSet(set);
       const isExtra = options?.isExtra ?? false;
       const canOpenSetInfo = !!set.setId;
-
-      let intensityPlaceholder = "Intensity";
-      let intensityUnitLabel: string = weightUnitLabel;
-
-      if (set.prescribedIntensityJson) {
-        try {
-          const intensity = JSON.parse(set.prescribedIntensityJson);
-          intensityPlaceholder =
-            getIntensityDefaultValue(intensity) || intensityPlaceholder;
-          const prescribedUnit = getIntensityUnit(intensity);
-          if (
-            prescribedUnit === "RPE" ||
-            prescribedUnit === "RIR" ||
-            prescribedUnit === "%"
-          ) {
-            intensityUnitLabel = prescribedUnit;
-          }
-        } catch {}
-      }
-
-      const repsPlaceholder = set.prescribedReps || "Reps";
+      const {
+        autofillWeight,
+        autofillReps,
+        intensityPlaceholder,
+        intensityUnitLabel,
+        repsPlaceholder,
+      } = getProgramSetInputPresentation(set, weightUnitLabel);
+      const canAutofill = !isComplete && !!autofillWeight && !!autofillReps;
       const roleLabel =
         isExtra
           ? "Extra"
@@ -234,42 +265,71 @@ function ProgrammedSetsPanel({
               : rawColors.borderLight,
           }}
         >
-          <View
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 14,
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: 10,
-              backgroundColor: isComplete
-                ? rawColors.success
-                : rawColors.foregroundSecondary,
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              isComplete
+                ? `Set ${index + 1} completed`
+                : canAutofill
+                ? `Autofill set ${index + 1} with prescribed values`
+                : `Set ${index + 1}`
+            }
+            accessibilityState={{
+              disabled: !canAutofill,
             }}
+            hitSlop={6}
+            disabled={!canAutofill}
+            onPress={() => {
+              if (!canAutofill) {
+                return;
+              }
+              void onAutofillSet(set.id, {
+                weight: autofillWeight,
+                reps: autofillReps,
+              });
+            }}
+            style={({ pressed }) => ({
+              paddingRight: 12,
+              marginRight: 4,
+              opacity: canAutofill && pressed ? 0.8 : 1,
+            })}
           >
-            {isComplete ? (
-              <MaterialCommunityIcons
-                name="check"
-                size={14}
-                color={rawColors.primaryForeground}
-              />
-            ) : (
-              <Text
-                className="text-xs font-bold text-primary-foreground"
-                selectable
-              >
-                {index + 1}
-              </Text>
-            )}
-          </View>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isComplete
+                  ? rawColors.success
+                  : rawColors.foregroundSecondary,
+              }}
+            >
+              {isComplete ? (
+                <MaterialCommunityIcons
+                  name="check"
+                  size={14}
+                  color={rawColors.primaryForeground}
+                />
+              ) : (
+                <Text
+                  className="text-xs font-bold text-primary-foreground"
+                  selectable
+                >
+                  {index + 1}
+                </Text>
+              )}
+            </View>
+          </Pressable>
 
-          <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1, flexDirection: "row", gap: 4, marginLeft: 8 }}>
             <View
               style={{
                 flex: 1,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 4,
+                gap: 2,
               }}
             >
               <TextInput
@@ -277,7 +337,7 @@ function ProgrammedSetsPanel({
                   flex: 1,
                   borderWidth: 1,
                   borderRadius: 8,
-                  paddingHorizontal: 10,
+                  paddingHorizontal: 8,
                   paddingVertical: 8,
                   fontSize: 15,
                   fontWeight: "600",
@@ -298,7 +358,7 @@ function ProgrammedSetsPanel({
               />
               <Text
                 className="text-[11px] font-medium"
-                style={{ width: 28, color: rawColors.foregroundSecondary }}
+                style={{ width: 24, color: rawColors.foregroundSecondary }}
                 selectable
               >
                 {intensityUnitLabel}
@@ -310,7 +370,7 @@ function ProgrammedSetsPanel({
                 flex: 1,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 4,
+                gap: 2,
               }}
             >
               <TextInput
@@ -318,7 +378,7 @@ function ProgrammedSetsPanel({
                   flex: 1,
                   borderWidth: 1,
                   borderRadius: 8,
-                  paddingHorizontal: 10,
+                  paddingHorizontal: 8,
                   paddingVertical: 8,
                   fontSize: 15,
                   fontWeight: "600",
@@ -339,7 +399,7 @@ function ProgrammedSetsPanel({
               />
               <Text
                 className="text-[11px] font-medium"
-                style={{ width: 28, color: rawColors.foregroundSecondary }}
+                style={{ width: 30, color: rawColors.foregroundSecondary }}
                 selectable
               >
                 reps
@@ -405,6 +465,7 @@ function ProgrammedSetsPanel({
     },
     [
       onOpenSetInfo,
+      onAutofillSet,
       onSetFocus,
       setIdsWithMedia,
       onRepsChange,
@@ -1094,17 +1155,17 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     [workoutExerciseId]
   );
 
-  const isProgramSetInputComplete = useCallback(
-    (setId: number) => {
-      const weightValue = (programWeightInputs[setId] ?? "").trim();
-      const repsValue = (programRepsInputs[setId] ?? "").trim();
+  const isProgramInputPairComplete = useCallback(
+    (weightValue: string, repsValue: string) => {
+      const trimmedWeight = weightValue.trim();
+      const trimmedReps = repsValue.trim();
 
-      if (!weightValue || !repsValue) {
+      if (!trimmedWeight || !trimmedReps) {
         return false;
       }
 
-      const parsedWeight = parseFloat(weightValue);
-      const parsedReps = parseInt(repsValue, 10);
+      const parsedWeight = parseFloat(trimmedWeight);
+      const parsedReps = parseInt(trimmedReps, 10);
 
       return (
         Number.isFinite(parsedWeight) &&
@@ -1113,7 +1174,16 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
         parsedReps > 0
       );
     },
-    [programRepsInputs, programWeightInputs]
+    []
+  );
+
+  const isProgramSetInputComplete = useCallback(
+    (setId: number) =>
+      isProgramInputPairComplete(
+        programWeightInputs[setId] ?? "",
+        programRepsInputs[setId] ?? ""
+      ),
+    [isProgramInputPairComplete, programRepsInputs, programWeightInputs]
   );
 
   const isProgramSetReadyForCompletion = useCallback(
@@ -1531,6 +1601,50 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       scheduleProgramSetAutosave(setId, { reps: value });
     },
     [scheduleProgramSetAutosave]
+  );
+
+  const handleProgramSetAutofill = useCallback(
+    async (
+      setId: number,
+      values: {
+        weight: string;
+        reps: string;
+      }
+    ) => {
+      const nextWeight = values.weight.trim();
+      const nextReps = values.reps.trim();
+
+      if (!nextWeight || !nextReps) {
+        return;
+      }
+
+      Keyboard.dismiss();
+
+      programWeightInputsRef.current = {
+        ...programWeightInputsRef.current,
+        [setId]: nextWeight,
+      };
+      programRepsInputsRef.current = {
+        ...programRepsInputsRef.current,
+        [setId]: nextReps,
+      };
+      setProgramWeightInputs((current) => ({
+        ...current,
+        [setId]: nextWeight,
+      }));
+      setProgramRepsInputs((current) => ({
+        ...current,
+        [setId]: nextReps,
+      }));
+
+      if (!isProgramInputPairComplete(nextWeight, nextReps)) {
+        return;
+      }
+
+      programDirtySetIdsRef.current.add(setId);
+      await commitProgramSetChanges(setId, { skipReload: true });
+    },
+    [commitProgramSetChanges, isProgramInputPairComplete]
   );
 
   const flushDirtyProgramSetCommits = useCallback(async () => {
@@ -2558,6 +2672,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
               repsInputs={programRepsInputs}
               onWeightChange={handleProgramWeightChange}
               onRepsChange={handleProgramRepsChange}
+              onAutofillSet={handleProgramSetAutofill}
               onSetFocus={handleProgramSetFocus}
               onSetBlur={handleProgramSetBlur}
               onOpenSetInfo={handleOpenProgramSetInfo}
