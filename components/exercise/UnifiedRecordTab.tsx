@@ -159,7 +159,8 @@ function hasLoggedProgramSet(set: ProgramCalendarSetRow): boolean {
 
 function getProgramSetInputPresentation(
   set: ProgramCalendarSetRow,
-  weightUnitLabel: string
+  weightUnitLabel: string,
+  unitPreference: "kg" | "lb"
 ) {
   let autofillWeight = "";
   let intensityPlaceholder = "Intensity";
@@ -168,9 +169,9 @@ function getProgramSetInputPresentation(
   if (set.prescribedIntensityJson) {
     try {
       const intensity = JSON.parse(set.prescribedIntensityJson);
-      autofillWeight = getIntensityDefaultValue(intensity) || "";
+      autofillWeight = getIntensityDefaultValue(intensity, unitPreference) || "";
       intensityPlaceholder = autofillWeight || intensityPlaceholder;
-      const prescribedUnit = getIntensityUnit(intensity);
+      const prescribedUnit = getIntensityUnit(intensity, unitPreference);
       if (
         prescribedUnit === "RPE" ||
         prescribedUnit === "RIR" ||
@@ -236,7 +237,11 @@ function ProgrammedSetsPanel({
         intensityPlaceholder,
         intensityUnitLabel,
         repsPlaceholder,
-      } = getProgramSetInputPresentation(set, weightUnitLabel);
+      } = getProgramSetInputPresentation(
+        set,
+        weightUnitLabel,
+        unitPreference
+      );
       const canAutofill = !isComplete && !!autofillWeight && !!autofillReps;
       const roleLabel =
         isExtra

@@ -2,11 +2,29 @@ import type {
   CompiledSet,
   CompiledExercise,
   IntensityTarget,
+  LoadUnit,
   RepRange,
   SetPrescription,
 } from "program-specification-language";
+import {
+  convertWeightToKg,
+  formatEditableWeightFromKg,
+} from "../../utils/units";
 
-export function formatIntensity(intensity: IntensityTarget | undefined): string {
+function formatDisplayLoad(
+  value: number,
+  unit: LoadUnit,
+  displayUnit?: LoadUnit
+): string {
+  const nextUnit = displayUnit ?? unit;
+  const weightKg = convertWeightToKg(value, unit);
+  return formatEditableWeightFromKg(weightKg, nextUnit);
+}
+
+export function formatIntensity(
+  intensity: IntensityTarget | undefined,
+  displayUnit?: LoadUnit
+): string {
   if (!intensity) return "";
 
   switch (intensity.type) {
@@ -14,7 +32,12 @@ export function formatIntensity(intensity: IntensityTarget | undefined): string 
       let s = `@${intensity.value}%`;
       if (intensity.plus_load) {
         const sign = intensity.plus_load.value >= 0 ? "+" : "";
-        s += `${sign}${intensity.plus_load.value}${intensity.plus_load.unit}`;
+        const nextUnit = displayUnit ?? intensity.plus_load.unit;
+        s += `${sign}${formatDisplayLoad(
+          intensity.plus_load.value,
+          intensity.plus_load.unit,
+          nextUnit
+        )}${nextUnit}`;
       }
       return s;
     }
@@ -22,15 +45,36 @@ export function formatIntensity(intensity: IntensityTarget | undefined): string 
       return `@RPE${intensity.value}`;
     case "rir":
       return `@RIR${intensity.value}`;
-    case "load":
-      return `${intensity.value}${intensity.unit}`;
-    case "load_range":
-      return `${intensity.min}-${intensity.max}${intensity.unit}`;
+    case "load": {
+      const nextUnit = displayUnit ?? intensity.unit;
+      return `${formatDisplayLoad(
+        intensity.value,
+        intensity.unit,
+        nextUnit
+      )}${nextUnit}`;
+    }
+    case "load_range": {
+      const nextUnit = displayUnit ?? intensity.unit;
+      return `${formatDisplayLoad(
+        intensity.min,
+        intensity.unit,
+        nextUnit
+      )}-${formatDisplayLoad(
+        intensity.max,
+        intensity.unit,
+        nextUnit
+      )}${nextUnit}`;
+    }
     case "percent_of_set":
       return `@${intensity.value}% of ${intensity.role}`;
     case "load_delta_from_set": {
       const sign = intensity.value >= 0 ? "+" : "";
-      return `${sign}${intensity.value}${intensity.unit} from ${intensity.role}`;
+      const nextUnit = displayUnit ?? intensity.unit;
+      return `${sign}${formatDisplayLoad(
+        intensity.value,
+        intensity.unit,
+        nextUnit
+      )}${nextUnit} from ${intensity.role}`;
     }
     default:
       return "";
@@ -106,13 +150,26 @@ export function getIntensityInputMode(intensity: IntensityTarget | undefined): I
   }
 }
 
-export function getIntensityDefaultValue(intensity: IntensityTarget | undefined): string {
+export function getIntensityDefaultValue(
+  intensity: IntensityTarget | undefined,
+  displayUnit?: LoadUnit
+): string {
   if (!intensity) return "";
   switch (intensity.type) {
     case "load":
-      return String(intensity.value);
-    case "load_range":
-      return `${intensity.min}-${intensity.max}`;
+      return formatDisplayLoad(intensity.value, intensity.unit, displayUnit);
+    case "load_range": {
+      const nextUnit = displayUnit ?? intensity.unit;
+      return `${formatDisplayLoad(
+        intensity.min,
+        intensity.unit,
+        nextUnit
+      )}-${formatDisplayLoad(
+        intensity.max,
+        intensity.unit,
+        nextUnit
+      )}`;
+    }
     case "rpe":
       return String(intensity.value);
     case "rir":
@@ -122,19 +179,26 @@ export function getIntensityDefaultValue(intensity: IntensityTarget | undefined)
     case "percent_of_set":
       return `${intensity.value}%`;
     case "load_delta_from_set":
-      return String(Math.abs(intensity.value));
+      return formatDisplayLoad(
+        Math.abs(intensity.value),
+        intensity.unit,
+        displayUnit
+      );
     default:
       return "";
   }
 }
 
-export function getIntensityUnit(intensity: IntensityTarget | undefined): string {
+export function getIntensityUnit(
+  intensity: IntensityTarget | undefined,
+  displayUnit?: LoadUnit
+): string {
   if (!intensity) return "";
   switch (intensity.type) {
     case "load":
     case "load_range":
     case "load_delta_from_set":
-      return intensity.unit;
+      return displayUnit ?? intensity.unit;
     case "percent_1rm":
     case "percent_of_set":
       return "%";

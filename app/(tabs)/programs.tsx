@@ -19,6 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Calendar, type DateData } from "react-native-calendars";
 import BaseModal from "../../components/modals/BaseModal";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
   getCalendarSessionsForDate,
@@ -51,6 +52,7 @@ interface FlatExerciseItem {
 
 export default function ProgramsScreen() {
   const { rawColors, isDark, colorTheme } = useTheme();
+  const { unitPreference } = useUnitPreference();
 
   const [selectedDate, setSelectedDate] = useState(getDateIsoToday());
   const [markedDates, setMarkedDates] = useState<Record<string, any>>({});
@@ -185,7 +187,7 @@ export default function ProgramsScreen() {
     let globalIdx = 0;
     for (const { session, exercises: exList } of dayData) {
       for (const ex of exList) {
-        const setsSummary = buildSetsSummary(ex);
+        const setsSummary = buildSetsSummary(ex, unitPreference);
         flatItems.push({
           calendarExerciseId: ex.id,
           exerciseId: ex.exerciseId,
@@ -199,7 +201,7 @@ export default function ProgramsScreen() {
       }
     }
     setExercises(flatItems);
-  }, []);
+  }, [unitPreference]);
 
   const loadData = useCallback(async () => {
     try {
@@ -660,7 +662,10 @@ export default function ProgramsScreen() {
   );
 }
 
-function buildSetsSummary(ex: CalendarExerciseWithSets): string {
+function buildSetsSummary(
+  ex: CalendarExerciseWithSets,
+  unitPreference: "kg" | "lb"
+): string {
   if (ex.sets.length === 0) return "";
   const totalSets = ex.sets.filter((s) => !s.isUserAdded).length;
   const first = ex.sets[0];
@@ -669,7 +674,7 @@ function buildSetsSummary(ex: CalendarExerciseWithSets): string {
   if (first.prescribedIntensityJson) {
     try {
       const intensity = JSON.parse(first.prescribedIntensityJson);
-      intensityStr = formatIntensity(intensity);
+      intensityStr = formatIntensity(intensity, unitPreference);
     } catch {}
   }
   let s = `${totalSets}x${reps}`;

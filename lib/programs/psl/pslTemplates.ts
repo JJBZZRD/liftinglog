@@ -1,4 +1,7 @@
-import { parseDocument } from "program-specification-language";
+import {
+  parseDocument,
+  type LoadUnit,
+} from "program-specification-language";
 import { buildTemplatePslSource, type TemplateSequenceOverride } from "./pslTemplateSource";
 import type { TemplateExerciseRequirement } from "./templateExercises";
 
@@ -1028,12 +1031,16 @@ const TEMPLATE_SEQUENCE_OVERRIDES: Partial<Record<RawPslTemplate["id"], Template
   },
 };
 
-function buildTemplate(template: RawPslTemplate): PslTemplate {
+function buildTemplate(
+  template: RawPslTemplate,
+  targetUnit?: LoadUnit
+): PslTemplate {
   const { pslSource, exerciseRequirements } = buildTemplatePslSource({
     name: template.name,
     rawPslSource: template.pslSource,
     sequenceOverride: TEMPLATE_SEQUENCE_OVERRIDES[template.id],
     exerciseRequirementOverrides: template.exerciseRequirementOverrides,
+    targetUnit,
   });
 
   return {
@@ -1046,7 +1053,11 @@ function buildTemplate(template: RawPslTemplate): PslTemplate {
 export function buildPersonalizedTemplateSource(
   templateId: string,
   exerciseNameOverrides: Record<string, string>,
-  programNameOverride?: string
+  programNameOverride?: string,
+  options?: {
+    targetUnit?: LoadUnit;
+    programDescriptionOverride?: string;
+  }
 ): string {
   const template = RAW_PSL_TEMPLATES.find((candidate) => candidate.id === templateId);
   if (!template) {
@@ -1059,11 +1070,15 @@ export function buildPersonalizedTemplateSource(
     sequenceOverride: TEMPLATE_SEQUENCE_OVERRIDES[template.id],
     exerciseNameOverrides,
     programNameOverride,
+    programDescriptionOverride: options?.programDescriptionOverride,
     exerciseRequirementOverrides: template.exerciseRequirementOverrides,
+    targetUnit: options?.targetUnit,
   }).pslSource;
 }
 
-export const PSL_TEMPLATES: PslTemplate[] = RAW_PSL_TEMPLATES.map(buildTemplate);
+export const PSL_TEMPLATES: PslTemplate[] = RAW_PSL_TEMPLATES.map((template) =>
+  buildTemplate(template)
+);
 
 export const TEMPLATE_CATEGORIES: TemplateCategory[] = [
   "Beginner",
@@ -1074,8 +1089,20 @@ export const TEMPLATE_CATEGORIES: TemplateCategory[] = [
   "Single-Exercise",
 ];
 
-export function getTemplateById(id: string): PslTemplate | undefined {
-  return PSL_TEMPLATES.find((t) => t.id === id);
+export function getTemplateById(
+  id: string,
+  targetUnit?: LoadUnit
+): PslTemplate | undefined {
+  const template = RAW_PSL_TEMPLATES.find((candidate) => candidate.id === id);
+  if (!template) {
+    return undefined;
+  }
+
+  if (!targetUnit) {
+    return PSL_TEMPLATES.find((candidate) => candidate.id === id);
+  }
+
+  return buildTemplate(template, targetUnit);
 }
 
 export function getTemplatesByCategory(category: TemplateCategory): PslTemplate[] {
@@ -1141,4 +1168,72 @@ export function buildImportedTemplateName(
   }
 
   return `${template.name} (${uniqueExerciseNames.join(", ")})`;
+}
+
+export function rebuildBundledTemplateSourceFromExistingProgram(
+  source: string,
+  targetUnit: LoadUnit
+): {
+  templateId: string;
+  currentUnit: LoadUnit | null;
+  nextSource: string;
+} | null {
+  let raw: unknown;
+  try {
+    raw = parseDocument(source);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(raw) || !isRecord(raw.metadata)) {
+    return null;
+  }
+
+  const metadataId =
+    typeof raw.metadata.id === "string" ? raw.metadata.id.trim() : "";
+  if (!metadataId) {
+    return null;
+  }
+
+  const template = RAW_PSL_TEMPLATES.find((candidate) => candidate.id === metadataId);
+  if (!template) {
+    return null;
+  }
+
+  const exerciseNameOverrides: Record<string, string> = {};
+  if (Array.isArray(raw.sessions)) {
+    for (const session of raw.sessions) {
+      if (!isRecord(session) || !Array.isArray(session.exercises)) {
+        continue;
+      }
+
+      for (const exercise of session.exercises) {
+        if (
+          isRecord(exercise) &&
+          typeof exercise.exercise_id === "string" &&
+          exercise.exercise_id.trim() &&
+          typeof exercise.exercise === "string"
+        ) {
+          exerciseNameOverrides[exercise.exercise_id.trim()] = exercise.exercise;
+        }
+      }
+    }
+  }
+
+  return {
+    templateId: template.id,
+    currentUnit: raw.units === "lb" || raw.units === "kg" ? raw.units : null,
+    nextSource: buildPersonalizedTemplateSource(
+      template.id,
+      exerciseNameOverrides,
+      typeof raw.metadata.name === "string" ? raw.metadata.name : template.name,
+      {
+        targetUnit,
+        programDescriptionOverride:
+          typeof raw.metadata.description === "string"
+            ? raw.metadata.description
+            : undefined,
+      }
+    ),
+  };
 }

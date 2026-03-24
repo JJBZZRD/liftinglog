@@ -11,12 +11,14 @@ import {
   View,
 } from "react-native";
 import BaseModal from "../../components/modals/BaseModal";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import {
 	PSL_TEMPLATES,
 	TEMPLATE_CATEGORIES,
 	searchTemplates,
 	getTemplatesByCategory,
+	getTemplateById,
 	type PslTemplate,
 	type TemplateCategory,
 } from "../../lib/programs/psl/pslTemplates";
@@ -39,6 +41,7 @@ const CATEGORY_ICONS: Record<TemplateCategory, string> = {
 
 export default function TemplateBrowserScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<PslTemplate | null>(null);
@@ -78,10 +81,10 @@ export default function TemplateBrowserScreen() {
       : "Ready-made programs you can preview and import into your library.";
 
   const handlePreview = useCallback((template: PslTemplate) => {
-    setPreviewTemplate(template);
+    setPreviewTemplate(getTemplateById(template.id, unitPreference) ?? template);
     setShowPslSource(false);
     setPreviewVisible(true);
-  }, []);
+  }, [unitPreference]);
 
   const handleAddToMyPrograms = useCallback(async () => {
     if (!previewTemplate) return;

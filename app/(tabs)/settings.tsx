@@ -249,8 +249,8 @@ export default function SettingsScreen() {
     []
   );
 
-  function onUnitSelect(unit: UnitPreference) {
-    updateUnitPreference(unit);
+  async function onUnitSelect(unit: UnitPreference) {
+    await updateUnitPreference(unit);
   }
 
   return (
@@ -504,8 +504,8 @@ export default function SettingsScreen() {
                   { borderBottomColor: rawColors.border },
                   unitPreference === option.id && { backgroundColor: rawColors.primaryLight },
                 ]}
-                onPress={() => {
-                  onUnitSelect(option.id);
+                onPress={async () => {
+                  await onUnitSelect(option.id);
                   setShowUnitPicker(false);
                 }}
               >

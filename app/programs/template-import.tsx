@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import AppModal from "../../components/modals/BaseModal";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import {
   createExercise,
   getExerciseByName,
@@ -79,9 +80,13 @@ function getDefaultResolution(
 
 export default function TemplateImportScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ templateId?: string; action?: string }>();
   const templateId = typeof params.templateId === "string" ? params.templateId : "";
-  const template = useMemo(() => getTemplateById(templateId), [templateId]);
+  const template = useMemo(
+    () => getTemplateById(templateId, unitPreference),
+    [templateId, unitPreference]
+  );
   const importMode = resolveImportMode(
     typeof params.action === "string" ? params.action : undefined
   );
@@ -366,7 +371,8 @@ export default function TemplateImportScreen() {
       const pslSource = buildPersonalizedTemplateSource(
         template.id,
         exerciseNameOverrides,
-        programName
+        programName,
+        { targetUnit: unitPreference }
       );
 
       const program = await createPslProgram({
@@ -374,6 +380,7 @@ export default function TemplateImportScreen() {
         description: template.description,
         pslSource,
         isActive: false,
+        units: unitPreference,
       });
 
       if (importMode === "activate") {
@@ -391,7 +398,7 @@ export default function TemplateImportScreen() {
     } finally {
       setImporting(false);
     }
-  }, [importMode, resolutions, template]);
+  }, [importMode, resolutions, template, unitPreference]);
 
   const renderMatchRow = useCallback(
     (match: TemplateExerciseMatch<Exercise>) => {

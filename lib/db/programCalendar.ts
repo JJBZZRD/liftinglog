@@ -232,6 +232,13 @@ export interface CalendarExerciseWithSets extends ProgramCalendarExerciseRow {
   sets: ProgramCalendarSetRow[];
 }
 
+export type CalendarSetPrescriptionUpdate = {
+  id: number;
+  prescribedReps: string | null;
+  prescribedIntensityJson: string | null;
+  prescribedRole: string | null;
+};
+
 export async function getExercisesForCalendarEntry(
   calendarId: number
 ): Promise<CalendarExerciseWithSets[]> {
@@ -485,6 +492,33 @@ export async function deleteUserSet(setId: number): Promise<void> {
         eq(programCalendarSets.isUserAdded, true)
       )
     );
+}
+
+export async function updateCalendarExercisePrescriptions(params: {
+  calendarExerciseId: number;
+  prescribedSetsJson: string;
+  setUpdates: CalendarSetPrescriptionUpdate[];
+}): Promise<void> {
+  await db
+    .update(programCalendarExercises)
+    .set({ prescribedSetsJson: params.prescribedSetsJson })
+    .where(eq(programCalendarExercises.id, params.calendarExerciseId));
+
+  for (const setUpdate of params.setUpdates) {
+    await db
+      .update(programCalendarSets)
+      .set({
+        prescribedReps: setUpdate.prescribedReps,
+        prescribedIntensityJson: setUpdate.prescribedIntensityJson,
+        prescribedRole: setUpdate.prescribedRole,
+      })
+      .where(
+        and(
+          eq(programCalendarSets.id, setUpdate.id),
+          eq(programCalendarSets.calendarExerciseId, params.calendarExerciseId)
+        )
+      );
+  }
 }
 
 export async function linkCalendarExerciseToWorkoutExercise(

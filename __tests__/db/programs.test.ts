@@ -25,12 +25,18 @@ import {
   buildSessionCompletionFromSnapshot,
   isPristineProgramCalendarEntry,
 } from "../../lib/programs/psl/programRuntimeHelpers";
-import { PSL_TEMPLATES } from "../../lib/programs/psl/pslTemplates";
+import {
+  buildPersonalizedTemplateSource,
+  PSL_TEMPLATES,
+  rebuildBundledTemplateSourceFromExistingProgram,
+} from "../../lib/programs/psl/pslTemplates";
 import {
   formatIntensity,
   formatReps,
   formatSetSummary,
+  getIntensityDefaultValue,
   getIntensityInputMode,
+  getIntensityUnit,
 } from "../../lib/programs/psl/pslMapper";
 
 // ============================================================================
@@ -824,6 +830,41 @@ describe("Bundled Templates", () => {
   });
 });
 
+describe("Template Unit Conversion", () => {
+  it("should build bundled template sources in the selected default unit", () => {
+    const source = buildPersonalizedTemplateSource(
+      "starting-strength",
+      {},
+      "Starting Strength",
+      { targetUnit: "kg" }
+    );
+
+    expect(source).toContain("units: kg");
+    expect(source).toContain('          - "3x5 @42.5kg; +2.5kg every session"');
+    expect(source).toContain('          - "1x5 @60kg; +5kg every session"');
+  });
+
+  it("should rebuild existing bundled-template programs into the selected unit", () => {
+    const source = buildPersonalizedTemplateSource(
+      "linear-progression",
+      { target_exercise: "Barbell Bench Press" },
+      "Linear Progression (Bench)",
+      { targetUnit: "kg" }
+    );
+
+    const rebuilt = rebuildBundledTemplateSourceFromExistingProgram(source, "lb");
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt?.templateId).toBe("linear-progression");
+    expect(rebuilt?.currentUnit).toBe("kg");
+    expect(rebuilt?.nextSource).toContain("units: lb");
+    expect(rebuilt?.nextSource).toContain('name: "Linear Progression (Bench)"');
+    expect(rebuilt?.nextSource).toContain('exercise: "Barbell Bench Press"');
+    expect(rebuilt?.nextSource).toContain(
+      '          - "3x5 @130lb; +5lb every session if success"'
+    );
+  });
+});
+
 describe("Progression Runtime", () => {
   function getFirstLoadAt(
     source: string,
@@ -1215,6 +1256,22 @@ describe("PSL Mapper", () => {
     expect(formatIntensity({ type: "load", value: 100, unit: "kg" })).toBe("100kg");
   });
 
+  it("should format load intensity in the active display unit", () => {
+    expect(formatIntensity({ type: "load", value: 100, unit: "kg" }, "lb")).toBe(
+      "220.5lb"
+    );
+    expect(
+      formatIntensity(
+        {
+          type: "percent_1rm",
+          value: 70,
+          plus_load: { value: 2.5, unit: "kg" },
+        },
+        "lb"
+      )
+    ).toBe("@70%+5.5lb");
+  });
+
   it("should format fixed reps", () => {
     expect(formatReps(5)).toBe("5");
   });
@@ -1233,6 +1290,12 @@ describe("PSL Mapper", () => {
     expect(getIntensityInputMode({ type: "rir", value: 2 })).toBe("rir");
     expect(getIntensityInputMode({ type: "percent_1rm", value: 75 })).toBe("percent");
     expect(getIntensityInputMode(undefined)).toBe("none");
+  });
+
+  it("should derive program input defaults in the active display unit", () => {
+    const intensity = { type: "load", value: 100, unit: "kg" } as const;
+    expect(getIntensityDefaultValue(intensity, "lb")).toBe("220.5");
+    expect(getIntensityUnit(intensity, "lb")).toBe("lb");
   });
 });
 

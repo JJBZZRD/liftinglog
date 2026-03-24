@@ -1,6 +1,8 @@
 import { createId } from "program-specification-language";
 import type {
   IntensityTarget,
+  LoadDelta,
+  LoadUnit,
   ProgramAst,
   ProgressionRule,
   Session,
@@ -14,6 +16,10 @@ import {
   buildTemplateExerciseRequirement,
   type TemplateExerciseRequirement,
 } from "./templateExercises";
+import {
+  convertWeightFromKg,
+  convertWeightToKg,
+} from "../../utils/units";
 
 export type TemplateSequenceOverride = {
   repeat: boolean;
@@ -30,9 +36,213 @@ export type TemplateSourceBuildResult = {
 
 const TEMPLATE_PREVIEW_START_DATE = "2026-01-05";
 const TEMPLATE_PREVIEW_END_DATE = "2026-03-30";
+const STANDARD_INCREMENT_BY_UNIT: Record<LoadUnit, number> = {
+  kg: 2.5,
+  lb: 5,
+};
 
 function yamlString(value: string): string {
   return JSON.stringify(value);
+}
+
+function roundTo(value: number, decimals = 4): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function roundToIncrement(value: number, increment: number): number {
+  if (!Number.isFinite(value) || increment <= 0) {
+    return roundTo(value);
+  }
+
+  return roundTo(Math.round(value / increment) * increment);
+}
+
+function convertProgramLoadValue(
+  value: number,
+  fromUnit: LoadUnit,
+  targetUnit: LoadUnit
+): number {
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+
+  if (fromUnit === targetUnit) {
+    return roundTo(value);
+  }
+
+  const converted = convertWeightFromKg(
+    convertWeightToKg(value, fromUnit),
+    targetUnit
+  );
+
+  return roundToIncrement(converted, STANDARD_INCREMENT_BY_UNIT[targetUnit]);
+}
+
+function convertLoadDelta(
+  load: LoadDelta,
+  targetUnit: LoadUnit
+): LoadDelta {
+  return {
+    value: convertProgramLoadValue(load.value, load.unit, targetUnit),
+    unit: targetUnit,
+  };
+}
+
+function convertIntensityTarget(
+  intensity: IntensityTarget,
+  programUnits: LoadUnit | undefined,
+  targetUnit: LoadUnit
+): IntensityTarget {
+  switch (intensity.type) {
+    case "load":
+      return {
+        ...intensity,
+        value: convertProgramLoadValue(intensity.value, intensity.unit, targetUnit),
+        unit: targetUnit,
+      };
+    case "load_range": {
+      const convertedMin = convertProgramLoadValue(
+        intensity.min,
+        intensity.unit,
+        targetUnit
+      );
+      const convertedMax = convertProgramLoadValue(
+        intensity.max,
+        intensity.unit,
+        targetUnit
+      );
+      return {
+        ...intensity,
+        min: Math.min(convertedMin, convertedMax),
+        max: Math.max(convertedMin, convertedMax),
+        unit: targetUnit,
+      };
+    }
+    case "load_delta_from_set":
+      return {
+        ...intensity,
+        value: convertProgramLoadValue(intensity.value, intensity.unit, targetUnit),
+        unit: targetUnit,
+      };
+    case "percent_1rm":
+      return {
+        ...intensity,
+        ...(intensity.plus_load
+          ? { plus_load: convertLoadDelta(intensity.plus_load, targetUnit) }
+          : {}),
+      };
+    case "percent_of_set":
+    case "rpe":
+    case "rir":
+    default:
+      return { ...intensity };
+  }
+}
+
+function convertProgressionRule(
+  progression: ProgressionRule | undefined,
+  programUnits: LoadUnit | undefined,
+  targetUnit: LoadUnit
+): ProgressionRule | undefined {
+  if (!progression) {
+    return progression;
+  }
+
+  if (progression.type === "auto_adjust") {
+    return {
+      ...progression,
+      actions: progression.actions.map((action) => {
+        if (action.type !== "reduce_load") {
+          return { ...action };
+        }
+
+        return {
+          ...action,
+          by:
+            typeof action.by === "number"
+              ? programUnits
+                ? convertProgramLoadValue(action.by, programUnits, targetUnit)
+                : action.by
+              : convertLoadDelta(action.by, targetUnit),
+        };
+      }),
+    };
+  }
+
+  return {
+    ...progression,
+    by:
+      typeof progression.by === "number"
+        ? programUnits
+          ? convertProgramLoadValue(progression.by, programUnits, targetUnit)
+          : progression.by
+        : typeof progression.by === "object" &&
+            progression.by !== null &&
+            "type" in progression.by &&
+            progression.by.type === "load"
+          ? {
+              ...progression.by,
+              value: convertProgramLoadValue(
+                progression.by.value,
+                progression.by.unit,
+                targetUnit
+              ),
+              unit: targetUnit,
+            }
+          : progression.by,
+  };
+}
+
+function convertSetPrescription(
+  set: SetPrescription,
+  programUnits: LoadUnit | undefined,
+  targetUnit: LoadUnit
+): SetPrescription {
+  return {
+    ...set,
+    ...(set.intensity
+      ? {
+          intensity: convertIntensityTarget(
+            set.intensity,
+            programUnits,
+            targetUnit
+          ),
+        }
+      : {}),
+    progression: convertProgressionRule(
+      set.progression,
+      programUnits,
+      targetUnit
+    ),
+  };
+}
+
+function convertProgramAstUnits(
+  ast: ProgramAst,
+  targetUnit: LoadUnit
+): ProgramAst {
+  const currentUnit = ast.units;
+  if (!currentUnit || currentUnit === targetUnit) {
+    return {
+      ...ast,
+      units: targetUnit,
+    };
+  }
+
+  return {
+    ...ast,
+    units: targetUnit,
+    sessions: ast.sessions.map((session) => ({
+      ...session,
+      exercises: session.exercises.map((exercise) => ({
+        ...exercise,
+        sets: exercise.sets.map((set) =>
+          convertSetPrescription(set, currentUnit, targetUnit)
+        ),
+      })),
+    })),
+  };
 }
 
 function getTemplateCalendarOverride(source: string) {
@@ -232,10 +442,12 @@ export function buildTemplatePslSource(params: {
   sequenceOverride?: TemplateSequenceOverride;
   exerciseNameOverrides?: Record<string, string>;
   programNameOverride?: string;
+  programDescriptionOverride?: string;
   exerciseRequirementOverrides?: Record<
     string,
     Partial<TemplateExerciseRequirement>
   >;
+  targetUnit?: LoadUnit;
 }): TemplateSourceBuildResult {
   const compileResult = compilePslSource(params.rawPslSource, {
     calendarOverride: getTemplateCalendarOverride(params.rawPslSource),
@@ -251,7 +463,12 @@ export function buildTemplatePslSource(params: {
     );
   }
 
-  const ast = compileResult.ast;
+  const ast =
+    params.targetUnit && compileResult.ast.units && compileResult.ast.units !== params.targetUnit
+      ? convertProgramAstUnits(compileResult.ast, params.targetUnit)
+      : params.targetUnit && !compileResult.ast.units
+        ? { ...compileResult.ast, units: params.targetUnit }
+        : compileResult.ast;
   const sequenceOverride = normalizeSequenceOverride(
     ast.sessions,
     params.sequenceOverride
@@ -283,14 +500,18 @@ export function buildTemplatePslSource(params: {
   );
   const resolvedProgramName =
     params.programNameOverride?.trim() || ast.metadata.name || params.name;
+  const resolvedProgramDescription =
+    params.programDescriptionOverride?.trim() ||
+    ast.metadata.description?.trim() ||
+    "";
   const lines: string[] = [];
 
   lines.push('language_version: "0.3"');
   lines.push("metadata:");
   lines.push(`  id: ${ast.metadata.id || createId("prog", params.name)}`);
   lines.push(`  name: ${yamlString(resolvedProgramName)}`);
-  if (ast.metadata.description?.trim()) {
-    lines.push(`  description: ${yamlString(ast.metadata.description.trim())}`);
+  if (resolvedProgramDescription) {
+    lines.push(`  description: ${yamlString(resolvedProgramDescription)}`);
   }
   if (ast.metadata.author?.trim()) {
     lines.push(`  author: ${yamlString(ast.metadata.author.trim())}`);

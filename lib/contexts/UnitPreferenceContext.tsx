@@ -4,10 +4,11 @@ import {
   getUnitPreference as getUnitPreferenceDB,
   setUnitPreference as setUnitPreferenceDB,
 } from "../db/settings";
+import { syncBundledTemplateProgramsToUnit } from "../programs/psl/templateUnitSync";
 
 type UnitPreferenceContextType = {
   unitPreference: UnitPreference;
-  setUnitPreference: (unit: UnitPreference) => void;
+  setUnitPreference: (unit: UnitPreference) => Promise<void>;
 };
 
 const UnitPreferenceContext = createContext<UnitPreferenceContextType | undefined>(undefined);
@@ -27,10 +28,15 @@ export function UnitPreferenceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateUnitPreference = (unit: UnitPreference) => {
+  const updateUnitPreference = async (unit: UnitPreference) => {
+    if (unit === unitPreference) {
+      return;
+    }
+
     setUnitPreferenceState(unit);
     try {
       setUnitPreferenceDB(unit);
+      await syncBundledTemplateProgramsToUnit(unit);
     } catch (error) {
       console.error("Error saving unit preference:", error);
     }
