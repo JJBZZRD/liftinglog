@@ -7,9 +7,9 @@ import { TabBar, TabView } from "react-native-tab-view";
 import { TabSwipeContext } from "../../lib/contexts/TabSwipeContext";
 import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import AnalyticsTab from "./tabs/AnalyticsTab";
 import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
-import VisualisationTab from "./tabs/VisualisationTab";
 
 export default function ExerciseModalScreen() {
   const { rawColors } = useTheme();
@@ -22,7 +22,7 @@ export default function ExerciseModalScreen() {
   const [routes] = useState([
     { key: "record", title: "Record" },
     { key: "history", title: "History" },
-    { key: "visualisation", title: "Visualisation" },
+    { key: "analytics", title: "Analytics" },
   ]);
   const [isPinned, setIsPinned] = useState(false);
   const [showPinLimitTooltip, setShowPinLimitTooltip] = useState(false);
@@ -42,8 +42,8 @@ export default function ExerciseModalScreen() {
           return <RecordTab onHistoryRefresh={triggerHistoryRefresh} />;
         case "history":
           return <HistoryTab refreshKey={historyRefreshKey} />;
-        case "visualisation":
-          return <VisualisationTab refreshKey={historyRefreshKey} />;
+        case "analytics":
+          return <AnalyticsTab refreshKey={historyRefreshKey} />;
         default:
           return null;
       }
@@ -77,7 +77,7 @@ export default function ExerciseModalScreen() {
       if (index === 0) {
         return;
       }
-      event.preventDefault();
+      (event as unknown as { preventDefault: () => void }).preventDefault();
       setIndex(0);
     });
 

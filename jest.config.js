@@ -9,7 +9,7 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {
-        jsx: 'react',
+        jsx: 'react-jsx',
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
         moduleResolution: 'node',

@@ -84,7 +84,7 @@ export default function AnalyticsChart({
   const plotWidth = chartWidth - PLOT_PADDING_X * 2; // Usable area for data points
   const chartHeight = height - X_AXIS_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
-  // Data is expected to arrive already sorted from VisualisationTab
+  // Data is expected to arrive already sorted from AnalyticsTab
   // But ensure it's sorted just in case
   const sortedData = useMemo(
     () => [...data].sort((a, b) => a.date - b.date),
@@ -212,7 +212,7 @@ export default function AnalyticsChart({
   }, [trendLineData, visibleStart, visibleEnd, dateToX, valueToY]);
 
   // Create SVG path for data line
-  const createLinePath = useCallback((points: Array<{ x: number; y: number }>) => {
+  const createLinePath = useCallback((points: { x: number; y: number }[]) => {
     if (points.length === 0) return "";
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
 
