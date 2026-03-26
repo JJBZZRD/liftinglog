@@ -1153,7 +1153,7 @@ export default function AnalyticsInsightsDeck({
         })}
       </Animated.ScrollView>
 
-      <View testID="analytics-page-control" className="self-center mt-2">
+      <View testID="analytics-page-control" className="self-center -mt-3">
         <DotsCarousel
           testID="analytics-dots-carousel"
           length={cardIds.length}
