@@ -7,7 +7,7 @@ import { Animated, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../components/AddExerciseModal";
 import BaseModal from "../../components/modals/BaseModal";
-import { deleteExercise, lastPerformedAt, listExercises, updateExercise, type Exercise } from "../../lib/db/exercises";
+import { deleteExercise, lastPerformedAt, listExercises, type Exercise } from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 type SortOption = "alphabetical" | "lastCompleted";
@@ -16,14 +16,12 @@ export default function ExercisesScreen() {
   const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Exercise[]>([]);
-  const [fabActive, setFabActive] = useState(false);
   const [lastPerformedAtByExerciseId, setLastPerformedAtByExerciseId] = useState<Record<number, number | null>>({});
   const [isAddModalVisible, setAddModalVisible] = useState(false);
   const [isActionModalVisible, setActionModalVisible] = useState(false);
-  const [isRenameModalVisible, setRenameModalVisible] = useState(false);
+  const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isDeleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-  const [renameText, setRenameText] = useState("");
   const scrollY = useRef(new Animated.Value(0)).current;
   
   // Filter and search state
@@ -82,22 +80,9 @@ export default function ExercisesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setFabActive(false);
       reloadExercises();
     }, [reloadExercises])
   );
-
-  const handleRename = useCallback(async () => {
-    const trimmed = renameText.trim();
-    if (!selectedExercise || !trimmed) {
-      setRenameModalVisible(false);
-      return;
-    }
-    await updateExercise(selectedExercise.id, { name: trimmed });
-    setRenameModalVisible(false);
-    setSelectedExercise(null);
-    await reloadExercises();
-  }, [selectedExercise, renameText, reloadExercises]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedExercise) {
@@ -133,7 +118,7 @@ export default function ExercisesScreen() {
         <View style={styles.headerContent}>
           <Text style={[styles.headerTitle, { color: rawColors.foreground }]}>Exercises</Text>
           <Text style={[styles.headerSubtitle, { color: rawColors.foregroundSecondary }]}>Your exercise library</Text>
-          <View style={styles.headerIcons}>
+          <View style={[styles.headerIcons, { alignItems: 'center' }]}>
             <Pressable 
               style={styles.headerIconButton}
               onPress={() => setShowFilterPopup(true)}
@@ -153,6 +138,20 @@ export default function ExercisesScreen() {
                 size={22} 
                 color={searchQuery ? rawColors.primary : rawColors.foregroundSecondary} 
               />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setAddModalVisible(true)}
+              className="flex-row items-center px-4 py-2 rounded-full border ml-auto"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+                borderColor: rawColors.borderLight,
+              })}
+            >
+              <MaterialCommunityIcons name="plus" size={16} color={rawColors.foregroundSecondary} />
+              <Text className="ml-1.5 text-sm font-semibold" style={{ color: rawColors.foregroundSecondary }}>
+                Add Exercise
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -188,7 +187,6 @@ export default function ExercisesScreen() {
             <Pressable
               onLongPress={() => {
                 setSelectedExercise(item);
-                setRenameText(item.name);
                 setActionModalVisible(true);
               }}
               className="rounded-2xl p-5"
@@ -222,98 +220,84 @@ export default function ExercisesScreen() {
         )}
       />
 
-      {/* FAB */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add exercise"
-        onPressIn={() => setFabActive(true)}
-        onPress={() => setAddModalVisible(true)}
-        style={[styles.fab, { backgroundColor: rawColors.surface, borderColor: fabActive ? rawColors.foregroundSecondary : rawColors.primary, shadowColor: rawColors.shadow }]}
-      >
-        <MaterialCommunityIcons 
-          name="plus" 
-          size={28} 
-          color={fabActive ? rawColors.foregroundSecondary : rawColors.primary} 
-        />
-      </Pressable>
-
       <AddExerciseModal
         visible={isAddModalVisible}
-        onDismiss={() => {
-          setAddModalVisible(false);
-          setFabActive(false);
-        }}
+        onDismiss={() => setAddModalVisible(false)}
         onSaved={reloadExercises}
       />
 
       {/* Actions Modal */}
       <BaseModal
         visible={isActionModalVisible}
-        onClose={() => setActionModalVisible(false)}
+        onClose={() => { setActionModalVisible(false); setSelectedExercise(null); }}
+        maxWidth={400}
       >
-        <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>Exercise options</Text>
-        <Pressable
-          onPress={() => {
-            setActionModalVisible(false);
-            setRenameModalVisible(true);
-          }}
-          style={styles.modalOption}
-        >
-          <Text style={[styles.modalOptionText, { color: rawColors.primary }]}>Rename</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            setActionModalVisible(false);
-            setDeleteConfirmVisible(true);
-          }}
-          style={styles.modalOption}
-        >
-          <Text style={[styles.modalOptionTextDestructive, { color: rawColors.destructive }]}>Delete</Text>
-        </Pressable>
-        <View style={styles.modalCancelRow}>
-          <Pressable onPress={() => setActionModalVisible(false)} style={styles.modalCancelButton}>
-            <Text style={[styles.modalCancelText, { color: rawColors.foregroundSecondary }]}>Cancel</Text>
-          </Pressable>
-        </View>
+        {selectedExercise && (
+          <>
+            <Text className="text-xl font-bold mb-5 text-foreground">
+              {selectedExercise.name}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setActionModalVisible(false);
+                setEditModalVisible(true);
+              }}
+              className="flex-row items-center p-3.5 rounded-xl mb-2 gap-3 bg-surface-secondary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={22} color={rawColors.primary} />
+              <Text className="text-[15px] font-medium text-foreground">Edit Details</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setActionModalVisible(false);
+                setDeleteConfirmVisible(true);
+              }}
+              className="flex-row items-center p-3.5 rounded-xl mb-2 gap-3 bg-surface-secondary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <MaterialCommunityIcons name="delete-outline" size={22} color={rawColors.destructive} />
+              <Text className="text-[15px] font-medium text-destructive">Delete</Text>
+            </Pressable>
+          </>
+        )}
       </BaseModal>
 
-      {/* Rename Modal */}
-      <BaseModal
-        visible={isRenameModalVisible}
-        onClose={() => setRenameModalVisible(false)}
-        maxWidth={520}
-      >
-        <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>Rename exercise</Text>
-        <TextInput
-          placeholder="New name"
-          value={renameText}
-          onChangeText={setRenameText}
-          placeholderTextColor={rawColors.foregroundMuted}
-          style={[styles.input, { borderColor: rawColors.border, color: rawColors.foreground, backgroundColor: rawColors.surfaceSecondary }]}
-        />
-        <View style={styles.modalButtonRow}>
-          <Pressable onPress={() => setRenameModalVisible(false)} style={styles.modalCancelButton}>
-            <Text style={[styles.modalCancelText, { color: rawColors.foregroundSecondary }]}>Cancel</Text>
-          </Pressable>
-          <Pressable onPress={handleRename} style={[styles.modalPrimaryButton, { backgroundColor: rawColors.primary }]}>
-            <Text style={[styles.modalPrimaryButtonText, { color: rawColors.surface }]}>Save</Text>
-          </Pressable>
-        </View>
-      </BaseModal>
+      {/* Edit Exercise Modal */}
+      <AddExerciseModal
+        visible={isEditModalVisible}
+        exercise={selectedExercise}
+        onDismiss={() => { setEditModalVisible(false); setSelectedExercise(null); }}
+        onSaved={reloadExercises}
+      />
 
       {/* Delete Confirm Modal */}
       <BaseModal
         visible={isDeleteConfirmVisible}
-        onClose={() => setDeleteConfirmVisible(false)}
+        onClose={() => { setDeleteConfirmVisible(false); setSelectedExercise(null); }}
+        maxWidth={380}
       >
-        <Text style={[styles.modalTitle, { color: rawColors.foreground }]}>Delete exercise?</Text>
-        <Text style={[styles.modalMessage, { color: rawColors.foregroundSecondary }]}>This action cannot be undone.</Text>
-        <View style={styles.modalButtonRow}>
-          <Pressable onPress={() => setDeleteConfirmVisible(false)} style={styles.modalCancelButton}>
-            <Text style={[styles.modalCancelText, { color: rawColors.foregroundSecondary }]}>Cancel</Text>
+        <Text className="text-xl font-bold mb-2 text-foreground">Delete Exercise?</Text>
+        <Text className="text-base mb-4 text-foreground-secondary">
+          This will permanently delete{" "}
+          <Text className="font-semibold text-foreground">{selectedExercise?.name}</Text>.
+          {" "}This action cannot be undone.
+        </Text>
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={() => { setDeleteConfirmVisible(false); setSelectedExercise(null); }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
           </Pressable>
-          <Pressable onPress={handleDelete} style={[styles.modalDestructiveButton, { backgroundColor: rawColors.destructive }]}>
-            <Text style={[styles.modalDestructiveButtonText, { color: rawColors.surface }]}>Delete</Text>
+          <Pressable
+            className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
+            onPress={handleDelete}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+          >
+            <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
+            <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
           </Pressable>
         </View>
       </BaseModal>
@@ -496,72 +480,6 @@ const styles = StyleSheet.create({
   },
   headerFade: {
     height: 8,
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 94,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  // Modal styles
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  modalMessage: {
-    marginBottom: 12,
-  },
-  modalOption: {
-    paddingVertical: 10,
-  },
-  modalOptionText: {
-    fontWeight: "600",
-  },
-  modalOptionTextDestructive: {
-    fontWeight: "600",
-  },
-  modalCancelRow: {
-    alignItems: "flex-end",
-  },
-  modalCancelButton: {
-    padding: 10,
-  },
-  modalCancelText: {},
-  modalButtonRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    marginTop: 4,
-  },
-  modalPrimaryButton: {
-    padding: 10,
-    borderRadius: 8,
-  },
-  modalPrimaryButtonText: {
-    fontWeight: "600",
-  },
-  modalDestructiveButton: {
-    padding: 10,
-    borderRadius: 8,
-  },
-  modalDestructiveButtonText: {
-    fontWeight: "600",
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
   },
   // Popup styles (kept as-is for custom positioning)
   popupOverlay: {

@@ -1,15 +1,17 @@
-import { useState } from "react";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
-import { createExercise } from "../lib/db/exercises";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { createExercise, updateExercise, type Exercise } from "../lib/db/exercises";
 import { useTheme } from "../lib/theme/ThemeContext";
+import BaseModal from "./modals/BaseModal";
 
 type AddExerciseModalProps = {
   visible: boolean;
   onDismiss: () => void;
   onSaved?: (exerciseId?: number) => void | Promise<void>;
+  exercise?: Exercise | null;
 };
 
-export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExerciseModalProps) {
+export default function AddExerciseModal({ visible, onDismiss, onSaved, exercise }: AddExerciseModalProps) {
   const { rawColors } = useTheme();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -17,92 +19,150 @@ export default function AddExerciseModal({ visible, onDismiss, onSaved }: AddExe
   const [equipment, setEquipment] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function onSave() {
+  const isEditMode = !!exercise;
+
+  useEffect(() => {
+    if (exercise) {
+      setName(exercise.name);
+      setDescription(exercise.description ?? "");
+      setMuscle(exercise.muscleGroup ?? "");
+      setEquipment(exercise.equipment ?? "");
+      setError(null);
+    }
+  }, [exercise]);
+
+  const resetForm = useCallback(() => {
+    setName("");
+    setDescription("");
+    setMuscle("");
+    setEquipment("");
+    setError(null);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetForm();
+    onDismiss();
+  }, [onDismiss, resetForm]);
+
+  const handleSave = useCallback(async () => {
     try {
       if (!name.trim()) {
         setError("Name is required");
         return;
       }
-      const exerciseId = await createExercise({
-        name: name.trim(),
-        description: description.trim() || null,
-        muscle_group: muscle.trim() || null,
-        equipment: equipment.trim() || null,
-        is_bodyweight: false,
-      });
-      setError(null);
-      setName("");
-      setDescription("");
-      setMuscle("");
-      setEquipment("");
-      await onSaved?.(exerciseId);
-      onDismiss();
+
+      if (isEditMode && exercise) {
+        await updateExercise(exercise.id, {
+          name: name.trim(),
+          description: description.trim() || null,
+          muscle_group: muscle.trim() || null,
+          equipment: equipment.trim() || null,
+        });
+        resetForm();
+        await onSaved?.(exercise.id);
+        onDismiss();
+      } else {
+        const exerciseId = await createExercise({
+          name: name.trim(),
+          description: description.trim() || null,
+          muscle_group: muscle.trim() || null,
+          equipment: equipment.trim() || null,
+          is_bodyweight: false,
+        });
+        resetForm();
+        await onSaved?.(exerciseId);
+        onDismiss();
+      }
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
-  }
+  }, [name, description, muscle, equipment, exercise, isEditMode, onDismiss, onSaved, resetForm]);
 
   return (
-    <Modal
+    <BaseModal
       visible={visible}
-      transparent
-      animationType="fade"
-      presentationStyle="overFullScreen"
-      onRequestClose={onDismiss}
+      onClose={handleClose}
+      maxWidth={480}
+      contentStyle={{ padding: 0, maxHeight: "70%" }}
     >
-      <Pressable
-        onPress={onDismiss}
-        className="flex-1 bg-overlay justify-center items-center p-4"
+      <ScrollView
+        contentContainerStyle={{ padding: 24 }}
+        keyboardShouldPersistTaps="handled"
       >
-        <Pressable
-          onPress={() => {}}
-          className="w-full max-w-[520px] bg-surface rounded-xl p-4 gap-3"
-        >
-          <Text className="text-lg font-semibold text-foreground">Add Exercise</Text>
-          {error ? <Text className="text-destructive">{error}</Text> : null}
+        <Text className="text-xl font-bold mb-5 text-foreground">
+          {isEditMode ? "Edit Exercise" : "New Exercise"}
+        </Text>
 
+        {error ? (
+          <View className="mb-4 px-3 py-2.5 rounded-lg bg-destructive/10">
+            <Text className="text-sm font-medium text-destructive">{error}</Text>
+          </View>
+        ) : null}
+
+        <View className="mb-4">
+          <Text className="text-sm font-medium mb-2 text-foreground-secondary">Name</Text>
           <TextInput
-            placeholder="Name"
+            className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => { setName(text); setError(null); }}
+            placeholder="e.g. Bench Press"
             placeholderTextColor={rawColors.foregroundMuted}
-            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
+            autoFocus={!isEditMode}
           />
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-sm font-medium mb-2 text-foreground-secondary">Muscle Group (optional)</Text>
           <TextInput
-            placeholder="Description"
-            value={description}
-            onChangeText={setDescription}
-            placeholderTextColor={rawColors.foregroundMuted}
-            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
-          />
-          <TextInput
-            placeholder="Muscle group"
+            className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
             value={muscle}
             onChangeText={setMuscle}
+            placeholder="e.g. Chest"
             placeholderTextColor={rawColors.foregroundMuted}
-            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
           />
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-sm font-medium mb-2 text-foreground-secondary">Equipment (optional)</Text>
           <TextInput
-            placeholder="Equipment"
+            className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
             value={equipment}
             onChangeText={setEquipment}
+            placeholder="e.g. Barbell"
             placeholderTextColor={rawColors.foregroundMuted}
-            className="border border-border rounded-lg p-2.5 text-foreground bg-surface"
           />
+        </View>
 
-          <View className="flex-row justify-end gap-3">
-            <Pressable onPress={onDismiss} className="p-2.5">
-              <Text className="text-foreground-secondary">Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={onSave}
-              className="bg-primary p-2.5 rounded-lg"
-            >
-              <Text className="text-primary-foreground font-semibold">Save</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        <View className="mb-4">
+          <Text className="text-sm font-medium mb-2 text-foreground-secondary">Description (optional)</Text>
+          <TextInput
+            className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground min-h-[80px]"
+            style={{ textAlignVertical: "top" }}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Add notes about form, cues, etc."
+            placeholderTextColor={rawColors.foregroundMuted}
+            multiline
+          />
+        </View>
+
+        <View className="flex-row gap-3 mt-2">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={handleClose}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+            onPress={handleSave}
+          >
+            <Text className="text-base font-semibold text-primary-foreground">
+              {isEditMode ? "Save" : "Create"}
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </BaseModal>
   );
 }
