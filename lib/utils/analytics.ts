@@ -58,6 +58,7 @@ export type ExerciseAnalyticsMetricType =
   | "totalVolume"
   | "maxReps"
   | "numSets";
+export type ExerciseAnalyticsBucketId = "1-3" | "4-6" | "7-9" | "10-12+";
 
 export type ExerciseAnalyticsSet = {
   id: number;
@@ -114,6 +115,46 @@ export type ExerciseAnalyticsProgress = {
   stabilityLabel: "stable" | "mixed" | "noisy" | "insufficient";
 };
 
+export type ExerciseAnalyticsBucketTrend = {
+  id: ExerciseAnalyticsBucketId;
+  label: string;
+  sessionCount: number;
+  latestStrengthKg: number | null;
+  bestStrengthKg: number | null;
+  normalizedSlope: number | null;
+  robustSlopeKg: number | null;
+  momentumKg: number | null;
+  confidenceScore: number | null;
+  confidenceLabel: ExerciseAnalyticsProgress["confidenceLabel"];
+  baseWeight: number;
+  effectiveWeight: number;
+  trendStatus: ExerciseAnalyticsProgress["trendStatus"];
+};
+
+export type ExerciseAnalyticsPerformanceProgress = {
+  hasEnoughData: boolean;
+  materialGainStatus: "improving" | "flat" | "slipping" | "mixed" | "insufficient";
+  absoluteProgressScore: number | null;
+  daysSinceLastMeaningfulGain: number | null;
+  meaningfulGainConfidence: "high" | "low" | "insufficient";
+  strongestImprovingBucket: {
+    id: ExerciseAnalyticsBucketId;
+    label: string;
+    normalizedSlope: number | null;
+  } | null;
+  weakestBucket: {
+    id: ExerciseAnalyticsBucketId;
+    label: string;
+    normalizedSlope: number | null;
+  } | null;
+  comparabilityScore: number | null;
+  comparabilityLabel: "high" | "moderate" | "less-comparable" | "insufficient";
+  repRangeDriftFlag: boolean;
+  dominantRecentBucket: ExerciseAnalyticsBucketId | null;
+  historicalMedianBucket: ExerciseAnalyticsBucketId | null;
+  bucketTrends: ExerciseAnalyticsBucketTrend[];
+};
+
 export type ExerciseAnalyticsPRSummary = {
   chips: { targetReps: number; weightKg: number | null }[];
   lastPrDate: number | null;
@@ -131,7 +172,7 @@ export type ExerciseAnalyticsConsistency = {
 };
 
 export type RepProfileBucket = {
-  id: "1-3" | "4-6" | "7-9" | "10-12+";
+  id: ExerciseAnalyticsBucketId;
   label: string;
   bestSet: {
     weightKg: number;
@@ -148,7 +189,8 @@ export type EstimatedRepMaxEntry = {
 
 export type ExerciseAnalyticsOverview = {
   snapshot: ExerciseAnalyticsSnapshot;
-  progress: ExerciseAnalyticsProgress;
+  metricTrend: ExerciseAnalyticsProgress;
+  performanceProgress: ExerciseAnalyticsPerformanceProgress;
   prs: ExerciseAnalyticsPRSummary;
   consistency: ExerciseAnalyticsConsistency;
   repProfile: {
@@ -207,10 +249,31 @@ type ExerciseAnalyticsSetLookup = {
 };
 
 type RepProfileBucketDefinition = {
-  id: RepProfileBucket["id"];
+  id: ExerciseAnalyticsBucketId;
   label: string;
   minReps: number;
   maxReps: number | null;
+};
+
+export type ExerciseAnalyticsPerformanceFacts = {
+  filteredSessions: ExerciseAnalyticsSession[];
+  now: number;
+};
+
+type SessionBucketStrength = {
+  id: ExerciseAnalyticsBucketId;
+  label: string;
+  date: number;
+  strengthKg: number;
+  weightKg: number;
+  reps: number;
+  setIndex: number;
+};
+
+type SessionPerformanceSummary = {
+  date: number;
+  dominantBucketId: ExerciseAnalyticsBucketId | null;
+  bucketBestSets: Partial<Record<ExerciseAnalyticsBucketId, SessionBucketStrength>>;
 };
 
 const REP_PROFILE_BUCKETS: RepProfileBucketDefinition[] = [
@@ -219,6 +282,13 @@ const REP_PROFILE_BUCKETS: RepProfileBucketDefinition[] = [
   { id: "7-9", label: "7-9 Reps", minReps: 7, maxReps: 9 },
   { id: "10-12+", label: "10-12+ Reps", minReps: 10, maxReps: null },
 ];
+
+const BUCKET_CONFIDENCE_WEIGHTS: Record<ExerciseAnalyticsBucketId, number> = {
+  "1-3": 1,
+  "4-6": 0.95,
+  "7-9": 0.88,
+  "10-12+": 0.8,
+};
 
 function resolveFormulaForExercise(
   exerciseId: number,
@@ -584,17 +654,215 @@ function getMomentumStatus(
   return "steady";
 }
 
+function getProgressStatusFromNormalizedSlope(
+  normalizedSlope: number | null
+): ExerciseAnalyticsProgress["trendStatus"] {
+  if (normalizedSlope === null) return "insufficient";
+  if (normalizedSlope >= TREND_THRESHOLD) return "improving";
+  if (normalizedSlope <= -TREND_THRESHOLD) return "slipping";
+  return "flat";
+}
+
 function getRegressionTrendStatus(values: number[]): ExerciseAnalyticsProgress["trendStatus"] {
   if (values.length < 4) return "insufficient";
 
   const { slope } = computeRegressionStats(values);
   const yMean = average(values) ?? 0;
   const baseline = Math.max(Math.abs(yMean), 1);
-  const normalizedSlope = slope / baseline;
+  return getProgressStatusFromNormalizedSlope(slope / baseline);
+}
 
-  if (normalizedSlope >= TREND_THRESHOLD) return "improving";
-  if (normalizedSlope <= -TREND_THRESHOLD) return "slipping";
-  return "flat";
+function getComparabilityLabel(
+  score: number | null
+): ExerciseAnalyticsPerformanceProgress["comparabilityLabel"] {
+  if (score === null) return "insufficient";
+  if (score >= 0.72) return "high";
+  if (score >= 0.45) return "moderate";
+  return "less-comparable";
+}
+
+function getBucketIndex(bucketId: ExerciseAnalyticsBucketId | null): number | null {
+  if (bucketId === null) return null;
+  const bucketIndex = REP_PROFILE_BUCKETS.findIndex((bucket) => bucket.id === bucketId);
+  return bucketIndex >= 0 ? bucketIndex : null;
+}
+
+function getBucketIdFromIndex(index: number | null): ExerciseAnalyticsBucketId | null {
+  if (index === null) return null;
+  return REP_PROFILE_BUCKETS[index]?.id ?? null;
+}
+
+function weightedMedian(entries: { value: number; weight: number }[]): number | null {
+  const weightedEntries = entries
+    .filter((entry) => Number.isFinite(entry.value) && entry.weight > 0)
+    .sort((a, b) => a.value - b.value);
+
+  if (weightedEntries.length === 0) return null;
+
+  const totalWeight = weightedEntries.reduce((sum, entry) => sum + entry.weight, 0);
+  let cumulativeWeight = 0;
+
+  for (const entry of weightedEntries) {
+    cumulativeWeight += entry.weight;
+    if (cumulativeWeight >= totalWeight / 2) {
+      return entry.value;
+    }
+  }
+
+  return weightedEntries[weightedEntries.length - 1]?.value ?? null;
+}
+
+function isBetterBucketStrength(
+  nextStrength: SessionBucketStrength,
+  currentStrength: SessionBucketStrength | null | undefined
+): boolean {
+  if (!currentStrength) return true;
+  if (nextStrength.strengthKg !== currentStrength.strengthKg) {
+    return nextStrength.strengthKg > currentStrength.strengthKg;
+  }
+  if (nextStrength.weightKg !== currentStrength.weightKg) {
+    return nextStrength.weightKg > currentStrength.weightKg;
+  }
+  if (nextStrength.reps !== currentStrength.reps) {
+    return nextStrength.reps > currentStrength.reps;
+  }
+  return nextStrength.setIndex > currentStrength.setIndex;
+}
+
+function buildSessionPerformanceSummary(
+  session: ExerciseAnalyticsSession,
+  formula: E1RMFormulaId
+): SessionPerformanceSummary {
+  const bucketBestSets: Partial<Record<ExerciseAnalyticsBucketId, SessionBucketStrength>> = {};
+  const bucketCounts = new Map<ExerciseAnalyticsBucketId, number>();
+
+  for (const set of session.sets) {
+    if (
+      typeof set.weightKg !== "number" ||
+      typeof set.reps !== "number" ||
+      set.weightKg <= 0 ||
+      set.reps <= 0
+    ) {
+      continue;
+    }
+
+    const bucket = getRepProfileBucketDefinition(set.reps);
+    if (!bucket) continue;
+
+    bucketCounts.set(bucket.id, (bucketCounts.get(bucket.id) ?? 0) + 1);
+
+    const bucketStrength: SessionBucketStrength = {
+      id: bucket.id,
+      label: bucket.label,
+      date: session.date,
+      strengthKg: computeE1rm(formula, set.weightKg, set.reps),
+      weightKg: set.weightKg,
+      reps: set.reps,
+      setIndex: set.setIndex,
+    };
+
+    if (isBetterBucketStrength(bucketStrength, bucketBestSets[bucket.id])) {
+      bucketBestSets[bucket.id] = bucketStrength;
+    }
+  }
+
+  const dominantBucket = Array.from(bucketCounts.entries()).sort((a, b) => {
+    const countDiff = b[1] - a[1];
+    if (countDiff !== 0) return countDiff;
+    const strengthDiff =
+      (bucketBestSets[b[0]]?.strengthKg ?? 0) - (bucketBestSets[a[0]]?.strengthKg ?? 0);
+    if (strengthDiff !== 0) return strengthDiff;
+    return (getBucketIndex(a[0]) ?? 0) - (getBucketIndex(b[0]) ?? 0);
+  })[0];
+
+  return {
+    date: session.date,
+    dominantBucketId: dominantBucket?.[0] ?? null,
+    bucketBestSets,
+  };
+}
+
+function getPerformanceFactsSessionSummaries(
+  filteredSessions: ExerciseAnalyticsSession[],
+  formula: E1RMFormulaId
+): SessionPerformanceSummary[] {
+  return sortSessionsChronologically(filteredSessions).map((session) =>
+    buildSessionPerformanceSummary(session, formula)
+  );
+}
+
+function getDaysSinceLastMeaningfulGain(
+  sessionSummaries: SessionPerformanceSummary[],
+  now: number
+): {
+  daysSinceLastMeaningfulGain: number | null;
+  meaningfulGainConfidence: ExerciseAnalyticsPerformanceProgress["meaningfulGainConfidence"];
+} {
+  let lastGainDate: number | null = null;
+  let lastGainConfidence: ExerciseAnalyticsPerformanceProgress["meaningfulGainConfidence"] =
+    "insufficient";
+
+  for (let summaryIndex = 0; summaryIndex < sessionSummaries.length; summaryIndex += 1) {
+    const summary = sessionSummaries[summaryIndex];
+    const priorSummaries = sessionSummaries.filter(
+      (candidate, candidateIndex) =>
+        candidateIndex < summaryIndex &&
+        candidate.date >= summary.date - 90 * MS_PER_DAY &&
+        candidate.date < summary.date
+    );
+
+    let foundSameBucketGain = false;
+    let foundAdjacentBucketGain = false;
+
+    for (const bucket of REP_PROFILE_BUCKETS) {
+      const currentStrength = summary.bucketBestSets[bucket.id];
+      if (!currentStrength) continue;
+
+      const priorSameBucketStrengths = priorSummaries
+        .map((candidate) => candidate.bucketBestSets[bucket.id]?.strengthKg ?? null)
+        .filter((value): value is number => value !== null);
+
+      if (priorSameBucketStrengths.length > 0) {
+        const priorBest = Math.max(...priorSameBucketStrengths);
+        const threshold = Math.max(1, priorBest * 0.01);
+        if (currentStrength.strengthKg - priorBest >= threshold) {
+          foundSameBucketGain = true;
+          break;
+        }
+        continue;
+      }
+
+      const bucketIndex = getBucketIndex(bucket.id);
+      const adjacentBucketIds = [bucketIndex === null ? null : bucketIndex - 1, bucketIndex === null ? null : bucketIndex + 1]
+        .map((index) => getBucketIdFromIndex(index))
+        .filter((value): value is ExerciseAnalyticsBucketId => value !== null);
+
+      const adjacentStrengths = priorSummaries.flatMap((candidate) =>
+        adjacentBucketIds
+          .map((bucketId) => candidate.bucketBestSets[bucketId]?.strengthKg ?? null)
+          .filter((value): value is number => value !== null)
+      );
+
+      if (adjacentStrengths.length === 0) continue;
+
+      const priorBestAdjacent = Math.max(...adjacentStrengths);
+      const threshold = Math.max(1, priorBestAdjacent * 0.01);
+      if (currentStrength.strengthKg - priorBestAdjacent >= threshold) {
+        foundAdjacentBucketGain = true;
+      }
+    }
+
+    if (foundSameBucketGain || foundAdjacentBucketGain) {
+      lastGainDate = summary.date;
+      lastGainConfidence = foundSameBucketGain ? "high" : "low";
+    }
+  }
+
+  return {
+    daysSinceLastMeaningfulGain:
+      lastGainDate === null ? null : Math.max(0, Math.floor((now - lastGainDate) / MS_PER_DAY)),
+    meaningfulGainConfidence: lastGainConfidence,
+  };
 }
 
 function getWeekStartTimestamp(timestamp: number): number {
@@ -722,6 +990,208 @@ function buildProgress(metricPoints: SessionDataPoint[]): ExerciseAnalyticsProgr
     plateauRiskLabel: getPlateauRiskLabel(plateauRiskScore),
     stabilityScore,
     stabilityLabel: getStabilityLabel(stabilityScore),
+  };
+}
+
+export function buildExerciseAnalyticsPerformanceProgress(
+  facts: ExerciseAnalyticsPerformanceFacts,
+  formula: E1RMFormulaId
+): ExerciseAnalyticsPerformanceProgress {
+  const sessionSummaries = getPerformanceFactsSessionSummaries(facts.filteredSessions, formula);
+  const totalSessions = sessionSummaries.length;
+
+  const bucketTrends: ExerciseAnalyticsBucketTrend[] = REP_PROFILE_BUCKETS.map((bucket) => {
+    const bucketSamples = sessionSummaries
+      .map((summary) => summary.bucketBestSets[bucket.id] ?? null)
+      .filter((value): value is SessionBucketStrength => value !== null);
+    const values = bucketSamples.map((sample) => sample.strengthKg);
+    const sessionCount = bucketSamples.length;
+    const baseWeight = BUCKET_CONFIDENCE_WEIGHTS[bucket.id];
+
+    if (sessionCount < 4) {
+      return {
+        id: bucket.id,
+        label: bucket.label,
+        sessionCount,
+        latestStrengthKg: bucketSamples[bucketSamples.length - 1]?.strengthKg ?? null,
+        bestStrengthKg: values.length > 0 ? Math.max(...values) : null,
+        normalizedSlope: null,
+        robustSlopeKg: null,
+        momentumKg: null,
+        confidenceScore: null,
+        confidenceLabel: "insufficient",
+        baseWeight,
+        effectiveWeight: 0,
+        trendStatus: "insufficient",
+      };
+    }
+
+    const robustSlopeKg = computeTheilSenSlope(values);
+    const baseline = Math.max(Math.abs(median(values) ?? average(values) ?? 0), 1);
+    const normalizedSlope = robustSlopeKg / baseline;
+    const ewmaSeries = computeEwmaSeries(values);
+    const momentumLookback = Math.min(2, ewmaSeries.length - 1);
+    const momentumKg =
+      momentumLookback > 0
+        ? ewmaSeries[ewmaSeries.length - 1] - ewmaSeries[ewmaSeries.length - 1 - momentumLookback]
+        : null;
+    const regressionStats = computeRegressionStats(values);
+    const standardDeviationValue = standardDeviation(values);
+    const slopeStrengthScore = clamp(
+      (Math.abs(robustSlopeKg) * Math.max(values.length - 1, 1)) /
+        Math.max(standardDeviationValue * 2, baseline * 0.03, 1)
+    );
+    const confidenceScore = clamp(
+      regressionStats.rSquared * 0.55 + slopeStrengthScore * 0.45
+    );
+    const effectiveWeight = baseWeight * clamp(sessionCount / Math.max(totalSessions, 4));
+
+    return {
+      id: bucket.id,
+      label: bucket.label,
+      sessionCount,
+      latestStrengthKg: bucketSamples[bucketSamples.length - 1]?.strengthKg ?? null,
+      bestStrengthKg: Math.max(...values),
+      normalizedSlope,
+      robustSlopeKg,
+      momentumKg,
+      confidenceScore,
+      confidenceLabel: getConfidenceLabel(confidenceScore),
+      baseWeight,
+      effectiveWeight,
+      trendStatus: getProgressStatusFromNormalizedSlope(normalizedSlope),
+    };
+  });
+
+  const eligibleBucketTrends = bucketTrends.filter(
+    (bucket) => bucket.normalizedSlope !== null && bucket.effectiveWeight > 0
+  );
+  const dominantBucketIndices = sessionSummaries
+    .map((summary) => getBucketIndex(summary.dominantBucketId))
+    .filter((value): value is number => value !== null);
+  const recentDominantBucketIndices = dominantBucketIndices.slice(-4);
+  const historicalMedianBucket = getBucketIdFromIndex(
+    dominantBucketIndices.length === 0
+      ? null
+      : Math.round(median(dominantBucketIndices) ?? dominantBucketIndices[dominantBucketIndices.length - 1])
+  );
+  const dominantRecentBucket = getBucketIdFromIndex(
+    recentDominantBucketIndices.length === 0
+      ? null
+      : Math.round(
+          median(recentDominantBucketIndices) ??
+            recentDominantBucketIndices[recentDominantBucketIndices.length - 1]
+        )
+  );
+  const repRangeDriftFlag =
+    historicalMedianBucket !== null &&
+    dominantRecentBucket !== null &&
+    Math.abs(
+      (getBucketIndex(historicalMedianBucket) ?? 0) -
+        (getBucketIndex(dominantRecentBucket) ?? 0)
+    ) > 1;
+  const averageBucketConfidence = average(
+    eligibleBucketTrends
+      .map((bucket) => bucket.confidenceScore)
+      .filter((value): value is number => value !== null)
+  );
+  const comparabilityScore =
+    totalSessions < 4
+      ? null
+      : clamp(
+          (averageBucketConfidence ?? 0) * 0.6 +
+            (eligibleBucketTrends.length / REP_PROFILE_BUCKETS.length) * 0.4 -
+            (repRangeDriftFlag ? 0.35 : 0)
+        );
+  const absoluteProgressScore = weightedMedian(
+    eligibleBucketTrends.map((bucket) => ({
+      value: bucket.normalizedSlope ?? 0,
+      weight: bucket.effectiveWeight,
+    }))
+  );
+
+  const strongestPositiveInfluence = Math.max(
+    0,
+    ...eligibleBucketTrends.map((bucket) =>
+      bucket.normalizedSlope !== null && bucket.normalizedSlope > 0
+        ? bucket.normalizedSlope * bucket.effectiveWeight
+        : 0
+    )
+  );
+  const strongestNegativeInfluence = Math.max(
+    0,
+    ...eligibleBucketTrends.map((bucket) =>
+      bucket.normalizedSlope !== null && bucket.normalizedSlope < 0
+        ? Math.abs(bucket.normalizedSlope * bucket.effectiveWeight)
+        : 0
+    )
+  );
+
+  let materialGainStatus: ExerciseAnalyticsPerformanceProgress["materialGainStatus"] =
+    "insufficient";
+  if (totalSessions >= 4 && eligibleBucketTrends.length > 0) {
+    const hasMixedOpposition =
+      strongestPositiveInfluence > 0 &&
+      strongestNegativeInfluence > 0 &&
+      (Math.min(strongestPositiveInfluence, strongestNegativeInfluence) /
+        Math.max(strongestPositiveInfluence, strongestNegativeInfluence) >=
+        0.75 ||
+        (strongestPositiveInfluence >= TREND_THRESHOLD * 0.6 &&
+          strongestNegativeInfluence >= TREND_THRESHOLD * 0.6));
+
+    if (hasMixedOpposition) {
+      materialGainStatus = "mixed";
+    } else if (absoluteProgressScore !== null && absoluteProgressScore >= TREND_THRESHOLD) {
+      materialGainStatus = "improving";
+    } else if (absoluteProgressScore !== null && absoluteProgressScore <= -TREND_THRESHOLD) {
+      materialGainStatus = "slipping";
+    } else {
+      materialGainStatus = "flat";
+    }
+  }
+
+  const strongestImprovingBucket = eligibleBucketTrends
+    .filter((bucket) => (bucket.normalizedSlope ?? 0) > 0)
+    .sort(
+      (a, b) =>
+        (b.normalizedSlope ?? 0) * b.effectiveWeight -
+        (a.normalizedSlope ?? 0) * a.effectiveWeight
+    )[0];
+  const weakestBucket = eligibleBucketTrends.sort(
+    (a, b) =>
+      (a.normalizedSlope ?? Number.POSITIVE_INFINITY) * a.effectiveWeight -
+      (b.normalizedSlope ?? Number.POSITIVE_INFINITY) * b.effectiveWeight
+  )[0];
+  const meaningfulGain = getDaysSinceLastMeaningfulGain(sessionSummaries, facts.now);
+
+  return {
+    hasEnoughData: totalSessions >= 4 && eligibleBucketTrends.length > 0,
+    materialGainStatus,
+    absoluteProgressScore,
+    daysSinceLastMeaningfulGain: meaningfulGain.daysSinceLastMeaningfulGain,
+    meaningfulGainConfidence: meaningfulGain.meaningfulGainConfidence,
+    strongestImprovingBucket: strongestImprovingBucket
+      ? {
+          id: strongestImprovingBucket.id,
+          label: strongestImprovingBucket.label,
+          normalizedSlope: strongestImprovingBucket.normalizedSlope,
+        }
+      : null,
+    weakestBucket: weakestBucket
+      ? {
+          id: weakestBucket.id,
+          label: weakestBucket.label,
+          normalizedSlope: weakestBucket.normalizedSlope,
+        }
+      : null,
+    comparabilityScore,
+    comparabilityLabel: repRangeDriftFlag
+      ? "less-comparable"
+      : getComparabilityLabel(comparabilityScore),
+    repRangeDriftFlag,
+    dominantRecentBucket,
+    historicalMedianBucket,
+    bucketTrends,
   };
 }
 
@@ -1016,10 +1486,15 @@ export function buildExerciseAnalyticsOverview(
     setScope,
   });
   const metricPoints = getMetricPointsFromSessions(filteredSessions, metric, formula);
+  const performanceFacts: ExerciseAnalyticsPerformanceFacts = {
+    filteredSessions,
+    now,
+  };
 
   return {
     snapshot: buildSnapshot(filteredSessions, metricPoints, now),
-    progress: buildProgress(metricPoints),
+    metricTrend: buildProgress(metricPoints),
+    performanceProgress: buildExerciseAnalyticsPerformanceProgress(performanceFacts, formula),
     prs: buildPRSummary(dataset, filteredSessions, setScope, options?.dateRange),
     consistency: buildConsistency(filteredSessions, options?.dateRange),
     repProfile: buildRepProfile(filteredSessions),

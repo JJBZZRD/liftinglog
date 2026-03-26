@@ -20,6 +20,7 @@ jest.mock("../../lib/db/settings", () => ({
 }));
 
 import { computeE1rm } from "../../lib/pr";
+import type { ExerciseAnalyticsDataset } from "../../lib/utils/analytics";
 const {
   buildExerciseAnalyticsOverview,
   getExerciseAnalyticsDataset,
@@ -30,6 +31,54 @@ import {
   analyticsFixtureNow,
   createAnalyticsDatasetFixture,
 } from "../helpers/analyticsFixture";
+
+function toTimestamp(iso: string): number {
+  return new Date(iso).getTime();
+}
+
+function createDatasetFromSessions(
+  sessionDefinitions: {
+    date: string;
+    sets: {
+      weightKg: number;
+      reps: number;
+      isWarmup?: boolean;
+    }[];
+  }[]
+): ExerciseAnalyticsDataset {
+  let setId = 1;
+
+  return {
+    exerciseId: 1,
+    formula: "epley",
+    sessions: [...sessionDefinitions]
+      .map((sessionDefinition, sessionIndex) => {
+        const workoutId = sessionIndex + 1;
+        const workoutExerciseId = workoutId + 100;
+
+        return {
+          date: toTimestamp(sessionDefinition.date),
+          workoutId,
+          workoutExerciseId,
+          performedAt: toTimestamp(sessionDefinition.date),
+          completedAt: toTimestamp(sessionDefinition.date) + 20 * 60 * 1000,
+          sets: sessionDefinition.sets.map((setDefinition, setIndex) => ({
+            id: setId++,
+            workoutId,
+            workoutExerciseId,
+            setIndex: setIndex + 1,
+            weightKg: setDefinition.weightKg,
+            reps: setDefinition.reps,
+            note: null,
+            isWarmup: setDefinition.isWarmup ?? false,
+            performedAt: toTimestamp(sessionDefinition.date) + (setIndex + 1) * 60 * 1000,
+          })),
+        };
+      })
+      .sort((a, b) => b.date - a.date),
+    prEvents: [],
+  };
+}
 
 describe("lib/utils/analytics", () => {
   it("filters metric points by date range and preserves legacy sessions", () => {
@@ -96,16 +145,17 @@ describe("lib/utils/analytics", () => {
 
     expect(overview.snapshot.latestValue).toBe(755);
     expect(overview.snapshot.bestValue).toBe(1337.5);
-    expect(overview.progress.hasEnoughData).toBe(true);
-    expect(overview.progress.rangeChange).toBeCloseTo(-505);
-    expect(overview.progress.recentAverage).toBeCloseTo(1046.25);
-    expect(overview.progress.previousAverage).toBeCloseTo(727.5);
-    expect(overview.progress.recentVsPreviousChange).toBeCloseTo(318.75);
-    expect(overview.progress.bestVsLatestGap).toBeCloseTo(582.5);
-    expect(overview.progress.momentumValue).toBeCloseTo(107.1402, 3);
-    expect(overview.progress.momentumStatus).toBe("building");
-    expect(overview.progress.confidenceScore).toBeGreaterThan(0.3);
-    expect(overview.progress.plateauRiskLabel).toBe("low");
+    expect(overview.metricTrend.hasEnoughData).toBe(true);
+    expect(overview.metricTrend.rangeChange).toBeCloseTo(-505);
+    expect(overview.metricTrend.recentAverage).toBeCloseTo(1046.25);
+    expect(overview.metricTrend.previousAverage).toBeCloseTo(727.5);
+    expect(overview.metricTrend.recentVsPreviousChange).toBeCloseTo(318.75);
+    expect(overview.metricTrend.bestVsLatestGap).toBeCloseTo(582.5);
+    expect(overview.metricTrend.momentumValue).toBeCloseTo(107.1402, 3);
+    expect(overview.metricTrend.momentumStatus).toBe("building");
+    expect(overview.metricTrend.confidenceScore).toBeGreaterThan(0.3);
+    expect(overview.metricTrend.plateauRiskLabel).toBe("low");
+    expect(overview.performanceProgress.hasEnoughData).toBe(false);
   });
 
   it("classifies improving trends and falls back for sparse ranges", () => {
@@ -124,16 +174,163 @@ describe("lib/utils/analytics", () => {
       },
     });
 
-    expect(improvingOverview.progress.trendStatus).toBe("improving");
-    expect(improvingOverview.progress.momentumStatus).toBe("building");
-    expect(improvingOverview.progress.confidenceLabel).toBe("high");
-    expect(improvingOverview.progress.plateauRiskLabel).toBe("low");
-    expect(improvingOverview.progress.stabilityLabel).toBe("stable");
-    expect(sparseOverview.progress.hasEnoughData).toBe(false);
-    expect(sparseOverview.progress.trendStatus).toBe("insufficient");
-    expect(sparseOverview.progress.confidenceLabel).toBe("insufficient");
-    expect(sparseOverview.progress.momentumStatus).toBe("insufficient");
+    expect(improvingOverview.metricTrend.trendStatus).toBe("improving");
+    expect(improvingOverview.metricTrend.momentumStatus).toBe("building");
+    expect(improvingOverview.metricTrend.confidenceLabel).toBe("high");
+    expect(improvingOverview.metricTrend.plateauRiskLabel).toBe("low");
+    expect(improvingOverview.metricTrend.stabilityLabel).toBe("stable");
+    expect(sparseOverview.metricTrend.hasEnoughData).toBe(false);
+    expect(sparseOverview.metricTrend.trendStatus).toBe("insufficient");
+    expect(sparseOverview.metricTrend.confidenceLabel).toBe("insufficient");
+    expect(sparseOverview.metricTrend.momentumStatus).toBe("insufficient");
     expect(sparseOverview.consistency.hasEnoughData).toBe(false);
+  });
+
+  it("keeps performance progress metric-independent and constrained to the selected date range", () => {
+    const dataset = createDatasetFromSessions([
+      { date: "2026-03-01T09:00:00Z", sets: [{ weightKg: 100, reps: 5 }] },
+      { date: "2026-03-08T09:00:00Z", sets: [{ weightKg: 102.5, reps: 5 }] },
+      { date: "2026-03-15T09:00:00Z", sets: [{ weightKg: 105, reps: 5 }] },
+      { date: "2026-03-22T09:00:00Z", sets: [{ weightKg: 107.5, reps: 5 }] },
+      { date: "2026-03-29T09:00:00Z", sets: [{ weightKg: 110, reps: 5 }] },
+    ]);
+
+    const byMaxWeight = buildExerciseAnalyticsOverview(dataset, "maxWeight", {
+      now: analyticsFixtureNow,
+      setScope: "work",
+    });
+    const byVolume = buildExerciseAnalyticsOverview(dataset, "totalVolume", {
+      now: analyticsFixtureNow,
+      setScope: "work",
+    });
+    const ranged = buildExerciseAnalyticsOverview(dataset, "maxWeight", {
+      now: analyticsFixtureNow,
+      setScope: "work",
+      dateRange: {
+        startDate: new Date("2026-03-15T00:00:00Z"),
+        endDate: new Date("2026-04-01T00:00:00Z"),
+      },
+    });
+
+    expect(byMaxWeight.performanceProgress.hasEnoughData).toBe(true);
+    expect(byMaxWeight.performanceProgress.materialGainStatus).toBe("improving");
+    expect(byMaxWeight.performanceProgress.daysSinceLastMeaningfulGain).toBe(10);
+    expect(byMaxWeight.performanceProgress.absoluteProgressScore).toBeCloseTo(
+      byVolume.performanceProgress.absoluteProgressScore ?? 0,
+      6
+    );
+    expect(byMaxWeight.performanceProgress.materialGainStatus).toBe(
+      byVolume.performanceProgress.materialGainStatus
+    );
+    expect(ranged.performanceProgress.hasEnoughData).toBe(false);
+  });
+
+  it("does not treat added volume at the same top-set strength as material progress", () => {
+    const dataset = createDatasetFromSessions([
+      { date: "2026-03-01T09:00:00Z", sets: [{ weightKg: 100, reps: 5 }] },
+      {
+        date: "2026-03-08T09:00:00Z",
+        sets: [
+          { weightKg: 100, reps: 5 },
+          { weightKg: 80, reps: 5 },
+        ],
+      },
+      {
+        date: "2026-03-15T09:00:00Z",
+        sets: [
+          { weightKg: 100, reps: 5 },
+          { weightKg: 80, reps: 5 },
+          { weightKg: 80, reps: 5 },
+        ],
+      },
+      {
+        date: "2026-03-22T09:00:00Z",
+        sets: [
+          { weightKg: 100, reps: 5 },
+          { weightKg: 80, reps: 5 },
+          { weightKg: 80, reps: 5 },
+          { weightKg: 80, reps: 5 },
+        ],
+      },
+    ]);
+
+    const overview = buildExerciseAnalyticsOverview(dataset, "totalVolume", {
+      now: analyticsFixtureNow,
+      setScope: "work",
+    });
+
+    expect(overview.metricTrend.hasEnoughData).toBe(true);
+    expect((overview.metricTrend.rangeChange ?? 0) > 0).toBe(true);
+    expect(overview.performanceProgress.hasEnoughData).toBe(true);
+    expect(overview.performanceProgress.materialGainStatus).toBe("flat");
+    expect(overview.performanceProgress.absoluteProgressScore).toBeCloseTo(0, 6);
+  });
+
+  it("returns mixed signal when heavier low-rep work rises while comparable strength slips", () => {
+    const dataset = createDatasetFromSessions([
+      {
+        date: "2026-03-01T09:00:00Z",
+        sets: [
+          { weightKg: 100, reps: 5 },
+          { weightKg: 105, reps: 2 },
+        ],
+      },
+      {
+        date: "2026-03-08T09:00:00Z",
+        sets: [
+          { weightKg: 99, reps: 5 },
+          { weightKg: 107.5, reps: 2 },
+        ],
+      },
+      {
+        date: "2026-03-15T09:00:00Z",
+        sets: [
+          { weightKg: 98, reps: 5 },
+          { weightKg: 110, reps: 2 },
+        ],
+      },
+      {
+        date: "2026-03-22T09:00:00Z",
+        sets: [
+          { weightKg: 97, reps: 5 },
+          { weightKg: 112.5, reps: 2 },
+        ],
+      },
+    ]);
+
+    const overview = buildExerciseAnalyticsOverview(dataset, "maxWeight", {
+      now: analyticsFixtureNow,
+      setScope: "work",
+    });
+
+    expect(overview.metricTrend.trendStatus).toBe("improving");
+    expect(overview.performanceProgress.hasEnoughData).toBe(true);
+    expect(overview.performanceProgress.materialGainStatus).toBe("mixed");
+  });
+
+  it("flags rep-range drift and applies lower base weight to high-rep buckets", () => {
+    const dataset = createDatasetFromSessions([
+      { date: "2026-02-01T09:00:00Z", sets: [{ weightKg: 90, reps: 10 }] },
+      { date: "2026-02-08T09:00:00Z", sets: [{ weightKg: 92.5, reps: 10 }] },
+      { date: "2026-02-15T09:00:00Z", sets: [{ weightKg: 95, reps: 10 }] },
+      { date: "2026-02-22T09:00:00Z", sets: [{ weightKg: 97.5, reps: 10 }] },
+      { date: "2026-03-01T09:00:00Z", sets: [{ weightKg: 110, reps: 2 }] },
+      { date: "2026-03-08T09:00:00Z", sets: [{ weightKg: 112.5, reps: 2 }] },
+      { date: "2026-03-15T09:00:00Z", sets: [{ weightKg: 115, reps: 2 }] },
+      { date: "2026-03-22T09:00:00Z", sets: [{ weightKg: 117.5, reps: 2 }] },
+    ]);
+
+    const overview = buildExerciseAnalyticsOverview(dataset, "maxWeight", {
+      now: analyticsFixtureNow,
+      setScope: "work",
+    });
+    const highRepBucket = overview.performanceProgress.bucketTrends.find(
+      (bucket: { id: string }) => bucket.id === "10-12+"
+    );
+
+    expect(overview.performanceProgress.repRangeDriftFlag).toBe(true);
+    expect(overview.performanceProgress.comparabilityLabel).toBe("less-comparable");
+    expect(highRepBucket?.baseWeight).toBeCloseTo(0.8);
   });
 
   it("calculates weekly consistency metrics from filtered sessions", () => {

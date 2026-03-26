@@ -33,7 +33,8 @@ type AnalyticsInsightsDeckProps = {
 
 type InsightCardId =
   | "snapshot"
-  | "progress"
+  | "performance-progress"
+  | "metric-trend"
   | "prs"
   | "consistency"
   | "rep-profile"
@@ -143,7 +144,7 @@ function getFormulaLabel(formulaId: ExerciseAnalyticsOverview["estimatedRepMaxes
   }
 }
 
-function getTrendTone(status: ExerciseAnalyticsOverview["progress"]["trendStatus"]) {
+function getTrendTone(status: ExerciseAnalyticsOverview["metricTrend"]["trendStatus"]) {
   type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
   switch (status) {
@@ -172,6 +173,65 @@ function getTrendTone(status: ExerciseAnalyticsOverview["progress"]["trendStatus
         colorClass: "text-foreground-secondary" as const,
       };
   }
+}
+
+function getPerformanceTone(
+  status: ExerciseAnalyticsOverview["performanceProgress"]["materialGainStatus"]
+) {
+  type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+  switch (status) {
+    case "improving":
+      return {
+        icon: "trending-up" as IconName,
+        label: "Improving",
+        colorClass: "text-primary" as const,
+      };
+    case "slipping":
+      return {
+        icon: "trending-down" as IconName,
+        label: "Slipping",
+        colorClass: "text-destructive" as const,
+      };
+    case "mixed":
+      return {
+        icon: "compare-horizontal" as IconName,
+        label: "Mixed signal",
+        colorClass: "text-foreground-secondary" as const,
+      };
+    case "flat":
+      return {
+        icon: "minus" as IconName,
+        label: "Flat",
+        colorClass: "text-foreground-secondary" as const,
+      };
+    default:
+      return {
+        icon: "progress-question" as IconName,
+        label: "Not enough data",
+        colorClass: "text-foreground-secondary" as const,
+      };
+  }
+}
+
+function getComparabilityText(
+  label: ExerciseAnalyticsOverview["performanceProgress"]["comparabilityLabel"]
+): string {
+  switch (label) {
+    case "less-comparable":
+      return "Less comparable";
+    case "insufficient":
+      return "Insufficient";
+    default:
+      return toTitleCase(label);
+  }
+}
+
+function formatProgressScore(value: number | null): string {
+  if (value === null) return "--";
+  const signedPercent = value * 100;
+  const prefix = signedPercent > 0 ? "+" : signedPercent < 0 ? "-" : "";
+  return `${prefix}${Math.abs(signedPercent).toFixed(1)}% / session`;
 }
 
 function ProjectionTile({
@@ -258,6 +318,57 @@ function ProgressSignalMeter({
   );
 }
 
+function PerformanceBucketChip({
+  bucket,
+}: {
+  bucket: ExerciseAnalyticsOverview["performanceProgress"]["bucketTrends"][number];
+}) {
+  const { rawColors } = useTheme();
+
+  const backgroundColor =
+    bucket.trendStatus === "improving"
+      ? rawColors.primaryLight
+      : bucket.trendStatus === "slipping"
+        ? rawColors.surfaceSecondary
+        : rawColors.surfaceSecondary;
+  const borderColor =
+    bucket.trendStatus === "improving"
+      ? rawColors.primary
+      : bucket.trendStatus === "slipping"
+        ? rawColors.destructive
+        : rawColors.border;
+  const textClass =
+    bucket.trendStatus === "improving"
+      ? "text-primary"
+      : bucket.trendStatus === "slipping"
+        ? "text-destructive"
+        : "text-foreground-secondary";
+
+  return (
+    <View
+      className="flex-1 rounded-xl border px-2.5 py-2"
+      style={{
+        backgroundColor,
+        borderColor,
+        opacity: bucket.confidenceScore === null ? 0.55 : 0.45 + bucket.confidenceScore * 0.55,
+      }}
+    >
+      <Text className="text-[11px] font-semibold text-foreground-secondary" selectable>
+        {bucket.label}
+      </Text>
+      <Text className={`text-sm font-bold mt-1 ${textClass}`} selectable>
+        {bucket.trendStatus === "insufficient"
+          ? "--"
+          : bucket.trendStatus === "flat"
+            ? "Flat"
+            : bucket.trendStatus === "improving"
+              ? "Up"
+              : "Down"}
+      </Text>
+    </View>
+  );
+}
+
 export default function AnalyticsInsightsDeck({
   overview,
   selectedMetric,
@@ -276,7 +387,15 @@ export default function AnalyticsInsightsDeck({
   const metricUnit = formatMetricUnit(selectedMetric, unitPreference);
 
   const cardIds = useMemo<InsightCardId[]>(
-    () => ["estimated-rep-maxes", "snapshot", "progress", "prs", "consistency", "rep-profile"],
+    () => [
+      "estimated-rep-maxes",
+      "performance-progress",
+      "snapshot",
+      "metric-trend",
+      "prs",
+      "consistency",
+      "rep-profile",
+    ],
     []
   );
 
@@ -296,23 +415,24 @@ export default function AnalyticsInsightsDeck({
     }
   );
 
-  const trendTone = getTrendTone(overview.progress.trendStatus);
+  const performanceTone = getPerformanceTone(overview.performanceProgress.materialGainStatus);
+  const trendTone = getTrendTone(overview.metricTrend.trendStatus);
   const momentumFillColor =
-    overview.progress.momentumStatus === "building"
+    overview.metricTrend.momentumStatus === "building"
       ? rawColors.primary
-      : overview.progress.momentumStatus === "softening"
+      : overview.metricTrend.momentumStatus === "softening"
         ? rawColors.destructive
         : rawColors.foregroundSecondary;
   const confidenceFillColor =
-    overview.progress.confidenceLabel === "high"
+    overview.metricTrend.confidenceLabel === "high"
       ? rawColors.primary
-      : overview.progress.confidenceLabel === "medium"
+      : overview.metricTrend.confidenceLabel === "medium"
         ? rawColors.foregroundSecondary
         : rawColors.destructive;
   const plateauFillColor =
-    overview.progress.plateauRiskLabel === "high"
+    overview.metricTrend.plateauRiskLabel === "high"
       ? rawColors.destructive
-      : overview.progress.plateauRiskLabel === "moderate"
+      : overview.metricTrend.plateauRiskLabel === "moderate"
         ? rawColors.foregroundSecondary
         : rawColors.primary;
 
@@ -438,12 +558,150 @@ export default function AnalyticsInsightsDeck({
                 </>
               )}
 
-              {cardId === "progress" && (
+              {cardId === "performance-progress" && (
                 <>
                   <View className="flex-row items-center justify-between mb-4">
                     <View>
                       <Text className="text-lg font-semibold text-foreground" selectable>
                         Progress
+                      </Text>
+                      <Text className="text-sm mt-1 text-foreground-secondary" selectable>
+                        Based on comparable rep-range strength across visible sessions
+                      </Text>
+                    </View>
+                    <View className="items-end gap-2">
+                      <View className="flex-row items-center px-3 py-1.5 rounded-full bg-surface-secondary">
+                        <MaterialCommunityIcons
+                          name={performanceTone.icon}
+                          size={14}
+                          color={
+                            performanceTone.label === "Improving"
+                              ? rawColors.primary
+                              : performanceTone.label === "Slipping"
+                                ? rawColors.destructive
+                                : rawColors.foregroundSecondary
+                          }
+                        />
+                        <Text
+                          className={`text-sm font-medium ml-1.5 ${performanceTone.colorClass}`}
+                          selectable
+                        >
+                          {performanceTone.label}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {!overview.performanceProgress.hasEnoughData ? (
+                    <View className="rounded-xl p-4 bg-surface-secondary">
+                      <Text className="text-base font-medium text-foreground" selectable>
+                        Not enough data
+                      </Text>
+                      <Text className="text-sm mt-1 text-foreground-secondary" selectable>
+                        Progress needs at least 4 visible sessions in a comparable rep bucket before it can classify material gains.
+                      </Text>
+                      <Text className="text-xs mt-3 text-foreground-muted" selectable>
+                        Based on comparable rep-range strength, not raw volume or heaviest set.
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View className="flex-row flex-wrap gap-3 mb-4">
+                        <View className="w-[48%] rounded-xl p-3 bg-surface-secondary">
+                          <Text className="text-xs font-medium text-foreground-secondary" selectable>
+                            Material Gain
+                          </Text>
+                          <Text className="text-xl font-bold mt-1 text-foreground" selectable>
+                            {performanceTone.label}
+                          </Text>
+                        </View>
+                        <View className="w-[48%] rounded-xl p-3 bg-surface-secondary">
+                          <Text className="text-xs font-medium text-foreground-secondary" selectable>
+                            Absolute Progress
+                          </Text>
+                          <Text className="text-xl font-bold mt-1 text-foreground" selectable>
+                            {formatProgressScore(overview.performanceProgress.absoluteProgressScore)}
+                          </Text>
+                        </View>
+                        <View className="w-[48%] rounded-xl p-3 bg-surface-secondary">
+                          <Text className="text-xs font-medium text-foreground-secondary" selectable>
+                            Days Since Gain
+                          </Text>
+                          <Text className="text-xl font-bold mt-1 text-foreground" selectable>
+                            {overview.performanceProgress.daysSinceLastMeaningfulGain === null
+                              ? "--"
+                              : `${overview.performanceProgress.daysSinceLastMeaningfulGain}d`}
+                          </Text>
+                        </View>
+                        <View className="w-[48%] rounded-xl p-3 bg-surface-secondary">
+                          <Text className="text-xs font-medium text-foreground-secondary" selectable>
+                            Comparability
+                          </Text>
+                          <Text className="text-xl font-bold mt-1 text-foreground" selectable>
+                            {getComparabilityText(overview.performanceProgress.comparabilityLabel)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View className="rounded-xl p-4 mb-4 bg-surface-secondary">
+                        <Text className="text-xs font-medium mb-4 text-foreground-secondary" selectable>
+                          Rep-Range Strength Strip
+                        </Text>
+                        <View className="flex-row gap-2">
+                          {overview.performanceProgress.bucketTrends.map((bucket) => (
+                            <PerformanceBucketChip key={bucket.id} bucket={bucket} />
+                          ))}
+                        </View>
+                      </View>
+
+                      <View className="flex-row gap-3">
+                        <View className="flex-1 rounded-xl p-3 bg-surface-secondary">
+                          <Text className="text-xs font-medium text-foreground-secondary" selectable>
+                            Strongest Bucket
+                          </Text>
+                          <Text className="text-lg font-bold mt-1 text-foreground" selectable>
+                            {overview.performanceProgress.strongestImprovingBucket?.label ?? "--"}
+                          </Text>
+                          <Text className="text-xs mt-1 text-foreground-muted" selectable>
+                            {overview.performanceProgress.strongestImprovingBucket?.normalizedSlope == null
+                              ? "No improving bucket yet"
+                              : formatProgressScore(
+                                  overview.performanceProgress.strongestImprovingBucket
+                                    ?.normalizedSlope ?? null
+                                )}
+                          </Text>
+                        </View>
+                        <View className="flex-1 rounded-xl p-3 bg-surface-secondary">
+                          <Text className="text-xs font-medium text-foreground-secondary" selectable>
+                            Weakest Bucket
+                          </Text>
+                          <Text className="text-lg font-bold mt-1 text-foreground" selectable>
+                            {overview.performanceProgress.weakestBucket?.label ?? "--"}
+                          </Text>
+                          <Text className="text-xs mt-1 text-foreground-muted" selectable>
+                            {overview.performanceProgress.repRangeDriftFlag
+                              ? "Recent rep range drift lowers comparability"
+                              : `Meaningful gain confidence: ${toTitleCase(
+                                  overview.performanceProgress.meaningfulGainConfidence
+                                )}`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text className="text-xs mt-4 text-foreground-muted" selectable>
+                        Based on comparable rep-range strength, not raw volume or heaviest set.
+                      </Text>
+                    </>
+                  )}
+                </>
+              )}
+
+              {cardId === "metric-trend" && (
+                <>
+                  <View className="flex-row items-center justify-between mb-4">
+                    <View>
+                      <Text className="text-lg font-semibold text-foreground" selectable>
+                        Metric Trend
                       </Text>
                       <Text className="text-sm mt-1 text-foreground-secondary" selectable>
                         {`Tracking ${selectedMetricLabel} (${metricUnit})`}
@@ -473,13 +731,13 @@ export default function AnalyticsInsightsDeck({
                       </View>
                     </View>
                   </View>
-                  {!overview.progress.hasEnoughData ? (
+                  {!overview.metricTrend.hasEnoughData ? (
                     <View className="rounded-xl p-4 bg-surface-secondary">
                       <Text className="text-base font-medium text-foreground" selectable>
                         Not enough data
                       </Text>
                       <Text className="text-sm mt-1 text-foreground-secondary" selectable>
-                        Record at least 4 visible sessions to unlock progress trend analysis for this metric.
+                        Record at least 4 visible sessions to unlock metric trend analysis for this metric.
                       </Text>
                     </View>
                   ) : (
@@ -492,7 +750,7 @@ export default function AnalyticsInsightsDeck({
                           <Text className="text-xl font-bold mt-1 text-foreground" selectable>
                             {formatSignedMetricValue(
                               selectedMetric,
-                              overview.progress.rangeChange,
+                              overview.metricTrend.rangeChange,
                               unitPreference,
                               { withUnit: true }
                             )}
@@ -505,7 +763,7 @@ export default function AnalyticsInsightsDeck({
                           <Text className="text-xl font-bold mt-1 text-foreground" selectable>
                             {formatSignedMetricValue(
                               selectedMetric,
-                              overview.progress.recentVsPreviousChange,
+                              overview.metricTrend.recentVsPreviousChange,
                               unitPreference,
                               { withUnit: true }
                             )}
@@ -518,7 +776,7 @@ export default function AnalyticsInsightsDeck({
                           <Text className="text-xl font-bold mt-1 text-foreground" selectable>
                             {formatMetricValue(
                               selectedMetric,
-                              overview.progress.recentAverage,
+                              overview.metricTrend.recentAverage,
                               unitPreference,
                               { withUnit: true }
                             )}
@@ -531,7 +789,7 @@ export default function AnalyticsInsightsDeck({
                           <Text className="text-xl font-bold mt-1 text-foreground" selectable>
                             {formatSignedMetricValue(
                               selectedMetric,
-                              overview.progress.bestVsLatestGap,
+                              overview.metricTrend.bestVsLatestGap,
                               unitPreference,
                               { withUnit: true }
                             )}
@@ -550,36 +808,36 @@ export default function AnalyticsInsightsDeck({
                         <View className="gap-4">
                           <ProgressSignalMeter
                             label="Momentum (EWMA)"
-                            subtitle={`Smoothed recent movement is ${overview.progress.momentumStatus}.`}
+                            subtitle={`Smoothed recent movement is ${overview.metricTrend.momentumStatus}.`}
                             value={
-                              overview.progress.momentumValue === null
+                              overview.metricTrend.momentumValue === null
                                 ? "--"
                                 : formatSignedMetricValue(
                                     selectedMetric,
-                                    overview.progress.momentumValue,
+                                    overview.metricTrend.momentumValue,
                                     unitPreference,
                                     { withUnit: true }
                                   )
                             }
-                            score={overview.progress.momentumScore}
+                            score={overview.metricTrend.momentumScore}
                             fillColor={momentumFillColor}
                           />
                           <ProgressSignalMeter
                             label="Trend Confidence"
                             subtitle="How clearly the trend stands out from session noise."
-                            value={`${toTitleCase(overview.progress.confidenceLabel)} / ${formatScorePercent(
-                              overview.progress.confidenceScore
+                            value={`${toTitleCase(overview.metricTrend.confidenceLabel)} / ${formatScorePercent(
+                              overview.metricTrend.confidenceScore
                             )}`}
-                            score={overview.progress.confidenceScore}
+                            score={overview.metricTrend.confidenceScore}
                             fillColor={confidenceFillColor}
                           />
                           <ProgressSignalMeter
                             label="Plateau Risk"
                             subtitle="Higher when performance is stable but trend strength is weak."
-                            value={`${toTitleCase(overview.progress.plateauRiskLabel)} / ${formatScorePercent(
-                              overview.progress.plateauRiskScore
+                            value={`${toTitleCase(overview.metricTrend.plateauRiskLabel)} / ${formatScorePercent(
+                              overview.metricTrend.plateauRiskScore
                             )}`}
-                            score={overview.progress.plateauRiskScore}
+                            score={overview.metricTrend.plateauRiskScore}
                             fillColor={plateauFillColor}
                           />
                         </View>
@@ -593,7 +851,7 @@ export default function AnalyticsInsightsDeck({
                           <Text className="text-lg font-bold mt-1 text-foreground" selectable>
                             {formatMetricPerSession(
                               selectedMetric,
-                              overview.progress.robustSlopePerSession,
+                              overview.metricTrend.robustSlopePerSession,
                               unitPreference
                             )}
                           </Text>
@@ -606,10 +864,10 @@ export default function AnalyticsInsightsDeck({
                             Stability
                           </Text>
                           <Text className="text-lg font-bold mt-1 text-foreground" selectable>
-                            {toTitleCase(overview.progress.stabilityLabel)}
+                            {toTitleCase(overview.metricTrend.stabilityLabel)}
                           </Text>
                           <Text className="text-xs mt-1 text-foreground-muted" selectable>
-                            {`${formatScorePercent(overview.progress.stabilityScore)} signal stability`}
+                            {`${formatScorePercent(overview.metricTrend.stabilityScore)} signal stability`}
                           </Text>
                         </View>
                       </View>

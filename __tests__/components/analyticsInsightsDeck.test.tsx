@@ -132,8 +132,9 @@ describe("AnalyticsInsightsDeck", () => {
 
     expect(cardTestIds).toEqual([
       "analytics-card-estimated-rep-maxes",
+      "analytics-card-performance-progress",
       "analytics-card-snapshot",
-      "analytics-card-progress",
+      "analytics-card-metric-trend",
       "analytics-card-prs",
       "analytics-card-consistency",
       "analytics-card-rep-profile",
