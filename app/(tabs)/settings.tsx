@@ -192,7 +192,7 @@ export default function SettingsScreen() {
         result.workouts.inserted +
         result.workoutExercises.inserted +
         result.sets.inserted +
-        result.prEvents.inserted +
+        result.pbEvents.inserted +
         result.media.inserted;
       const totalUpdated =
         result.exercises.updated +

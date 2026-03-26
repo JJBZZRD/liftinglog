@@ -117,7 +117,7 @@ rawColors.borderLight
 rawColors.overlay
 rawColors.overlayDark
 rawColors.shadow
-rawColors.prGold
+rawColors.pbGold
 ```
 
 ### Theme State Access

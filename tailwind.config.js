@@ -34,7 +34,7 @@ module.exports = {
         pressed: "rgb(var(--color-pressed) / <alpha-value>)",
         
         // Special
-        "pr-gold": "rgb(var(--color-pr-gold) / <alpha-value>)",
+        "pb-gold": "rgb(var(--color-pb-gold) / <alpha-value>)",
       },
       backgroundColor: {
         overlay: "var(--color-overlay)",

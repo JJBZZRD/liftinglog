@@ -106,7 +106,7 @@ When adding a new DB function:
 2. Put bootstrap/migration SQL in `bootstrap.ts` if schema/storage needs to change.
 3. Add the query function to the domain file under `lib/db/`.
 4. Use Drizzle unless there is a clear SQLite-specific reason not to.
-5. Check whether the write path must also update PR events, media links, or program-calendar links.
+5. Check whether the write path must also update PB events, media links, or program-calendar links.
 
 ## 5. Smells To Avoid
 

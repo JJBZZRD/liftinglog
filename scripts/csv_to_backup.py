@@ -345,7 +345,7 @@ def convert_csv_to_db(csv_path: Path, db_path: Path):
                 set_index += 1
                 set_count += 1
 
-    # Calculate and record PR events (rep max PRs) in chronological order
+    # Calculate and record PB events (rep max PBs) in chronological order
     pr_count = 0
     best_by_exercise_rep: dict[tuple[int, int], float] = {}
 
@@ -388,7 +388,7 @@ def convert_csv_to_db(csv_path: Path, db_path: Path):
     print(f"  - Workouts: {len(workouts)}")
     print(f"  - Workout exercises: {len(workout_exercises)}")
     print(f"  - Sets: {set_count}")
-    print(f"  - PR events: {pr_count}")
+    print(f"  - PB events: {pr_count}")
     print(f"\nOutput saved to: {db_path}")
 
 

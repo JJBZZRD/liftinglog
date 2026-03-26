@@ -1,8 +1,16 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams } from "expo-router";
-import { useCallback, useContext, useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, ScrollView, Text, View, type ViewStyle } from "react-native";
+import Animated, {
+  FadeInDown,
+  FadeOutUp,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import AnalyticsChart from "../../../components/charts/AnalyticsChart";
 import AnalyticsInsightsDeck from "../../../components/charts/AnalyticsInsightsDeck";
 import DataPointModal from "../../../components/charts/DataPointModal";
@@ -16,15 +24,18 @@ import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../../lib/theme/ThemeContext";
 import {
   buildExerciseAnalyticsOverview,
-  computeTrendLine,
-  getCurrentPRSessionKeysFromDataset,
+  buildExerciseAnalyticsChartOverlays,
   getExerciseAnalyticsDataset,
+  getAvailableExerciseAnalyticsOverlays,
   getMetricDataPoints,
   getSessionDetails,
   getSessionDetailsByWorkoutExerciseId,
+  type ExerciseAnalyticsChartOverlay,
   type ExerciseAnalyticsDataset,
   type ExerciseAnalyticsMetricType,
   type ExerciseAnalyticsOverview,
+  type ExerciseAnalyticsOverlayAvailability,
+  type ExerciseAnalyticsOverlayType,
   type ExerciseAnalyticsSetScope,
   type SessionDataPoint,
   type SessionDetails,
@@ -44,6 +55,19 @@ const setScopeOptions: { label: string; value: ExerciseAnalyticsSetScope }[] = [
   { label: "Work Sets", value: "work" },
 ];
 
+const overlayOptions: { label: string; value: ExerciseAnalyticsOverlayType }[] = [
+  { label: "Trend", value: "trendLine" },
+  { label: "EWMA", value: "ewma" },
+  { label: "Robust Trend", value: "robustTrend" },
+  { label: "PB Markers", value: "pbMarkers" },
+  { label: "Plateau Zones", value: "plateauZones" },
+  { label: "Weekly Band", value: "weeklyBand" },
+  { label: "Outliers", value: "outliers" },
+  { label: "Rep Buckets", value: "repBuckets" },
+];
+
+const defaultOverlaySelection: ExerciseAnalyticsOverlayType[] = ["trendLine", "pbMarkers"];
+
 function getMetricUnit(metric: ExerciseAnalyticsMetricType, weightUnit: "kg" | "lb"): string {
   switch (metric) {
     case "maxWeight":
@@ -57,6 +81,76 @@ function getMetricUnit(metric: ExerciseAnalyticsMetricType, weightUnit: "kg" | "
     default:
       return "";
   }
+}
+
+function shouldConvertWeightMetric(metric: ExerciseAnalyticsMetricType): boolean {
+  return metric === "maxWeight" || metric === "e1rm" || metric === "totalVolume";
+}
+
+function convertOverlayForDisplay(
+  overlay: ExerciseAnalyticsChartOverlay,
+  convertWeightValues: boolean,
+  unitPreference: "kg" | "lb"
+): ExerciseAnalyticsChartOverlay {
+  if (!convertWeightValues) {
+    return overlay;
+  }
+
+  switch (overlay.kind) {
+    case "line":
+      return {
+        ...overlay,
+        points: overlay.points.map((point) => ({
+          ...point,
+          value: convertWeightFromKg(point.value, unitPreference),
+        })),
+      };
+    case "band":
+      return {
+        ...overlay,
+        points: overlay.points.map((point) => ({
+          ...point,
+          center: convertWeightFromKg(point.center, unitPreference),
+          lower: convertWeightFromKg(point.lower, unitPreference),
+          upper: convertWeightFromKg(point.upper, unitPreference),
+        })),
+      };
+    case "marker":
+      return {
+        ...overlay,
+        points: overlay.points.map((point) => ({
+          ...point,
+          value: convertWeightFromKg(point.value, unitPreference),
+        })),
+      };
+    case "zone":
+    default:
+      return overlay;
+  }
+}
+
+function areOverlaySelectionsEqual(
+  left: ExerciseAnalyticsOverlayType[],
+  right: ExerciseAnalyticsOverlayType[]
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function formatSelectedOverlaySummary(selectedOverlays: ExerciseAnalyticsOverlayType[]): string {
+  if (selectedOverlays.length === 0) {
+    return "No active overlays";
+  }
+
+  const labels = selectedOverlays
+    .map(
+      (overlayType) => overlayOptions.find((option) => option.value === overlayType)?.label ?? overlayType
+    )
+    .slice(0, 2);
+  const suffix =
+    selectedOverlays.length > 2 ? ` +${selectedOverlays.length - 2} more` : "";
+
+  return `${selectedOverlays.length} active • ${labels.join(", ")}${suffix}`;
 }
 
 type AnalyticsTabProps = {
@@ -74,12 +168,17 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
   const [selectedMetric, setSelectedMetric] = useState<ExerciseAnalyticsMetricType>("maxWeight");
   const [setScope, setSetScope] = useState<ExerciseAnalyticsSetScope>("all");
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange());
+  const [selectedOverlays, setSelectedOverlays] =
+    useState<ExerciseAnalyticsOverlayType[]>(defaultOverlaySelection);
+  const [showOverlayControls, setShowOverlayControls] = useState(false);
   const [dataset, setDataset] = useState<ExerciseAnalyticsDataset | null>(null);
   const [overview, setOverview] = useState<ExerciseAnalyticsOverview | null>(null);
   const [allData, setAllData] = useState<SessionDataPoint[]>([]);
   const [filteredData, setFilteredData] = useState<SessionDataPoint[]>([]);
-  const [trendLineData, setTrendLineData] = useState<SessionDataPoint[]>([]);
-  const [prSessionKeys, setPrSessionKeys] = useState<Set<string>>(new Set());
+  const [chartOverlays, setChartOverlays] = useState<ExerciseAnalyticsChartOverlay[]>([]);
+  const [overlayAvailability, setOverlayAvailability] = useState<ExerciseAnalyticsOverlayAvailability[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
   const [showMetricPicker, setShowMetricPicker] = useState(false);
   const [showDataPointModal, setShowDataPointModal] = useState(false);
@@ -94,6 +193,8 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
   const handleGestureEnd = useCallback(() => {
     setSwipeEnabled(true);
   }, [setSwipeEnabled]);
+  const overlayChevronRotation = useSharedValue(0);
+  const overlayRevealProgress = useSharedValue(0);
 
   const fetchDataset = useCallback(async () => {
     if (!exerciseId) {
@@ -135,11 +236,20 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
   }, [selectedMetric, setScope, dateRange]);
 
   useEffect(() => {
+    overlayChevronRotation.value = withTiming(showOverlayControls ? 180 : 0, {
+      duration: 220,
+    });
+    overlayRevealProgress.value = withTiming(showOverlayControls ? 1 : 0, {
+      duration: 220,
+    });
+  }, [overlayChevronRotation, overlayRevealProgress, showOverlayControls]);
+
+  useEffect(() => {
     if (!dataset) {
       setAllData([]);
       setFilteredData([]);
-      setTrendLineData([]);
-      setPrSessionKeys(new Set());
+      setChartOverlays([]);
+      setOverlayAvailability([]);
       setOverview(null);
       return;
     }
@@ -149,26 +259,46 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
       dateRange,
       setScope,
     });
-    const shouldConvertWeightMetric =
-      selectedMetric === "maxWeight" || selectedMetric === "e1rm" || selectedMetric === "totalVolume";
+    const shouldConvertMetric = shouldConvertWeightMetric(selectedMetric);
     const sortedVisiblePoints = [...visibleMetricPoints].sort((a, b) => a.date - b.date);
-    const displayData = shouldConvertWeightMetric
+    const displayData = shouldConvertMetric
       ? sortedVisiblePoints.map((point) => ({
           ...point,
           value: convertWeightFromKg(point.value, unitPreference),
         }))
       : sortedVisiblePoints;
+    const availableOverlays = getAvailableExerciseAnalyticsOverlays(dataset, selectedMetric, {
+      dateRange,
+      setScope,
+    });
+    const enabledOverlayTypes = new Set(
+      availableOverlays.filter((overlay) => overlay.enabled).map((overlay) => overlay.type)
+    );
+    const nextSelectedOverlays = selectedOverlays.filter((overlayType) =>
+      enabledOverlayTypes.has(overlayType)
+    );
+    const overlaySelectionToRender =
+      nextSelectedOverlays.length > 0 ? nextSelectedOverlays : selectedOverlays;
+    const nextChartOverlays = buildExerciseAnalyticsChartOverlays(dataset, selectedMetric, {
+      dateRange,
+      setScope,
+      selectedOverlays: overlaySelectionToRender,
+    }).map((overlay) => convertOverlayForDisplay(overlay, shouldConvertMetric, unitPreference));
 
     setAllData(metricPoints);
     setFilteredData(displayData);
-    setTrendLineData(computeTrendLine(displayData, 5));
-    setPrSessionKeys(getCurrentPRSessionKeysFromDataset(dataset, setScope));
+    setOverlayAvailability(availableOverlays);
+    setChartOverlays(nextChartOverlays);
     setOverview(
       buildExerciseAnalyticsOverview(dataset, selectedMetric, {
         dateRange,
         setScope,
       })
     );
+
+    if (!areOverlaySelectionsEqual(selectedOverlays, nextSelectedOverlays)) {
+      setSelectedOverlays(nextSelectedOverlays);
+    }
 
     if (__DEV__ && displayData.length > 0) {
       console.log(
@@ -186,7 +316,7 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
         }))
       );
     }
-  }, [dataset, selectedMetric, setScope, dateRange, unitPreference]);
+  }, [dataset, selectedMetric, setScope, dateRange, selectedOverlays, unitPreference]);
 
   const handleDataPointPress = useCallback(
     async (point: SessionDataPoint) => {
@@ -223,6 +353,55 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
   const unit = getMetricUnit(selectedMetric, unitPreference);
   const hasVisibleData = filteredData.length > 0;
   const hasAnyData = allData.length > 0;
+  const overlayAvailabilityByType = useMemo(
+    () => new Map(overlayAvailability.map((availability) => [availability.type, availability])),
+    [overlayAvailability]
+  );
+  const overlaySummary = useMemo(
+    () => formatSelectedOverlaySummary(selectedOverlays),
+    [selectedOverlays]
+  );
+  const overlayChevronStyle = useAnimatedStyle<ViewStyle>(() => ({
+    transform: [{ rotate: `${overlayChevronRotation.value}deg` }],
+  }));
+  const overlayPanelStyle = useAnimatedStyle<ViewStyle>(() => ({
+    opacity: overlayRevealProgress.value,
+    transform: [
+      { translateY: (1 - overlayRevealProgress.value) * -8 },
+      { scale: 0.98 + overlayRevealProgress.value * 0.02 },
+    ] as const,
+  }));
+
+  const handleOverlayToggle = useCallback(
+    (overlayType: ExerciseAnalyticsOverlayType) => {
+      const availability = overlayAvailabilityByType.get(overlayType);
+      if (!availability?.enabled) return;
+
+      setSelectedOverlays((current) => {
+        if (current.includes(overlayType)) {
+          return current.filter((type) => type !== overlayType);
+        }
+
+        const next = [...current, overlayType];
+        if (next.length <= 3) {
+          return next;
+        }
+
+        const removableOverlay = next.find(
+          (type) =>
+            !defaultOverlaySelection.includes(type) &&
+            type !== overlayType
+        );
+
+        if (!removableOverlay) {
+          return next.filter((type) => type !== overlayType);
+        }
+
+        return next.filter((type) => type !== removableOverlay);
+      });
+    },
+    [overlayAvailabilityByType]
+  );
 
   return (
     <View className="flex-1 bg-background">
@@ -244,6 +423,7 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
           <View className="mb-4">
             <Text className="text-sm font-medium mb-2 text-foreground-secondary">Metric</Text>
             <Pressable
+              testID="analytics-metric-picker-trigger"
               className="flex-row items-center justify-between border border-border rounded-xl px-4 py-3 bg-surface-secondary"
               onPress={() => setShowMetricPicker(true)}
             >
@@ -283,6 +463,87 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
           <View>
             <Text className="text-sm font-medium mb-2 text-foreground-secondary">Date Range</Text>
             <DateRangeSelector value={dateRange} onChange={setDateRange} />
+          </View>
+
+          <View className="mt-4">
+            <Pressable
+              testID="analytics-overlay-toggle"
+              className="flex-row items-center justify-between border border-border rounded-xl px-4 py-3 bg-surface-secondary"
+              onPress={() => setShowOverlayControls((current) => !current)}
+            >
+              <View className="flex-1 pr-3">
+                <Text className="text-sm font-medium text-foreground-secondary">Overlays</Text>
+                <Text className="text-xs mt-1 text-foreground-muted">{overlaySummary}</Text>
+              </View>
+
+              <View className="flex-row items-center">
+                <View className="rounded-full px-2.5 py-1 bg-primary-light">
+                  <Text className="text-xs font-semibold text-primary">
+                    {selectedOverlays.length}
+                  </Text>
+                </View>
+                <Animated.View style={overlayChevronStyle} className="ml-3">
+                  <MaterialCommunityIcons
+                    name="chevron-down"
+                    size={20}
+                    color={rawColors.foregroundSecondary}
+                  />
+                </Animated.View>
+              </View>
+            </Pressable>
+
+            <Animated.View layout={LinearTransition.duration(220)}>
+              {showOverlayControls ? (
+                <Animated.View
+                  testID="analytics-overlay-content"
+                  className="mt-3"
+                  style={overlayPanelStyle}
+                  entering={FadeInDown.duration(220)}
+                  exiting={FadeOutUp.duration(160)}
+                >
+                  <View className="flex-row flex-wrap gap-2">
+                    {overlayOptions.map((option, index) => {
+                      const availability = overlayAvailabilityByType.get(option.value);
+                      const isEnabled = availability?.enabled ?? false;
+                      const isSelected = isEnabled && selectedOverlays.includes(option.value);
+
+                      return (
+                        <Animated.View
+                          key={option.value}
+                          layout={LinearTransition.duration(180)}
+                          entering={FadeInDown.duration(220).delay(40 + index * 35)}
+                          exiting={FadeOutUp.duration(120)}
+                        >
+                          <Pressable
+                            testID={`analytics-overlay-chip-${option.value}`}
+                            className={`rounded-2xl border px-3 py-2 ${
+                              isSelected
+                                ? "bg-primary-light border-primary"
+                                : "bg-surface-secondary border-border"
+                            }`}
+                            style={{ opacity: isEnabled ? 1 : 0.6 }}
+                            onPress={() => handleOverlayToggle(option.value)}
+                          >
+                            <Text
+                              className={`text-sm font-semibold ${
+                                isSelected ? "text-primary" : "text-foreground-secondary"
+                              }`}
+                            >
+                              {option.label}
+                            </Text>
+                            {!isEnabled && availability?.reason ? (
+                              <Text className="text-[11px] mt-1 text-foreground-muted">
+                                {availability.reason}
+                              </Text>
+                            ) : null}
+                          </Pressable>
+                        </Animated.View>
+                      );
+                    })}
+                  </View>
+                </Animated.View>
+              ) : null}
+            </Animated.View>
           </View>
         </View>
 
@@ -331,7 +592,7 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
 
               <AnalyticsChart
                 data={filteredData}
-                trendLineData={trendLineData}
+                overlays={chartOverlays}
                 height={280}
                 unit={unit}
                 onDataPointPress={handleDataPointPress}
@@ -339,7 +600,6 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
                 onGestureStart={handleGestureStart}
                 onGestureEnd={handleGestureEnd}
                 selectedPoint={selectedPoint}
-                prSessionKeys={prSessionKeys}
               />
             </>
           )}
@@ -384,6 +644,7 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
             {metricOptions.map((option, index) => (
               <Pressable
                 key={option.value}
+                testID={`analytics-metric-option-${option.value}`}
                 className={`flex-row items-center justify-between py-4 px-5 ${
                   index < metricOptions.length - 1 ? "border-b border-border-light" : ""
                 } ${selectedMetric === option.value ? "bg-primary-light" : ""}`}
@@ -425,11 +686,10 @@ export default function AnalyticsTab({ refreshKey }: AnalyticsTabProps) {
         visible={showFullscreen}
         onClose={() => setShowFullscreen(false)}
         data={filteredData}
-        trendLineData={trendLineData}
+        overlays={chartOverlays}
         title={`${exerciseName} - ${selectedMetricLabel}`}
         unit={unit}
         onDataPointPress={handleDataPointPress}
-        prSessionKeys={prSessionKeys}
       />
     </View>
   );

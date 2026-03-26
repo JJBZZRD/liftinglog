@@ -150,7 +150,7 @@ sessions:
     id: "madcow-5x5",
     name: "Madcow 5x5",
     category: "Strength",
-    description: "Intermediate 3-day program with ramping sets and weekly progression. Monday heavy, Wednesday light, Friday new PRs.",
+    description: "Intermediate 3-day program with ramping sets and weekly progression. Monday heavy, Wednesday light, Friday new PBs.",
     daysPerWeek: 3,
     pslSource: `language_version: "0.2"
 metadata:
@@ -185,7 +185,7 @@ sessions:
       - "Standing Barbell Overhead Press: 4x5 @65%"
       - "Barbell Deadlift: 4x5 @65%"
   - id: friday-pr
-    name: Friday - PR Day
+    name: Friday - PB Day
     schedule: "FRI"
     rest_default: "3m"
     exercises:
@@ -207,7 +207,7 @@ sessions:
     id: "texas-method",
     name: "Texas Method",
     category: "Strength",
-    description: "3-day intermediate program: Volume Monday, Recovery Wednesday, Intensity Friday. Weekly progression on Friday PRs.",
+    description: "3-day intermediate program: Volume Monday, Recovery Wednesday, Intensity Friday. Weekly progression on Friday PBs.",
     daysPerWeek: 3,
     pslSource: `language_version: "0.2"
 metadata:

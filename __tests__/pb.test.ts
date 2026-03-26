@@ -11,7 +11,7 @@ import {
   wathan,
   computeE1rm,
   formulaComputeMap,
-} from '../lib/pr';
+} from "../lib/pb";
 
 describe('E1RM Formulas', () => {
   describe('epley', () => {

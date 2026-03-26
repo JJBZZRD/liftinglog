@@ -1,9 +1,9 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
-import { computeE1rm } from "../pr";
+import { computeE1rm } from "../pb";
 import { db, sqlite } from "./connection";
 import { hasColumn } from "./introspection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
-import { rebuildPREventsForExercise } from "./prEvents";
+import { rebuildPBEventsForExercise } from "./pbEvents";
 import { getGlobalFormula } from "./settings";
 import { newUid } from "../utils/uid";
 import { convertWeightToKg } from "../utils/units";
@@ -103,7 +103,7 @@ export async function deleteWorkout(id: number): Promise<void> {
   await db.delete(workouts).where(eq(workouts.id, id)).run();
 
   for (const exerciseId of exerciseIds) {
-    await rebuildPREventsForExercise(exerciseId);
+    await rebuildPBEventsForExercise(exerciseId);
   }
 }
 
@@ -137,7 +137,7 @@ export async function deleteWorkoutExercise(workoutExerciseId: number): Promise<
   await db.delete(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId)).run();
 
   if (exerciseId !== null) {
-    await rebuildPREventsForExercise(exerciseId);
+    await rebuildPBEventsForExercise(exerciseId);
   }
 
   await refreshUpcomingCalendarForPrograms(affectedProgramIds);
@@ -179,7 +179,7 @@ export async function deleteExerciseSession(workoutId: number, exerciseId: numbe
     and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId))
   ).run();
 
-  await rebuildPREventsForExercise(exerciseId);
+  await rebuildPBEventsForExercise(exerciseId);
   await refreshUpcomingCalendarForPrograms(affectedProgramIds);
 }
 
@@ -354,7 +354,7 @@ export async function addSet(args: {
     })
     .run();
 
-  await rebuildPREventsForExercise(args.exercise_id);
+  await rebuildPBEventsForExercise(args.exercise_id);
   return (res.lastInsertRowId as number) ?? 0;
 }
 
@@ -396,16 +396,17 @@ export async function updateSet(setId: number, updates: {
   set_index?: number | null;
   performed_at?: number | null;
 }): Promise<void> {
-  const affectsPR = updates.weight_kg !== undefined || updates.reps !== undefined || updates.performed_at !== undefined;
+  const affectsPB =
+    updates.weight_kg !== undefined || updates.reps !== undefined || updates.performed_at !== undefined;
 
-  let exerciseIdForPR: number | null = null;
-  if (affectsPR) {
+  let exerciseIdForPB: number | null = null;
+  if (affectsPB) {
     const rows = await db
       .select({ exerciseId: sets.exerciseId })
       .from(sets)
       .where(eq(sets.id, setId))
       .limit(1);
-    exerciseIdForPR = rows[0]?.exerciseId ?? null;
+    exerciseIdForPB = rows[0]?.exerciseId ?? null;
   }
 
   const mapped: Partial<typeof sets.$inferInsert> = {};
@@ -421,8 +422,8 @@ export async function updateSet(setId: number, updates: {
     await getProgramIdsForWorkoutSetIds([setId])
   );
 
-  if (affectsPR && exerciseIdForPR !== null) {
-    await rebuildPREventsForExercise(exerciseIdForPR);
+  if (affectsPB && exerciseIdForPB !== null) {
+    await rebuildPBEventsForExercise(exerciseIdForPB);
   }
 }
 
@@ -447,7 +448,7 @@ export async function deleteSetsForWorkoutExercise(workoutExerciseId: number): P
   await maybeDeleteCompletedWorkoutExerciseIfEmpty(workoutExerciseId);
 
   for (const exerciseId of exerciseIds) {
-    await rebuildPREventsForExercise(exerciseId);
+    await rebuildPBEventsForExercise(exerciseId);
   }
 
   await refreshUpcomingCalendarForPrograms(affectedProgramIds);
@@ -471,7 +472,7 @@ export async function deleteSet(setId: number): Promise<void> {
   await maybeDeleteCompletedWorkoutExerciseIfEmpty(workoutExerciseId);
 
   if (exerciseId !== null) {
-    await rebuildPREventsForExercise(exerciseId);
+    await rebuildPBEventsForExercise(exerciseId);
   }
 
   await refreshUpcomingCalendarForPrograms(affectedProgramIds);
@@ -659,7 +660,7 @@ export async function updateExerciseEntryDate(workoutExerciseId: number, perform
     .run();
 
   if (exerciseId !== null) {
-    await rebuildPREventsForExercise(exerciseId);
+    await rebuildPBEventsForExercise(exerciseId);
   }
 }
 

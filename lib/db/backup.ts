@@ -31,7 +31,7 @@ export interface MergeResult {
   workouts: { inserted: number; updated: number };
   workoutExercises: { inserted: number; updated: number };
   sets: { inserted: number; updated: number };
-  prEvents: { inserted: number };
+  pbEvents: { inserted: number };
   media: { inserted: number; updated: number; relinked: number };
   durationMs: number;
 }
@@ -668,7 +668,7 @@ function isValidSetForPR(set: PRSourceSet): set is {
   );
 }
 
-function rebuildImportedPREvents(exerciseIds: Iterable<number>): { inserted: number } {
+function rebuildImportedPBEvents(exerciseIds: Iterable<number>): { inserted: number } {
   const uniqueExerciseIds = [...new Set(exerciseIds)].filter((exerciseId) => Number.isFinite(exerciseId));
   if (uniqueExerciseIds.length === 0) {
     return { inserted: 0 };
@@ -1262,13 +1262,13 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
     sqlite.execSync("BEGIN TRANSACTION;");
 
     try {
-      // Merge in FK order, then rebuild derived PR events from merged sets.
+      // Merge in FK order, then rebuild derived PB events from merged sets.
       const exercisesResult = mergeExercises(backupDb, exerciseUidMap);
       const workoutsResult = mergeWorkouts(backupDb, workoutUidMap);
       const workoutExercisesResult = mergeWorkoutExercises(backupDb, exerciseUidMap, workoutUidMap, workoutExerciseUidMap);
       const setsResult = mergeSets(backupDb, exerciseUidMap, workoutUidMap, workoutExerciseUidMap, setUidMap);
       const mediaResult = mergeMedia(backupDb, workoutUidMap, setUidMap, importedVideoCandidates);
-      const prEventsResult = rebuildImportedPREvents(exerciseUidMap.values());
+      const pbEventsResult = rebuildImportedPBEvents(exerciseUidMap.values());
 
       sqlite.execSync("COMMIT;");
 
@@ -1279,7 +1279,7 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
         workouts: workoutsResult,
         workoutExercises: workoutExercisesResult,
         sets: setsResult,
-        prEvents: prEventsResult,
+        pbEvents: pbEventsResult,
         media: {
           ...mediaResult,
           relinked: relinkedMediaCount,

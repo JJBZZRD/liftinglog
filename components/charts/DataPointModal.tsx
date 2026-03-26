@@ -24,7 +24,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowD
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { deleteExerciseSession, deleteWorkoutExercise } from "../../lib/db/workouts";
 import { listMediaForSetIds } from "../../lib/db/media";
-import { getCurrentPREventsForExercise, type PREvent } from "../../lib/db/prEvents";
+import { getCurrentPBEventsForExercise, type PBEvent } from "../../lib/db/pbEvents";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type { SessionDetails } from "../../lib/utils/analytics";
 import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../../lib/utils/units";
@@ -70,28 +70,28 @@ export default function DataPointModal({
   // Track measured height of the fixed section
   const [fixedHeight, setFixedHeight] = useState(0);
   const [landscapeLeftHeight, setLandscapeLeftHeight] = useState(0);
-  const [prEventsBySetId, setPrEventsBySetId] = useState<Map<number, PREvent>>(new Map());
+  const [pbEventsBySetId, setPbEventsBySetId] = useState<Map<number, PBEvent>>(new Map());
   const [setIdsWithMedia, setSetIdsWithMedia] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadPrEvents = async () => {
+    const loadPbEvents = async () => {
       if (!visible || !exerciseId) {
-        setPrEventsBySetId(new Map());
+        setPbEventsBySetId(new Map());
         return;
       }
 
       try {
-        const map = await getCurrentPREventsForExercise(exerciseId);
-        if (!cancelled) setPrEventsBySetId(map);
+        const map = await getCurrentPBEventsForExercise(exerciseId);
+        if (!cancelled) setPbEventsBySetId(map);
       } catch (error) {
-        console.error("Error loading PR events:", error);
-        if (!cancelled) setPrEventsBySetId(new Map());
+        console.error("Error loading PB events:", error);
+        if (!cancelled) setPbEventsBySetId(new Map());
       }
     };
 
-    loadPrEvents();
+    loadPbEvents();
     return () => {
       cancelled = true;
     };
@@ -480,7 +480,7 @@ export default function DataPointModal({
                         reps={set.reps}
                         note={set.note}
                         variant="compact"
-                        prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
+                        pbBadge={pbEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
                         onPress={() => handleSetPress(set.id)}
                         rightActions={renderSetMediaIcon(set.id)}
                       />
@@ -679,7 +679,7 @@ export default function DataPointModal({
                       reps={set.reps}
                       note={set.note}
                       variant="compact"
-                      prBadge={prEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
+                      pbBadge={pbEventsBySetId.get(set.id)?.type.toUpperCase() || undefined}
                       onPress={() => handleSetPress(set.id)}
                       rightActions={renderSetMediaIcon(set.id)}
                     />

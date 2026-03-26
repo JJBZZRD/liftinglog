@@ -40,8 +40,8 @@ jest.mock("../../lib/db/introspection", () => ({
   hasColumn: jest.fn(() => true),
 }));
 
-jest.mock("../../lib/db/prEvents", () => ({
-  getPREventsForExercise: jest.fn(async () => []),
+jest.mock("../../lib/db/pbEvents", () => ({
+  getPBEventsForExercise: jest.fn(async () => []),
 }));
 
 jest.mock("../../lib/db/settings", () => ({
@@ -78,6 +78,9 @@ jest.mock("../../lib/theme/ThemeContext", () => ({
       borderLight: "#e8ecef",
       primary: "#0a7f5a",
       primaryLight: "#dff2ea",
+      success: "#34C759",
+      warning: "#FF9500",
+      pbGold: "#FFD700",
       overlay: "rgba(0,0,0,0.35)",
       pressed: "#d8e6df",
     },
@@ -90,12 +93,81 @@ jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({
   })),
 }));
 
-jest.mock("../../components/charts/AnalyticsChart", () => () => {
+jest.mock("react-native-reanimated", () => {
   const React = require("react");
-  return React.createElement("View", { testID: "analytics-chart" });
+  const { View } = require("react-native");
+
+  const createAnimationMock = () => {
+    const animation = {
+      duration: () => animation,
+      delay: () => animation,
+    };
+
+    return animation;
+  };
+
+  const AnimatedView = React.forwardRef(
+    (
+      { children, ...props }: { children?: React.ReactNode } & Record<string, unknown>,
+      ref: React.Ref<unknown>
+    ) => React.createElement(View, { ref, ...props }, children)
+  );
+
+  return {
+    __esModule: true,
+    default: {
+      View: AnimatedView,
+    },
+    LinearTransition: {
+      duration: () => ({}),
+    },
+    FadeInDown: createAnimationMock(),
+    FadeOutUp: createAnimationMock(),
+    useAnimatedStyle: (updater: () => Record<string, unknown>) => updater(),
+    useSharedValue: (value: unknown) => ({ value }),
+    withTiming: (value: unknown) => value,
+  };
 });
+
+const mockAnalyticsChart = jest.fn(
+  ({
+    overlays = [],
+  }: {
+    overlays?: { overlayType: string }[];
+  }) => {
+    const React = require("react");
+    return React.createElement("View", {
+      testID: "analytics-chart",
+      overlayCount: overlays.length,
+      overlayTypes: overlays.map((overlay) => overlay.overlayType).join(","),
+    });
+  }
+);
+
+jest.mock("../../components/charts/AnalyticsChart", () => ({
+  __esModule: true,
+  default: (props: unknown) => mockAnalyticsChart(props as never),
+}));
 jest.mock("../../components/charts/DataPointModal", () => () => null);
-jest.mock("../../components/charts/FullscreenChart", () => () => null);
+const mockFullscreenChart = jest.fn(
+  ({
+    overlays = [],
+  }: {
+    overlays?: { overlayType: string }[];
+  }) => {
+    const React = require("react");
+    return React.createElement("View", {
+      testID: "fullscreen-chart",
+      overlayCount: overlays.length,
+      overlayTypes: overlays.map((overlay) => overlay.overlayType).join(","),
+    });
+  }
+);
+
+jest.mock("../../components/charts/FullscreenChart", () => ({
+  __esModule: true,
+  default: (props: unknown) => mockFullscreenChart(props as never),
+}));
 jest.mock("../../components/charts/AnalyticsInsightsDeck", () => ({
   __esModule: true,
   default: ({
@@ -168,6 +240,101 @@ describe("AnalyticsTab", () => {
       expect(screen.getByTestId("analytics-overview-summary").props.children).toBe(
         "latest:115 sessions:5"
       );
+    });
+  });
+
+  it("renders overlay chips and enables default overlays on first load", async () => {
+    render(<AnalyticsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-chart").props.overlayTypes).toBe(
+        "trendLine,pbMarkers"
+      );
+      expect(screen.getByTestId("fullscreen-chart").props.overlayTypes).toBe(
+        "trendLine,pbMarkers"
+      );
+    });
+
+    expect(screen.queryByTestId("analytics-overlay-content")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("analytics-overlay-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-overlay-content")).toBeTruthy();
+    });
+
+    expect(screen.getByTestId("analytics-overlay-chip-trendLine")).toBeTruthy();
+    expect(screen.getByTestId("analytics-overlay-chip-pbMarkers")).toBeTruthy();
+    expect(screen.getByTestId("analytics-overlay-chip-ewma")).toBeTruthy();
+  });
+
+  it("updates chart overlays and evicts the oldest non-default overlay when a fourth is selected", async () => {
+    render(<AnalyticsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-chart").props.overlayTypes).toBe(
+        "trendLine,pbMarkers"
+      );
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-overlay-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-overlay-content")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-overlay-chip-ewma"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-chart").props.overlayTypes).toBe(
+        "trendLine,pbMarkers,ewma"
+      );
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-overlay-chip-robustTrend"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-chart").props.overlayTypes).toBe(
+        "trendLine,pbMarkers,robustTrend"
+      );
+      expect(screen.getByTestId("fullscreen-chart").props.overlayTypes).toBe(
+        "trendLine,pbMarkers,robustTrend"
+      );
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-overlay-chip-pbMarkers"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-chart").props.overlayTypes).toBe(
+        "trendLine,robustTrend"
+      );
+    });
+  });
+
+  it("updates overlay availability when the metric changes", async () => {
+    render(<AnalyticsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-overlay-toggle")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-overlay-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-overlay-content")).toBeTruthy();
+      expect(screen.getByTestId("analytics-overlay-chip-repBuckets")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-metric-picker-trigger"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("analytics-metric-option-totalVolume")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId("analytics-metric-option-totalVolume"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Not available for this metric")).toBeTruthy();
     });
   });
 });

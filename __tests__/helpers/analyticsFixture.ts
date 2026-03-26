@@ -234,7 +234,7 @@ export function createAnalyticsDatasetFixture(
         ],
       },
     ],
-    prEvents: [
+    pbEvents: [
       {
         id: 100,
         uid: "pr-100",

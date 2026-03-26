@@ -24,7 +24,7 @@ import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import type { UnitPreference } from "../../../lib/db";
-import { getCurrentPREventsForExercise } from "../../../lib/db/prEvents";
+import { getCurrentPBEventsForExercise } from "../../../lib/db/pbEvents";
 import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { listMediaForSetIds } from "../../../lib/db/media";
 import { useTheme } from "../../../lib/theme/ThemeContext";
@@ -97,9 +97,9 @@ function parseSearchQuery(query: string, currentUnit: UnitPreference): ParsedSea
   return { notesQuery, weightKgValue, repsValue };
 }
 
-// Extended set row with PR badge
-type SetWithPR = SetRow & { prBadge?: string };
-type HistoryEntry = WorkoutHistoryEntry & { sets: SetWithPR[] };
+// Extended set row with PB badge
+type SetWithPB = SetRow & { pbBadge?: string };
+type HistoryEntry = WorkoutHistoryEntry & { sets: SetWithPB[] };
 
 type SortField = "date" | "e1rm" | "maxWeight" | "volume" | "reps" | "sets";
 type SortDirection = "asc" | "desc";
@@ -141,7 +141,7 @@ function calculateE1RM(weight: number | null, reps: number | null): number {
 /**
  * Calculate session stats for a list of sets
  */
-function calculateSessionStats(sets: SetWithPR[]): {
+function calculateSessionStats(sets: SetWithPB[]): {
   totalVolume: number;
   totalReps: number;
   totalSets: number;
@@ -315,11 +315,11 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   }, [weightFilter, repsFilter, parsedSearch, unitPreference]);
 
   // Filter history based on all filter criteria
-  const filteredHistory = useMemo((): (WorkoutHistoryEntry & { sets: SetWithPR[] })[] => {
+  const filteredHistory = useMemo((): (WorkoutHistoryEntry & { sets: SetWithPB[] })[] => {
     const { startDate, endDate } = dateRangeTimestamps;
     const { weightMin, weightMax, repsMin, repsMax, notesQuery } = effectiveFilters;
 
-    const matchesFilters = (set: SetWithPR) => {
+    const matchesFilters = (set: SetWithPB) => {
       // Weight filter
       if (weightMin !== null && (set.weightKg ?? 0) < weightMin) return false;
       if (weightMax !== null && (set.weightKg ?? 0) > weightMax) return false;
@@ -439,18 +439,18 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
     try {
       const exerciseHistory = await getExerciseHistory(exerciseId);
       
-      const prEventsMap = await getCurrentPREventsForExercise(exerciseId);
+      const pbEventsMap = await getCurrentPBEventsForExercise(exerciseId);
       
-      // Map PR events to sets
-      const historyWithPRs = exerciseHistory.map(entry => ({
+      // Map PB events to sets
+      const historyWithPBs = exerciseHistory.map(entry => ({
         ...entry,
         sets: entry.sets.map(set => ({
           ...set,
-          prBadge: prEventsMap.get(set.id)?.type.toUpperCase() || undefined,
+          pbBadge: pbEventsMap.get(set.id)?.type.toUpperCase() || undefined,
         })),
       }));
       
-      setRawHistory(historyWithPRs);
+      setRawHistory(historyWithPBs);
     } catch (error) {
       console.error("Error loading exercise history:", error);
     } finally {
@@ -1028,7 +1028,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
               </View>
 
               <View style={styles.setsContainer}>
-                {item.sets.map((set: SetWithPR, index) => (
+                {item.sets.map((set: SetWithPB, index) => (
                   <SetItem
                     key={set.id}
                     index={index + 1}
@@ -1036,7 +1036,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                     reps={set.reps}
                     note={set.note}
                     variant="compact"
-                    prBadge={set.prBadge}
+                    pbBadge={set.pbBadge}
                     isBestSet={set.id === sessionStats.bestSetId}
                     onPress={() => handleSetPress(set.id)}
                     rightActions={

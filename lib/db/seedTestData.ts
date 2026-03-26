@@ -12,7 +12,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "./connection";
 import { exercises, sets, workoutExercises, workouts } from "./schema";
-import { detectAndRecordPRs } from "../pr/detection";
+import { detectAndRecordPBs } from "../pb/detection";
 
 // Seed date: 6 months before "today"
 const REFERENCE_DATE = new Date("2026-01-08");
@@ -124,7 +124,7 @@ async function createWorkoutSession(
       })
       .run();
 
-    await detectAndRecordPRs(
+    await detectAndRecordPBs(
       setResult.lastInsertRowId as number,
       exerciseId,
       setData.weight,

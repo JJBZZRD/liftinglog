@@ -31,8 +31,8 @@ interface SetItemProps {
   delayLongPress?: number;
   /** Variant styling */
   variant?: "default" | "compact";
-  /** PR badge text (e.g., "1RM", "5RM") */
-  prBadge?: string | null;
+  /** PB badge text (e.g., "1RM", "5RM") */
+  pbBadge?: string | null;
   /** Whether this is the best set in the session */
   isBestSet?: boolean;
   /** Optional right-side actions/accessories */
@@ -56,7 +56,7 @@ export default function SetItem({
   onLongPress,
   delayLongPress = 400,
   variant = "default",
-  prBadge,
+  pbBadge,
   isBestSet,
   rightActions,
 }: SetItemProps) {
@@ -122,13 +122,13 @@ export default function SetItem({
           </Text>
         )}
       </View>
-      {prBadge && (
+      {pbBadge && (
         <View 
           className="px-2 py-1 rounded-md ml-2"
-          style={{ backgroundColor: rawColors.prGold }}
+          style={{ backgroundColor: rawColors.pbGold }}
         >
           <Text className="text-[11px] font-bold uppercase text-primary-foreground">
-            {prBadge}
+            {pbBadge}
           </Text>
         </View>
       )}

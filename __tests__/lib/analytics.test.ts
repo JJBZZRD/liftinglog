@@ -10,8 +10,8 @@ jest.mock("../../lib/db/introspection", () => ({
   hasColumn: jest.fn(() => true),
 }));
 
-jest.mock("../../lib/db/prEvents", () => ({
-  getPREventsForExercise: jest.fn(async () => []),
+jest.mock("../../lib/db/pbEvents", () => ({
+  getPBEventsForExercise: jest.fn(async () => []),
 }));
 
 jest.mock("../../lib/db/settings", () => ({
@@ -19,12 +19,14 @@ jest.mock("../../lib/db/settings", () => ({
   getGlobalFormula: jest.fn(() => "epley"),
 }));
 
-import { computeE1rm } from "../../lib/pr";
+import { computeE1rm } from "../../lib/pb";
 import type { ExerciseAnalyticsDataset } from "../../lib/utils/analytics";
 const {
+  buildExerciseAnalyticsChartOverlays,
   buildExerciseAnalyticsOverview,
   getExerciseAnalyticsDataset,
-  getCurrentPRSessionKeysFromDataset,
+  getAvailableExerciseAnalyticsOverlays,
+  getCurrentPBSessionKeysFromDataset,
   getMetricDataPoints,
 } = require("../../lib/utils/analytics");
 import {
@@ -76,7 +78,7 @@ function createDatasetFromSessions(
         };
       })
       .sort((a, b) => b.date - a.date),
-    prEvents: [],
+    pbEvents: [],
   };
 }
 
@@ -349,7 +351,7 @@ describe("lib/utils/analytics", () => {
     expect(overview.consistency.weekdayCounts).toEqual([5, 0, 0, 0, 0, 0, 0]);
   });
 
-  it("summarizes PRs and excludes warmup-only PRs from work-set views", () => {
+  it("summarizes PBs and excludes warmup-only PBs from work-set views", () => {
     const dataset = createAnalyticsDatasetFixture();
 
     const allOverview = buildExerciseAnalyticsOverview(dataset, "maxWeight", {
@@ -360,10 +362,10 @@ describe("lib/utils/analytics", () => {
       now: analyticsFixtureNow,
       setScope: "work",
     });
-    const allKeys = getCurrentPRSessionKeysFromDataset(dataset, "all");
-    const workKeys = getCurrentPRSessionKeysFromDataset(dataset, "work");
+    const allKeys = getCurrentPBSessionKeysFromDataset(dataset, "all");
+    const workKeys = getCurrentPBSessionKeysFromDataset(dataset, "work");
 
-    expect(workOverview.prs.chips).toEqual([
+    expect(workOverview.pbs.chips).toEqual([
       { targetReps: 1, weightKg: null },
       { targetReps: 2, weightKg: 115 },
       { targetReps: 3, weightKg: 112.5 },
@@ -371,14 +373,164 @@ describe("lib/utils/analytics", () => {
       { targetReps: 8, weightKg: 95 },
       { targetReps: 10, weightKg: 100 },
     ]);
-    expect(allOverview.prs.lastPrDate).toBe(new Date("2026-04-06T09:00:00Z").getTime());
-    expect(workOverview.prs.lastPrDate).toBe(new Date("2026-03-30T09:10:00Z").getTime());
-    expect(allOverview.prs.prSessionsInRange).toBe(6);
-    expect(workOverview.prs.prSessionsInRange).toBe(5);
-    expect(allOverview.prs.newPrEventsInRange).toBe(8);
-    expect(workOverview.prs.newPrEventsInRange).toBe(7);
+    expect(allOverview.pbs.lastPbDate).toBe(new Date("2026-04-06T09:00:00Z").getTime());
+    expect(workOverview.pbs.lastPbDate).toBe(new Date("2026-03-30T09:10:00Z").getTime());
+    expect(allOverview.pbs.pbSessionsInRange).toBe(6);
+    expect(workOverview.pbs.pbSessionsInRange).toBe(5);
+    expect(allOverview.pbs.newPbEventsInRange).toBe(8);
+    expect(workOverview.pbs.newPbEventsInRange).toBe(7);
     expect(allKeys.has("106:206")).toBe(true);
     expect(workKeys.has("106:206")).toBe(false);
+  });
+
+  it("reports overlay availability from visible data density and metric support", () => {
+    const dataset = createAnalyticsDatasetFixture();
+
+    const availability = getAvailableExerciseAnalyticsOverlays(dataset, "maxWeight", {
+      setScope: "work",
+    });
+    const byType = new Map(
+      availability.map((entry: { type: string }) => [entry.type, entry])
+    );
+
+    expect(byType.get("trendLine")).toMatchObject({ enabled: true });
+    expect(byType.get("ewma")).toMatchObject({ enabled: true });
+    expect(byType.get("pbMarkers")).toMatchObject({ enabled: true });
+    expect(byType.get("weeklyBand")).toMatchObject({ enabled: true });
+    expect(byType.get("repBuckets")).toMatchObject({ enabled: true });
+    expect(byType.get("robustTrend")).toMatchObject({
+      enabled: false,
+      reason: "Need 6 sessions in range",
+    });
+    expect(byType.get("plateauZones")).toMatchObject({
+      enabled: false,
+      reason: "Need 6 sessions in range",
+    });
+    expect(byType.get("outliers")).toMatchObject({
+      enabled: false,
+      reason: "Need 6 sessions in range",
+    });
+
+    const totalVolumeAvailability = getAvailableExerciseAnalyticsOverlays(dataset, "totalVolume", {
+      setScope: "work",
+    });
+    const totalVolumeByType = new Map(
+      totalVolumeAvailability.map((entry: { type: string }) => [entry.type, entry])
+    );
+
+    expect(totalVolumeByType.get("repBuckets")).toMatchObject({
+      enabled: false,
+      reason: "Not available for this metric",
+    });
+  });
+
+  it("builds overlays only from the selected date range and set scope", () => {
+    const dataset = createAnalyticsDatasetFixture();
+    const range = {
+      startDate: new Date("2026-03-16T00:00:00Z"),
+      endDate: new Date("2026-03-30T23:59:59Z"),
+    };
+
+    const overlays = buildExerciseAnalyticsChartOverlays(dataset, "maxWeight", {
+      dateRange: range,
+      setScope: "work",
+      selectedOverlays: ["trendLine", "ewma", "pbMarkers", "weeklyBand"],
+    });
+
+    expect(overlays.map((overlay: { overlayType: string }) => overlay.overlayType)).toEqual([
+      "trendLine",
+      "ewma",
+      "pbMarkers",
+    ]);
+
+    const trendOverlay = overlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "trendLine"
+    );
+    const prOverlay = overlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "pbMarkers"
+    );
+
+    expect(trendOverlay?.points).toHaveLength(3);
+    expect(
+      trendOverlay?.points.every(
+        (point: { date: number }) =>
+          point.date >= range.startDate.getTime() && point.date <= range.endDate.getTime()
+      )
+    ).toBe(true);
+    expect(prOverlay?.points).toHaveLength(2);
+    expect(
+      prOverlay?.points.map((point: { workoutId: number; workoutExerciseId: number | null }) =>
+        `${point.workoutId}:${point.workoutExerciseId ?? "null"}`
+      )
+    ).toEqual(["104:204", "105:205"]);
+  });
+
+  it("builds weekly band and rep-bucket overlays from filtered sessions", () => {
+    const dataset = createAnalyticsDatasetFixture();
+
+    const overlays = buildExerciseAnalyticsChartOverlays(dataset, "maxWeight", {
+      setScope: "work",
+      selectedOverlays: ["weeklyBand", "repBuckets"],
+    });
+
+    const weeklyBand = overlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "weeklyBand"
+    );
+    const repBuckets = overlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "repBuckets"
+    );
+
+    expect(weeklyBand?.points).toHaveLength(5);
+    expect(repBuckets?.points).toHaveLength(5);
+    expect(
+      repBuckets?.points.map((point: { variant: string }) => point.variant)
+    ).toEqual(["7-9", "4-6", "1-3", "10-12+", "1-3"]);
+  });
+
+  it("detects plateau zones and outlier markers when enough data exists", () => {
+    const plateauDataset = createDatasetFromSessions([
+      { date: "2026-03-01T09:00:00Z", sets: [{ weightKg: 100, reps: 5 }] },
+      { date: "2026-03-08T09:00:00Z", sets: [{ weightKg: 100.5, reps: 5 }] },
+      { date: "2026-03-15T09:00:00Z", sets: [{ weightKg: 99.8, reps: 5 }] },
+      { date: "2026-03-22T09:00:00Z", sets: [{ weightKg: 100.2, reps: 5 }] },
+      { date: "2026-03-29T09:00:00Z", sets: [{ weightKg: 99.9, reps: 5 }] },
+      { date: "2026-04-05T09:00:00Z", sets: [{ weightKg: 100.1, reps: 5 }] },
+    ]);
+    const outlierDataset = createDatasetFromSessions([
+      { date: "2026-03-01T09:00:00Z", sets: [{ weightKg: 100, reps: 5 }] },
+      { date: "2026-03-08T09:00:00Z", sets: [{ weightKg: 101, reps: 5 }] },
+      { date: "2026-03-15T09:00:00Z", sets: [{ weightKg: 99.5, reps: 5 }] },
+      { date: "2026-03-22T09:00:00Z", sets: [{ weightKg: 100.5, reps: 5 }] },
+      { date: "2026-03-29T09:00:00Z", sets: [{ weightKg: 100, reps: 5 }] },
+      { date: "2026-04-05T09:00:00Z", sets: [{ weightKg: 130, reps: 5 }] },
+    ]);
+
+    const plateauOverlays = buildExerciseAnalyticsChartOverlays(plateauDataset, "maxWeight", {
+      setScope: "work",
+      selectedOverlays: ["plateauZones", "robustTrend"],
+    });
+    const outlierOverlays = buildExerciseAnalyticsChartOverlays(outlierDataset, "maxWeight", {
+      setScope: "work",
+      selectedOverlays: ["outliers"],
+    });
+
+    const plateauZones = plateauOverlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "plateauZones"
+    );
+    const robustTrend = plateauOverlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "robustTrend"
+    );
+    const outliers = outlierOverlays.find(
+      (overlay: { overlayType: string }) => overlay.overlayType === "outliers"
+    );
+
+    expect(plateauZones?.ranges).toHaveLength(1);
+    expect(robustTrend?.points).toHaveLength(6);
+    expect(outliers?.points).toHaveLength(1);
+    expect(outliers?.points[0]).toMatchObject({
+      variant: "positive",
+      workoutId: 6,
+    });
   });
 
   it("builds rep profiles and resolves final tie-breaks by recency", () => {
@@ -542,14 +694,14 @@ describe("lib/utils/analytics", () => {
       getExerciseFormulaOverride: jest.Mock;
       getGlobalFormula: jest.Mock;
     };
-    const prEvents = jest.requireMock("../../lib/db/prEvents") as {
-      getPREventsForExercise: jest.Mock;
+    const pbEvents = jest.requireMock("../../lib/db/pbEvents") as {
+      getPBEventsForExercise: jest.Mock;
     };
 
     db.select.mockReturnValue(query);
     settings.getExerciseFormulaOverride.mockReturnValue("wathan");
     settings.getGlobalFormula.mockReturnValue("epley");
-    prEvents.getPREventsForExercise.mockResolvedValue([]);
+    pbEvents.getPBEventsForExercise.mockResolvedValue([]);
 
     const derived = await getExerciseAnalyticsDataset(42);
     const explicit = await getExerciseAnalyticsDataset(42, "brzycki");

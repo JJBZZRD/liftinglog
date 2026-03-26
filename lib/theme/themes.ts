@@ -60,7 +60,7 @@ export interface RawThemeColors {
   overlay: string;
   overlayDark: string;
   shadow: string;
-  prGold: string;
+  pbGold: string;
 }
 
 // Raw color definitions for each theme (hex values)
@@ -85,7 +85,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(0, 0, 0, 0.3)",
       overlayDark: "rgba(0, 0, 0, 0.5)",
       shadow: "#000000",
-      prGold: "#FFD700",
+      pbGold: "#FFD700",
     },
     dark: {
       primary: "#0A84FF",
@@ -106,7 +106,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(0, 0, 0, 0.5)",
       overlayDark: "rgba(0, 0, 0, 0.7)",
       shadow: "#000000",
-      prGold: "#B8860B",
+      pbGold: "#B8860B",
     },
   },
   ocean: {
@@ -129,7 +129,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(13, 148, 136, 0.2)",
       overlayDark: "rgba(13, 148, 136, 0.4)",
       shadow: "#0D9488",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
     dark: {
       primary: "#2DD4BF",
@@ -150,7 +150,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(45, 212, 191, 0.2)",
       overlayDark: "rgba(45, 212, 191, 0.4)",
       shadow: "#000000",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
   },
   forest: {
@@ -173,7 +173,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(5, 150, 105, 0.2)",
       overlayDark: "rgba(5, 150, 105, 0.4)",
       shadow: "#059669",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
     dark: {
       primary: "#34D399",
@@ -194,7 +194,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(52, 211, 153, 0.2)",
       overlayDark: "rgba(52, 211, 153, 0.4)",
       shadow: "#000000",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
   },
   sunset: {
@@ -217,7 +217,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(234, 88, 12, 0.2)",
       overlayDark: "rgba(234, 88, 12, 0.4)",
       shadow: "#EA580C",
-      prGold: "#F59E0B",
+      pbGold: "#F59E0B",
     },
     dark: {
       primary: "#FB923C",
@@ -238,7 +238,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(251, 146, 60, 0.2)",
       overlayDark: "rgba(251, 146, 60, 0.4)",
       shadow: "#000000",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
   },
   rose: {
@@ -261,7 +261,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(225, 29, 72, 0.2)",
       overlayDark: "rgba(225, 29, 72, 0.4)",
       shadow: "#E11D48",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
     dark: {
       primary: "#FB7185",
@@ -282,7 +282,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(251, 113, 133, 0.2)",
       overlayDark: "rgba(251, 113, 133, 0.4)",
       shadow: "#000000",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
   },
   violet: {
@@ -305,7 +305,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(124, 58, 237, 0.2)",
       overlayDark: "rgba(124, 58, 237, 0.4)",
       shadow: "#7C3AED",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
     dark: {
       primary: "#A78BFA",
@@ -326,7 +326,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(167, 139, 250, 0.2)",
       overlayDark: "rgba(167, 139, 250, 0.4)",
       shadow: "#000000",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
   },
   slate: {
@@ -349,7 +349,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(71, 85, 105, 0.2)",
       overlayDark: "rgba(71, 85, 105, 0.4)",
       shadow: "#475569",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
     dark: {
       primary: "#94A3B8",
@@ -370,7 +370,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
       overlay: "rgba(148, 163, 184, 0.2)",
       overlayDark: "rgba(148, 163, 184, 0.4)",
       shadow: "#000000",
-      prGold: "#FBBF24",
+      pbGold: "#FBBF24",
     },
   },
 };
@@ -416,7 +416,7 @@ function createThemeVars(colors: RawThemeColors) {
     "--color-overlay": colors.overlay,
     "--color-overlay-dark": colors.overlayDark,
     "--color-shadow": hexToRgbString(colors.shadow),
-    "--color-pr-gold": hexToRgbString(colors.prGold),
+    "--color-pb-gold": hexToRgbString(colors.pbGold),
   });
 }
 

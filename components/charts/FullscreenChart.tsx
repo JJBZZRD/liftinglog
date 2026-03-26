@@ -10,29 +10,27 @@ import { useEffect, useState } from "react";
 import { Dimensions, Modal, Pressable, StatusBar, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/theme/ThemeContext";
-import type { SessionDataPoint } from "../../lib/utils/analytics";
+import type { ExerciseAnalyticsChartOverlay, SessionDataPoint } from "../../lib/utils/analytics";
 import AnalyticsChart from "./AnalyticsChart";
 
 interface FullscreenChartProps {
   visible: boolean;
   onClose: () => void;
   data: SessionDataPoint[];
-  trendLineData?: SessionDataPoint[];
+  overlays?: ExerciseAnalyticsChartOverlay[];
   title: string;
   unit: string;
   onDataPointPress?: (point: SessionDataPoint) => void;
-  prSessionKeys?: ReadonlySet<string>;
 }
 
 export default function FullscreenChart({
   visible,
   onClose,
   data,
-  trendLineData,
+  overlays,
   title,
   unit,
   onDataPointPress,
-  prSessionKeys,
 }: FullscreenChartProps) {
   const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -131,12 +129,11 @@ export default function FullscreenChart({
         <View className="flex-1 justify-center items-center">
           <AnalyticsChart
             data={data}
-            trendLineData={trendLineData}
+            overlays={overlays}
             width={chartWidth}
             height={chartHeight}
             unit={unit}
             onDataPointPress={onDataPointPress}
-            prSessionKeys={prSessionKeys}
           />
         </View>
       </View>

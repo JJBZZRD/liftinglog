@@ -17,7 +17,7 @@ This document covers the behavior of:
 - `app/exercise/tabs/HistoryTab.tsx`
 - `app/workout-history.tsx`
 - `app/programs/exercise-log/[id].tsx`
-- `lib/db/prEvents.ts`
+- `lib/db/pbEvents.ts`
 - `lib/utils/analytics.ts`
 - `lib/utils/exportCsv.ts`
 - `lib/db/backup.ts`
@@ -122,7 +122,7 @@ Canonical per-exercise session row inside a workout.
 Canonical set history table.
 
 - This is the authoritative storage for logged set performance.
-- If a set should count for history, analytics, export, PRs, or media attachment, it must exist here.
+- If a set should count for history, analytics, export, PBs, or media attachment, it must exist here.
 - Each row belongs to a `workout_id` and an `exercise_id`.
 - New logging code should also set `workout_exercise_id` for all real logged sets.
 - `workout_exercise_id` is nullable for legacy/backward-compatibility reasons, but null should be treated as old or incomplete data, not the target design.
@@ -131,9 +131,9 @@ Canonical set history table.
 
 Derived table from `sets`.
 
-- PR data is not independently authored.
+- PB data is not independently authored.
 - It is rebuilt when sets are inserted, updated, or deleted.
-- If a performance does not exist in `sets`, it cannot produce correct PR behavior.
+- If a performance does not exist in `sets`, it cannot produce correct PB behavior.
 
 ### `media`
 
@@ -188,7 +188,7 @@ These rules are mandatory.
 
 1. Logged training history is authoritative only when it exists in `workouts`, `workout_exercises`, and `sets`.
 2. `program_calendar*` tables may cache or mirror logging state, but they are not allowed to replace the main history tables.
-3. A set that should appear in workout history, exercise history, analytics, export, or PR logic must be inserted into `sets`.
+3. A set that should appear in workout history, exercise history, analytics, export, or PB logic must be inserted into `sets`.
 4. New logged sets should carry `workout_id`, `exercise_id`, and `workout_exercise_id`.
 5. A `workout_exercise` with real sets but no meaningful completion state behaves like an in-progress session and can surface as backlog.
 
@@ -252,7 +252,7 @@ This is the normal non-program logging flow.
 3. If an open row exists, it reuses it.
 4. Otherwise it creates a new `workout_exercise`.
 5. Each confirmed set is written directly into `sets` with `workout_id`, `exercise_id`, and `workout_exercise_id`.
-6. PR events are rebuilt from the real set data.
+6. PB events are rebuilt from the real set data.
 7. When the user presses Complete, `completeExerciseEntry(workoutExerciseId, performedAt)` sets `completed_at` and `performed_at` on the `workout_exercise`.
 8. Only then is the session unambiguously complete in the main history model.
 
@@ -267,13 +267,13 @@ When a real set is changed through `lib/db/workouts.ts`:
 
 1. `updateSet()` updates the `sets` row.
 2. `syncLinkedProgramSetsByWorkoutSetIds()` mirrors the change back into linked `program_calendar_sets`.
-3. PR events are rebuilt if needed.
+3. PB events are rebuilt if needed.
 
 When a real set is deleted:
 
 1. `deleteSet()` clears the linked `program_calendar_sets` state via `clearLinkedProgramSetsByWorkoutSetIds()`.
 2. The real `sets` row is deleted.
-3. PR events are rebuilt.
+3. PB events are rebuilt.
 4. Empty completed `workout_exercises` may be removed.
 
 ### C. Workout day history
@@ -388,11 +388,11 @@ Rule:
 
 ## 8. Downstream Consumers
 
-### PR events
+### PB events
 
 - Derived from `sets`
 - Rebuilt on set create, update, and delete
-- Any alternate store for logged sets breaks PR correctness
+- Any alternate store for logged sets breaks PB correctness
 
 ### Analytics
 
@@ -464,7 +464,7 @@ If you are changing persistence or adding new features, follow these rules.
 - Ensure real logged sets point at the correct `workout_exercise_id`.
 - Keep `program_calendar_sets.set_id` synchronized with the real set row.
 - Keep `program_calendar_exercises.workout_exercise_id` synchronized manually.
-- Update PR, analytics, export, and delete flows when set persistence changes.
+- Update PB, analytics, export, and delete flows when set persistence changes.
 - Add repair logic if a migration can leave old rows in an invalid mixed state.
 
 ### Do not do this
@@ -483,7 +483,7 @@ Use these when reasoning about bugs.
 - If data should appear in exercise history and does not, first check whether real `sets` exist and whether they point to the expected `workout_exercise_id`.
 - If a program exercise looks complete in the program UI but not in history, check whether the program side was updated without creating/updating the real `sets` row.
 - If `RecordTab` shows unexpected backlog, check for open `workout_exercises` with program-linked sets.
-- If PRs or analytics are wrong, verify the corresponding real `sets` rows before inspecting the derived tables.
+- If PBs or analytics are wrong, verify the corresponding real `sets` rows before inspecting the derived tables.
 
 ## 13. One-Sentence Ground Truth
 

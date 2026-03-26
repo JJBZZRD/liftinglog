@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
-import { getTotalPRCount } from "../../lib/db/prEvents";
+import { getTotalPBCount } from "../../lib/db/pbEvents";
 import { getLastWorkoutDay, getQuickStats, type LastWorkoutDayResult, type QuickStats } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../../lib/utils/units";
@@ -24,7 +24,7 @@ export default function OverviewScreen() {
       const [workoutResult, statsResult, prCount] = await Promise.all([
         getLastWorkoutDay(),
         getQuickStats(),
-        getTotalPRCount(),
+        getTotalPBCount(),
       ]);
       setLastWorkout(workoutResult);
       setQuickStats(statsResult);
@@ -125,7 +125,7 @@ export default function OverviewScreen() {
             <View className="items-center">
               <MaterialCommunityIcons name="trophy" size={32} color={rawColors.success} />
               <Text className="text-2xl font-bold mt-2 text-foreground">{totalPRs}</Text>
-              <Text className="text-xs text-foreground-secondary">PRs</Text>
+              <Text className="text-xs text-foreground-secondary">PBs</Text>
             </View>
           </View>
         </View>

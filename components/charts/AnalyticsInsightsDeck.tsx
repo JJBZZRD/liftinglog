@@ -1,12 +1,20 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useMemo, useState, type ComponentProps } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import {
+  type ComponentType,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ComponentRef,
+} from "react";
+import { Text, View, useWindowDimensions } from "react-native";
 import Animated, {
   runOnJS,
   useAnimatedReaction,
   useAnimatedScrollHandler,
   useSharedValue,
 } from "react-native-reanimated";
+import AnimatedDotsCarousel from "react-native-animated-dots-carousel";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import type {
@@ -35,10 +43,12 @@ type InsightCardId =
   | "snapshot"
   | "performance-progress"
   | "metric-trend"
-  | "prs"
+  | "pbs"
   | "consistency"
   | "rep-profile"
   | "estimated-rep-maxes";
+
+const DotsCarousel = AnimatedDotsCarousel as unknown as ComponentType<Record<string, unknown>>;
 
 function formatShortDate(timestamp: number | null): string {
   if (timestamp === null) return "--";
@@ -379,6 +389,7 @@ export default function AnalyticsInsightsDeck({
   const { rawColors } = useTheme();
   const { unitPreference } = useUnitPreference();
   const { width: windowWidth } = useWindowDimensions();
+  const scrollViewRef = useRef<ComponentRef<typeof Animated.ScrollView> | null>(null);
   const scrollX = useSharedValue(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const containerWidth = Math.max(280, windowWidth - 32);
@@ -392,12 +403,25 @@ export default function AnalyticsInsightsDeck({
       "performance-progress",
       "snapshot",
       "metric-trend",
-      "prs",
+      "pbs",
       "consistency",
       "rep-profile",
     ],
     []
   );
+
+  const scrollToCard = (index: number, animated = true) => {
+    const clampedIndex = Math.max(0, Math.min(cardIds.length - 1, index));
+    const offsetX = clampedIndex * snapInterval;
+
+    setActiveIndex(clampedIndex);
+    scrollX.value = offsetX;
+    scrollViewRef.current?.scrollTo?.({
+      x: offsetX,
+      y: 0,
+      animated,
+    });
+  };
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -463,6 +487,7 @@ export default function AnalyticsInsightsDeck({
 
       <Animated.ScrollView
         testID="analytics-insights-scroll"
+        ref={scrollViewRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
@@ -480,7 +505,7 @@ export default function AnalyticsInsightsDeck({
           setActiveIndex(Math.max(0, Math.min(cardIds.length - 1, nextIndex)));
           onGestureEnd?.();
         }}
-        contentContainerStyle={{ paddingRight: CARD_PEEK }}
+        contentContainerStyle={{ paddingRight: CARD_PEEK, paddingBottom: 18 }}
       >
         {cardIds.map((cardId, index) => {
           const isLastCard = index === cardIds.length - 1;
@@ -560,8 +585,8 @@ export default function AnalyticsInsightsDeck({
 
               {cardId === "performance-progress" && (
                 <>
-                  <View className="flex-row items-center justify-between mb-4">
-                    <View>
+                  <View className="flex-row items-start justify-between gap-3 mb-4">
+                    <View className="flex-1 pr-2">
                       <Text className="text-lg font-semibold text-foreground" selectable>
                         Progress
                       </Text>
@@ -569,7 +594,7 @@ export default function AnalyticsInsightsDeck({
                         Based on comparable rep-range strength across visible sessions
                       </Text>
                     </View>
-                    <View className="items-end gap-2">
+                    <View className="shrink-0 items-end self-start">
                       <View className="flex-row items-center px-3 py-1.5 rounded-full bg-surface-secondary">
                         <MaterialCommunityIcons
                           name={performanceTone.icon}
@@ -698,8 +723,8 @@ export default function AnalyticsInsightsDeck({
 
               {cardId === "metric-trend" && (
                 <>
-                  <View className="flex-row items-center justify-between mb-4">
-                    <View>
+                  <View className="flex-row items-start justify-between gap-3 mb-4">
+                    <View className="flex-1 pr-2">
                       <Text className="text-lg font-semibold text-foreground" selectable>
                         Metric Trend
                       </Text>
@@ -707,7 +732,7 @@ export default function AnalyticsInsightsDeck({
                         {`Tracking ${selectedMetricLabel} (${metricUnit})`}
                       </Text>
                     </View>
-                    <View className="items-end gap-2">
+                    <View className="shrink-0 items-end gap-2 self-start">
                       <View className="px-3 py-1.5 rounded-full bg-primary-light">
                         <Text className="text-sm font-medium text-primary" selectable>
                           {metricUnit}
@@ -876,15 +901,15 @@ export default function AnalyticsInsightsDeck({
                 </>
               )}
 
-              {cardId === "prs" && (
+              {cardId === "pbs" && (
                 <>
                   <View className="flex-row items-center justify-between mb-4">
                     <View>
                       <Text className="text-lg font-semibold text-foreground" selectable>
-                        PRs
+                        PBs
                       </Text>
                       <Text className="text-sm mt-1 text-foreground-secondary" selectable>
-                        Current rep-max records and PR activity
+                        Current rep-max records and PB activity
                       </Text>
                     </View>
                     <View className="px-3 py-1.5 rounded-full bg-primary-light">
@@ -894,7 +919,7 @@ export default function AnalyticsInsightsDeck({
                     </View>
                   </View>
                   <View className="flex-row flex-wrap gap-2 mb-4">
-                    {overview.prs.chips.map((chip) => (
+                    {overview.pbs.chips.map((chip) => (
                       <View
                         key={chip.targetReps}
                         className="px-3 py-2 rounded-full border"
@@ -924,26 +949,26 @@ export default function AnalyticsInsightsDeck({
                   <View className="flex-row gap-3">
                     <View className="flex-1 rounded-xl p-3 bg-surface-secondary">
                       <Text className="text-xs font-medium text-foreground-secondary" selectable>
-                        Last PR
+                        Last PB
                       </Text>
                       <Text className="text-base font-bold mt-1 text-foreground" selectable>
-                        {formatShortDate(overview.prs.lastPrDate)}
+                        {formatShortDate(overview.pbs.lastPbDate)}
                       </Text>
                     </View>
                     <View className="flex-1 rounded-xl p-3 bg-surface-secondary">
                       <Text className="text-xs font-medium text-foreground-secondary" selectable>
-                        PR Sessions
+                        PB Sessions
                       </Text>
                       <Text className="text-base font-bold mt-1 text-foreground" selectable>
-                        {overview.prs.prSessionsInRange}
+                        {overview.pbs.pbSessionsInRange}
                       </Text>
                     </View>
                     <View className="flex-1 rounded-xl p-3 bg-surface-secondary">
                       <Text className="text-xs font-medium text-foreground-secondary" selectable>
-                        New PRs
+                        New PBs
                       </Text>
                       <Text className="text-base font-bold mt-1 text-foreground" selectable>
-                        {overview.prs.newPrEventsInRange}
+                        {overview.pbs.newPbEventsInRange}
                       </Text>
                     </View>
                   </View>
@@ -1128,20 +1153,63 @@ export default function AnalyticsInsightsDeck({
         })}
       </Animated.ScrollView>
 
-      <View className="flex-row items-center justify-center gap-2 mt-4">
-        {cardIds.map((cardId, index) => (
-          <Pressable
-            key={cardId}
-            testID={`analytics-dot-${index}`}
-            className="rounded-full"
-            style={{
-              width: activeIndex === index ? 18 : 8,
-              height: 8,
-              backgroundColor:
-                activeIndex === index ? rawColors.primary : rawColors.border,
-            }}
-          />
-        ))}
+      <View testID="analytics-page-control" className="self-center mt-2">
+        <DotsCarousel
+          testID="analytics-dots-carousel"
+          length={cardIds.length}
+          currentIndex={activeIndex}
+          maxIndicators={cardIds.length}
+          interpolateOpacityAndColor
+          duration={250}
+          activeIndicatorConfig={{
+            color: rawColors.primary,
+            margin: 4,
+            opacity: 1,
+            size: 8,
+          }}
+          inactiveIndicatorConfig={{
+            color: rawColors.border,
+            margin: 4,
+            opacity: 1,
+            size: 8,
+          }}
+          decreasingDots={[
+            {
+              quantity: 1,
+              config: {
+                color: rawColors.border,
+                margin: 4,
+                opacity: 0.75,
+                size: 6,
+              },
+            },
+            {
+              quantity: 1,
+              config: {
+                color: rawColors.border,
+                margin: 4,
+                opacity: 0.55,
+                size: 4,
+              },
+            },
+          ]}
+          scrollableDotsConfig={{
+            setIndex: setActiveIndex,
+            onNewIndex: (newIndex) => {
+              onGestureStart?.();
+              scrollToCard(newIndex, false);
+              onGestureEnd?.();
+            },
+            containerBackgroundColor: rawColors.surfaceSecondary,
+            container: {
+              alignItems: "center",
+              borderRadius: 999,
+              height: 30,
+              justifyContent: "center",
+              paddingHorizontal: 14,
+            },
+          }}
+        />
       </View>
     </View>
   );

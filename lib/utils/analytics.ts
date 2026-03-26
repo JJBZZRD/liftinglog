@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { getPREventsForExercise, type PREvent } from "../db/prEvents";
+import { getPBEventsForExercise, type PBEvent } from "../db/pbEvents";
 import {
   getExerciseFormulaOverride,
   getGlobalFormula,
@@ -8,7 +8,7 @@ import {
 import { db } from "../db/connection";
 import { hasColumn } from "../db/introspection";
 import { sets, workoutExercises, workouts } from "../db/schema";
-import { computeE1rm } from "../pr";
+import { computeE1rm } from "../pb";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_WEEK = 7 * MS_PER_DAY;
@@ -59,6 +59,15 @@ export type ExerciseAnalyticsMetricType =
   | "maxReps"
   | "numSets";
 export type ExerciseAnalyticsBucketId = "1-3" | "4-6" | "7-9" | "10-12+";
+export type ExerciseAnalyticsOverlayType =
+  | "trendLine"
+  | "ewma"
+  | "robustTrend"
+  | "pbMarkers"
+  | "plateauZones"
+  | "weeklyBand"
+  | "outliers"
+  | "repBuckets";
 
 export type ExerciseAnalyticsSet = {
   id: number;
@@ -85,7 +94,7 @@ export type ExerciseAnalyticsDataset = {
   exerciseId: number;
   formula: E1RMFormulaId;
   sessions: ExerciseAnalyticsSession[];
-  prEvents: PREvent[];
+  pbEvents: PBEvent[];
 };
 
 export type ExerciseAnalyticsSnapshot = {
@@ -155,11 +164,11 @@ export type ExerciseAnalyticsPerformanceProgress = {
   bucketTrends: ExerciseAnalyticsBucketTrend[];
 };
 
-export type ExerciseAnalyticsPRSummary = {
+export type ExerciseAnalyticsPBSummary = {
   chips: { targetReps: number; weightKg: number | null }[];
-  lastPrDate: number | null;
-  prSessionsInRange: number;
-  newPrEventsInRange: number;
+  lastPbDate: number | null;
+  pbSessionsInRange: number;
+  newPbEventsInRange: number;
 };
 
 export type ExerciseAnalyticsConsistency = {
@@ -187,11 +196,66 @@ export type EstimatedRepMaxEntry = {
   isMuted: boolean;
 };
 
+export type ExerciseAnalyticsChartLineStyle = "solid" | "dashed";
+export type ExerciseAnalyticsChartColorToken =
+  | "primary"
+  | "secondary"
+  | "muted"
+  | "success"
+  | "warning"
+  | "gold";
+export type ExerciseAnalyticsChartBandPoint = {
+  date: number;
+  center: number;
+  lower: number;
+  upper: number;
+};
+export type ExerciseAnalyticsChartMarkerPoint = SessionDataPoint & {
+  variant: "pb" | "positive" | "negative" | ExerciseAnalyticsBucketId;
+};
+
+export type ExerciseAnalyticsChartOverlay =
+  | {
+      overlayType: "trendLine" | "ewma" | "robustTrend";
+      kind: "line";
+      colorToken: ExerciseAnalyticsChartColorToken;
+      style: ExerciseAnalyticsChartLineStyle;
+      points: SessionDataPoint[];
+    }
+  | {
+      overlayType: "weeklyBand";
+      kind: "band";
+      colorToken: ExerciseAnalyticsChartColorToken;
+      points: ExerciseAnalyticsChartBandPoint[];
+    }
+  | {
+      overlayType: "plateauZones";
+      kind: "zone";
+      colorToken: ExerciseAnalyticsChartColorToken;
+      ranges: {
+        startDate: number;
+        endDate: number;
+        severity: "moderate" | "high";
+      }[];
+    }
+  | {
+      overlayType: "pbMarkers" | "outliers" | "repBuckets";
+      kind: "marker";
+      colorToken: ExerciseAnalyticsChartColorToken;
+      points: ExerciseAnalyticsChartMarkerPoint[];
+    };
+
+export type ExerciseAnalyticsOverlayAvailability = {
+  type: ExerciseAnalyticsOverlayType;
+  enabled: boolean;
+  reason?: string;
+};
+
 export type ExerciseAnalyticsOverview = {
   snapshot: ExerciseAnalyticsSnapshot;
   metricTrend: ExerciseAnalyticsProgress;
   performanceProgress: ExerciseAnalyticsPerformanceProgress;
-  prs: ExerciseAnalyticsPRSummary;
+  pbs: ExerciseAnalyticsPBSummary;
   consistency: ExerciseAnalyticsConsistency;
   repProfile: {
     buckets: RepProfileBucket[];
@@ -213,6 +277,10 @@ export type ExerciseAnalyticsQueryOptions = {
   setScope?: ExerciseAnalyticsSetScope;
   formula?: E1RMFormulaId;
   now?: number;
+};
+
+export type ExerciseAnalyticsOverlayQueryOptions = ExerciseAnalyticsQueryOptions & {
+  selectedOverlays?: ExerciseAnalyticsOverlayType[];
 };
 
 type ExerciseAnalyticsJoinedSetRow = {
@@ -272,8 +340,15 @@ type SessionBucketStrength = {
 
 type SessionPerformanceSummary = {
   date: number;
+  workoutId: number;
+  workoutExerciseId: number | null;
   dominantBucketId: ExerciseAnalyticsBucketId | null;
   bucketBestSets: Partial<Record<ExerciseAnalyticsBucketId, SessionBucketStrength>>;
+};
+
+type WeeklyAggregatePoint = {
+  date: number;
+  value: number;
 };
 
 const REP_PROFILE_BUCKETS: RepProfileBucketDefinition[] = [
@@ -289,6 +364,23 @@ const BUCKET_CONFIDENCE_WEIGHTS: Record<ExerciseAnalyticsBucketId, number> = {
   "7-9": 0.88,
   "10-12+": 0.8,
 };
+
+const OVERLAY_ORDER: ExerciseAnalyticsOverlayType[] = [
+  "trendLine",
+  "ewma",
+  "robustTrend",
+  "pbMarkers",
+  "plateauZones",
+  "weeklyBand",
+  "outliers",
+  "repBuckets",
+];
+
+const REP_BUCKET_SUPPORTED_METRICS = new Set<ExerciseAnalyticsMetricType>([
+  "maxWeight",
+  "e1rm",
+  "maxReps",
+]);
 
 function resolveFormulaForExercise(
   exerciseId: number,
@@ -672,6 +764,41 @@ function getRegressionTrendStatus(values: number[]): ExerciseAnalyticsProgress["
   return getProgressStatusFromNormalizedSlope(slope / baseline);
 }
 
+function computeStabilityScore(values: number[], baseline?: number): number {
+  const resolvedBaseline = Math.max(Math.abs(baseline ?? average(values) ?? 0), 1);
+  return clamp(1 - standardDeviation(values) / Math.max(resolvedBaseline * 0.18, 1));
+}
+
+function computeRobustIntercept(values: number[], slope: number): number {
+  const intercepts = values.map((value, index) => value - slope * index);
+  return median(intercepts) ?? values[0] ?? 0;
+}
+
+function buildEwmaPoints(points: SessionDataPoint[]): SessionDataPoint[] {
+  const chronologicalPoints = [...points].sort((a, b) => a.date - b.date);
+  if (chronologicalPoints.length === 0) return [];
+
+  const ewmaSeries = computeEwmaSeries(chronologicalPoints.map((point) => point.value));
+  return chronologicalPoints.map((point, index) => ({
+    ...point,
+    value: ewmaSeries[index],
+  }));
+}
+
+function buildRobustTrendPoints(points: SessionDataPoint[]): SessionDataPoint[] {
+  const chronologicalPoints = [...points].sort((a, b) => a.date - b.date);
+  if (chronologicalPoints.length === 0) return [];
+
+  const values = chronologicalPoints.map((point) => point.value);
+  const slope = computeTheilSenSlope(values);
+  const intercept = computeRobustIntercept(values, slope);
+
+  return chronologicalPoints.map((point, index) => ({
+    ...point,
+    value: intercept + slope * index,
+  }));
+}
+
 function getComparabilityLabel(
   score: number | null
 ): ExerciseAnalyticsPerformanceProgress["comparabilityLabel"] {
@@ -777,6 +904,8 @@ function buildSessionPerformanceSummary(
 
   return {
     date: session.date,
+    workoutId: session.workoutId,
+    workoutExerciseId: session.workoutExerciseId,
     dominantBucketId: dominantBucket?.[0] ?? null,
     bucketBestSets,
   };
@@ -874,6 +1003,191 @@ function getWeekStartTimestamp(timestamp: number): number {
   );
   mondayStart.setUTCDate(mondayStart.getUTCDate() + mondayOffset);
   return mondayStart.getTime();
+}
+
+function buildMetricPointLookup(metricPoints: SessionDataPoint[]): Map<string, SessionDataPoint> {
+  return new Map(
+    metricPoints.map((point) => [
+      toSessionKey(point.workoutId, point.workoutExerciseId),
+      point,
+    ])
+  );
+}
+
+function getDistinctWeekCount(metricPoints: SessionDataPoint[]): number {
+  return new Set(metricPoints.map((point) => getWeekStartTimestamp(point.date))).size;
+}
+
+function buildPBMarkerOverlayPoints(
+  dataset: ExerciseAnalyticsDataset,
+  metricPoints: SessionDataPoint[],
+  setScope: ExerciseAnalyticsSetScope
+): SessionDataPoint[] {
+  const currentPBSessionKeys = getCurrentPBSessionKeysFromDataset(dataset, setScope);
+  return [...metricPoints]
+    .filter((point) => currentPBSessionKeys.has(toSessionKey(point.workoutId, point.workoutExerciseId)))
+    .sort((a, b) => a.date - b.date);
+}
+
+function buildWeeklyAggregatePoints(
+  metricPoints: SessionDataPoint[],
+  metric: ExerciseAnalyticsMetricType
+): WeeklyAggregatePoint[] {
+  const weeklyMap = new Map<number, WeeklyAggregatePoint>();
+
+  for (const point of [...metricPoints].sort((a, b) => a.date - b.date)) {
+    const weekStart = getWeekStartTimestamp(point.date);
+    const current = weeklyMap.get(weekStart);
+
+    if (!current) {
+      weeklyMap.set(weekStart, {
+        date: point.date,
+        value: point.value,
+      });
+      continue;
+    }
+
+    weeklyMap.set(weekStart, {
+      date: Math.max(current.date, point.date),
+      value:
+        metric === "totalVolume" || metric === "numSets"
+          ? current.value + point.value
+          : Math.max(current.value, point.value),
+    });
+  }
+
+  return Array.from(weeklyMap.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, point]) => point);
+}
+
+function buildWeeklyBandOverlay(
+  metricPoints: SessionDataPoint[],
+  metric: ExerciseAnalyticsMetricType
+): Extract<ExerciseAnalyticsChartOverlay, { kind: "band" }> | null {
+  const weeklyPoints = buildWeeklyAggregatePoints(metricPoints, metric);
+  if (weeklyPoints.length < 4) return null;
+
+  const bandPoints = weeklyPoints.map((point, index) => {
+    const rollingWindow = weeklyPoints.slice(Math.max(0, index - 3), index + 1);
+    const values = rollingWindow.map((entry) => entry.value);
+    const center = average(values) ?? point.value;
+    const deviation = standardDeviation(values);
+
+    return {
+      date: point.date,
+      center,
+      lower: Math.max(0, center - deviation),
+      upper: center + deviation,
+    };
+  });
+
+  return {
+    overlayType: "weeklyBand",
+    kind: "band",
+    colorToken: "primary",
+    points: bandPoints,
+  };
+}
+
+function buildOutlierOverlayPoints(
+  metricPoints: SessionDataPoint[]
+): ExerciseAnalyticsChartMarkerPoint[] {
+  if (metricPoints.length < 6) return [];
+
+  const chronologicalPoints = [...metricPoints].sort((a, b) => a.date - b.date);
+  const values = chronologicalPoints.map((point) => point.value);
+  const mean = average(values) ?? 0;
+  const deviation = standardDeviation(values);
+
+  if (deviation === 0) return [];
+
+  return chronologicalPoints.flatMap<ExerciseAnalyticsChartMarkerPoint>((point) => {
+    const zScore = (point.value - mean) / deviation;
+    if (Math.abs(zScore) < 1.75) return [];
+
+    return [
+      {
+        ...point,
+        variant: zScore > 0 ? "positive" : "negative",
+      },
+    ];
+  });
+}
+
+function buildRepBucketOverlayPoints(
+  metricPoints: SessionDataPoint[],
+  sessionSummaries: SessionPerformanceSummary[]
+): ExerciseAnalyticsChartMarkerPoint[] {
+  const metricPointLookup = buildMetricPointLookup(metricPoints);
+
+  return sessionSummaries.flatMap<ExerciseAnalyticsChartMarkerPoint>((summary) => {
+    if (!summary.dominantBucketId) return [];
+    const metricPoint = metricPointLookup.get(
+      toSessionKey(summary.workoutId, summary.workoutExerciseId)
+    );
+    if (!metricPoint) return [];
+
+    return [
+      {
+        ...metricPoint,
+        variant: summary.dominantBucketId,
+      },
+    ];
+  });
+}
+
+function buildPlateauZoneOverlay(
+  metricPoints: SessionDataPoint[]
+): Extract<ExerciseAnalyticsChartOverlay, { kind: "zone" }> | null {
+  const chronologicalPoints = [...metricPoints].sort((a, b) => a.date - b.date);
+  if (chronologicalPoints.length < 6) return null;
+
+  const candidateRanges: {
+    startDate: number;
+    endDate: number;
+    severity: "moderate" | "high";
+  }[] = [];
+
+  for (let index = 0; index <= chronologicalPoints.length - 6; index += 1) {
+    const windowPoints = chronologicalPoints.slice(index, index + 6);
+    const values = windowPoints.map((point) => point.value);
+    const baseline = Math.max(Math.abs(average(values) ?? 0), 1);
+    const normalizedSlope = Math.abs(computeTheilSenSlope(values) / baseline);
+    const stabilityScore = computeStabilityScore(values, baseline);
+
+    if (normalizedSlope > TREND_THRESHOLD * 0.5 || stabilityScore < 0.45) {
+      continue;
+    }
+
+    candidateRanges.push({
+      startDate: windowPoints[0].date,
+      endDate: windowPoints[windowPoints.length - 1].date,
+      severity: stabilityScore >= 0.72 ? "high" : "moderate",
+    });
+  }
+
+  if (candidateRanges.length === 0) return null;
+
+  const mergedRanges = candidateRanges.reduce<typeof candidateRanges>((ranges, range) => {
+    const previous = ranges[ranges.length - 1];
+    if (!previous || range.startDate > previous.endDate) {
+      ranges.push(range);
+      return ranges;
+    }
+
+    previous.endDate = Math.max(previous.endDate, range.endDate);
+    previous.severity =
+      previous.severity === "high" || range.severity === "high" ? "high" : "moderate";
+    return ranges;
+  }, []);
+
+  return {
+    overlayType: "plateauZones",
+    kind: "zone",
+    colorToken: "warning",
+    ranges: mergedRanges,
+  };
 }
 
 function buildSnapshot(
@@ -1195,14 +1509,14 @@ export function buildExerciseAnalyticsPerformanceProgress(
   };
 }
 
-function buildPRSummary(
+function buildPBSummary(
   dataset: ExerciseAnalyticsDataset,
   filteredSessions: ExerciseAnalyticsSession[],
   setScope: ExerciseAnalyticsSetScope,
   dateRange?: DateRange
-): ExerciseAnalyticsPRSummary {
+): ExerciseAnalyticsPBSummary {
   const setLookup = buildSetLookup(dataset.sessions);
-  const scopedEvents = [...dataset.prEvents]
+  const scopedEvents = [...dataset.pbEvents]
     .filter((event) => {
       const sourceSet = setLookup.get(event.setId);
       if (!sourceSet) return false;
@@ -1215,7 +1529,7 @@ function buildPRSummary(
       return b.id - a.id;
     });
 
-  const currentByType = new Map<string, PREvent>();
+  const currentByType = new Map<string, PBEvent>();
   for (const event of scopedEvents) {
     if (!currentByType.has(event.type)) {
       currentByType.set(event.type, event);
@@ -1226,13 +1540,13 @@ function buildPRSummary(
   const visibleSessionKeys = new Set(
     filteredSessions.map((session) => toSessionKey(session.workoutId, session.workoutExerciseId))
   );
-  const prSessionKeys = new Set<string>();
+  const pbSessionKeys = new Set<string>();
 
   for (const event of rangedEvents) {
     const sourceSet = setLookup.get(event.setId);
     if (!sourceSet) continue;
     if (!visibleSessionKeys.has(sourceSet.sessionKey)) continue;
-    prSessionKeys.add(sourceSet.sessionKey);
+    pbSessionKeys.add(sourceSet.sessionKey);
   }
 
   return {
@@ -1240,9 +1554,9 @@ function buildPRSummary(
       targetReps,
       weightKg: currentByType.get(toRepMaxType(targetReps))?.metricValue ?? null,
     })),
-    lastPrDate: scopedEvents[0]?.occurredAt ?? null,
-    prSessionsInRange: prSessionKeys.size,
-    newPrEventsInRange: rangedEvents.length,
+    lastPbDate: scopedEvents[0]?.occurredAt ?? null,
+    pbSessionsInRange: pbSessionKeys.size,
+    newPbEventsInRange: rangedEvents.length,
   };
 }
 
@@ -1495,7 +1809,7 @@ export function buildExerciseAnalyticsOverview(
     snapshot: buildSnapshot(filteredSessions, metricPoints, now),
     metricTrend: buildProgress(metricPoints),
     performanceProgress: buildExerciseAnalyticsPerformanceProgress(performanceFacts, formula),
-    prs: buildPRSummary(dataset, filteredSessions, setScope, options?.dateRange),
+    pbs: buildPBSummary(dataset, filteredSessions, setScope, options?.dateRange),
     consistency: buildConsistency(filteredSessions, options?.dateRange),
     repProfile: buildRepProfile(filteredSessions),
     estimatedRepMaxes: buildEstimatedRepMaxes(filteredSessions, formula),
@@ -1515,12 +1829,12 @@ export function getMetricDataPoints(
   return getMetricPointsFromSessions(filteredSessions, metric, formula);
 }
 
-export function getCurrentPRSessionKeysFromDataset(
+export function getCurrentPBSessionKeysFromDataset(
   dataset: ExerciseAnalyticsDataset,
   setScope: ExerciseAnalyticsSetScope = "all"
 ): Set<string> {
   const setLookup = buildSetLookup(dataset.sessions);
-  const scopedEvents = [...dataset.prEvents]
+  const scopedEvents = [...dataset.pbEvents]
     .filter((event) => {
       const sourceSet = setLookup.get(event.setId);
       if (!sourceSet) return false;
@@ -1545,6 +1859,220 @@ export function getCurrentPRSessionKeysFromDataset(
   }
 
   return keys;
+}
+
+export function getAvailableExerciseAnalyticsOverlays(
+  dataset: ExerciseAnalyticsDataset,
+  metric: ExerciseAnalyticsMetricType,
+  options?: ExerciseAnalyticsQueryOptions
+): ExerciseAnalyticsOverlayAvailability[] {
+  const formula = options?.formula ?? dataset.formula;
+  const setScope = options?.setScope ?? "all";
+  const filteredSessions = getFilteredSessions(dataset.sessions, {
+    dateRange: options?.dateRange,
+    setScope,
+  });
+  const metricPoints = getMetricPointsFromSessions(filteredSessions, metric, formula).sort(
+    (a, b) => a.date - b.date
+  );
+  const distinctWeeks = getDistinctWeekCount(metricPoints);
+  const hasVariance = standardDeviation(metricPoints.map((point) => point.value)) > 0;
+  const pbMarkerPoints = buildPBMarkerOverlayPoints(dataset, metricPoints, setScope);
+  const sessionSummaries = getPerformanceFactsSessionSummaries(filteredSessions, formula);
+  const repBucketPoints = buildRepBucketOverlayPoints(metricPoints, sessionSummaries);
+
+  return OVERLAY_ORDER.map((type) => {
+    switch (type) {
+      case "trendLine":
+        return {
+          type,
+          enabled: metricPoints.length >= 2,
+          reason: metricPoints.length >= 2 ? undefined : "Need 2 sessions in range",
+        };
+      case "ewma":
+        return {
+          type,
+          enabled: metricPoints.length >= 3,
+          reason: metricPoints.length >= 3 ? undefined : "Need 3 sessions in range",
+        };
+      case "robustTrend":
+      case "plateauZones":
+        return {
+          type,
+          enabled: metricPoints.length >= 6,
+          reason: metricPoints.length >= 6 ? undefined : "Need 6 sessions in range",
+        };
+      case "pbMarkers":
+        return {
+          type,
+          enabled: pbMarkerPoints.length > 0,
+          reason: pbMarkerPoints.length > 0 ? undefined : "No PB sessions in range",
+        };
+      case "weeklyBand":
+        return {
+          type,
+          enabled: distinctWeeks >= 4,
+          reason: distinctWeeks >= 4 ? undefined : "Need 4 weeks in range",
+        };
+      case "outliers":
+        return {
+          type,
+          enabled: metricPoints.length >= 6 && hasVariance,
+          reason:
+            metricPoints.length < 6
+              ? "Need 6 sessions in range"
+              : hasVariance
+                ? undefined
+                : "Need variation in range",
+        };
+      case "repBuckets":
+        return {
+          type,
+          enabled: REP_BUCKET_SUPPORTED_METRICS.has(metric) && repBucketPoints.length >= 4,
+          reason: !REP_BUCKET_SUPPORTED_METRICS.has(metric)
+            ? "Not available for this metric"
+            : repBucketPoints.length >= 4
+              ? undefined
+              : "Need 4 sessions in range",
+        };
+      default:
+        return {
+          type,
+          enabled: false,
+          reason: "Unavailable",
+        };
+    }
+  });
+}
+
+export function buildExerciseAnalyticsChartOverlays(
+  dataset: ExerciseAnalyticsDataset,
+  metric: ExerciseAnalyticsMetricType,
+  options?: ExerciseAnalyticsOverlayQueryOptions
+): ExerciseAnalyticsChartOverlay[] {
+  const formula = options?.formula ?? dataset.formula;
+  const setScope = options?.setScope ?? "all";
+  const filteredSessions = getFilteredSessions(dataset.sessions, {
+    dateRange: options?.dateRange,
+    setScope,
+  });
+  const metricPoints = getMetricPointsFromSessions(filteredSessions, metric, formula).sort(
+    (a, b) => a.date - b.date
+  );
+  const availability = new Map(
+    getAvailableExerciseAnalyticsOverlays(dataset, metric, options).map((entry) => [
+      entry.type,
+      entry,
+    ])
+  );
+  const sessionSummaries = getPerformanceFactsSessionSummaries(filteredSessions, formula);
+  const selectedOverlayTypes =
+    options && "selectedOverlays" in options && options.selectedOverlays
+      ? options.selectedOverlays
+      : OVERLAY_ORDER;
+
+  const overlays: ExerciseAnalyticsChartOverlay[] = [];
+
+  for (const overlayType of selectedOverlayTypes) {
+    if (!availability.get(overlayType)?.enabled) continue;
+
+    switch (overlayType) {
+      case "trendLine": {
+        const points = computeTrendLine(metricPoints, 5);
+        if (points.length > 0) {
+          overlays.push({
+            overlayType,
+            kind: "line",
+            colorToken: "muted",
+            style: "dashed",
+            points,
+          });
+        }
+        break;
+      }
+      case "ewma": {
+        const points = buildEwmaPoints(metricPoints);
+        if (points.length > 0) {
+          overlays.push({
+            overlayType,
+            kind: "line",
+            colorToken: "secondary",
+            style: "solid",
+            points,
+          });
+        }
+        break;
+      }
+      case "robustTrend": {
+        const points = buildRobustTrendPoints(metricPoints);
+        if (points.length > 0) {
+          overlays.push({
+            overlayType,
+            kind: "line",
+            colorToken: "success",
+            style: "dashed",
+            points,
+          });
+        }
+        break;
+      }
+      case "pbMarkers": {
+        const points = buildPBMarkerOverlayPoints(dataset, metricPoints, setScope).map((point) => ({
+          ...point,
+          variant: "pb" as const,
+        }));
+        if (points.length > 0) {
+          overlays.push({
+            overlayType,
+            kind: "marker",
+            colorToken: "gold",
+            points,
+          });
+        }
+        break;
+      }
+      case "plateauZones": {
+        const zoneOverlay = buildPlateauZoneOverlay(metricPoints);
+        if (zoneOverlay && zoneOverlay.ranges.length > 0) {
+          overlays.push(zoneOverlay);
+        }
+        break;
+      }
+      case "weeklyBand": {
+        const bandOverlay = buildWeeklyBandOverlay(metricPoints, metric);
+        if (bandOverlay && bandOverlay.points.length > 0) {
+          overlays.push(bandOverlay);
+        }
+        break;
+      }
+      case "outliers": {
+        const points = buildOutlierOverlayPoints(metricPoints);
+        if (points.length > 0) {
+          overlays.push({
+            overlayType,
+            kind: "marker",
+            colorToken: "warning",
+            points,
+          });
+        }
+        break;
+      }
+      case "repBuckets": {
+        const points = buildRepBucketOverlayPoints(metricPoints, sessionSummaries);
+        if (points.length > 0) {
+          overlays.push({
+            overlayType,
+            kind: "marker",
+            colorToken: "primary",
+            points,
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  return overlays;
 }
 
 export async function getExerciseAnalyticsDataset(
@@ -1593,7 +2121,7 @@ export async function getExerciseAnalyticsDataset(
     exerciseId,
     formula: resolveFormulaForExercise(exerciseId, formula),
     sessions,
-    prEvents: await getPREventsForExercise(exerciseId),
+    pbEvents: await getPBEventsForExercise(exerciseId),
   };
 }
 

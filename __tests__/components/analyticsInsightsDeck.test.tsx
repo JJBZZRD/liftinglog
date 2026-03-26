@@ -33,8 +33,8 @@ jest.mock("../../lib/db/introspection", () => ({
   hasColumn: jest.fn(() => true),
 }));
 
-jest.mock("../../lib/db/prEvents", () => ({
-  getPREventsForExercise: jest.fn(async () => []),
+jest.mock("../../lib/db/pbEvents", () => ({
+  getPBEventsForExercise: jest.fn(async () => []),
 }));
 
 jest.mock("../../lib/db/settings", () => ({
@@ -87,6 +87,15 @@ jest.mock("react-native-reanimated", () => {
   };
 });
 
+jest.mock("react-native-animated-dots-carousel", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  return React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) =>
+    React.createElement(View, { ref, ...props })
+  );
+});
+
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import AnalyticsInsightsDeck from "../../components/charts/AnalyticsInsightsDeck";
@@ -100,13 +109,8 @@ function getOverview() {
   });
 }
 
-function getStyleValue(style: unknown, key: string): unknown {
-  if (!style || typeof style !== "object") return undefined;
-  return (style as Record<string, unknown>)[key];
-}
-
 describe("AnalyticsInsightsDeck", () => {
-  it("renders the six analytics cards in the expected order", () => {
+  it("renders the seven analytics cards in the expected order", () => {
     let renderer: any;
     act(() => {
       renderer = TestRenderer.create(
@@ -135,7 +139,7 @@ describe("AnalyticsInsightsDeck", () => {
       "analytics-card-performance-progress",
       "analytics-card-snapshot",
       "analytics-card-metric-trend",
-      "analytics-card-prs",
+      "analytics-card-pbs",
       "analytics-card-consistency",
       "analytics-card-rep-profile",
     ]);
@@ -157,14 +161,10 @@ describe("AnalyticsInsightsDeck", () => {
       testID: "analytics-insights-scroll",
     });
 
-    const getDotWidth = (index: number) =>
-      getStyleValue(
-        renderer!.root.findByProps({ testID: `analytics-dot-${index}` }).props.style,
-        "width"
-      );
+    const getCurrentIndex = () =>
+      renderer!.root.findByProps({ testID: "analytics-dots-carousel" }).props.currentIndex;
 
-    expect(getDotWidth(0)).toBe(18);
-    expect(getDotWidth(1)).toBe(8);
+    expect(getCurrentIndex()).toBe(0);
 
     act(() => {
       scrollView.props.onMomentumScrollEnd({
@@ -176,7 +176,32 @@ describe("AnalyticsInsightsDeck", () => {
       });
     });
 
-    expect(getDotWidth(0)).toBe(8);
-    expect(getDotWidth(1)).toBe(18);
+    expect(getCurrentIndex()).toBe(1);
+  });
+
+  it("allows the page control to jump between cards", () => {
+    let renderer: any;
+    act(() => {
+      renderer = TestRenderer.create(
+        <AnalyticsInsightsDeck
+          overview={getOverview()}
+          selectedMetric="maxWeight"
+          selectedMetricLabel="Max Weight Per Session"
+        />
+      );
+    });
+
+    const dotsCarousel = renderer!.root.findByProps({
+      testID: "analytics-dots-carousel",
+    });
+
+    act(() => {
+      dotsCarousel.props.scrollableDotsConfig.setIndex(6);
+      dotsCarousel.props.scrollableDotsConfig.onNewIndex(6);
+    });
+
+    expect(
+      renderer!.root.findByProps({ testID: "analytics-dots-carousel" }).props.currentIndex
+    ).toBe(6);
   });
 });

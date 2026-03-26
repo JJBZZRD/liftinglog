@@ -1,48 +1,48 @@
-# PR Events & Analytics Visualization
+# PB Events & Analytics Visualization
 
 **Date:** 2026-01-06
 
 ## Summary
 
-Added Personal Record (PR) tracking for rep maxes and implemented an analytics visualization tab for exercise progress tracking.
+Added Personal Best (PB) tracking for rep maxes and implemented an analytics visualization tab for exercise progress tracking.
 
 ## Changes
 
 ### New Files
 
-- `lib/db/prEvents.ts` - Database operations for PR events (record, query, delete)
-- `lib/pr/detection.ts` - PR detection logic for rep maxes (1RM, 2RM, etc.)
+- `lib/db/pbEvents.ts` - Database operations for PB events (record, query, delete)
+- `lib/pb/detection.ts` - PB detection logic for rep maxes (1RM, 2RM, etc.)
 - `lib/utils/analytics.ts` - Analytics functions for chart data aggregation
 
 ### Database Schema Updates
 
 **`lib/db/connection.ts`:**
 - Commented out `best_lifts` table (reserved for future optimization)
-- Added index `idx_sets_exercise_reps` on `sets(exercise_id, reps)` for PR queries
+- Added index `idx_sets_exercise_reps` on `sets(exercise_id, reps)` for PB queries
 
 **`lib/db/schema.ts`:**
-- Added `prEvents` table schema definition for Drizzle ORM
-- Added `PREventRow` type export
+- Added `pbEvents` table schema definition for Drizzle ORM
+- Added `PBEventRow` type export
 
 ### Theme Updates
 
 **`lib/theme/colors.ts`:**
-- Added `prGold` color for both light (#FFD700) and dark (#B8860B) themes
+- Added `pbGold` color for both light (#FFD700) and dark (#B8860B) themes
 
 ### Component Updates
 
 **`components/lists/SetItem.tsx`:**
-- Added optional `prBadge` prop for displaying PR badges
-- Added PR badge styling (gold background, compact design)
+- Added optional `pbBadge` prop for displaying PB badges
+- Added PB badge styling (gold background, compact design)
 
 **`app/exercise/tabs/RecordTab.tsx`:**
-- Integrated PR detection after adding new sets
-- Calls `detectAndRecordPRs()` when a set is successfully saved
+- Integrated PB detection after adding new sets
+- Calls `detectAndRecordPBs()` when a set is successfully saved
 
 **`app/exercise/tabs/HistoryTab.tsx`:**
-- Fetches PR events for displayed sets
-- Uses `SetItem` component with `prBadge` prop for consistent styling
-- PR badges (e.g., "1RM", "5RM") display on sets that achieved a new record
+- Fetches PB events for displayed sets
+- Uses `SetItem` component with `pbBadge` prop for consistent styling
+- PB badges (e.g., "1RM", "5RM") display on sets that achieved a new record
 
 **`app/exercise/tabs/VisualisationTab.tsx`:**
 - Full implementation of interactive analytics chart
@@ -83,11 +83,11 @@ Added Personal Record (PR) tracking for rep maxes and implemented an analytics v
 ### Index Updates
 
 **`lib/db/index.ts`:**
-- Added export for `prEvents` module
+- Added export for `pbEvents` module
 
-## PR Detection Logic
+## PB Detection Logic
 
-PR events are recorded for "rep maxes":
+PB events are recorded for "rep maxes":
 - A **1RM** is the heaviest weight lifted for exactly 1 rep
 - A **5RM** is the heaviest weight lifted for exactly 5 reps
 - etc.
@@ -95,7 +95,7 @@ PR events are recorded for "rep maxes":
 When a new set is added, the system:
 1. Queries all previous sets for the same exercise and rep count
 2. Compares the new weight against the historical best
-3. If the new weight exceeds the previous best, records a PR event
+3. If the new weight exceeds the previous best, records a PB event
 
 ## Dependencies
 

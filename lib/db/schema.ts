@@ -68,7 +68,7 @@ export const sets = sqliteTable("sets", {
   performedAt: integer("performed_at"),
 });
 
-export const prEvents = sqliteTable("pr_events", {
+export const pbEvents = sqliteTable("pr_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   uid: text("uid"),
   setId: integer("set_id").notNull(),
@@ -173,7 +173,7 @@ export type ExerciseRow = typeof exercises.$inferSelect;
 export type WorkoutRow = typeof workouts.$inferSelect;
 export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
 export type SetRow = typeof sets.$inferSelect;
-export type PREventRow = typeof prEvents.$inferSelect;
+export type PBEventRow = typeof pbEvents.$inferSelect;
 export type MediaRow = typeof media.$inferSelect;
 export type ExerciseFormulaOverrideRow = typeof exerciseFormulaOverrides.$inferSelect;
 export type PslProgramRow = typeof pslPrograms.$inferSelect;

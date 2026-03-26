@@ -6,7 +6,7 @@
  * - Pan when zoomed (shifts visible date range)
  * - Fixed Y-axis during pan
  * - Touch-and-drag scrubbing to open details
- * - Optional trend line overlay
+ * - Optional analytics overlays
  * - Fullscreen button
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -14,13 +14,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
-import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "../../lib/theme/ThemeContext";
-import type { SessionDataPoint } from "../../lib/utils/analytics";
+import type {
+  ExerciseAnalyticsBucketId,
+  ExerciseAnalyticsChartOverlay,
+  SessionDataPoint,
+} from "../../lib/utils/analytics";
 
 interface AnalyticsChartProps {
   data: SessionDataPoint[];
-  trendLineData?: SessionDataPoint[];
+  overlays?: ExerciseAnalyticsChartOverlay[];
   width?: number;
   height?: number;
   unit: string;
@@ -32,8 +36,6 @@ interface AnalyticsChartProps {
   onGestureEnd?: () => void;
   /** Point to highlight (e.g., when tapped) */
   selectedPoint?: SessionDataPoint | null;
-  /** Sessions to highlight as PR sessions (see lib/db/prEvents) */
-  prSessionKeys?: ReadonlySet<string>;
 }
 
 type RenderDataPoint = SessionDataPoint & {
@@ -41,7 +43,27 @@ type RenderDataPoint = SessionDataPoint & {
   y: number;
   index: number;
   isInVisibleRange: boolean;
-  isPRSession: boolean;
+};
+
+type RenderMarkerPoint = SessionDataPoint & {
+  x: number;
+  y: number;
+  variant: "pb" | "positive" | "negative" | ExerciseAnalyticsBucketId;
+};
+
+type RenderBandPoint = {
+  x: number;
+  centerY: number;
+  lowerY: number;
+  upperY: number;
+};
+
+type RenderZoneRange = {
+  startDate: number;
+  endDate: number;
+  startX: number;
+  endX: number;
+  severity: "moderate" | "high";
 };
 
 // Layout constants
@@ -64,9 +86,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // Interaction constants
 const DATA_POINT_RADIUS = 4;
 
+function withAlpha(color: string, alphaHex: string): string {
+  return `${color}${alphaHex}`;
+}
+
 export default function AnalyticsChart({
   data,
-  trendLineData,
+  overlays = [],
   width: propWidth,
   height = 250,
   unit,
@@ -75,7 +101,6 @@ export default function AnalyticsChart({
   onGestureStart,
   onGestureEnd,
   selectedPoint,
-  prSessionKeys,
 }: AnalyticsChartProps) {
   const { rawColors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -83,6 +108,25 @@ export default function AnalyticsChart({
   const chartWidth = containerWidth - Y_AXIS_WIDTH - PADDING_RIGHT;
   const plotWidth = chartWidth - PLOT_PADDING_X * 2; // Usable area for data points
   const chartHeight = height - X_AXIS_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+
+  const overlayColors = useMemo(
+    () => ({
+      primary: rawColors.primary,
+      secondary: rawColors.foregroundSecondary,
+      muted: rawColors.foregroundMuted,
+      success: rawColors.success,
+      destructive: rawColors.destructive,
+      warning: rawColors.warning,
+      gold: rawColors.pbGold,
+      bucket: {
+        "1-3": rawColors.primary,
+        "4-6": rawColors.success,
+        "7-9": rawColors.warning,
+        "10-12+": rawColors.foregroundSecondary,
+      } satisfies Record<ExerciseAnalyticsBucketId, string>,
+    }),
+    [rawColors]
+  );
 
   // Data is expected to arrive already sorted from AnalyticsTab
   // But ensure it's sorted just in case
@@ -194,22 +238,96 @@ export default function AnalyticsChart({
         index,
         // Track if point is within visible range (for hit testing)
         isInVisibleRange: point.date >= visibleStart && point.date <= visibleEnd,
-        isPRSession: prSessionKeys?.has(`${point.workoutId}:${point.workoutExerciseId ?? "null"}`) ?? false,
       }));
-  }, [sortedData, visibleStart, visibleEnd, dateToX, valueToY, prSessionKeys]);
+  }, [sortedData, visibleStart, visibleEnd, dateToX, valueToY]);
 
-  // Calculate trend line points
-  const visibleTrendPoints = useMemo(() => {
-    if (!trendLineData || trendLineData.length === 0) return [];
-    const buffer = (visibleEnd - visibleStart) * 0.1;
-    return trendLineData
-      .filter((p) => p.date >= visibleStart - buffer && p.date <= visibleEnd + buffer)
-      .map((point) => ({
-        ...point,
-        x: dateToX(point.date),
-        y: valueToY(point.value),
-      }));
-  }, [trendLineData, visibleStart, visibleEnd, dateToX, valueToY]);
+  const lineOverlays = useMemo(
+    () =>
+      overlays
+        .filter((overlay): overlay is Extract<ExerciseAnalyticsChartOverlay, { kind: "line" }> => overlay.kind === "line")
+        .map((overlay) => {
+          const buffer = (visibleEnd - visibleStart) * 0.1;
+          const renderPoints = overlay.points
+            .filter((point) => point.date >= visibleStart - buffer && point.date <= visibleEnd + buffer)
+            .map((point) => ({
+              ...point,
+              x: dateToX(point.date),
+              y: valueToY(point.value),
+            }));
+
+          return {
+            ...overlay,
+            renderPoints,
+          };
+        }),
+    [overlays, visibleEnd, visibleStart, dateToX, valueToY]
+  );
+
+  const bandOverlays = useMemo(
+    () =>
+      overlays
+        .filter((overlay): overlay is Extract<ExerciseAnalyticsChartOverlay, { kind: "band" }> => overlay.kind === "band")
+        .map((overlay) => {
+          const buffer = (visibleEnd - visibleStart) * 0.1;
+          const renderPoints: RenderBandPoint[] = overlay.points
+            .filter((point) => point.date >= visibleStart - buffer && point.date <= visibleEnd + buffer)
+            .map((point) => ({
+              x: dateToX(point.date),
+              centerY: valueToY(point.center),
+              lowerY: valueToY(point.lower),
+              upperY: valueToY(point.upper),
+            }));
+
+          return {
+            ...overlay,
+            renderPoints,
+          };
+        }),
+    [overlays, visibleEnd, visibleStart, dateToX, valueToY]
+  );
+
+  const zoneOverlays = useMemo(
+    () =>
+      overlays
+        .filter((overlay): overlay is Extract<ExerciseAnalyticsChartOverlay, { kind: "zone" }> => overlay.kind === "zone")
+        .map((overlay) => ({
+          ...overlay,
+          renderRanges: overlay.ranges.map<RenderZoneRange>((range) => ({
+            startDate: range.startDate,
+            endDate: range.endDate,
+            startX: dateToX(Math.max(range.startDate, visibleStart)),
+            endX: dateToX(Math.min(range.endDate, visibleEnd)),
+            severity: range.severity,
+          })),
+        })),
+    [overlays, visibleEnd, visibleStart, dateToX]
+  );
+
+  const markerOverlays = useMemo(
+    () =>
+      overlays
+        .filter((overlay): overlay is Extract<ExerciseAnalyticsChartOverlay, { kind: "marker" }> => overlay.kind === "marker")
+        .map((overlay) => {
+          const buffer = (visibleEnd - visibleStart) * 0.1;
+          const renderPoints: RenderMarkerPoint[] = overlay.points
+            .filter((point) => point.date >= visibleStart - buffer && point.date <= visibleEnd + buffer)
+            .map((point) => ({
+              ...point,
+              x: dateToX(point.date),
+              y: valueToY(point.value),
+            }));
+
+          return {
+            ...overlay,
+            renderPoints,
+          };
+        }),
+    [overlays, visibleEnd, visibleStart, dateToX, valueToY]
+  );
+
+  const repBucketLegendVisible = markerOverlays.some(
+    (overlay) => overlay.overlayType === "repBuckets" && overlay.renderPoints.length > 0
+  );
 
   // Create SVG path for data line
   const createLinePath = useCallback((points: { x: number; y: number }[]) => {
@@ -228,9 +346,13 @@ export default function AnalyticsChart({
     [createLinePath, renderDataPoints]
   );
 
-  const trendLinePath = useMemo(
-    () => createLinePath(visibleTrendPoints),
-    [createLinePath, visibleTrendPoints]
+  const lineOverlayPaths = useMemo(
+    () =>
+      lineOverlays.map((overlay) => ({
+        ...overlay,
+        path: createLinePath(overlay.renderPoints),
+      })),
+    [createLinePath, lineOverlays]
   );
 
   // Area path (for fill under line)
@@ -240,6 +362,40 @@ export default function AnalyticsChart({
     const lastX = renderDataPoints[renderDataPoints.length - 1].x;
     return `${linePath} L ${lastX} ${chartHeight} L ${firstX} ${chartHeight} Z`;
   }, [linePath, renderDataPoints, chartHeight]);
+
+  const bandOverlayPaths = useMemo(
+    () =>
+      bandOverlays.map((overlay) => {
+        const upperPath = createLinePath(
+          overlay.renderPoints.map((point) => ({
+            x: point.x,
+            y: point.upperY,
+          }))
+        );
+        const lowerPoints = [...overlay.renderPoints]
+          .reverse()
+          .map((point) => ({
+            x: point.x,
+            y: point.lowerY,
+          }));
+        const lowerPath = createLinePath(lowerPoints);
+        const centerPath = createLinePath(
+          overlay.renderPoints.map((point) => ({
+            x: point.x,
+            y: point.centerY,
+          }))
+        );
+        const bandPath =
+          upperPath && lowerPath ? `${upperPath} ${lowerPath.replace(/^M/, "L")} Z` : "";
+
+        return {
+          ...overlay,
+          bandPath,
+          centerPath,
+        };
+      }),
+    [bandOverlays, createLinePath]
+  );
 
   const baseXAxisTickCount = useMemo(() => {
     const ticks = Math.floor(plotWidth / X_AXIS_MIN_LABEL_SPACING_PX) + 1;
@@ -656,26 +812,54 @@ export default function AnalyticsChart({
                     />
                   ))}
 
+                  {zoneOverlays.map((overlay) =>
+                    overlay.renderRanges
+                      .filter((range) => range.endX > range.startX)
+                      .map((range, index) => (
+                        <Rect
+                          key={`${overlay.overlayType}-${range.startDate}-${range.endDate}-${index}`}
+                          x={range.startX}
+                          y={PADDING_TOP}
+                          width={range.endX - range.startX}
+                          height={chartHeight}
+                          fill={withAlpha(
+                            overlayColors.warning,
+                            range.severity === "high" ? "22" : "16"
+                          )}
+                        />
+                      ))
+                  )}
+
+                  {bandOverlayPaths.map((overlay) => (
+                    <G key={overlay.overlayType}>
+                      {overlay.bandPath ? (
+                        <Path
+                          d={overlay.bandPath}
+                          fill={withAlpha(overlayColors.primary, "18")}
+                          opacity={0.7}
+                          transform={`translate(0, ${PADDING_TOP})`}
+                        />
+                      ) : null}
+                      {overlay.centerPath ? (
+                        <Path
+                          d={overlay.centerPath}
+                          fill="none"
+                          stroke={withAlpha(overlayColors.primary, "AA")}
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          strokeDasharray="4,4"
+                          transform={`translate(0, ${PADDING_TOP})`}
+                        />
+                      ) : null}
+                    </G>
+                  ))}
+
                   {/* Area fill */}
                   {areaPath && (
                     <Path
                       d={areaPath}
                       fill={rawColors.primaryLight}
                       opacity={0.4}
-                      transform={`translate(0, ${PADDING_TOP})`}
-                    />
-                  )}
-
-                  {/* Trend line (if provided) */}
-                  {trendLinePath && (
-                    <Path
-                      d={trendLinePath}
-                      fill="none"
-                      stroke={rawColors.foregroundSecondary}
-                      strokeWidth={2}
-                      strokeDasharray="6,4"
-                      strokeLinecap="round"
-                      opacity={0.7}
                       transform={`translate(0, ${PADDING_TOP})`}
                     />
                   )}
@@ -693,21 +877,27 @@ export default function AnalyticsChart({
                     />
                   )}
 
+                  {lineOverlayPaths.map((overlay) =>
+                    overlay.path ? (
+                      <Path
+                        key={overlay.overlayType}
+                        d={overlay.path}
+                        fill="none"
+                        stroke={overlayColors[overlay.colorToken]}
+                        strokeWidth={overlay.overlayType === "robustTrend" ? 2.5 : 2}
+                        strokeDasharray={overlay.style === "dashed" ? "6,4" : undefined}
+                        strokeLinecap="round"
+                        opacity={overlay.overlayType === "trendLine" ? 0.7 : 0.8}
+                        transform={`translate(0, ${PADDING_TOP})`}
+                      />
+                    ) : null
+                  )}
+
                   {/* Data points */}
                   {renderDataPoints.map((point) => (
                     <G
                       key={`${point.workoutId}-${point.workoutExerciseId ?? "null"}-${point.date}`}
                     >
-                      {point.isPRSession && (
-                        <Circle
-                          cx={point.x}
-                          cy={point.y + PADDING_TOP}
-                          r={DATA_POINT_RADIUS + 3}
-                          fill="none"
-                          stroke={rawColors.prGold}
-                          strokeWidth={2}
-                        />
-                      )}
                       <Circle
                         cx={point.x}
                         cy={point.y + PADDING_TOP}
@@ -716,6 +906,47 @@ export default function AnalyticsChart({
                         stroke={rawColors.surface}
                         strokeWidth={2}
                       />
+                    </G>
+                  ))}
+
+                  {markerOverlays.map((overlay) => (
+                    <G key={overlay.overlayType}>
+                      {overlay.renderPoints.map((point, index) => {
+                        if (overlay.overlayType === "repBuckets") {
+                          return (
+                            <Line
+                              key={`${overlay.overlayType}-${point.workoutId}-${point.date}-${index}`}
+                              x1={point.x - 4}
+                              y1={point.y + PADDING_TOP + 9}
+                              x2={point.x + 4}
+                              y2={point.y + PADDING_TOP + 9}
+                              stroke={overlayColors.bucket[point.variant as ExerciseAnalyticsBucketId]}
+                              strokeWidth={3}
+                              strokeLinecap="round"
+                            />
+                          );
+                        }
+
+                        const strokeColor =
+                          overlay.overlayType === "pbMarkers"
+                            ? overlayColors.gold
+                            : point.variant === "positive"
+                              ? overlayColors.success
+                              : overlayColors.destructive;
+
+                        return (
+                          <Circle
+                            key={`${overlay.overlayType}-${point.workoutId}-${point.date}-${index}`}
+                            cx={point.x}
+                            cy={point.y + PADDING_TOP}
+                            r={overlay.overlayType === "pbMarkers" ? DATA_POINT_RADIUS + 3 : DATA_POINT_RADIUS + 5}
+                            fill="none"
+                            stroke={strokeColor}
+                            strokeWidth={overlay.overlayType === "pbMarkers" ? 2 : 2.5}
+                            opacity={overlay.overlayType === "pbMarkers" ? 1 : 0.85}
+                          />
+                        );
+                      })}
                     </G>
                   ))}
 
@@ -756,6 +987,31 @@ export default function AnalyticsChart({
             </View>
           </GestureDetector>
         </View>
+
+        {repBucketLegendVisible && (
+          <View style={styles.legendRow}>
+            {(
+              [
+                ["1-3", "1-3"],
+                ["4-6", "4-6"],
+                ["7-9", "7-9"],
+                ["10-12+", "10-12+"],
+              ] as const
+            ).map(([bucketId, label]) => (
+              <View key={bucketId} style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendSwatch,
+                    { backgroundColor: overlayColors.bucket[bucketId] },
+                  ]}
+                />
+                <Text style={[styles.legendLabel, { color: rawColors.foregroundSecondary }]}>
+                  {label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Unit label */}
         <Text style={[styles.unitLabel, { color: rawColors.foregroundMuted }]}>
@@ -838,6 +1094,27 @@ const styles = StyleSheet.create({
   },
   xAxisContainer: {
     // Static positioning
+  },
+  legendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendSwatch: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   emptyContainer: {
     alignItems: "center",

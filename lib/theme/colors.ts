@@ -52,7 +52,7 @@ export interface ThemeColors {
   shadow: string;
   
   // Special
-  prGold: string;
+  pbGold: string;
 }
 
 // ============================================================
@@ -112,8 +112,8 @@ const defaultLightColors: ThemeColors = {
   // Shadows
   shadow: '#000000',
   
-  // PR badges
-  prGold: '#FFD700',
+  // PB badges
+  pbGold: '#FFD700',
 };
 
 const defaultDarkColors: ThemeColors = {
@@ -153,8 +153,8 @@ const defaultDarkColors: ThemeColors = {
   // Shadows
   shadow: '#000000',
   
-  // PR badges
-  prGold: '#B8860B',
+  // PB badges
+  pbGold: '#B8860B',
 };
 
 // ============================================================
@@ -190,7 +190,7 @@ const oceanLightColors: ThemeColors = {
   
   shadow: '#0D9488',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 const oceanDarkColors: ThemeColors = {
@@ -222,7 +222,7 @@ const oceanDarkColors: ThemeColors = {
   
   shadow: '#000000',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 // ============================================================
@@ -258,7 +258,7 @@ const forestLightColors: ThemeColors = {
   
   shadow: '#059669',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 const forestDarkColors: ThemeColors = {
@@ -290,7 +290,7 @@ const forestDarkColors: ThemeColors = {
   
   shadow: '#000000',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 // ============================================================
@@ -326,7 +326,7 @@ const sunsetLightColors: ThemeColors = {
   
   shadow: '#EA580C',
   
-  prGold: '#F59E0B',
+  pbGold: '#F59E0B',
 };
 
 const sunsetDarkColors: ThemeColors = {
@@ -358,7 +358,7 @@ const sunsetDarkColors: ThemeColors = {
   
   shadow: '#000000',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 // ============================================================
@@ -394,7 +394,7 @@ const roseLightColors: ThemeColors = {
   
   shadow: '#E11D48',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 const roseDarkColors: ThemeColors = {
@@ -426,7 +426,7 @@ const roseDarkColors: ThemeColors = {
   
   shadow: '#000000',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 // ============================================================
@@ -462,7 +462,7 @@ const violetLightColors: ThemeColors = {
   
   shadow: '#7C3AED',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 const violetDarkColors: ThemeColors = {
@@ -494,7 +494,7 @@ const violetDarkColors: ThemeColors = {
   
   shadow: '#000000',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 // ============================================================
@@ -530,7 +530,7 @@ const slateLightColors: ThemeColors = {
   
   shadow: '#475569',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 const slateDarkColors: ThemeColors = {
@@ -562,7 +562,7 @@ const slateDarkColors: ThemeColors = {
   
   shadow: '#000000',
   
-  prGold: '#FBBF24',
+  pbGold: '#FBBF24',
 };
 
 // ============================================================

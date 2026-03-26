@@ -30,7 +30,7 @@
     --color-overlay-dark: rgba(0, 0, 0, 0.5);
     --color-shadow: 0 0 0;
     
-    --color-pr-gold: 255 215 0;
+    --color-pb-gold: 255 215 0;
   }
 
   .dark {
@@ -60,6 +60,6 @@
     --color-overlay-dark: rgba(0, 0, 0, 0.7);
     --color-shadow: 0 0 0;
     
-    --color-pr-gold: 184 134 11;
+    --color-pb-gold: 184 134 11;
   }
 }

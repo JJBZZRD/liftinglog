@@ -1,6 +1,6 @@
-import { brzycki, computeE1rm, epley, lombardi, mayhew, oconner, wathan } from "../lib/pr";
+import { brzycki, computeE1rm, epley, lombardi, mayhew, oconner, wathan } from "../lib/pb";
 
-describe("PR formulas", () => {
+describe("PB formulas", () => {
   test("epley computes expected value", () => {
     expect(Math.round(epley(100, 5))).toBe(Math.round(100 * (1 + 5 / 30)));
   });
