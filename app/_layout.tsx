@@ -62,6 +62,14 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen
+          name="user-metrics"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
+          name="user-metric/[metric]"
+          options={{ presentation: "card" }}
+        />
+        <Stack.Screen
           name="programs/manage"
           options={{ presentation: "card" }}
         />

@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { getTotalPBCount } from "../../lib/db/pbEvents";
+import { getLatestUserMetricsSnapshot, type UserMetricsSnapshot } from "../../lib/db/userCheckins";
 import { getLastWorkoutDay, getQuickStats, type LastWorkoutDayResult, type QuickStats } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../../lib/utils/units";
@@ -15,20 +16,30 @@ export default function OverviewScreen() {
   const { unitPreference } = useUnitPreference();
   const [lastWorkout, setLastWorkout] = useState<LastWorkoutDayResult | null>(null);
   const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
+  const [userMetrics, setUserMetrics] = useState<UserMetricsSnapshot | null>(null);
   const [totalPRs, setTotalPRs] = useState(0);
   const [loading, setLoading] = useState(true);
   const weightUnitLabel = getWeightUnitLabel(unitPreference);
+  const cardShadowStyle = {
+    shadowColor: rawColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  } as const;
 
   const loadData = useCallback(async () => {
     try {
-      const [workoutResult, statsResult, prCount] = await Promise.all([
+      const [workoutResult, statsResult, prCount, metricsResult] = await Promise.all([
         getLastWorkoutDay(),
         getQuickStats(),
         getTotalPBCount(),
+        getLatestUserMetricsSnapshot(),
       ]);
       setLastWorkout(workoutResult);
       setQuickStats(statsResult);
       setTotalPRs(prCount);
+      setUserMetrics(metricsResult);
     } catch (error) {
       console.error("Error loading home data:", error);
     } finally {
@@ -62,12 +73,39 @@ export default function OverviewScreen() {
     });
   };
 
+  const formatMetricDate = (timestamp: number | null | undefined) => {
+    if (typeof timestamp !== "number") {
+      return "No date logged";
+    }
+    const date = new Date(timestamp);
+    const now = new Date();
+    const sameYear = date.getFullYear() === now.getFullYear();
+    return date.toLocaleDateString("en-US", sameYear
+      ? { month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const formatSleepDuration = (hoursValue: number | null | undefined) => {
+    if (typeof hoursValue !== "number" || !Number.isFinite(hoursValue)) {
+      return "--";
+    }
+
+    const totalMinutes = Math.max(0, Math.round(hoursValue * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  };
+
   const getAlphabetLetter = (index: number) => {
     return String.fromCharCode(65 + index); // A = 65
   };
 
   const handleWorkoutHistoryPress = () => {
     router.push("/workout-history");
+  };
+
+  const handleUserMetricsPress = () => {
+    router.push("/user-metrics");
   };
 
   // Convert timestamp to dayKey format (YYYY-MM-DD) for navigation
@@ -98,7 +136,7 @@ export default function OverviewScreen() {
         {/* Quick Stats */}
         <View
           className="rounded-2xl p-5 mb-4 bg-surface"
-          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          style={cardShadowStyle}
         >
           <Text className="text-lg font-semibold mb-4 text-foreground">
             Quick Stats
@@ -130,10 +168,108 @@ export default function OverviewScreen() {
           </View>
         </View>
 
+        {/* User Metrics */}
+        <View className="rounded-2xl p-5 mb-4 bg-surface" style={cardShadowStyle}>
+          <Pressable className="mb-4 flex-row items-center justify-between" onPress={handleUserMetricsPress}>
+            <View className="flex-1 pr-3">
+              <Text className="text-lg font-semibold text-foreground">
+                User Metrics
+              </Text>
+              <Text className="mt-1 text-xs text-foreground-secondary">
+                Latest bodyweight and recovery check-ins
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-3">
+              <View className="h-11 w-11 items-center justify-center rounded-full bg-primary-light">
+                <MaterialCommunityIcons name="account-heart-outline" size={22} color={rawColors.primary} />
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={rawColors.foregroundSecondary} />
+            </View>
+          </Pressable>
+
+          <View className="gap-3">
+            <View className="rounded-2xl border border-border-light bg-surface-secondary p-4">
+              <View className="flex-row items-start gap-3">
+                <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-light">
+                  <MaterialCommunityIcons name="scale-bathroom" size={24} color={rawColors.primary} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
+                    Bodyweight
+                  </Text>
+                  <Text
+                    className="mt-2 text-[30px] font-bold text-foreground"
+                    selectable
+                    style={{ fontVariant: ["tabular-nums"] }}
+                  >
+                    {formatWeightFromKg(userMetrics?.bodyweightKg?.value, unitPreference, {
+                      placeholder: "--",
+                      maximumFractionDigits: 1,
+                    })}
+                  </Text>
+                  <Text className="mt-1 text-xs text-foreground-muted" selectable>
+                    {userMetrics?.bodyweightKg
+                      ? `Recorded ${formatMetricDate(userMetrics.bodyweightKg.recordedAt)}`
+                      : "No weigh-in logged yet"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View className="flex-row gap-3">
+              <View className="flex-1 rounded-2xl border border-border-light bg-surface-secondary p-4">
+                <View className="h-10 w-10 items-center justify-center rounded-full bg-warning/15">
+                  <MaterialCommunityIcons name="sleep" size={20} color={rawColors.warning} />
+                </View>
+                <Text className="mt-3 text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
+                  Sleep
+                </Text>
+                <Text
+                  className="mt-2 text-xl font-bold text-foreground"
+                  numberOfLines={1}
+                  selectable
+                  style={{ fontVariant: ["tabular-nums"] }}
+                >
+                  {formatSleepDuration(userMetrics?.sleepHours?.value)}
+                </Text>
+                <Text className="mt-1 text-xs text-foreground-muted" selectable>
+                  {userMetrics?.sleepHours
+                    ? formatMetricDate(userMetrics.sleepHours.recordedAt)
+                    : "No sleep logged"}
+                </Text>
+              </View>
+
+              <View className="flex-1 rounded-2xl border border-border-light bg-surface-secondary p-4">
+                <View className="h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                  <MaterialCommunityIcons name="heart-pulse" size={20} color={rawColors.destructive} />
+                </View>
+                <Text className="mt-3 text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
+                  Resting HR
+                </Text>
+                <Text
+                  className="mt-2 text-xl font-bold text-foreground"
+                  numberOfLines={1}
+                  selectable
+                  style={{ fontVariant: ["tabular-nums"] }}
+                >
+                  {typeof userMetrics?.restingHrBpm?.value === "number"
+                    ? `${userMetrics.restingHrBpm.value} bpm`
+                    : "--"}
+                </Text>
+                <Text className="mt-1 text-xs text-foreground-muted" selectable>
+                  {userMetrics?.restingHrBpm
+                    ? formatMetricDate(userMetrics.restingHrBpm.recordedAt)
+                    : "No RHR logged"}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* Workout History */}
         <View
           className="rounded-2xl p-5 mb-4 bg-surface min-h-[400px] max-h-[700px] overflow-hidden"
-          style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          style={cardShadowStyle}
         >
           {/* Card Header */}
           <Pressable

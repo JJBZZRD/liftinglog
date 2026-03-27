@@ -4,6 +4,16 @@ import { userCheckins, type UserCheckinRow } from "./schema";
 import { newUid } from "../utils/uid";
 
 export type UserCheckin = UserCheckinRow;
+export type LatestUserMetric = {
+  value: number;
+  recordedAt: number;
+};
+
+export type UserMetricsSnapshot = {
+  bodyweightKg: LatestUserMetric | null;
+  sleepHours: LatestUserMetric | null;
+  restingHrBpm: LatestUserMetric | null;
+};
 
 export type UserCheckinInput = {
   recorded_at?: number | null;
@@ -67,6 +77,48 @@ export async function getLatestBodyweightKg(): Promise<number | null> {
   return rows[0]?.bodyweightKg ?? null;
 }
 
+export async function getLatestUserMetricsSnapshot(): Promise<UserMetricsSnapshot> {
+  const [bodyweightRows, sleepRows, restingHrRows] = await Promise.all([
+    db
+      .select({ value: userCheckins.bodyweightKg, recordedAt: userCheckins.recordedAt })
+      .from(userCheckins)
+      .where(isNotNull(userCheckins.bodyweightKg))
+      .orderBy(desc(userCheckins.recordedAt), desc(userCheckins.id))
+      .limit(1),
+    db
+      .select({ value: userCheckins.sleepHours, recordedAt: userCheckins.recordedAt })
+      .from(userCheckins)
+      .where(isNotNull(userCheckins.sleepHours))
+      .orderBy(desc(userCheckins.recordedAt), desc(userCheckins.id))
+      .limit(1),
+    db
+      .select({ value: userCheckins.restingHrBpm, recordedAt: userCheckins.recordedAt })
+      .from(userCheckins)
+      .where(isNotNull(userCheckins.restingHrBpm))
+      .orderBy(desc(userCheckins.recordedAt), desc(userCheckins.id))
+      .limit(1),
+  ]);
+
+  const bodyweightRow = bodyweightRows[0];
+  const sleepRow = sleepRows[0];
+  const restingHrRow = restingHrRows[0];
+
+  return {
+    bodyweightKg:
+      typeof bodyweightRow?.value === "number"
+        ? { value: bodyweightRow.value, recordedAt: bodyweightRow.recordedAt }
+        : null,
+    sleepHours:
+      typeof sleepRow?.value === "number"
+        ? { value: sleepRow.value, recordedAt: sleepRow.recordedAt }
+        : null,
+    restingHrBpm:
+      typeof restingHrRow?.value === "number"
+        ? { value: restingHrRow.value, recordedAt: restingHrRow.recordedAt }
+        : null,
+  };
+}
+
 export async function listUserCheckins(limit = 50, offset = 0): Promise<UserCheckin[]> {
   return db
     .select()
@@ -74,6 +126,13 @@ export async function listUserCheckins(limit = 50, offset = 0): Promise<UserChec
     .orderBy(desc(userCheckins.recordedAt), desc(userCheckins.id))
     .limit(limit)
     .offset(offset);
+}
+
+export async function listAllUserCheckins(): Promise<UserCheckin[]> {
+  return db
+    .select()
+    .from(userCheckins)
+    .orderBy(desc(userCheckins.recordedAt), desc(userCheckins.id));
 }
 
 export async function listUserCheckinsInRange(
