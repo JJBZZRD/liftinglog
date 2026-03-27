@@ -2,23 +2,35 @@
  * Test Data Seeder
  *
  * Creates test exercises with various training protocols:
- * - Test_531: 6 months of 5/3/1 style workouts (bench press)
- * - Test_Smolov: 3-week Smolov Jr cycle (squat)
+ * - Test_531: ongoing 5/3/1 style workouts (bench press)
+ * - Test_Smolov: repeated Smolov Jr cycles (squat)
  * - Test_Sheiko: Sheiko-style high volume training (deadlift)
- * - Test_Linear: Simple linear progression (overhead press)
+ * - Test_Linear: simple linear progression (overhead press)
  *
- * Only runs in __DEV__ mode and is idempotent.
+ * Only runs in __DEV__ mode and appends missing seeded history up to today.
  */
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "./connection";
 import { exercises, sets, workoutExercises, workouts } from "./schema";
 import { detectAndRecordPBs } from "../pb/detection";
 
-// Seed date: 6 months before "today"
-const REFERENCE_DATE = new Date("2026-01-08");
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const SIX_MONTHS_AGO = new Date(REFERENCE_DATE.getTime() - 180 * MS_PER_DAY);
-const THREE_MONTHS_AGO = new Date(REFERENCE_DATE.getTime() - 90 * MS_PER_DAY);
+function startOfLocalDay(date: Date): Date {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function addDays(date: Date, days: number): Date {
+  const value = new Date(date);
+  value.setDate(value.getDate() + days);
+  return value;
+}
+
+// Preserve the original seed anchors so reruns extend the same deterministic histories.
+const TODAY_START = startOfLocalDay(new Date());
+const SEED_END_EXCLUSIVE = addDays(TODAY_START, 1);
+const SIX_MONTHS_START = new Date(2025, 6, 12);
+const THREE_MONTHS_START = new Date(2025, 9, 10);
 
 // Deterministic pseudo-random number generator (Mulberry32)
 function createRng(seed: number) {
@@ -42,7 +54,7 @@ async function getOrCreateExercise(
   muscleGroup: string,
   equipment: string,
   createdAt: number
-): Promise<{ id: number; isNew: boolean }> {
+): Promise<number> {
   const existing = await db
     .select()
     .from(exercises)
@@ -50,17 +62,7 @@ async function getOrCreateExercise(
     .limit(1);
 
   if (existing.length > 0) {
-    // Check if we already have sets for this exercise
-    const existingSets = await db
-      .select()
-      .from(sets)
-      .where(eq(sets.exerciseId, existing[0].id))
-      .limit(1);
-
-    if (existingSets.length > 0) {
-      return { id: existing[0].id, isNew: false };
-    }
-    return { id: existing[0].id, isNew: true };
+    return existing[0].id;
   }
 
   const result = await db
@@ -75,7 +77,26 @@ async function getOrCreateExercise(
     })
     .run();
 
-  return { id: result.lastInsertRowId as number, isNew: true };
+  return result.lastInsertRowId as number;
+}
+
+async function getLatestSeededSetTime(exerciseId: number): Promise<number | null> {
+  const latestSet = await db
+    .select({ performedAt: sets.performedAt })
+    .from(sets)
+    .where(eq(sets.exerciseId, exerciseId))
+    .orderBy(desc(sets.performedAt), desc(sets.id))
+    .limit(1);
+
+  return latestSet[0]?.performedAt ?? null;
+}
+
+function shouldCreateSession(latestSeededTime: number | null, workoutTime: number): boolean {
+  return latestSeededTime === null || workoutTime > latestSeededTime;
+}
+
+function isSeededThroughToday(latestSeededTime: number | null): boolean {
+  return latestSeededTime !== null && latestSeededTime >= TODAY_START.getTime();
 }
 
 // Helper to create a workout session with sets
@@ -165,16 +186,17 @@ const WEEK_SETS_531: Record<WeekType531, Array<{ percent: number; reps: number; 
 };
 
 async function seed531Program(): Promise<void> {
-  const { id: exerciseId, isNew } = await getOrCreateExercise(
+  const exerciseId = await getOrCreateExercise(
     "Test_531",
-    "5/3/1 Bench Press - 6 months of classic Wendler programming",
+    "5/3/1 Bench Press - ongoing classic Wendler programming",
     "Chest",
     "Barbell",
-    SIX_MONTHS_AGO.getTime()
+    SIX_MONTHS_START.getTime()
   );
 
-  if (!isNew) {
-    console.log("[SeedTestData] Test_531 already seeded, skipping.");
+  const latestSeededTime = await getLatestSeededSetTime(exerciseId);
+  if (isSeededThroughToday(latestSeededTime)) {
+    console.log("[SeedTestData] Test_531 already reaches today, skipping.");
     return;
   }
 
@@ -185,11 +207,13 @@ async function seed531Program(): Promise<void> {
   const startingTM = 100;
   const tmIncrement = 2.5;
 
-  let currentDate = new Date(SIX_MONTHS_AGO);
+  let currentDate = new Date(SIX_MONTHS_START);
   while (currentDate.getDay() !== 1) currentDate.setDate(currentDate.getDate() + 1);
 
   let sessionCount = 0;
-  while (currentDate.getTime() < REFERENCE_DATE.getTime()) {
+  let insertedCount = 0;
+
+  while (currentDate.getTime() < SEED_END_EXCLUSIVE.getTime()) {
     const dayOfWeek = currentDate.getDay();
     if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
       if (rng() > 0.05) {
@@ -217,14 +241,17 @@ async function seed531Program(): Promise<void> {
           sessionSets.push({ weight: roundToNearest2_5(trainingMax * setDef.percent), reps });
         }
 
-        await createWorkoutSession(exerciseId, workoutTime, sessionSets);
+        if (shouldCreateSession(latestSeededTime, workoutTime)) {
+          await createWorkoutSession(exerciseId, workoutTime, sessionSets);
+          insertedCount++;
+        }
         sessionCount++;
       }
     }
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
-  console.log(`[SeedTestData] Test_531: ${sessionCount} sessions seeded.`);
+  console.log(`[SeedTestData] Test_531: ${insertedCount} sessions inserted.`);
 }
 
 // ============================================================================
@@ -256,16 +283,17 @@ const SMOLOV_WEEKS = [
 ];
 
 async function seedSmolovProgram(): Promise<void> {
-  const { id: exerciseId, isNew } = await getOrCreateExercise(
+  const exerciseId = await getOrCreateExercise(
     "Test_Smolov",
     "Smolov Jr Squat - High frequency/volume squat specialization",
     "Legs",
     "Barbell",
-    THREE_MONTHS_AGO.getTime()
+    THREE_MONTHS_START.getTime()
   );
 
-  if (!isNew) {
-    console.log("[SeedTestData] Test_Smolov already seeded, skipping.");
+  const latestSeededTime = await getLatestSeededSetTime(exerciseId);
+  if (isSeededThroughToday(latestSeededTime)) {
+    console.log("[SeedTestData] Test_Smolov already reaches today, skipping.");
     return;
   }
 
@@ -274,26 +302,26 @@ async function seedSmolovProgram(): Promise<void> {
   const rng = createRng(123);
   const starting1RM = 140; // Starting estimated 1RM
 
-  let currentDate = new Date(THREE_MONTHS_AGO);
+  let currentDate = new Date(THREE_MONTHS_START);
   while (currentDate.getDay() !== 1) currentDate.setDate(currentDate.getDate() + 1);
 
   let cycleCount = 0;
-  let sessionCount = 0;
+  let insertedCount = 0;
 
-  while (currentDate.getTime() < REFERENCE_DATE.getTime()) {
+  while (currentDate.getTime() < SEED_END_EXCLUSIVE.getTime()) {
     // Run a 3-week Smolov Jr cycle
     const cycle1RM = starting1RM + cycleCount * 10; // +10kg per cycle
 
-    for (let week = 0; week < 3 && currentDate.getTime() < REFERENCE_DATE.getTime(); week++) {
+    for (let week = 0; week < 3 && currentDate.getTime() < SEED_END_EXCLUSIVE.getTime(); week++) {
       const weekData = SMOLOV_WEEKS[week];
 
       for (const session of weekData) {
         // Find the correct day
-        while (currentDate.getDay() !== session.day && currentDate.getTime() < REFERENCE_DATE.getTime()) {
+        while (currentDate.getDay() !== session.day && currentDate.getTime() < SEED_END_EXCLUSIVE.getTime()) {
           currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        if (currentDate.getTime() >= REFERENCE_DATE.getTime()) break;
+        if (currentDate.getTime() >= SEED_END_EXCLUSIVE.getTime()) break;
 
         // Skip occasionally (3% chance)
         if (rng() < 0.03) {
@@ -319,8 +347,10 @@ async function seedSmolovProgram(): Promise<void> {
           sessionSets.push({ weight, reps: Math.max(1, actualReps) });
         }
 
-        await createWorkoutSession(exerciseId, workoutTime, sessionSets);
-        sessionCount++;
+        if (shouldCreateSession(latestSeededTime, workoutTime)) {
+          await createWorkoutSession(exerciseId, workoutTime, sessionSets);
+          insertedCount++;
+        }
         currentDate.setDate(currentDate.getDate() + 1);
       }
     }
@@ -330,7 +360,7 @@ async function seedSmolovProgram(): Promise<void> {
     cycleCount++;
   }
 
-  console.log(`[SeedTestData] Test_Smolov: ${sessionCount} sessions over ${cycleCount} cycles.`);
+  console.log(`[SeedTestData] Test_Smolov: ${insertedCount} sessions inserted over ${cycleCount} cycles.`);
 }
 
 // ============================================================================
@@ -372,16 +402,17 @@ const SHEIKO_SESSIONS = [
 ];
 
 async function seedSheikoProgram(): Promise<void> {
-  const { id: exerciseId, isNew } = await getOrCreateExercise(
+  const exerciseId = await getOrCreateExercise(
     "Test_Sheiko",
     "Sheiko-style Deadlift - High volume Russian powerlifting method",
     "Back",
     "Barbell",
-    SIX_MONTHS_AGO.getTime()
+    SIX_MONTHS_START.getTime()
   );
 
-  if (!isNew) {
-    console.log("[SeedTestData] Test_Sheiko already seeded, skipping.");
+  const latestSeededTime = await getLatestSeededSetTime(exerciseId);
+  if (isSeededThroughToday(latestSeededTime)) {
+    console.log("[SeedTestData] Test_Sheiko already reaches today, skipping.");
     return;
   }
 
@@ -391,23 +422,23 @@ async function seedSheikoProgram(): Promise<void> {
   const startingMax = 180;
   const weeklyIncrement = 1.25; // Slower progression
 
-  let currentDate = new Date(SIX_MONTHS_AGO);
+  let currentDate = new Date(SIX_MONTHS_START);
   while (currentDate.getDay() !== 1) currentDate.setDate(currentDate.getDate() + 1);
 
-  let sessionCount = 0;
   let weekCount = 0;
+  let insertedCount = 0;
 
-  while (currentDate.getTime() < REFERENCE_DATE.getTime()) {
+  while (currentDate.getTime() < SEED_END_EXCLUSIVE.getTime()) {
     // 4 sessions per week: Mon, Tue, Thu, Sat
     const sessionDays = [1, 2, 4, 6];
     const currentMax = startingMax + weekCount * weeklyIncrement;
 
-    for (let i = 0; i < sessionDays.length && currentDate.getTime() < REFERENCE_DATE.getTime(); i++) {
-      while (currentDate.getDay() !== sessionDays[i] && currentDate.getTime() < REFERENCE_DATE.getTime()) {
+    for (let i = 0; i < sessionDays.length && currentDate.getTime() < SEED_END_EXCLUSIVE.getTime(); i++) {
+      while (currentDate.getDay() !== sessionDays[i] && currentDate.getTime() < SEED_END_EXCLUSIVE.getTime()) {
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
-      if (currentDate.getTime() >= REFERENCE_DATE.getTime()) break;
+      if (currentDate.getTime() >= SEED_END_EXCLUSIVE.getTime()) break;
 
       // Skip occasionally (8% chance - life happens)
       if (rng() < 0.08) {
@@ -428,15 +459,17 @@ async function seedSheikoProgram(): Promise<void> {
         }
       }
 
-      await createWorkoutSession(exerciseId, workoutTime, sessionSets);
-      sessionCount++;
+      if (shouldCreateSession(latestSeededTime, workoutTime)) {
+        await createWorkoutSession(exerciseId, workoutTime, sessionSets);
+        insertedCount++;
+      }
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
     weekCount++;
   }
 
-  console.log(`[SeedTestData] Test_Sheiko: ${sessionCount} sessions over ${weekCount} weeks.`);
+  console.log(`[SeedTestData] Test_Sheiko: ${insertedCount} sessions inserted over ${weekCount} weeks.`);
 }
 
 // ============================================================================
@@ -444,16 +477,17 @@ async function seedSheikoProgram(): Promise<void> {
 // ============================================================================
 
 async function seedLinearProgram(): Promise<void> {
-  const { id: exerciseId, isNew } = await getOrCreateExercise(
+  const exerciseId = await getOrCreateExercise(
     "Test_Linear",
     "Linear Progression OHP - Simple 3x5 with 2.5kg weekly increases",
     "Shoulders",
     "Barbell",
-    SIX_MONTHS_AGO.getTime()
+    SIX_MONTHS_START.getTime()
   );
 
-  if (!isNew) {
-    console.log("[SeedTestData] Test_Linear already seeded, skipping.");
+  const latestSeededTime = await getLatestSeededSetTime(exerciseId);
+  if (isSeededThroughToday(latestSeededTime)) {
+    console.log("[SeedTestData] Test_Linear already reaches today, skipping.");
     return;
   }
 
@@ -463,13 +497,14 @@ async function seedLinearProgram(): Promise<void> {
   let currentWeight = 40; // Starting weight
   const targetWeight = 70; // Realistic 6-month goal
 
-  let currentDate = new Date(SIX_MONTHS_AGO);
+  let currentDate = new Date(SIX_MONTHS_START);
   while (currentDate.getDay() !== 1) currentDate.setDate(currentDate.getDate() + 1);
 
   let sessionCount = 0;
   let failedAttempts = 0;
+  let insertedCount = 0;
 
-  while (currentDate.getTime() < REFERENCE_DATE.getTime()) {
+  while (currentDate.getTime() < SEED_END_EXCLUSIVE.getTime()) {
     const dayOfWeek = currentDate.getDay();
     // Train Mon/Wed/Fri
     if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
@@ -504,7 +539,10 @@ async function seedLinearProgram(): Promise<void> {
         sessionSets.push({ weight: currentWeight, reps, note });
       }
 
-      await createWorkoutSession(exerciseId, workoutTime, sessionSets);
+      if (shouldCreateSession(latestSeededTime, workoutTime)) {
+        await createWorkoutSession(exerciseId, workoutTime, sessionSets);
+        insertedCount++;
+      }
       sessionCount++;
 
       // Progress logic: increase every successful session, deload after 3 fails
@@ -519,7 +557,7 @@ async function seedLinearProgram(): Promise<void> {
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
-  console.log(`[SeedTestData] Test_Linear: ${sessionCount} sessions, final weight ${currentWeight}kg.`);
+  console.log(`[SeedTestData] Test_Linear: ${insertedCount} sessions inserted, final weight ${currentWeight}kg.`);
 }
 
 // ============================================================================
@@ -528,7 +566,7 @@ async function seedLinearProgram(): Promise<void> {
 
 /**
  * Seed all test data exercises if in development mode
- * Idempotent: will not duplicate data on subsequent calls
+ * Safe to rerun: appends any missing seeded sessions up to today
  */
 export async function seedTestDataExercise(): Promise<void> {
   if (!__DEV__) {
