@@ -211,7 +211,7 @@ These rules are mandatory.
 
 15. `program_calendar*` rows are materialized schedule rows and can be deleted/rebuilt when a program is rescheduled or reactivated.
 16. Because of that, durable logged history must live in the main history tables, not only in `program_calendar*`.
-17. Backup/import merges the durable history tables plus `media`, then rebuilds `pr_events` from the merged `sets`. Program tables are not merged.
+17. Backup/import merges the durable history tables plus `media` and standalone durable user-data tables such as `user_checkins`, then rebuilds `pr_events` from the merged `sets`. Program tables are not merged.
 
 ## 6. Foreign Keys vs Soft Links
 

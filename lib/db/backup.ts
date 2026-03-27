@@ -27,6 +27,7 @@ const SQLITE_HEADER = "SQLite format 3";
 
 /** Merge result returned after import */
 export interface MergeResult {
+  userCheckins: { inserted: number; updated: number };
   exercises: { inserted: number; updated: number };
   workouts: { inserted: number; updated: number };
   workoutExercises: { inserted: number; updated: number };
@@ -364,6 +365,23 @@ interface BackupExercise {
   is_pinned: number;
 }
 
+interface BackupUserCheckin {
+  id: number;
+  uid: string | null;
+  recorded_at: number | null;
+  context: string | null;
+  bodyweight_kg: number | null;
+  waist_cm: number | null;
+  sleep_hours: number | null;
+  resting_hr_bpm: number | null;
+  readiness_score: number | null;
+  soreness_score: number | null;
+  stress_score: number | null;
+  steps: number | null;
+  note: string | null;
+  source: string | null;
+}
+
 interface BackupWorkout {
   id: number;
   uid: string | null;
@@ -430,6 +448,21 @@ interface LiveSetCandidate {
   note: string | null;
   superset_group_id: string | null;
   performed_at: number | null;
+}
+
+interface LiveUserCheckinCandidate {
+  id: number;
+  context: string | null;
+  bodyweight_kg: number | null;
+  waist_cm: number | null;
+  sleep_hours: number | null;
+  resting_hr_bpm: number | null;
+  readiness_score: number | null;
+  soreness_score: number | null;
+  stress_score: number | null;
+  steps: number | null;
+  note: string | null;
+  source: string | null;
 }
 
 interface BackupMedia {
@@ -622,6 +655,53 @@ function findExistingSetId(
       workout_exercise_id: liveWorkoutExerciseId,
     },
     candidates
+  );
+}
+
+function findExistingUserCheckinId(backupUid: string, row: BackupUserCheckin): number | null {
+  const directRows = queryLiveRows<{ id: number }>(
+    `SELECT id FROM user_checkins WHERE uid = ${sqlLiteral(backupUid)} LIMIT 1;`
+  );
+  if (directRows[0]?.id) {
+    return directRows[0].id;
+  }
+
+  if (row.recorded_at === null) {
+    return null;
+  }
+
+  const candidates = queryLiveRows<LiveUserCheckinCandidate>(`
+    SELECT
+      id,
+      context,
+      bodyweight_kg,
+      waist_cm,
+      sleep_hours,
+      resting_hr_bpm,
+      readiness_score,
+      soreness_score,
+      stress_score,
+      steps,
+      note,
+      source
+    FROM user_checkins
+    WHERE recorded_at = ${sqlLiteral(row.recorded_at)};
+  `);
+
+  return (
+    candidates.find((candidate) =>
+      candidate.context === row.context &&
+      candidate.bodyweight_kg === row.bodyweight_kg &&
+      candidate.waist_cm === row.waist_cm &&
+      candidate.sleep_hours === row.sleep_hours &&
+      candidate.resting_hr_bpm === row.resting_hr_bpm &&
+      candidate.readiness_score === row.readiness_score &&
+      candidate.soreness_score === row.soreness_score &&
+      candidate.stress_score === row.stress_score &&
+      candidate.steps === row.steps &&
+      candidate.note === row.note &&
+      candidate.source === row.source
+    )?.id ?? null
   );
 }
 
@@ -1075,6 +1155,100 @@ function mergeSets(
   return { inserted, updated };
 }
 
+function mergeUserCheckins(
+  backupDb: SQLiteDatabase
+): { inserted: number; updated: number } {
+  const columns = [
+    "id",
+    "uid",
+    "recorded_at",
+    "context",
+    "bodyweight_kg",
+    "waist_cm",
+    "sleep_hours",
+    "resting_hr_bpm",
+    "readiness_score",
+    "soreness_score",
+    "stress_score",
+    "steps",
+    "note",
+    "source",
+  ];
+  const rows = readBackupTable<BackupUserCheckin>(backupDb, "user_checkins", columns);
+
+  let inserted = 0;
+  let updated = 0;
+
+  for (const row of rows) {
+    if (row.recorded_at === null) {
+      if (__DEV__) {
+        console.warn(`${LOG_PREFIX} Skipping user_checkin ${row.id}: missing recorded_at`);
+      }
+      continue;
+    }
+
+    const backupUid = row.uid || newUid();
+    const liveId = findExistingUserCheckinId(backupUid, row);
+
+    if (liveId !== null) {
+      sqlite.execSync(`
+        UPDATE user_checkins SET
+          uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
+          context = COALESCE(context, ${sqlLiteral(row.context)}),
+          bodyweight_kg = COALESCE(bodyweight_kg, ${sqlLiteral(row.bodyweight_kg)}),
+          waist_cm = COALESCE(waist_cm, ${sqlLiteral(row.waist_cm)}),
+          sleep_hours = COALESCE(sleep_hours, ${sqlLiteral(row.sleep_hours)}),
+          resting_hr_bpm = COALESCE(resting_hr_bpm, ${sqlLiteral(row.resting_hr_bpm)}),
+          readiness_score = COALESCE(readiness_score, ${sqlLiteral(row.readiness_score)}),
+          soreness_score = COALESCE(soreness_score, ${sqlLiteral(row.soreness_score)}),
+          stress_score = COALESCE(stress_score, ${sqlLiteral(row.stress_score)}),
+          steps = COALESCE(steps, ${sqlLiteral(row.steps)}),
+          note = COALESCE(note, ${sqlLiteral(row.note)}),
+          source = COALESCE(source, ${sqlLiteral(row.source)})
+        WHERE id = ${liveId};
+      `);
+      updated++;
+      continue;
+    }
+
+    sqlite.execSync(`
+      INSERT INTO user_checkins (
+        uid,
+        recorded_at,
+        context,
+        bodyweight_kg,
+        waist_cm,
+        sleep_hours,
+        resting_hr_bpm,
+        readiness_score,
+        soreness_score,
+        stress_score,
+        steps,
+        note,
+        source
+      )
+      VALUES (
+        ${sqlLiteral(backupUid)},
+        ${sqlLiteral(row.recorded_at)},
+        ${sqlLiteral(row.context)},
+        ${sqlLiteral(row.bodyweight_kg)},
+        ${sqlLiteral(row.waist_cm)},
+        ${sqlLiteral(row.sleep_hours)},
+        ${sqlLiteral(row.resting_hr_bpm)},
+        ${sqlLiteral(row.readiness_score)},
+        ${sqlLiteral(row.soreness_score)},
+        ${sqlLiteral(row.stress_score)},
+        ${sqlLiteral(row.steps)},
+        ${sqlLiteral(row.note)},
+        ${sqlLiteral(row.source)}
+      );
+    `);
+    inserted++;
+  }
+
+  return { inserted, updated };
+}
+
 function mergeMedia(
   backupDb: SQLiteDatabase,
   workoutUidMap: Map<number, number>,
@@ -1263,6 +1437,7 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
 
     try {
       // Merge in FK order, then rebuild derived PB events from merged sets.
+      const userCheckinsResult = mergeUserCheckins(backupDb);
       const exercisesResult = mergeExercises(backupDb, exerciseUidMap);
       const workoutsResult = mergeWorkouts(backupDb, workoutUidMap);
       const workoutExercisesResult = mergeWorkoutExercises(backupDb, exerciseUidMap, workoutUidMap, workoutExerciseUidMap);
@@ -1275,6 +1450,7 @@ export async function importDatabaseBackup(): Promise<MergeResult> {
       const relinkedMediaCount = await repairImportedVideoLinks(importedVideoCandidates);
 
       mergeResult = {
+        userCheckins: userCheckinsResult,
         exercises: exercisesResult,
         workouts: workoutsResult,
         workoutExercises: workoutExercisesResult,

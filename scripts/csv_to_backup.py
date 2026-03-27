@@ -51,6 +51,23 @@ def create_schema(conn: sqlite3.Connection):
             theme_preference TEXT NOT NULL DEFAULT 'system'
         );
 
+        CREATE TABLE IF NOT EXISTS user_checkins (
+            id INTEGER PRIMARY KEY NOT NULL,
+            uid TEXT,
+            recorded_at INTEGER NOT NULL,
+            context TEXT,
+            bodyweight_kg REAL,
+            waist_cm REAL,
+            sleep_hours REAL,
+            resting_hr_bpm INTEGER,
+            readiness_score INTEGER,
+            soreness_score INTEGER,
+            stress_score INTEGER,
+            steps INTEGER,
+            note TEXT,
+            source TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS exercises (
             id INTEGER PRIMARY KEY NOT NULL,
             uid TEXT,
@@ -124,9 +141,11 @@ def create_schema(conn: sqlite3.Connection):
         CREATE INDEX IF NOT EXISTS idx_sets_workout_id ON sets(workout_id);
         CREATE INDEX IF NOT EXISTS idx_sets_exercise_id ON sets(exercise_id);
         CREATE INDEX IF NOT EXISTS idx_sets_performed_at ON sets(performed_at);
+        CREATE INDEX IF NOT EXISTS idx_user_checkins_recorded_at ON user_checkins(recorded_at);
         CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(workout_id, order_index);
         
         -- UID indexes
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_user_checkins_uid ON user_checkins(uid);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_exercises_uid ON exercises(uid);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_workouts_uid ON workouts(uid);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_workout_exercises_uid ON workout_exercises(uid);

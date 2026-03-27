@@ -10,6 +10,23 @@ const SCHEMA_BOOTSTRAP_SQL = `
     color_theme TEXT NOT NULL DEFAULT 'default'
   );
 
+  CREATE TABLE IF NOT EXISTS user_checkins (
+    id INTEGER PRIMARY KEY NOT NULL,
+    uid TEXT,
+    recorded_at INTEGER NOT NULL,
+    context TEXT,
+    bodyweight_kg REAL,
+    waist_cm REAL,
+    sleep_hours REAL,
+    resting_hr_bpm INTEGER,
+    readiness_score INTEGER,
+    soreness_score INTEGER,
+    stress_score INTEGER,
+    steps INTEGER,
+    note TEXT,
+    source TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS exercises (
     id INTEGER PRIMARY KEY NOT NULL,
     uid TEXT,
@@ -195,6 +212,7 @@ const SCHEMA_BOOTSTRAP_SQL = `
   CREATE INDEX IF NOT EXISTS idx_sets_group ON sets(set_group_id);
   CREATE INDEX IF NOT EXISTS idx_sets_exercise_reps ON sets(exercise_id, reps);
   CREATE INDEX IF NOT EXISTS idx_sets_workout_exercise_id ON sets(workout_exercise_id);
+  CREATE INDEX IF NOT EXISTS idx_user_checkins_recorded_at ON user_checkins(recorded_at);
   CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(workout_id, order_index);
   CREATE INDEX IF NOT EXISTS idx_pr_events_exercise_time ON pr_events(exercise_id, occurred_at);
   CREATE INDEX IF NOT EXISTS idx_program_calendar_date ON program_calendar(date_iso);
@@ -212,6 +230,7 @@ const LEGACY_PROGRAM_TABLES = [
 ] as const;
 
 const UID_TABLES = [
+  "user_checkins",
   "exercises",
   "workouts",
   "workout_exercises",

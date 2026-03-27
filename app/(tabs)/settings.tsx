@@ -188,6 +188,7 @@ export default function SettingsScreen() {
       const result: MergeResult = await importDatabaseBackup();
 
       const totalInserted =
+        result.userCheckins.inserted +
         result.exercises.inserted +
         result.workouts.inserted +
         result.workoutExercises.inserted +
@@ -195,13 +196,17 @@ export default function SettingsScreen() {
         result.pbEvents.inserted +
         result.media.inserted;
       const totalUpdated =
+        result.userCheckins.updated +
         result.exercises.updated +
         result.workouts.updated +
         result.workoutExercises.updated +
         result.sets.updated +
         result.media.updated;
 
-      let message = `Imported: ${result.exercises.inserted} exercises, ${result.workouts.inserted} workouts, ${result.sets.inserted} sets, ${result.media.inserted} media links.`;
+      let message = `Imported: ${result.exercises.inserted} exercises, ${result.workouts.inserted} workouts, ${result.sets.inserted} sets, ${result.media.inserted} media links, ${result.userCheckins.inserted} check-ins.`;
+      if (totalInserted === 0 && totalUpdated === 0 && result.media.relinked === 0) {
+        message = "No new data was imported. Your existing data has been preserved.";
+      }
       if (totalUpdated > 0) {
         message += ` Updated ${totalUpdated} existing records.`;
       }

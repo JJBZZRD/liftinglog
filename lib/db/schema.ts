@@ -16,6 +16,23 @@ export const settings = sqliteTable("settings", {
   }).notNull().default("default"),
 });
 
+export const userCheckins = sqliteTable("user_checkins", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  uid: text("uid"),
+  recordedAt: integer("recorded_at").notNull(),
+  context: text("context"),
+  bodyweightKg: real("bodyweight_kg"),
+  waistCm: real("waist_cm"),
+  sleepHours: real("sleep_hours"),
+  restingHrBpm: integer("resting_hr_bpm"),
+  readinessScore: integer("readiness_score"),
+  sorenessScore: integer("soreness_score"),
+  stressScore: integer("stress_score"),
+  steps: integer("steps"),
+  note: text("note"),
+  source: text("source"),
+});
+
 export const exercises = sqliteTable("exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   uid: text("uid"),
@@ -169,6 +186,7 @@ export const taggings = sqliteTable("taggings", {
 });
 
 export type SettingsRow = typeof settings.$inferSelect;
+export type UserCheckinRow = typeof userCheckins.$inferSelect;
 export type ExerciseRow = typeof exercises.$inferSelect;
 export type WorkoutRow = typeof workouts.$inferSelect;
 export type WorkoutExerciseRow = typeof workoutExercises.$inferSelect;
