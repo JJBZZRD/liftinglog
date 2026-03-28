@@ -17,6 +17,8 @@ const SCHEMA_BOOTSTRAP_SQL = `
     context TEXT,
     bodyweight_kg REAL,
     waist_cm REAL,
+    sleep_start_at INTEGER,
+    sleep_end_at INTEGER,
     sleep_hours REAL,
     resting_hr_bpm INTEGER,
     readiness_score INTEGER,
@@ -268,6 +270,8 @@ function runColumnMigrations(sqlite: SQLiteDatabase): void {
   addColumnIfMissing(sqlite, "media", "media_created_at INTEGER");
   addColumnIfMissing(sqlite, "media", "duration_ms INTEGER");
   addColumnIfMissing(sqlite, "media", "album_name TEXT");
+  addColumnIfMissing(sqlite, "user_checkins", "sleep_start_at INTEGER");
+  addColumnIfMissing(sqlite, "user_checkins", "sleep_end_at INTEGER");
 }
 
 function addColumnIfMissing(

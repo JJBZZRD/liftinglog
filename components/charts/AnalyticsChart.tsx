@@ -29,6 +29,7 @@ interface AnalyticsChartProps {
   height?: number;
   unit: string;
   onDataPointPress?: (point: SessionDataPoint) => void;
+  onScrubPointChange?: (point: SessionDataPoint | null) => void;
   onFullscreenPress?: () => void;
   /** Called when a gesture (pinch/pan) starts - use to disable parent scrolling/swiping */
   onGestureStart?: () => void;
@@ -36,6 +37,11 @@ interface AnalyticsChartProps {
   onGestureEnd?: () => void;
   /** Point to highlight (e.g., when tapped) */
   selectedPoint?: SessionDataPoint | null;
+  seriesType?: "line" | "bar";
+  showAreaFill?: boolean;
+  formatYAxisLabel?: (value: number) => string;
+  formatScrubLabel?: (point: SessionDataPoint) => string;
+  instructionsText?: string;
 }
 
 type RenderDataPoint = SessionDataPoint & {
@@ -97,10 +103,16 @@ export default function AnalyticsChart({
   height = 250,
   unit,
   onDataPointPress,
+  onScrubPointChange,
   onFullscreenPress,
   onGestureStart,
   onGestureEnd,
   selectedPoint,
+  seriesType = "line",
+  showAreaFill = true,
+  formatYAxisLabel,
+  formatScrubLabel,
+  instructionsText = "Pinch to zoom | Touch and drag to scrub | Release to select",
 }: AnalyticsChartProps) {
   const { rawColors } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -477,22 +489,25 @@ export default function AnalyticsChart({
       setIsScrubbing(true);
       const closestPoint = getClosestVisiblePointByX(x);
       setScrubbedPoint(closestPoint);
+      onScrubPointChange?.(closestPoint);
     },
-    [getClosestVisiblePointByX]
+    [getClosestVisiblePointByX, onScrubPointChange]
   );
 
   const updateScrubbedPoint = useCallback(
     (x: number) => {
       const closestPoint = getClosestVisiblePointByX(x);
       setScrubbedPoint(closestPoint);
+      onScrubPointChange?.(closestPoint);
     },
-    [getClosestVisiblePointByX]
+    [getClosestVisiblePointByX, onScrubPointChange]
   );
 
   const endScrubCancelled = useCallback(() => {
     setIsScrubbing(false);
     setScrubbedPoint(null);
-  }, []);
+    onScrubPointChange?.(null);
+  }, [onScrubPointChange]);
 
   const endScrubWithModal = useCallback(
     (endX: number) => {
@@ -502,8 +517,9 @@ export default function AnalyticsChart({
       }
       setIsScrubbing(false);
       setScrubbedPoint(null);
+      onScrubPointChange?.(null);
     },
-    [getClosestVisiblePointByX, onDataPointPress]
+    [getClosestVisiblePointByX, onDataPointPress, onScrubPointChange]
   );
 
   // Update visible range (called from gesture handlers via runOnJS)

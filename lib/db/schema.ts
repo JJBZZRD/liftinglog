@@ -23,6 +23,8 @@ export const userCheckins = sqliteTable("user_checkins", {
   context: text("context"),
   bodyweightKg: real("bodyweight_kg"),
   waistCm: real("waist_cm"),
+  sleepStartAt: integer("sleep_start_at"),
+  sleepEndAt: integer("sleep_end_at"),
   sleepHours: real("sleep_hours"),
   restingHrBpm: integer("resting_hr_bpm"),
   readinessScore: integer("readiness_score"),

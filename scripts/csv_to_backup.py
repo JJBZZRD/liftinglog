@@ -58,6 +58,8 @@ def create_schema(conn: sqlite3.Connection):
             context TEXT,
             bodyweight_kg REAL,
             waist_cm REAL,
+            sleep_start_at INTEGER,
+            sleep_end_at INTEGER,
             sleep_hours REAL,
             resting_hr_bpm INTEGER,
             readiness_score INTEGER,

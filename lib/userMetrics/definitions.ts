@@ -14,6 +14,7 @@ export type UserMetricKey =
 
 export type UserMetricAccent = "primary" | "success" | "warning" | "destructive";
 export type UserMetricInputMode = "decimal" | "integer" | "score";
+export type UserMetricChartVariant = "line" | "bar";
 
 export type UserMetricDefinition = {
   key: UserMetricKey;
@@ -33,6 +34,8 @@ export type UserMetricEntry = {
   checkinId: number;
   recordedAt: number;
   value: number;
+  sleepStartAt: number | null;
+  sleepEndAt: number | null;
   note: string | null;
   context: string | null;
   source: string | null;
@@ -189,6 +192,8 @@ export function getUserMetricEntries(
       checkinId: checkin.id,
       recordedAt: checkin.recordedAt,
       value,
+      sleepStartAt: checkin.sleepStartAt ?? null,
+      sleepEndAt: checkin.sleepEndAt ?? null,
       note: checkin.note ?? null,
       context: checkin.context ?? null,
       source: checkin.source ?? null,
@@ -208,6 +213,22 @@ export function formatSleepHours(hoursValue: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+export function getUserMetricChartVariant(metricKey: UserMetricKey): UserMetricChartVariant {
+  switch (metricKey) {
+    case "sleep":
+    case "readiness":
+    case "soreness":
+    case "stress":
+    case "steps":
+      return "bar";
+    case "bodyweight":
+    case "waist":
+    case "restingHr":
+    default:
+      return "line";
+  }
 }
 
 export function formatUserMetricValue(

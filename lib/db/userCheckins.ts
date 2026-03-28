@@ -20,6 +20,8 @@ export type UserCheckinInput = {
   context?: string | null;
   bodyweight_kg?: number | null;
   waist_cm?: number | null;
+  sleep_start_at?: number | null;
+  sleep_end_at?: number | null;
   sleep_hours?: number | null;
   resting_hr_bpm?: number | null;
   readiness_score?: number | null;
@@ -39,6 +41,8 @@ export async function createUserCheckin(data: UserCheckinInput): Promise<number>
       context: data.context ?? null,
       bodyweightKg: data.bodyweight_kg ?? null,
       waistCm: data.waist_cm ?? null,
+      sleepStartAt: data.sleep_start_at ?? null,
+      sleepEndAt: data.sleep_end_at ?? null,
       sleepHours: data.sleep_hours ?? null,
       restingHrBpm: data.resting_hr_bpm ?? null,
       readinessScore: data.readiness_score ?? null,
@@ -158,6 +162,8 @@ export async function updateUserCheckin(
   if (updates.context !== undefined) mapped.context = updates.context;
   if (updates.bodyweight_kg !== undefined) mapped.bodyweightKg = updates.bodyweight_kg;
   if (updates.waist_cm !== undefined) mapped.waistCm = updates.waist_cm;
+  if (updates.sleep_start_at !== undefined) mapped.sleepStartAt = updates.sleep_start_at;
+  if (updates.sleep_end_at !== undefined) mapped.sleepEndAt = updates.sleep_end_at;
   if (updates.sleep_hours !== undefined) mapped.sleepHours = updates.sleep_hours;
   if (updates.resting_hr_bpm !== undefined) mapped.restingHrBpm = updates.resting_hr_bpm;
   if (updates.readiness_score !== undefined) mapped.readinessScore = updates.readiness_score;

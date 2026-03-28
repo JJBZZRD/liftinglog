@@ -372,6 +372,8 @@ interface BackupUserCheckin {
   context: string | null;
   bodyweight_kg: number | null;
   waist_cm: number | null;
+  sleep_start_at: number | null;
+  sleep_end_at: number | null;
   sleep_hours: number | null;
   resting_hr_bpm: number | null;
   readiness_score: number | null;
@@ -455,6 +457,8 @@ interface LiveUserCheckinCandidate {
   context: string | null;
   bodyweight_kg: number | null;
   waist_cm: number | null;
+  sleep_start_at: number | null;
+  sleep_end_at: number | null;
   sleep_hours: number | null;
   resting_hr_bpm: number | null;
   readiness_score: number | null;
@@ -676,6 +680,8 @@ function findExistingUserCheckinId(backupUid: string, row: BackupUserCheckin): n
       context,
       bodyweight_kg,
       waist_cm,
+      sleep_start_at,
+      sleep_end_at,
       sleep_hours,
       resting_hr_bpm,
       readiness_score,
@@ -693,6 +699,8 @@ function findExistingUserCheckinId(backupUid: string, row: BackupUserCheckin): n
       candidate.context === row.context &&
       candidate.bodyweight_kg === row.bodyweight_kg &&
       candidate.waist_cm === row.waist_cm &&
+      candidate.sleep_start_at === row.sleep_start_at &&
+      candidate.sleep_end_at === row.sleep_end_at &&
       candidate.sleep_hours === row.sleep_hours &&
       candidate.resting_hr_bpm === row.resting_hr_bpm &&
       candidate.readiness_score === row.readiness_score &&
@@ -1165,6 +1173,8 @@ function mergeUserCheckins(
     "context",
     "bodyweight_kg",
     "waist_cm",
+    "sleep_start_at",
+    "sleep_end_at",
     "sleep_hours",
     "resting_hr_bpm",
     "readiness_score",
@@ -1197,6 +1207,8 @@ function mergeUserCheckins(
           context = COALESCE(context, ${sqlLiteral(row.context)}),
           bodyweight_kg = COALESCE(bodyweight_kg, ${sqlLiteral(row.bodyweight_kg)}),
           waist_cm = COALESCE(waist_cm, ${sqlLiteral(row.waist_cm)}),
+          sleep_start_at = COALESCE(sleep_start_at, ${sqlLiteral(row.sleep_start_at)}),
+          sleep_end_at = COALESCE(sleep_end_at, ${sqlLiteral(row.sleep_end_at)}),
           sleep_hours = COALESCE(sleep_hours, ${sqlLiteral(row.sleep_hours)}),
           resting_hr_bpm = COALESCE(resting_hr_bpm, ${sqlLiteral(row.resting_hr_bpm)}),
           readiness_score = COALESCE(readiness_score, ${sqlLiteral(row.readiness_score)}),
@@ -1218,6 +1230,8 @@ function mergeUserCheckins(
         context,
         bodyweight_kg,
         waist_cm,
+        sleep_start_at,
+        sleep_end_at,
         sleep_hours,
         resting_hr_bpm,
         readiness_score,
@@ -1233,6 +1247,8 @@ function mergeUserCheckins(
         ${sqlLiteral(row.context)},
         ${sqlLiteral(row.bodyweight_kg)},
         ${sqlLiteral(row.waist_cm)},
+        ${sqlLiteral(row.sleep_start_at)},
+        ${sqlLiteral(row.sleep_end_at)},
         ${sqlLiteral(row.sleep_hours)},
         ${sqlLiteral(row.resting_hr_bpm)},
         ${sqlLiteral(row.readiness_score)},
