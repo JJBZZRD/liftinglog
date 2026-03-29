@@ -32,12 +32,24 @@ const presets: { id: DateRangePreset; label: string; days: number | null }[] = [
   { id: "all", label: "All", days: null },
 ];
 
+function getStartOfDay(date: Date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function getEndOfDay(date: Date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(23, 59, 59, 999);
+  return nextDate;
+}
+
 export function getDateRangeFromPreset(preset: DateRangePreset, customStart?: Date | null, customEnd?: Date): DateRange {
   const now = new Date();
-  const endDate = customEnd ?? now;
+  const endDate = getEndOfDay(customEnd ?? now);
   
   if (preset === "custom" && customStart) {
-    return { startDate: customStart, endDate, preset };
+    return { startDate: getStartOfDay(customStart), endDate, preset };
   }
   
   if (preset === "all") {
@@ -49,7 +61,8 @@ export function getDateRangeFromPreset(preset: DateRangePreset, customStart?: Da
     return { startDate: null, endDate, preset };
   }
   
-  const startDate = new Date(now.getTime() - presetConfig.days * 24 * 60 * 60 * 1000);
+  const startDate = getStartOfDay(endDate);
+  startDate.setDate(startDate.getDate() - (presetConfig.days - 1));
   return { startDate, endDate, preset };
 }
 

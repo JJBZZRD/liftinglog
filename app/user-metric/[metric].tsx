@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -197,9 +197,23 @@ function getChartYDomain(metricKey: UserMetricKey) {
   }
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function getStartOfLocalDay(value: number | Date) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getEndOfLocalDay(value: number | Date) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
 function filterEntriesByDateRange(entries: UserMetricEntry[], dateRange: DateRange) {
-  const startTimestamp = dateRange.startDate ? dateRange.startDate.getTime() : null;
-  const endTimestamp = dateRange.endDate.getTime() + (24 * 60 * 60 * 1000) - 1;
+  const startTimestamp = dateRange.startDate ? getStartOfLocalDay(dateRange.startDate).getTime() : null;
+  const endTimestamp = getEndOfLocalDay(dateRange.endDate).getTime();
 
   return entries.filter((entry) => {
     if (startTimestamp !== null && entry.recordedAt < startTimestamp) {
@@ -209,13 +223,16 @@ function filterEntriesByDateRange(entries: UserMetricEntry[], dateRange: DateRan
   });
 }
 
-function buildChartPoints(entries: UserMetricEntry[]): UserMetricChartPoint[] {
+function buildChartPoints(
+  entries: UserMetricEntry[],
+  chartVariant: "line" | "bar",
+  dateRange: DateRange,
+  yDomain?: { min: number; max: number }
+): UserMetricChartPoint[] {
   const latestEntryByDay = new Map<number, UserMetricEntry>();
 
   for (const entry of entries) {
-    const dayStart = new Date(entry.recordedAt);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayKey = dayStart.getTime();
+    const dayKey = getStartOfLocalDay(entry.recordedAt).getTime();
     const existingEntry = latestEntryByDay.get(dayKey);
 
     if (
@@ -227,13 +244,48 @@ function buildChartPoints(entries: UserMetricEntry[]): UserMetricChartPoint[] {
     }
   }
 
-  return [...latestEntryByDay.values()]
+  const points = [...latestEntryByDay.values()]
     .sort((left, right) => left.recordedAt - right.recordedAt)
     .map((entry) => ({
       id: entry.checkinId,
       date: entry.recordedAt,
       value: entry.value,
     }));
+
+  if (chartVariant !== "bar" || points.length === 0) {
+    return points;
+  }
+
+  const startDate = dateRange.startDate
+    ? getStartOfLocalDay(dateRange.startDate)
+    : getStartOfLocalDay(
+      Math.min(...entries.map((entry) => entry.recordedAt))
+    );
+  const endDate = getStartOfLocalDay(dateRange.endDate);
+  const placeholderValue = yDomain ? yDomain.min + 0.001 : 0;
+  const paddedPoints: UserMetricChartPoint[] = [];
+
+  for (let dayTimestamp = startDate.getTime(); dayTimestamp <= endDate.getTime(); dayTimestamp += MS_PER_DAY) {
+    const entry = latestEntryByDay.get(dayTimestamp);
+
+    if (entry) {
+      paddedPoints.push({
+        id: entry.checkinId,
+        date: entry.recordedAt,
+        value: entry.value,
+      });
+      continue;
+    }
+
+    paddedPoints.push({
+      id: -dayTimestamp,
+      date: dayTimestamp,
+      value: placeholderValue,
+      isPlaceholder: true,
+    });
+  }
+
+  return paddedPoints;
 }
 
 const ALL_USER_METRIC_KEYS: UserMetricKey[] = [
@@ -445,9 +497,9 @@ export default function UserMetricDetailScreen() {
   const entries = getUserMetricEntries(checkins, metric.key);
   const latestEntry = entries[0] ?? null;
   const filteredEntries = filterEntriesByDateRange(entries, dateRange);
-  const chartPoints = buildChartPoints(filteredEntries);
   const chartVariant = getUserMetricChartVariant(metric.key);
   const chartYDomain = getChartYDomain(metric.key);
+  const chartPoints = buildChartPoints(filteredEntries, chartVariant, dateRange, chartYDomain);
   const accent = getAccentColors(metric.accent, rawColors);
   const editingEntry = editingEntryId !== null
     ? entries.find((entry) => entry.checkinId === editingEntryId) ?? null
@@ -464,20 +516,32 @@ export default function UserMetricDetailScreen() {
   const averageValue = getAverageMetricValue(filteredEntries);
   const range = getMetricRange(filteredEntries);
   const historyEntries = filteredEntries.slice(0, 8);
+  const latestSelectableChartPoint = useMemo(
+    () => [...chartPoints].reverse().find((point) => !point.isPlaceholder) ?? null,
+    [chartPoints]
+  );
 
   useEffect(() => {
-    if (chartPoints.length === 0) {
+    if (chartPoints.length === 0 || latestSelectableChartPoint === null) {
       setSelectedPoint(null);
       return;
     }
 
     setSelectedPoint((currentSelection) => {
-      if (currentSelection && chartPoints.some((point) => point.id === currentSelection.id && point.date === currentSelection.date)) {
+      if (
+        currentSelection
+        && chartPoints.some(
+          (point) =>
+            point.id === currentSelection.id
+            && point.date === currentSelection.date
+            && !point.isPlaceholder
+        )
+      ) {
         return currentSelection;
       }
-      return chartPoints[chartPoints.length - 1];
+      return latestSelectableChartPoint;
     });
-  }, [chartPoints]);
+  }, [chartPoints, latestSelectableChartPoint]);
 
   useEffect(() => {
     if (metric.key !== "sleep" || editingEntryId !== null) {
@@ -501,7 +565,7 @@ export default function UserMetricDetailScreen() {
     setSleepDraft(getDefaultSleepWindow(latestEntry?.recordedAt ?? Date.now()));
   }, [editingEntryId, latestEntry, metric.key]);
 
-  const selectedEntry = selectedPoint
+  const selectedEntry = selectedPoint && !selectedPoint.isPlaceholder
     ? filteredEntries.find((entry) => entry.checkinId === selectedPoint.id && entry.recordedAt === selectedPoint.date) ?? null
     : null;
   const displayEntry = selectedEntry ?? filteredEntries[0] ?? null;
@@ -754,7 +818,7 @@ export default function UserMetricDetailScreen() {
               <DateRangeSelector value={dateRange} onChange={setDateRange} />
             </View>
 
-            <View className="mt-4 rounded-2xl border border-border-light bg-surface-secondary p-3">
+            <View className="mt-4 overflow-hidden rounded-2xl border border-border-light bg-surface-secondary py-2">
               <UserMetricChart
                 data={chartPoints}
                 variant={chartVariant}

@@ -1,15 +1,29 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { runOnJS, useSharedValue } from "react-native-reanimated";
-import Svg, { Circle, Line, Path, Rect, Text as SvgText } from "react-native-svg";
+import { useCallback, useMemo, useState } from "react";
+import {
+  type LayoutChangeEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import {
+  BarChart,
+  type barDataItem,
+} from "react-native-gifted-charts";
+import Svg, {
+  Circle,
+  Line as SvgLine,
+  Path,
+  Text as SvgText,
+} from "react-native-svg";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 export type UserMetricChartPoint = {
   id: number;
   date: number;
   value: number;
+  isPlaceholder?: boolean;
 };
 
 type UserMetricChartProps = {
@@ -25,35 +39,148 @@ type UserMetricChartProps = {
   yDomain?: { min: number; max: number };
 };
 
-type RenderChartPoint = UserMetricChartPoint & {
-  x: number;
-  y: number;
-  index: number;
-  isInVisibleRange: boolean;
-};
+const Y_AXIS_LABEL_WIDTH = 32;
+const WRAPPER_H_PADDING = 12;
+const MIN_CHART_WIDTH = 180;
 
-const Y_AXIS_WIDTH = 28;
-const X_AXIS_HEIGHT = 32;
-const PADDING_TOP = 20;
-const PADDING_BOTTOM = 12;
-const PADDING_RIGHT = 16;
-const PLOT_PADDING_X = 18;
-const X_AXIS_MIN_TICKS = 3;
-const X_AXIS_MAX_TICKS = 8;
-const X_AXIS_MIN_LABEL_SPACING_PX = 72;
-const MIN_VISIBLE_DAYS = 7;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const DATA_POINT_RADIUS = 4;
+function getBarChartLayout(pointCount: number, availableWidth: number) {
+  const barWidth = pointCount > 20 ? 6 : pointCount > 12 ? 7 : 8;
+
+  if (pointCount <= 1) {
+    return {
+      barWidth: 12,
+      spacing: 0,
+      initialSpacing: Math.floor(availableWidth / 2) - 6,
+      endSpacing: Math.floor(availableWidth / 2) - 6,
+      labelWidth: 60,
+    };
+  }
+
+  if (pointCount <= 7) {
+    const totalBarWidth = pointCount * barWidth;
+    const totalGapSpace = availableWidth - totalBarWidth;
+    const spacing = Math.max(8, Math.floor(totalGapSpace / (pointCount + 1)));
+    const initialSpacing = spacing;
+    const endSpacing = availableWidth - (initialSpacing + totalBarWidth + (pointCount - 1) * spacing);
+    const labelWidth = Math.max(28, Math.min(52, Math.floor(availableWidth / pointCount)));
+
+    return {
+      barWidth,
+      spacing,
+      initialSpacing: Math.max(8, initialSpacing),
+      endSpacing: Math.max(0, endSpacing),
+      labelWidth,
+    };
+  }
+
+  const spacing = pointCount > 20 ? 8 : 10;
+  const contentWidth = pointCount * barWidth + (pointCount - 1) * spacing;
+  const scrollable = contentWidth > availableWidth;
+
+  return {
+    barWidth,
+    spacing,
+    initialSpacing: scrollable ? 10 : Math.max(8, Math.floor((availableWidth - contentWidth) / 2)),
+    endSpacing: scrollable ? 24 : 0,
+    labelWidth: barWidth + spacing,
+  };
+}
+
+function getLineChartLayout(pointCount: number, availableWidth: number) {
+  if (pointCount <= 1) {
+    const centeredSpacing = Math.max(24, Math.floor(availableWidth / 2));
+    return {
+      adjustToWidth: false,
+      disableScroll: true,
+      initialSpacing: centeredSpacing,
+      endSpacing: centeredSpacing,
+      spacing: 42,
+    };
+  }
+
+  if (pointCount <= 5) {
+    const spacing = Math.min(88, Math.max(48, Math.floor(availableWidth / Math.max(1, pointCount - 1))));
+    const contentWidth = (pointCount - 1) * spacing;
+    const sidePadding = Math.max(14, Math.floor((availableWidth - contentWidth) / 2));
+
+    return {
+      adjustToWidth: false,
+      disableScroll: true,
+      initialSpacing: sidePadding,
+      endSpacing: sidePadding,
+      spacing,
+    };
+  }
+
+  if (pointCount <= 7) {
+    const spacing = Math.max(36, Math.floor((availableWidth - 20) / Math.max(1, pointCount - 1)));
+    return {
+      adjustToWidth: false,
+      disableScroll: true,
+      initialSpacing: 10,
+      endSpacing: 10,
+      spacing,
+    };
+  }
+
+  return {
+    adjustToWidth: false,
+    disableScroll: false,
+    initialSpacing: 8,
+    endSpacing: 12,
+    spacing: pointCount > 24 ? 34 : 42,
+  };
+}
 
 function buildLinePath(points: { x: number; y: number }[]) {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-
-  let path = `M ${points[0].x} ${points[0].y}`;
-  for (let index = 1; index < points.length; index += 1) {
-    path += ` L ${points[index].x} ${points[index].y}`;
+  if (points.length === 0) {
+    return "";
   }
-  return path;
+
+  if (points.length === 1) {
+    return `M ${points[0].x} ${points[0].y}`;
+  }
+
+  return points.map((point, index) =>
+    `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`
+  ).join(" ");
+}
+
+function formatXAxisLabel(timestamp: number, includeYear: boolean) {
+  const options: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+  };
+
+  if (includeYear) {
+    options.year = "2-digit";
+  }
+
+  return new Date(timestamp).toLocaleDateString("en-US", options);
+}
+
+function formatBarXAxisLabel(timestamp: number, includeYear: boolean, pointCount: number) {
+  if (pointCount <= 7) {
+    return new Date(timestamp).toLocaleDateString("en-US", { weekday: "short" });
+  }
+
+  return formatXAxisLabel(timestamp, includeYear);
+}
+
+function getXAxisLabelStep(pointCount: number) {
+  if (pointCount <= 7) return 1;
+  if (pointCount <= 14) return 2;
+  if (pointCount <= 24) return 3;
+  if (pointCount <= 45) return 5;
+  return 7;
+}
+
+function formatYAxisText(value: number, formatter?: (value: number) => string) {
+  if (formatter) {
+    return formatter(value);
+  }
+
+  return `${Math.round(value)}`;
 }
 
 export default function UserMetricChart({
@@ -61,404 +188,201 @@ export default function UserMetricChart({
   variant,
   selectedPoint,
   onSelectPoint,
-  height = 248,
+  height,
   width: propWidth,
   unitLabel,
   formatYAxisLabel,
-  instructionsText = "Pinch to zoom | Drag to scrub | Two fingers to pan",
+  instructionsText,
   yDomain,
 }: UserMetricChartProps) {
   const { rawColors } = useTheme();
-  const { width: windowWidth } = useWindowDimensions();
-  const containerWidth = propWidth ?? windowWidth - 32;
-  const chartWidth = containerWidth - Y_AXIS_WIDTH - PADDING_RIGHT;
-  const plotWidth = chartWidth - PLOT_PADDING_X * 2;
-  const chartHeight = height - X_AXIS_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+  const [measuredWidth, setMeasuredWidth] = useState(0);
 
-  const sortedData = useMemo(
-    () => [...data].sort((left, right) => left.date - right.date),
-    [data]
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const w = event.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - measuredWidth) > 1) {
+      setMeasuredWidth(w);
+    }
+  }, [measuredWidth]);
+
+  const containerWidth = propWidth ?? measuredWidth;
+  const resolvedHeight = height ?? (variant === "bar" ? 196 : 208);
+  const chartAreaWidth = Math.max(
+    MIN_CHART_WIDTH,
+    containerWidth - Y_AXIS_LABEL_WIDTH - WRAPPER_H_PADDING * 2,
   );
-
-  const { minDate, maxDate, fullRangeMs } = useMemo(() => {
-    if (sortedData.length === 0) {
-      const now = Date.now();
-      return { minDate: now, maxDate: now, fullRangeMs: MS_PER_DAY };
+  const chartHeight = Math.max(
+    variant === "bar" ? 148 : 156,
+    resolvedHeight - (variant === "bar" ? 56 : 60),
+  );
+  const xAxisLabelStep = getXAxisLabelStep(data.length);
+  const barChartLayout = useMemo(() => getBarChartLayout(data.length, chartAreaWidth), [chartAreaWidth, data.length]);
+  const lineChartLayout = useMemo(() => getLineChartLayout(data.length, chartAreaWidth), [chartAreaWidth, data.length]);
+  const includeYearOnXAxis = useMemo(() => {
+    if (data.length <= 1) {
+      return false;
     }
 
-    const firstDate = sortedData[0].date;
-    const lastDate = sortedData[sortedData.length - 1].date;
-    return {
-      minDate: firstDate,
-      maxDate: lastDate,
-      fullRangeMs: Math.max(lastDate - firstDate, MS_PER_DAY),
-    };
-  }, [sortedData]);
+    return new Date(data[0].date).getFullYear() !== new Date(data[data.length - 1].date).getFullYear();
+  }, [data]);
 
-  const [visibleStart, setVisibleStart] = useState(minDate);
-  const [visibleEnd, setVisibleEnd] = useState(maxDate);
-  const [scrubbedPoint, setScrubbedPoint] = useState<RenderChartPoint | null>(null);
-
-  useEffect(() => {
-    setVisibleStart(minDate);
-    setVisibleEnd(maxDate);
-  }, [maxDate, minDate]);
-
-  const visibleRangeMs = visibleEnd - visibleStart;
-  const isZoomed = visibleRangeMs < fullRangeMs * 0.99;
-
-  const { paddedMin, paddedMax, yAxisLabels } = useMemo(() => {
-    if (sortedData.length === 0) {
-      return { paddedMin: 0, paddedMax: 5, yAxisLabels: [] as { value: number; y: number }[] };
+  const selectedIndex = useMemo(() => {
+    if (!selectedPoint) {
+      return -1;
     }
 
+    return data.findIndex(
+      (point) => point.id === selectedPoint.id && point.date === selectedPoint.date
+    );
+  }, [data, selectedPoint]);
+
+  const computedYAxis = useMemo(() => {
     if (yDomain) {
-      const labelCount = 5;
-      const labelStep = (yDomain.max - yDomain.min) / (labelCount - 1 || 1);
-
+      const range = yDomain.max - yDomain.min;
       return {
-        paddedMin: yDomain.min,
-        paddedMax: yDomain.max,
-        yAxisLabels: Array.from({ length: labelCount }, (_, index) => {
-          const value = yDomain.min + (labelStep * index);
-          return {
-            value,
-            y: chartHeight - ((value - yDomain.min) / (yDomain.max - yDomain.min || 1)) * chartHeight,
-          };
-        }),
+        yAxisOffset: yDomain.min,
+        maxValue: range,
+        noOfSections: Math.min(range, 4),
       };
     }
 
-    const values = sortedData.map((point) => point.value);
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
-    const range = maxValue - minValue || Math.max(1, maxValue * 0.2 || 1);
-    const lowerPadding = variant === "bar" ? 0 : range * 0.15;
-    const paddedLow = Math.max(0, minValue - lowerPadding);
-    const paddedHigh = maxValue + (range * 0.18);
-    const labelCount = 5;
-    const labelStep = (paddedHigh - paddedLow) / (labelCount - 1);
+    if (variant === "line" && data.length > 0) {
+      const values = data.map((point) => point.value);
+      const minPointValue = Math.min(...values);
+      const maxPointValue = Math.max(...values);
+      const rawRange = maxPointValue - minPointValue;
+      const paddedRange = Math.max(4, rawRange * 1.2 || 4);
+      let yAxisOffset = Math.max(0, ((minPointValue + maxPointValue) / 2) - (paddedRange / 2));
+      let maxChartValue = yAxisOffset + paddedRange;
+
+      if (maxChartValue < maxPointValue) {
+        maxChartValue = maxPointValue;
+        yAxisOffset = Math.max(0, maxChartValue - paddedRange);
+      }
+
+      const noOfSections = 4;
+
+      return {
+        yAxisOffset,
+        maxValue: paddedRange,
+        noOfSections,
+      };
+    }
 
     return {
-      paddedMin: paddedLow,
-      paddedMax: paddedHigh,
-      yAxisLabels: Array.from({ length: labelCount }, (_, index) => {
-        const value = paddedLow + (labelStep * index);
-        return {
-          value,
-          y: chartHeight - ((value - paddedLow) / (paddedHigh - paddedLow || 1)) * chartHeight,
-        };
-      }),
+      yAxisOffset: 0,
+      maxValue: undefined,
+      noOfSections: 4,
     };
-  }, [chartHeight, sortedData, variant, yDomain]);
+  }, [data, variant, yDomain]);
+  const { yAxisOffset, maxValue, noOfSections } = computedYAxis;
+  const axisTextColor = rawColors.foregroundSecondary;
+  const rulesColor = `${rawColors.foregroundMuted}26`;
+  const baseInstructions = variant === "bar"
+    ? "Tap a bar to inspect | Scroll for older data"
+    : "Tap a point to inspect | Scroll for older data";
 
-  const dateToX = useCallback((date: number) => {
-    if (visibleEnd === visibleStart) {
-      return PLOT_PADDING_X + (plotWidth / 2);
-    }
-    const ratio = (date - visibleStart) / (visibleEnd - visibleStart);
-    return PLOT_PADDING_X + (ratio * plotWidth);
-  }, [plotWidth, visibleEnd, visibleStart]);
-
-  const valueToY = useCallback((value: number) => {
-    return chartHeight - (((value - paddedMin) / (paddedMax - paddedMin || 1)) * chartHeight);
-  }, [chartHeight, paddedMax, paddedMin]);
-
-  const renderPoints = useMemo<RenderChartPoint[]>(() => {
-    const buffer = (visibleEnd - visibleStart) * 0.1;
-    return sortedData
-      .filter((point) => point.date >= visibleStart - buffer && point.date <= visibleEnd + buffer)
-      .map((point, index) => ({
-        ...point,
-        x: dateToX(point.date),
-        y: valueToY(point.value),
-        index,
-        isInVisibleRange: point.date >= visibleStart && point.date <= visibleEnd,
-      }));
-  }, [dateToX, sortedData, valueToY, visibleEnd, visibleStart]);
-
-  const visibleRenderPoints = useMemo(
-    () => renderPoints.filter((point) => point.isInVisibleRange),
-    [renderPoints]
-  );
-
-  const linePath = useMemo(
-    () => buildLinePath(renderPoints),
-    [renderPoints]
-  );
-
-  const barWidth = useMemo(() => {
-    if (visibleRenderPoints.length <= 1) {
-      return Math.max(16, Math.min(26, plotWidth * 0.18));
-    }
-
-    let minGap = Number.POSITIVE_INFINITY;
-    for (let index = 1; index < visibleRenderPoints.length; index += 1) {
-      minGap = Math.min(minGap, visibleRenderPoints[index].x - visibleRenderPoints[index - 1].x);
-    }
-
-    if (!Number.isFinite(minGap)) {
-      return 20;
-    }
-
-    return Math.max(12, Math.min(24, minGap * 0.6));
-  }, [plotWidth, visibleRenderPoints]);
-
-  const selectedRenderPoint = useMemo(() => {
-    const activePoint = scrubbedPoint ?? selectedPoint ?? null;
-    if (!activePoint) {
-      return null;
-    }
-
-    return renderPoints.find(
-      (point) => point.id === activePoint.id && point.date === activePoint.date
-    ) ?? null;
-  }, [renderPoints, scrubbedPoint, selectedPoint]);
-
-  const baseXAxisTickCount = useMemo(() => {
-    const ticks = Math.floor(plotWidth / X_AXIS_MIN_LABEL_SPACING_PX) + 1;
-    return Math.max(X_AXIS_MIN_TICKS, Math.min(ticks, X_AXIS_MAX_TICKS));
-  }, [plotWidth]);
-
-  const xAxisLabels = useMemo(() => {
-    if (sortedData.length === 0) return [];
-
-    if (visibleEnd <= visibleStart) {
-      return [{ date: visibleStart, x: dateToX(visibleStart) }];
-    }
-
-    const rangeMs = visibleEnd - visibleStart;
-    const maxDayTicks = Math.floor(rangeMs / MS_PER_DAY) + 1;
-    const tickCount = Math.max(2, Math.min(baseXAxisTickCount, maxDayTicks));
-
-    if (tickCount === 2) {
-      return [
-        { date: visibleStart, x: dateToX(visibleStart) },
-        { date: visibleEnd, x: dateToX(visibleEnd) },
-      ];
-    }
-
-    const stepMs = rangeMs / (tickCount - 1);
-    return Array.from({ length: tickCount }, (_, index) => {
-      const date = index === tickCount - 1 ? visibleEnd : visibleStart + (stepMs * index);
-      return { date, x: dateToX(date) };
-    });
-  }, [baseXAxisTickCount, dateToX, sortedData.length, visibleEnd, visibleStart]);
-
-  const showYearOnXAxis = useMemo(
-    () => new Date(visibleStart).getFullYear() !== new Date(visibleEnd).getFullYear(),
-    [visibleEnd, visibleStart]
-  );
-
-  const formatDate = useCallback((timestamp: number) => {
-    const options: Intl.DateTimeFormatOptions = {
-      month: "short",
-      day: "numeric",
-    };
-    if (showYearOnXAxis) {
-      options.year = "2-digit";
-    }
-    return new Date(timestamp).toLocaleDateString("en-US", options);
-  }, [showYearOnXAxis]);
-
-  const getClosestVisiblePointByX = useCallback((tapX: number) => {
-    if (visibleRenderPoints.length === 0) {
-      return null;
-    }
-
-    let closestPoint = visibleRenderPoints[0];
-    let closestDistance = Math.abs(closestPoint.x - tapX);
-
-    for (const point of visibleRenderPoints) {
-      const distance = Math.abs(point.x - tapX);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestPoint = point;
-      }
-    }
-
-    return closestPoint;
-  }, [visibleRenderPoints]);
-
-  const selectPoint = useCallback((point: RenderChartPoint | null) => {
-    if (!point) {
+  const handleSelectIndex = useCallback((index: number) => {
+    if (index < 0 || index >= data.length) {
       return;
     }
-    onSelectPoint?.(point);
-  }, [onSelectPoint]);
 
-  const beginScrub = useCallback((x: number) => {
-    const closestPoint = getClosestVisiblePointByX(x);
-    setScrubbedPoint(closestPoint);
-    selectPoint(closestPoint);
-  }, [getClosestVisiblePointByX, selectPoint]);
+    onSelectPoint?.(data[index]);
+  }, [data, onSelectPoint]);
 
-  const updateScrubbedPoint = useCallback((x: number) => {
-    const closestPoint = getClosestVisiblePointByX(x);
-    setScrubbedPoint(closestPoint);
-    selectPoint(closestPoint);
-  }, [getClosestVisiblePointByX, selectPoint]);
+  const giftedBarData = useMemo<barDataItem[]>(() => {
+    const labeledWidth = Math.max(
+      barChartLayout.labelWidth,
+      Math.min(52, barChartLayout.spacing * xAxisLabelStep),
+    );
 
-  const endScrub = useCallback(() => {
-    setScrubbedPoint(null);
-  }, []);
+    return data.map((point, index) => {
+      const shouldShowLabel = index % xAxisLabelStep === 0 || index === data.length - 1;
 
-  const updateVisibleRange = useCallback((start: number, end: number) => {
-    setVisibleStart(start);
-    setVisibleEnd(end);
-  }, []);
-
-  const scrubBlocked = useSharedValue(false);
-  const initialRangeMs = useSharedValue(fullRangeMs);
-  const anchorDateMs = useSharedValue((minDate + maxDate) / 2);
-  const pinchStartStart = useSharedValue(minDate);
-  const pinchStartEnd = useSharedValue(maxDate);
-  const panStartStart = useSharedValue(minDate);
-  const panStartEnd = useSharedValue(maxDate);
-  const touch1PrevX = useSharedValue(0);
-  const touch2PrevX = useSharedValue(0);
-  const initialDistance = useSharedValue(0);
-  const initialFocalX = useSharedValue(0);
-  const gestureMode = useSharedValue<"undecided" | "zoom" | "pan">("undecided");
-
-  const twoFingerGesture = Gesture.Pan()
-    .minPointers(2)
-    .maxPointers(2)
-    .minDistance(0)
-    .onBegin(() => {
-      scrubBlocked.value = true;
-      gestureMode.value = "undecided";
-      runOnJS(endScrub)();
-    })
-    .onTouchesDown((event: any) => {
-      if (!event.allTouches || event.allTouches.length < 2) {
-        return;
-      }
-
-      const firstTouch = event.allTouches[0];
-      const secondTouch = event.allTouches[1];
-
-      touch1PrevX.value = firstTouch.x;
-      touch2PrevX.value = secondTouch.x;
-      initialDistance.value = Math.abs(firstTouch.x - secondTouch.x);
-      initialFocalX.value = (firstTouch.x + secondTouch.x) / 2;
-      initialRangeMs.value = visibleEnd - visibleStart;
-      pinchStartStart.value = visibleStart;
-      pinchStartEnd.value = visibleEnd;
-      panStartStart.value = visibleStart;
-      panStartEnd.value = visibleEnd;
-
-      const focalX = (firstTouch.x + secondTouch.x) / 2;
-      const focalRatio = Math.max(0, Math.min(1, (focalX - PLOT_PADDING_X) / plotWidth));
-      anchorDateMs.value = visibleStart + (focalRatio * (visibleEnd - visibleStart));
-    })
-    .onTouchesMove((event: any) => {
-      if (!event.allTouches || event.allTouches.length < 2) {
-        return;
-      }
-
-      const firstTouch = event.allTouches[0];
-      const secondTouch = event.allTouches[1];
-      const delta1 = firstTouch.x - touch1PrevX.value;
-      const delta2 = secondTouch.x - touch2PrevX.value;
-
-      touch1PrevX.value = firstTouch.x;
-      touch2PrevX.value = secondTouch.x;
-
-      if (gestureMode.value === "undecided") {
-        const minMovement = 3;
-        const hasMovement1 = Math.abs(delta1) > minMovement;
-        const hasMovement2 = Math.abs(delta2) > minMovement;
-
-        if (hasMovement1 && hasMovement2) {
-          const sameDirection = (delta1 > 0 && delta2 > 0) || (delta1 < 0 && delta2 < 0);
-          gestureMode.value = sameDirection ? "pan" : "zoom";
-        } else if (hasMovement1 || hasMovement2) {
-          const currentDistance = Math.abs(firstTouch.x - secondTouch.x);
-          const distanceChange = Math.abs(currentDistance - initialDistance.value);
-          gestureMode.value = distanceChange > 8 ? "zoom" : "pan";
-        }
-      }
-
-      if (gestureMode.value === "pan") {
-        const currentRange = panStartEnd.value - panStartStart.value;
-        if (currentRange >= fullRangeMs * 0.99) {
-          return;
-        }
-
-        const currentFocalX = (firstTouch.x + secondTouch.x) / 2;
-        const totalTranslation = currentFocalX - initialFocalX.value;
-        const pixelsPerMs = plotWidth / currentRange;
-        const panOffsetMs = -totalTranslation / pixelsPerMs;
-
-        let nextStart = panStartStart.value + panOffsetMs;
-        let nextEnd = panStartEnd.value + panOffsetMs;
-
-        if (nextStart < minDate) {
-          nextStart = minDate;
-          nextEnd = minDate + currentRange;
-        }
-        if (nextEnd > maxDate) {
-          nextEnd = maxDate;
-          nextStart = maxDate - currentRange;
-        }
-
-        runOnJS(updateVisibleRange)(nextStart, nextEnd);
-      } else if (gestureMode.value === "zoom") {
-        const currentDistance = Math.abs(firstTouch.x - secondTouch.x);
-        const scale = currentDistance / Math.max(initialDistance.value, 1);
-        const minRangeMs = MIN_VISIBLE_DAYS * MS_PER_DAY;
-        const nextRangeMs = Math.max(minRangeMs, Math.min(fullRangeMs, initialRangeMs.value / scale));
-        const anchorRatio = (anchorDateMs.value - pinchStartStart.value) / (pinchStartEnd.value - pinchStartStart.value || 1);
-
-        let nextStart = anchorDateMs.value - (anchorRatio * nextRangeMs);
-        let nextEnd = nextStart + nextRangeMs;
-
-        if (nextStart < minDate) {
-          nextStart = minDate;
-          nextEnd = minDate + nextRangeMs;
-        }
-        if (nextEnd > maxDate) {
-          nextEnd = maxDate;
-          nextStart = maxDate - nextRangeMs;
-        }
-
-        runOnJS(updateVisibleRange)(nextStart, nextEnd);
-      }
-    })
-    .onFinalize(() => {
-      gestureMode.value = "undecided";
+      return {
+        value: point.value - yAxisOffset,
+        label: shouldShowLabel ? formatBarXAxisLabel(point.date, includeYearOnXAxis, data.length) : "",
+        onPress: point.isPlaceholder ? undefined : () => handleSelectIndex(index),
+        disablePress: point.isPlaceholder,
+        frontColor: point.isPlaceholder ? "transparent" : `${rawColors.primary}D8`,
+        labelWidth: shouldShowLabel ? labeledWidth : barChartLayout.labelWidth,
+        labelTextStyle: {
+          color: axisTextColor,
+          fontSize: 9,
+          fontWeight: "600",
+        },
+      };
     });
+  }, [
+    axisTextColor,
+    barChartLayout.labelWidth,
+    barChartLayout.spacing,
+    data,
+    handleSelectIndex,
+    includeYearOnXAxis,
+    rawColors.primary,
+    xAxisLabelStep,
+    yAxisOffset,
+  ]);
 
-  const scrubGesture = Gesture.Pan()
-    .minPointers(1)
-    .minDistance(0)
-    .onBegin((event: any) => {
-      scrubBlocked.value = false;
-      runOnJS(beginScrub)(event.x);
-    })
-    .onTouchesDown((event: any) => {
-      if (event.allTouches && event.allTouches.length > 1) {
-        scrubBlocked.value = true;
-        runOnJS(endScrub)();
-      }
-    })
-    .onUpdate((event: any) => {
-      if (!scrubBlocked.value && event.numberOfPointers === 1) {
-        runOnJS(updateScrubbedPoint)(event.x);
-      } else if (event.numberOfPointers > 1) {
-        scrubBlocked.value = true;
-      }
-    })
-    .onFinalize(() => {
-      runOnJS(endScrub)();
+  const linePlotTop = 10;
+  const lineLabelAreaHeight = 28;
+  const linePlotHeight = Math.max(116, chartHeight - lineLabelAreaHeight);
+  const lineDomainMax = yAxisOffset + (maxValue ?? Math.max(...data.map((point) => point.value), 0));
+  const lineScrollableWidth = useMemo(() => {
+    if (data.length <= 1) {
+      return chartAreaWidth;
+    }
+
+    const lastX = lineChartLayout.initialSpacing + (lineChartLayout.spacing * (data.length - 1));
+    return Math.max(chartAreaWidth, lastX + lineChartLayout.endSpacing);
+  }, [chartAreaWidth, data.length, lineChartLayout.endSpacing, lineChartLayout.initialSpacing, lineChartLayout.spacing]);
+  const linePoints = useMemo(() => {
+    const range = Math.max(1, lineDomainMax - yAxisOffset);
+
+    return data.map((point, index) => {
+      const x = data.length <= 1
+        ? Math.floor(lineScrollableWidth / 2)
+        : lineChartLayout.initialSpacing + (index * lineChartLayout.spacing);
+      const ratio = (point.value - yAxisOffset) / range;
+      const y = linePlotTop + ((1 - ratio) * linePlotHeight);
+
+      return {
+        ...point,
+        x,
+        y,
+      };
     });
+  }, [
+    data,
+    lineChartLayout.initialSpacing,
+    lineChartLayout.spacing,
+    lineDomainMax,
+    linePlotHeight,
+    lineScrollableWidth,
+    yAxisOffset,
+  ]);
+  const linePath = useMemo(
+    () => buildLinePath(linePoints.map((point) => ({ x: point.x, y: point.y }))),
+    [linePoints]
+  );
+  const lineSelectedPoint = selectedIndex >= 0 ? linePoints[selectedIndex] ?? null : null;
+  const lineYLabels = useMemo(() => {
+    return Array.from({ length: noOfSections + 1 }, (_, index) => {
+      const ratio = index / noOfSections;
+      return {
+        value: yAxisOffset + (ratio * (lineDomainMax - yAxisOffset)),
+        y: linePlotTop + linePlotHeight - (ratio * linePlotHeight),
+      };
+    });
+  }, [lineDomainMax, linePlotHeight, linePlotTop, noOfSections, yAxisOffset]);
 
-  const composedGesture = Gesture.Simultaneous(twoFingerGesture, scrubGesture);
-
-  if (sortedData.length === 0) {
+  if (data.length === 0) {
     return (
-      <View style={[styles.emptyContainer, { height, backgroundColor: rawColors.surfaceSecondary }]}>
+      <View
+        style={[styles.emptyContainer, { height: resolvedHeight, backgroundColor: rawColors.surfaceSecondary }]}
+        onLayout={handleLayout}
+      >
         <MaterialCommunityIcons name="chart-line" size={42} color={rawColors.foregroundMuted} />
         <Text style={[styles.emptyText, { color: rawColors.foregroundSecondary }]}>
           No metric history yet
@@ -467,214 +391,233 @@ export default function UserMetricChart({
     );
   }
 
+  if (containerWidth === 0) {
+    return <View style={styles.wrapper} onLayout={handleLayout} />;
+  }
+
   return (
-    <GestureHandlerRootView style={styles.wrapper}>
-      <View style={[styles.container, { backgroundColor: rawColors.surfaceSecondary }]}>
-        {isZoomed ? (
-          <View style={[styles.zoomIndicator, { backgroundColor: rawColors.surface }]}>
-            <Text style={[styles.zoomText, { color: rawColors.foregroundSecondary }]}>
-              {Math.round((fullRangeMs / visibleRangeMs) * 100)}%
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.chartRow}>
-          <View style={[styles.yAxis, { width: Y_AXIS_WIDTH }]}>
-            <Svg width={Y_AXIS_WIDTH} height={chartHeight + PADDING_TOP + PADDING_BOTTOM}>
-              {yAxisLabels.map((label, index) => (
-                <SvgText
-                  key={index}
-                  x={Y_AXIS_WIDTH - 4}
-                  y={label.y + PADDING_TOP + 4}
-                  fontSize={10}
-                  fill={rawColors.foregroundSecondary}
-                  textAnchor="end"
-                >
-                  {formatYAxisLabel ? formatYAxisLabel(label.value) : label.value.toFixed(0)}
-                </SvgText>
-              ))}
-            </Svg>
+    <View
+      style={[styles.wrapper, { backgroundColor: rawColors.surfaceSecondary }]}
+      onLayout={handleLayout}
+    >
+      {variant === "line" ? (
+        <View style={styles.lineChartRow}>
+          <View style={[styles.lineYAxisColumn, { height: linePlotTop + linePlotHeight }]}>
+            {lineYLabels.map((label, index) => (
+              <Text
+                key={`y-${index}`}
+                style={[
+                  styles.lineYAxisLabel,
+                  {
+                    color: axisTextColor,
+                    top: label.y - 10,
+                  },
+                ]}
+              >
+                {formatYAxisText(label.value, formatYAxisLabel)}
+              </Text>
+            ))}
           </View>
 
-          <GestureDetector gesture={composedGesture}>
-            <View style={[styles.chartArea, { width: chartWidth + PADDING_RIGHT }]}>
-              <View style={styles.chartClip}>
-                <Svg width={chartWidth} height={chartHeight + PADDING_TOP + PADDING_BOTTOM}>
-                  {yAxisLabels.map((label, index) => (
-                    <Line
-                      key={`grid-${index}`}
-                      x1={0}
-                      y1={label.y + PADDING_TOP}
-                      x2={chartWidth}
-                      y2={label.y + PADDING_TOP}
-                      stroke={rawColors.foregroundMuted}
-                      strokeWidth={1}
-                      strokeDasharray="4,4"
-                      opacity={0.24}
+          <View style={styles.lineChartArea}>
+            <ScrollView
+              horizontal
+              scrollEnabled={!lineChartLayout.disableScroll}
+              showsHorizontalScrollIndicator={false}
+              bounces={false}
+            >
+              <Svg width={lineScrollableWidth} height={linePlotTop + linePlotHeight + lineLabelAreaHeight}>
+                {lineYLabels.map((label, index) => (
+                  <SvgLine
+                    key={`rule-${index}`}
+                    x1={0}
+                    y1={label.y}
+                    x2={lineScrollableWidth}
+                    y2={label.y}
+                    stroke={rulesColor}
+                    strokeWidth={1}
+                    strokeDasharray="4 8"
+                  />
+                ))}
+
+                {lineSelectedPoint ? (
+                  <SvgLine
+                    x1={lineSelectedPoint.x}
+                    y1={linePlotTop}
+                    x2={lineSelectedPoint.x}
+                    y2={linePlotTop + linePlotHeight}
+                    stroke={`${rawColors.primary}4D`}
+                    strokeWidth={1.5}
+                  />
+                ) : null}
+
+                <SvgLine
+                  x1={0}
+                  y1={linePlotTop + linePlotHeight}
+                  x2={lineScrollableWidth}
+                  y2={linePlotTop + linePlotHeight}
+                  stroke={rawColors.border}
+                  strokeWidth={1}
+                />
+
+                {linePath ? (
+                  <Path
+                    d={linePath}
+                    fill="none"
+                    stroke={rawColors.primary}
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : null}
+
+                {linePoints.map((point, index) => {
+                  const isSelected = selectedIndex === index;
+                  return (
+                    <Circle
+                      key={`${point.id}-${point.date}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={isSelected ? 6.5 : data.length <= 2 ? 5 : 4}
+                      fill={rawColors.primary}
+                      stroke={rawColors.surfaceSecondary}
+                      strokeWidth={isSelected ? 3 : 2}
+                      onPress={() => handleSelectIndex(index)}
                     />
-                  ))}
+                  );
+                })}
 
-                  {selectedRenderPoint ? (
-                    <Line
-                      x1={selectedRenderPoint.x}
-                      y1={PADDING_TOP}
-                      x2={selectedRenderPoint.x}
-                      y2={chartHeight + PADDING_TOP}
-                      stroke={rawColors.primary}
-                      strokeWidth={1.5}
-                      strokeDasharray="5,5"
-                      opacity={0.28}
-                    />
-                  ) : null}
+                {linePoints.map((point, index) => {
+                  const shouldShowLabel = index % xAxisLabelStep === 0 || index === data.length - 1;
+                  if (!shouldShowLabel) {
+                    return null;
+                  }
 
-                  {variant === "line" ? (
-                    <>
-                      {linePath ? (
-                        <Path
-                          d={linePath}
-                          fill="none"
-                          stroke={rawColors.primary}
-                          strokeWidth={2.5}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          transform={`translate(0, ${PADDING_TOP})`}
-                        />
-                      ) : null}
-
-                      {renderPoints.map((point) => (
-                        <Circle
-                          key={`${point.id}-${point.date}`}
-                          cx={point.x}
-                          cy={point.y + PADDING_TOP}
-                          r={DATA_POINT_RADIUS}
-                          fill={rawColors.primary}
-                          stroke={rawColors.surface}
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      {renderPoints.map((point) => (
-                        <Rect
-                          key={`${point.id}-${point.date}`}
-                          x={point.x - (barWidth / 2)}
-                          y={point.y + PADDING_TOP}
-                          width={barWidth}
-                          height={Math.max(4, chartHeight - point.y)}
-                          rx={Math.min(8, barWidth / 3)}
-                          fill={`${rawColors.primary}D6`}
-                        />
-                      ))}
-                    </>
-                  )}
-
-                  {selectedRenderPoint ? (
-                    variant === "line" ? (
-                      <Circle
-                        cx={selectedRenderPoint.x}
-                        cy={selectedRenderPoint.y + PADDING_TOP}
-                        r={DATA_POINT_RADIUS + 5}
-                        fill="none"
-                        stroke={rawColors.primary}
-                        strokeWidth={2.5}
-                        opacity={0.55}
-                      />
-                    ) : (
-                      <Rect
-                        x={selectedRenderPoint.x - (barWidth / 2) - 2}
-                        y={selectedRenderPoint.y + PADDING_TOP - 2}
-                        width={barWidth + 4}
-                        height={Math.max(8, chartHeight - selectedRenderPoint.y + 2)}
-                        rx={Math.min(10, barWidth / 3 + 2)}
-                        fill="none"
-                        stroke={rawColors.primary}
-                        strokeWidth={2.5}
-                        opacity={0.82}
-                      />
-                    )
-                  ) : null}
-                </Svg>
-              </View>
-
-              <View style={styles.xAxisContainer}>
-                <Svg width={chartWidth} height={X_AXIS_HEIGHT}>
-                  {xAxisLabels.map((point, index) => (
+                  return (
                     <SvgText
-                      key={`x-axis-${index}`}
+                      key={`x-${point.id}-${point.date}`}
                       x={point.x}
-                      y={18}
-                      fontSize={9}
-                      fill={rawColors.foregroundSecondary}
-                      textAnchor={
-                        index === 0
-                          ? "start"
-                          : index === xAxisLabels.length - 1
-                            ? "end"
-                            : "middle"
-                      }
+                      y={linePlotTop + linePlotHeight + 18}
+                      fill={axisTextColor}
+                      fontSize="9"
+                      fontWeight="600"
+                      textAnchor="middle"
                     >
-                      {formatDate(point.date)}
+                      {formatXAxisLabel(point.date, includeYearOnXAxis)}
                     </SvgText>
-                  ))}
-                </Svg>
-              </View>
-            </View>
-          </GestureDetector>
+                  );
+                })}
+              </Svg>
+            </ScrollView>
+          </View>
         </View>
+      ) : (
+        <View style={styles.barChartContainer}>
+          <BarChart
+            key={`bar-${data.length}-${chartAreaWidth}-${data[0]?.date ?? 0}-${data[data.length - 1]?.date ?? 0}`}
+            data={giftedBarData}
+            width={chartAreaWidth}
+            height={chartHeight}
+            parentWidth={chartAreaWidth + Y_AXIS_LABEL_WIDTH}
+            disableScroll={data.length <= 7}
+            scrollToEnd={data.length > 7}
+            scrollAnimation={false}
+            initialSpacing={barChartLayout.initialSpacing}
+            endSpacing={barChartLayout.endSpacing}
+            spacing={barChartLayout.spacing}
+            barWidth={barChartLayout.barWidth}
+            minHeight={6}
+            roundedTop={false}
+            roundedBottom={false}
+            barBorderRadius={4}
+            xAxisColor={rawColors.border}
+            xAxisThickness={1}
+            xAxisTextNumberOfLines={1}
+            xAxisLabelsHeight={24}
+            xAxisLabelTextStyle={[styles.axisText, { color: axisTextColor }]}
+            labelsDistanceFromXaxis={6}
+            yAxisColor="transparent"
+            yAxisThickness={0}
+            yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
+            yAxisTextStyle={[styles.axisText, { color: axisTextColor }]}
+            yAxisOffset={yAxisOffset}
+            maxValue={maxValue}
+            noOfSections={noOfSections}
+            formatYLabel={(label) => {
+              const n = Number(label);
+              if (yAxisOffset > 0 && n < yAxisOffset) return "";
+              return formatYAxisText(n, formatYAxisLabel);
+            }}
+            hideRules={false}
+            rulesColor={rulesColor}
+            rulesThickness={1}
+            dashGap={8}
+            dashWidth={4}
+            rulesType="dashed"
+            trimYAxisAtTop
+            showVerticalLines={false}
+            focusBarOnPress
+            focusedBarIndex={selectedIndex >= 0 ? selectedIndex : undefined}
+            focusedBarConfig={{
+              color: rawColors.primary,
+              opacity: 1,
+              borderRadius: 4,
+              width: barChartLayout.barWidth,
+            }}
+            showScrollIndicator={false}
+            bounces={false}
+          />
+        </View>
+      )}
 
-        <View style={styles.footerRow}>
-          <Text style={[styles.unitLabel, { color: rawColors.foregroundMuted }]}>
-            {unitLabel ?? ""}
-          </Text>
-          <Text style={[styles.instructions, { color: rawColors.foregroundMuted }]}>
-            {instructionsText}
-          </Text>
-        </View>
+      <View style={styles.footerRow}>
+        <Text style={[styles.unitLabel, { color: rawColors.foregroundMuted }]}>
+          {unitLabel ?? ""}
+        </Text>
+        <Text style={[styles.instructions, { color: rawColors.foregroundMuted }]}>
+          {instructionsText ?? baseInstructions}
+        </Text>
       </View>
-    </GestureHandlerRootView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    flex: 1,
-  },
-  container: {
-    borderRadius: 18,
-    paddingTop: 14,
-    paddingRight: 12,
+    borderRadius: 16,
+    paddingHorizontal: WRAPPER_H_PADDING,
+    paddingTop: 12,
     paddingBottom: 10,
+    overflow: "hidden",
   },
-  chartRow: {
+  axisText: {
+    fontSize: 9,
+    fontWeight: "600",
+  },
+  lineChartRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
   },
-  yAxis: {
-    alignItems: "flex-end",
-    justifyContent: "flex-start",
-  },
-  chartArea: {
+  lineChartArea: {
+    flex: 1,
     overflow: "hidden",
   },
-  chartClip: {
-    overflow: "hidden",
+  lineYAxisColumn: {
+    width: Y_AXIS_LABEL_WIDTH,
+    position: "relative",
   },
-  xAxisContainer: {},
-  zoomIndicator: {
+  lineYAxisLabel: {
     position: "absolute",
-    top: 8,
-    left: 8,
-    zIndex: 10,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    right: 2,
+    fontSize: 9,
+    fontWeight: "600",
   },
-  zoomText: {
-    fontSize: 11,
-    fontWeight: "700",
+  barChartContainer: {
+    overflow: "hidden",
+    marginLeft: -4,
   },
   footerRow: {
-    marginTop: 6,
+    marginTop: 8,
     alignItems: "center",
   },
   unitLabel: {
@@ -682,12 +625,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   instructions: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: 3,
+    fontSize: 10,
     textAlign: "center",
+    opacity: 0.7,
   },
   emptyContainer: {
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
