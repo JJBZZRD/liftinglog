@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useMemo, useState } from "react";
 import {
   type LayoutChangeEvent,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -39,8 +40,19 @@ type UserMetricChartProps = {
   yDomain?: { min: number; max: number };
 };
 
-const Y_AXIS_LABEL_WIDTH = 32;
-const WRAPPER_H_PADDING = 12;
+const Y_AXIS_LABEL_WIDTH = 42;
+/** Y tick label font size (line chart + bar chart); used to vertically center labels on grid lines. */
+const Y_AXIS_NUMBER_FONT_SIZE = 12;
+/** Draw line-chart grid from the left edge of the Y-label column into the plot (full column + small overlap). */
+const LINE_GRID_EXTEND_INTO_Y_AXIS = Y_AXIS_LABEL_WIDTH + 6;
+/** Shift horizontal rules left in Gifted BarChart so they meet Y labels. */
+const BAR_RULES_SHIFT_TOWARD_Y_AXIS = Y_AXIS_LABEL_WIDTH + 4;
+
+const barHorizontalRulesStyle = {
+  marginLeft: -BAR_RULES_SHIFT_TOWARD_Y_AXIS,
+};
+const WRAPPER_PADDING_LEFT = 10;
+const WRAPPER_PADDING_RIGHT = 12;
 const MIN_CHART_WIDTH = 180;
 
 function getBarChartLayout(pointCount: number, availableWidth: number) {
@@ -190,9 +202,7 @@ export default function UserMetricChart({
   onSelectPoint,
   height,
   width: propWidth,
-  unitLabel,
   formatYAxisLabel,
-  instructionsText,
   yDomain,
 }: UserMetricChartProps) {
   const { rawColors } = useTheme();
@@ -206,14 +216,17 @@ export default function UserMetricChart({
   }, [measuredWidth]);
 
   const containerWidth = propWidth ?? measuredWidth;
-  const resolvedHeight = height ?? (variant === "bar" ? 196 : 208);
+  const resolvedHeight = height ?? (variant === "bar" ? 268 : 288);
+  const innerWidth =
+    containerWidth - WRAPPER_PADDING_LEFT - WRAPPER_PADDING_RIGHT;
   const chartAreaWidth = Math.max(
     MIN_CHART_WIDTH,
-    containerWidth - Y_AXIS_LABEL_WIDTH - WRAPPER_H_PADDING * 2,
+    innerWidth - Y_AXIS_LABEL_WIDTH,
   );
+  const wrapperVerticalReserve = 28;
   const chartHeight = Math.max(
-    variant === "bar" ? 148 : 156,
-    resolvedHeight - (variant === "bar" ? 56 : 60),
+    variant === "bar" ? 198 : 210,
+    resolvedHeight - wrapperVerticalReserve,
   );
   const xAxisLabelStep = getXAxisLabelStep(data.length);
   const barChartLayout = useMemo(() => getBarChartLayout(data.length, chartAreaWidth), [chartAreaWidth, data.length]);
@@ -278,10 +291,6 @@ export default function UserMetricChart({
   const { yAxisOffset, maxValue, noOfSections } = computedYAxis;
   const axisTextColor = rawColors.foregroundSecondary;
   const rulesColor = `${rawColors.foregroundMuted}26`;
-  const baseInstructions = variant === "bar"
-    ? "Tap a bar to inspect | Scroll for older data"
-    : "Tap a point to inspect | Scroll for older data";
-
   const handleSelectIndex = useCallback((index: number) => {
     if (index < 0 || index >= data.length) {
       return;
@@ -326,8 +335,8 @@ export default function UserMetricChart({
   ]);
 
   const linePlotTop = 10;
-  const lineLabelAreaHeight = 28;
-  const linePlotHeight = Math.max(116, chartHeight - lineLabelAreaHeight);
+  const lineLabelAreaHeight = 30;
+  const linePlotHeight = Math.max(140, chartHeight - lineLabelAreaHeight);
   const lineDomainMax = yAxisOffset + (maxValue ?? Math.max(...data.map((point) => point.value), 0));
   const lineScrollableWidth = useMemo(() => {
     if (data.length <= 1) {
@@ -337,13 +346,15 @@ export default function UserMetricChart({
     const lastX = lineChartLayout.initialSpacing + (lineChartLayout.spacing * (data.length - 1));
     return Math.max(chartAreaWidth, lastX + lineChartLayout.endSpacing);
   }, [chartAreaWidth, data.length, lineChartLayout.endSpacing, lineChartLayout.initialSpacing, lineChartLayout.spacing]);
+  const lineSvgWidth = lineScrollableWidth + LINE_GRID_EXTEND_INTO_Y_AXIS;
   const linePoints = useMemo(() => {
     const range = Math.max(1, lineDomainMax - yAxisOffset);
 
     return data.map((point, index) => {
-      const x = data.length <= 1
+      const xPlot = data.length <= 1
         ? Math.floor(lineScrollableWidth / 2)
         : lineChartLayout.initialSpacing + (index * lineChartLayout.spacing);
+      const x = xPlot + LINE_GRID_EXTEND_INTO_Y_AXIS;
       const ratio = (point.value - yAxisOffset) / range;
       const y = linePlotTop + ((1 - ratio) * linePlotHeight);
 
@@ -402,7 +413,15 @@ export default function UserMetricChart({
     >
       {variant === "line" ? (
         <View style={styles.lineChartRow}>
-          <View style={[styles.lineYAxisColumn, { height: linePlotTop + linePlotHeight }]}>
+          <View
+            style={[
+              styles.lineYAxisColumn,
+              {
+                height: linePlotTop + linePlotHeight,
+                backgroundColor: rawColors.surfaceSecondary,
+              },
+            ]}
+          >
             {lineYLabels.map((label, index) => (
               <Text
                 key={`y-${index}`}
@@ -410,7 +429,7 @@ export default function UserMetricChart({
                   styles.lineYAxisLabel,
                   {
                     color: axisTextColor,
-                    top: label.y - 10,
+                    top: label.y - Y_AXIS_NUMBER_FONT_SIZE / 2,
                   },
                 ]}
               >
@@ -426,88 +445,93 @@ export default function UserMetricChart({
               showsHorizontalScrollIndicator={false}
               bounces={false}
             >
-              <Svg width={lineScrollableWidth} height={linePlotTop + linePlotHeight + lineLabelAreaHeight}>
-                {lineYLabels.map((label, index) => (
-                  <SvgLine
-                    key={`rule-${index}`}
-                    x1={0}
-                    y1={label.y}
-                    x2={lineScrollableWidth}
-                    y2={label.y}
-                    stroke={rulesColor}
-                    strokeWidth={1}
-                    strokeDasharray="4 8"
-                  />
-                ))}
-
-                {lineSelectedPoint ? (
-                  <SvgLine
-                    x1={lineSelectedPoint.x}
-                    y1={linePlotTop}
-                    x2={lineSelectedPoint.x}
-                    y2={linePlotTop + linePlotHeight}
-                    stroke={`${rawColors.primary}4D`}
-                    strokeWidth={1.5}
-                  />
-                ) : null}
-
-                <SvgLine
-                  x1={0}
-                  y1={linePlotTop + linePlotHeight}
-                  x2={lineScrollableWidth}
-                  y2={linePlotTop + linePlotHeight}
-                  stroke={rawColors.border}
-                  strokeWidth={1}
-                />
-
-                {linePath ? (
-                  <Path
-                    d={linePath}
-                    fill="none"
-                    stroke={rawColors.primary}
-                    strokeWidth={3}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                ) : null}
-
-                {linePoints.map((point, index) => {
-                  const isSelected = selectedIndex === index;
-                  return (
-                    <Circle
-                      key={`${point.id}-${point.date}`}
-                      cx={point.x}
-                      cy={point.y}
-                      r={isSelected ? 6.5 : data.length <= 2 ? 5 : 4}
-                      fill={rawColors.primary}
-                      stroke={rawColors.surfaceSecondary}
-                      strokeWidth={isSelected ? 3 : 2}
-                      onPress={() => handleSelectIndex(index)}
+              <View style={[styles.lineSvgOuter, { width: lineSvgWidth }]}>
+                <Svg
+                  width={lineSvgWidth}
+                  height={linePlotTop + linePlotHeight + lineLabelAreaHeight}
+                >
+                  {lineYLabels.map((label, index) => (
+                    <SvgLine
+                      key={`rule-${index}`}
+                      x1={0}
+                      y1={label.y}
+                      x2={lineSvgWidth}
+                      y2={label.y}
+                      stroke={rulesColor}
+                      strokeWidth={1}
+                      strokeDasharray="4 8"
                     />
-                  );
-                })}
+                  ))}
 
-                {linePoints.map((point, index) => {
-                  const shouldShowLabel = index % xAxisLabelStep === 0 || index === data.length - 1;
-                  if (!shouldShowLabel) {
-                    return null;
-                  }
+                  {lineSelectedPoint ? (
+                    <SvgLine
+                      x1={lineSelectedPoint.x}
+                      y1={linePlotTop}
+                      x2={lineSelectedPoint.x}
+                      y2={linePlotTop + linePlotHeight}
+                      stroke={`${rawColors.primary}4D`}
+                      strokeWidth={1.5}
+                    />
+                  ) : null}
 
-                  return (
-                    <SvgText
-                      key={`x-${point.id}-${point.date}`}
-                      x={point.x}
-                      y={linePlotTop + linePlotHeight + 18}
-                      fill={axisTextColor}
-                      fontSize="9"
-                      fontWeight="600"
-                      textAnchor="middle"
-                    >
-                      {formatXAxisLabel(point.date, includeYearOnXAxis)}
-                    </SvgText>
-                  );
-                })}
-              </Svg>
+                  <SvgLine
+                    x1={0}
+                    y1={linePlotTop + linePlotHeight}
+                    x2={lineSvgWidth}
+                    y2={linePlotTop + linePlotHeight}
+                    stroke={rawColors.border}
+                    strokeWidth={1}
+                  />
+
+                  {linePath ? (
+                    <Path
+                      d={linePath}
+                      fill="none"
+                      stroke={rawColors.primary}
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  ) : null}
+
+                  {linePoints.map((point, index) => {
+                    const isSelected = selectedIndex === index;
+                    return (
+                      <Circle
+                        key={`${point.id}-${point.date}`}
+                        cx={point.x}
+                        cy={point.y}
+                        r={isSelected ? 6.5 : data.length <= 2 ? 5 : 4}
+                        fill={rawColors.primary}
+                        stroke={rawColors.surfaceSecondary}
+                        strokeWidth={isSelected ? 3 : 2}
+                        onPress={() => handleSelectIndex(index)}
+                      />
+                    );
+                  })}
+
+                  {linePoints.map((point, index) => {
+                    const shouldShowLabel = index % xAxisLabelStep === 0 || index === data.length - 1;
+                    if (!shouldShowLabel) {
+                      return null;
+                    }
+
+                    return (
+                      <SvgText
+                        key={`x-${point.id}-${point.date}`}
+                        x={point.x}
+                        y={linePlotTop + linePlotHeight + 18}
+                        fill={axisTextColor}
+                        fontSize="9"
+                        fontWeight="600"
+                        textAnchor="middle"
+                      >
+                        {formatXAxisLabel(point.date, includeYearOnXAxis)}
+                      </SvgText>
+                    );
+                  })}
+                </Svg>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -539,7 +563,9 @@ export default function UserMetricChart({
             yAxisColor="transparent"
             yAxisThickness={0}
             yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
-            yAxisTextStyle={[styles.axisText, { color: axisTextColor }]}
+            yAxisLabelContainerStyle={styles.barYAxisLabelContainer}
+            rulesLength={chartAreaWidth + BAR_RULES_SHIFT_TOWARD_Y_AXIS}
+            yAxisTextStyle={[styles.yAxisText, { color: axisTextColor }]}
             yAxisOffset={yAxisOffset}
             maxValue={maxValue}
             noOfSections={noOfSections}
@@ -549,6 +575,7 @@ export default function UserMetricChart({
               return formatYAxisText(n, formatYAxisLabel);
             }}
             hideRules={false}
+            horizontalRulesStyle={barHorizontalRulesStyle}
             rulesColor={rulesColor}
             rulesThickness={1}
             dashGap={8}
@@ -569,15 +596,6 @@ export default function UserMetricChart({
           />
         </View>
       )}
-
-      <View style={styles.footerRow}>
-        <Text style={[styles.unitLabel, { color: rawColors.foregroundMuted }]}>
-          {unitLabel ?? ""}
-        </Text>
-        <Text style={[styles.instructions, { color: rawColors.foregroundMuted }]}>
-          {instructionsText ?? baseInstructions}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -585,7 +603,8 @@ export default function UserMetricChart({
 const styles = StyleSheet.create({
   wrapper: {
     borderRadius: 16,
-    paddingHorizontal: WRAPPER_H_PADDING,
+    paddingLeft: WRAPPER_PADDING_LEFT,
+    paddingRight: WRAPPER_PADDING_RIGHT,
     paddingTop: 12,
     paddingBottom: 10,
     overflow: "hidden",
@@ -594,41 +613,45 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "600",
   },
+  yAxisText: {
+    fontSize: Y_AXIS_NUMBER_FONT_SIZE,
+    fontWeight: "600",
+    lineHeight: Y_AXIS_NUMBER_FONT_SIZE,
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+  },
   lineChartRow: {
     flexDirection: "row",
     alignItems: "flex-start",
+    overflow: "visible",
   },
   lineChartArea: {
     flex: 1,
-    overflow: "hidden",
+    overflow: "visible",
+    zIndex: 0,
   },
   lineYAxisColumn: {
     width: Y_AXIS_LABEL_WIDTH,
     position: "relative",
+    zIndex: 2,
+  },
+  lineSvgOuter: {
+    marginLeft: -LINE_GRID_EXTEND_INTO_Y_AXIS,
   },
   lineYAxisLabel: {
     position: "absolute",
-    right: 2,
-    fontSize: 9,
+    left: 0,
+    fontSize: Y_AXIS_NUMBER_FONT_SIZE,
     fontWeight: "600",
+    lineHeight: Y_AXIS_NUMBER_FONT_SIZE,
+    textAlign: "left",
+    textAlignVertical: "center",
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+  },
+  barYAxisLabelContainer: {
+    alignItems: "flex-start",
   },
   barChartContainer: {
     overflow: "hidden",
-    marginLeft: -4,
-  },
-  footerRow: {
-    marginTop: 8,
-    alignItems: "center",
-  },
-  unitLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  instructions: {
-    marginTop: 3,
-    fontSize: 10,
-    textAlign: "center",
-    opacity: 0.7,
   },
   emptyContainer: {
     borderRadius: 16,
