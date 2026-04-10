@@ -11,8 +11,9 @@
  */
 import { desc, eq } from "drizzle-orm";
 import { db } from "./connection";
-import { exercises, sets, workoutExercises, workouts } from "./schema";
+import { exercises, sets, userCheckins, workoutExercises, workouts } from "./schema";
 import { detectAndRecordPBs } from "../pb/detection";
+import { createUserCheckin } from "./userCheckins";
 
 function startOfLocalDay(date: Date): Date {
   const value = new Date(date);
@@ -31,6 +32,14 @@ const TODAY_START = startOfLocalDay(new Date());
 const SEED_END_EXCLUSIVE = addDays(TODAY_START, 1);
 const SIX_MONTHS_START = new Date(2025, 6, 12);
 const THREE_MONTHS_START = new Date(2025, 9, 10);
+const USER_METRICS_START = new Date(2025, 3, 12);
+
+const BODYWEIGHT_SEED_SOURCE = "seed:user-metrics:bodyweight:v1";
+const STRESS_SEED_SOURCE = "seed:user-metrics:stress:v1";
+
+const BODYWEIGHT_BULK_END_DAY = 196;
+const BODYWEIGHT_MAINTAIN_END_DAY = 224;
+const BODYWEIGHT_CUT_END_DAY = 350;
 
 // Deterministic pseudo-random number generator (Mulberry32)
 function createRng(seed: number) {
@@ -45,6 +54,18 @@ function createRng(seed: number) {
 // Round to nearest 2.5kg
 function roundToNearest2_5(value: number): number {
   return Math.round(value / 2.5) * 2.5;
+}
+
+function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function lerp(start: number, end: number, progress: number): number {
+  return start + (end - start) * clamp(progress, 0, 1);
 }
 
 // Helper to create or get exercise
@@ -89,6 +110,17 @@ async function getLatestSeededSetTime(exerciseId: number): Promise<number | null
     .limit(1);
 
   return latestSet[0]?.performedAt ?? null;
+}
+
+async function getLatestSeededCheckinTime(source: string): Promise<number | null> {
+  const latestCheckin = await db
+    .select({ recordedAt: userCheckins.recordedAt })
+    .from(userCheckins)
+    .where(eq(userCheckins.source, source))
+    .orderBy(desc(userCheckins.recordedAt), desc(userCheckins.id))
+    .limit(1);
+
+  return latestCheckin[0]?.recordedAt ?? null;
 }
 
 function shouldCreateSession(latestSeededTime: number | null, workoutTime: number): boolean {
@@ -252,6 +284,198 @@ async function seed531Program(): Promise<void> {
   }
 
   console.log(`[SeedTestData] Test_531: ${insertedCount} sessions inserted.`);
+}
+
+function getBodyweightTrend(dayIndex: number): number {
+  if (dayIndex <= BODYWEIGHT_BULK_END_DAY) {
+    return lerp(90, 105, dayIndex / BODYWEIGHT_BULK_END_DAY);
+  }
+
+  if (dayIndex <= BODYWEIGHT_MAINTAIN_END_DAY) {
+    const phaseDay = dayIndex - BODYWEIGHT_BULK_END_DAY;
+    return 105 - Math.sin((phaseDay / (BODYWEIGHT_MAINTAIN_END_DAY - BODYWEIGHT_BULK_END_DAY)) * Math.PI) * 0.25;
+  }
+
+  if (dayIndex <= BODYWEIGHT_CUT_END_DAY) {
+    return lerp(
+      105,
+      92,
+      (dayIndex - BODYWEIGHT_MAINTAIN_END_DAY) / (BODYWEIGHT_CUT_END_DAY - BODYWEIGHT_MAINTAIN_END_DAY)
+    );
+  }
+
+  return lerp(92, 92.7, (dayIndex - BODYWEIGHT_CUT_END_DAY) / 45);
+}
+
+function getSeededBodyweightValue(
+  dayIndex: number,
+  dayOfWeek: number,
+  previousStressScore: number,
+  rollingOffset: number
+): number {
+  const trend = getBodyweightTrend(dayIndex);
+  const weeklyCycle = Math.sin((dayIndex / 7) * Math.PI * 2 + 0.85) * 0.35;
+  const weekendFoodBias = dayOfWeek === 1 ? 0.35 : dayOfWeek === 6 ? 0.15 : 0;
+  const stressRetention = previousStressScore >= 4 ? 0.2 : previousStressScore <= 2 ? -0.05 : 0;
+  const refeedBias =
+    dayIndex > BODYWEIGHT_MAINTAIN_END_DAY && dayIndex <= BODYWEIGHT_CUT_END_DAY && dayOfWeek === 6
+      ? 0.25
+      : 0;
+  const checkpointValue =
+    dayIndex === 0 ? 90 : dayIndex === BODYWEIGHT_BULK_END_DAY ? 105 : dayIndex === BODYWEIGHT_CUT_END_DAY ? 92 : null;
+
+  if (checkpointValue !== null) {
+    return checkpointValue;
+  }
+
+  return roundToOneDecimal(
+    clamp(
+      trend + weeklyCycle + rollingOffset + weekendFoodBias + stressRetention + refeedBias,
+      trend - 1.1,
+      trend + 1.1
+    )
+  );
+}
+
+function getStressEventBias(dayIndex: number): number {
+  if ((dayIndex >= 54 && dayIndex <= 61) || (dayIndex >= 146 && dayIndex <= 154)) {
+    return 0.8;
+  }
+
+  if (dayIndex >= 265 && dayIndex <= 278) {
+    return 1.0;
+  }
+
+  if (dayIndex >= 252 && dayIndex <= 260) {
+    return -0.8;
+  }
+
+  if (dayIndex >= 336 && dayIndex <= 343) {
+    return -0.4;
+  }
+
+  return 0;
+}
+
+function getSeededStressValue(
+  dayIndex: number,
+  dayOfWeek: number,
+  previousStressScore: number,
+  rngValue: number
+): number {
+  const weekdayBiasByDay = [-0.55, 0.7, 0.4, 0.2, 0.3, 0.05, -0.2];
+
+  let baseline = 2.2;
+  if (dayIndex <= BODYWEIGHT_BULK_END_DAY) {
+    baseline = lerp(2.2, 2.9, dayIndex / BODYWEIGHT_BULK_END_DAY);
+  } else if (dayIndex <= BODYWEIGHT_MAINTAIN_END_DAY) {
+    baseline = 2.8;
+  } else if (dayIndex <= BODYWEIGHT_CUT_END_DAY) {
+    baseline = lerp(
+      2.9,
+      3.4,
+      (dayIndex - BODYWEIGHT_MAINTAIN_END_DAY) / (BODYWEIGHT_CUT_END_DAY - BODYWEIGHT_MAINTAIN_END_DAY)
+    );
+  } else {
+    baseline = 2.4;
+  }
+
+  const stressPersistence = (previousStressScore - 3) * 0.3;
+  const randomNoise = (rngValue - 0.5) * 1.2;
+
+  return clamp(
+    Math.round(
+      baseline
+      + weekdayBiasByDay[dayOfWeek]
+      + getStressEventBias(dayIndex)
+      + stressPersistence
+      + randomNoise
+    ),
+    1,
+    5
+  );
+}
+
+async function seedUserMetrics(): Promise<void> {
+  const [latestBodyweightTime, latestStressTime] = await Promise.all([
+    getLatestSeededCheckinTime(BODYWEIGHT_SEED_SOURCE),
+    getLatestSeededCheckinTime(STRESS_SEED_SOURCE),
+  ]);
+
+  if (isSeededThroughToday(latestBodyweightTime) && isSeededThroughToday(latestStressTime)) {
+    console.log("[SeedTestData] User metrics already reach today, skipping.");
+    return;
+  }
+
+  console.log("[SeedTestData] Seeding user metrics (bodyweight + stress)...");
+
+  const rng = createRng(314159);
+  let bodyweightRollingOffset = 0;
+  let previousStressScore = 3;
+  let bodyweightInsertedCount = 0;
+  let stressInsertedCount = 0;
+
+  for (
+    let currentDate = new Date(USER_METRICS_START), dayIndex = 0;
+    currentDate.getTime() < SEED_END_EXCLUSIVE.getTime();
+    currentDate = addDays(currentDate, 1), dayIndex++
+  ) {
+    const dayOfWeek = currentDate.getDay();
+    const morningMinuteOffset = 6 * 60 + 20 + Math.floor(rng() * 85);
+    const eveningMinuteOffset = 20 * 60 + 10 + Math.floor(rng() * 135);
+
+    bodyweightRollingOffset = bodyweightRollingOffset * 0.55 + (rng() - 0.5) * 0.55;
+
+    const retainedStressScore = previousStressScore;
+    const stressValue = getSeededStressValue(dayIndex, dayOfWeek, previousStressScore, rng());
+    previousStressScore = stressValue;
+
+    const shouldLogBodyweight =
+      dayIndex === 0
+      || dayIndex === BODYWEIGHT_BULK_END_DAY
+      || dayIndex === BODYWEIGHT_CUT_END_DAY
+      || currentDate.getTime() === TODAY_START.getTime()
+      || (dayOfWeek >= 1 && dayOfWeek <= 5 ? rng() > 0.16 : rng() > 0.48);
+
+    if (shouldLogBodyweight) {
+      const recordedAt = currentDate.getTime() + morningMinuteOffset * 60 * 1000;
+      if (shouldCreateSession(latestBodyweightTime, recordedAt)) {
+        await createUserCheckin({
+          recorded_at: recordedAt,
+          context: "morning",
+          bodyweight_kg: getSeededBodyweightValue(
+            dayIndex,
+            dayOfWeek,
+            retainedStressScore,
+            bodyweightRollingOffset
+          ),
+          source: BODYWEIGHT_SEED_SOURCE,
+        });
+        bodyweightInsertedCount++;
+      }
+    }
+
+    const shouldLogStress =
+      currentDate.getTime() === TODAY_START.getTime()
+      || (dayOfWeek === 0 || dayOfWeek === 6 ? rng() > 0.18 : rng() > 0.08);
+
+    if (shouldLogStress) {
+      const recordedAt = currentDate.getTime() + eveningMinuteOffset * 60 * 1000;
+      if (shouldCreateSession(latestStressTime, recordedAt)) {
+        await createUserCheckin({
+          recorded_at: recordedAt,
+          context: "evening",
+          stress_score: stressValue,
+          source: STRESS_SEED_SOURCE,
+        });
+        stressInsertedCount++;
+      }
+    }
+  }
+
+  console.log(
+    `[SeedTestData] User metrics: ${bodyweightInsertedCount} bodyweight entries, ${stressInsertedCount} stress entries inserted.`
+  );
 }
 
 // ============================================================================
@@ -579,6 +803,7 @@ export async function seedTestDataExercise(): Promise<void> {
   await seedSmolovProgram();
   await seedSheikoProgram();
   await seedLinearProgram();
+  await seedUserMetrics();
 
   console.log("[SeedTestData] All test data seeding complete!");
 }
