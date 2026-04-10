@@ -265,7 +265,9 @@ function buildChartPoints(
   const placeholderValue = yDomain ? yDomain.min + 0.001 : 0;
   const paddedPoints: UserMetricChartPoint[] = [];
 
-  for (let dayTimestamp = startDate.getTime(); dayTimestamp <= endDate.getTime(); dayTimestamp += MS_PER_DAY) {
+  const cursor = new Date(startDate);
+  while (cursor.getTime() <= endDate.getTime()) {
+    const dayTimestamp = getStartOfLocalDay(cursor).getTime();
     const entry = latestEntryByDay.get(dayTimestamp);
 
     if (entry) {
@@ -274,15 +276,16 @@ function buildChartPoints(
         date: entry.recordedAt,
         value: entry.value,
       });
-      continue;
+    } else {
+      paddedPoints.push({
+        id: -dayTimestamp,
+        date: dayTimestamp,
+        value: placeholderValue,
+        isPlaceholder: true,
+      });
     }
 
-    paddedPoints.push({
-      id: -dayTimestamp,
-      date: dayTimestamp,
-      value: placeholderValue,
-      isPlaceholder: true,
-    });
+    cursor.setDate(cursor.getDate() + 1);
   }
 
   return paddedPoints;
@@ -379,28 +382,6 @@ function hasOtherMetricValues(checkin: UserCheckin, activeMetricKey: UserMetricK
   });
 }
 
-function renderHistoryMeta(entry: UserMetricEntry) {
-  const tags = [entry.context, entry.source].filter(
-    (value): value is string => typeof value === "string" && value.trim().length > 0
-  );
-
-  if (tags.length === 0) {
-    return null;
-  }
-
-  return (
-    <View className="mt-3 flex-row flex-wrap gap-2">
-      {tags.map((tag) => (
-        <View key={`${entry.checkinId}-${tag}`} className="rounded-full bg-surface px-2.5 py-1">
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-foreground-secondary">
-            {tag.replace(/_/g, " ")}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 function renderSleepSummary(entry: UserMetricEntry | null) {
   if (!entry || entry.sleepStartAt === null || entry.sleepEndAt === null) {
     return null;
@@ -412,28 +393,28 @@ function renderSleepSummary(entry: UserMetricEntry | null) {
   );
 
   return (
-    <View className="mt-4 flex-row gap-3">
-      <View className="flex-1 rounded-2xl border border-border-light bg-surface px-3 py-3">
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-foreground-secondary">
-          Sleep Time
+    <View className="mt-4 flex-row gap-2">
+      <View className="flex-1 rounded-xl bg-surface-secondary px-3 py-2.5">
+        <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+          Sleep
         </Text>
-        <Text className="mt-2 text-sm font-semibold text-foreground">
+        <Text className="mt-1 text-sm font-semibold text-foreground">
           {formatSleepClockTime(entry.sleepStartAt)}
         </Text>
       </View>
-      <View className="flex-1 rounded-2xl border border-border-light bg-surface px-3 py-3">
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-foreground-secondary">
-          Wake Time
+      <View className="flex-1 rounded-xl bg-surface-secondary px-3 py-2.5">
+        <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+          Wake
         </Text>
-        <Text className="mt-2 text-sm font-semibold text-foreground">
+        <Text className="mt-1 text-sm font-semibold text-foreground">
           {formatSleepClockTime(entry.sleepEndAt)}
         </Text>
       </View>
-      <View className="flex-1 rounded-2xl border border-border-light bg-surface px-3 py-3">
-        <Text className="text-[11px] font-semibold uppercase tracking-wide text-foreground-secondary">
-          Sleep Duration
+      <View className="flex-1 rounded-xl bg-surface-secondary px-3 py-2.5">
+        <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+          Duration
         </Text>
-        <Text className="mt-2 text-sm font-semibold text-foreground">
+        <Text className="mt-1 text-sm font-semibold text-foreground">
           {formatSleepDurationMinutes(durationMinutes)}
         </Text>
       </View>
@@ -798,27 +779,101 @@ export default function UserMetricDetailScreen() {
         <ScrollView
           className="flex-1"
           contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120, gap: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120, gap: 12 }}
         >
-          <View className="rounded-2xl bg-surface p-5" style={cardShadowStyle}>
-            <View className="flex-row items-start gap-4">
+          {/* ── HERO STAT ── */}
+          <View className="rounded-2xl bg-surface px-5 pt-5 pb-4">
+            <View className="flex-row items-center gap-3">
               <View
-                className="h-14 w-14 items-center justify-center rounded-full"
+                className="h-10 w-10 items-center justify-center rounded-full"
                 style={{ backgroundColor: accent.iconBackground }}
               >
-                <MaterialCommunityIcons name={metric.icon as never} size={28} color={accent.iconColor} />
+                <MaterialCommunityIcons name={metric.icon as never} size={20} color={accent.iconColor} />
               </View>
-              <View className="flex-1">
-                <Text className="text-2xl font-semibold text-foreground">{metric.label}</Text>
-                <Text className="mt-1 text-sm text-foreground-secondary">{metric.subtitle}</Text>
+              <Text className="text-xs font-semibold uppercase tracking-widest text-foreground-muted">
+                {selectedEntry ? "Selected" : "Current"} {metric.label}
+              </Text>
+              {loading ? (
+                <ActivityIndicator size="small" color={rawColors.primary} style={{ marginLeft: 4 }} />
+              ) : null}
+            </View>
+
+            <Text
+              className="mt-3 text-[42px] font-bold text-foreground"
+              style={{ fontVariant: ["tabular-nums"], lineHeight: 48 }}
+            >
+              {selectedValueLabel}
+            </Text>
+
+            <Text className="mt-1 text-sm text-foreground-muted">
+              {displayEntry
+                ? `Logged ${formatRecordedAt(displayEntry.recordedAt)}`
+                : metric.emptyStateLabel}
+            </Text>
+
+            {metric.key === "sleep" ? renderSleepSummary(displayEntry) : null}
+
+            {displayEntry?.note ? (
+              <Text className="mt-3 text-sm leading-5 text-foreground-secondary">
+                {displayEntry.note}
+              </Text>
+            ) : null}
+
+            {displayEntry ? (
+              <View className="mt-4 flex-row gap-2">
+                <Pressable
+                  className="flex-row items-center rounded-lg bg-surface-secondary px-3 py-2"
+                  onPress={() => handleStartEditing(displayEntry)}
+                  disabled={saving || deletingEntryId !== null || editingEntryId === displayEntry.checkinId}
+                  style={{ opacity: saving || deletingEntryId !== null ? 0.6 : 1 }}
+                >
+                  <MaterialCommunityIcons
+                    name={editingEntryId === displayEntry.checkinId ? "pencil-circle" : "pencil-outline"}
+                    size={16}
+                    color={editingEntryId === displayEntry.checkinId ? accent.iconColor : rawColors.primary}
+                  />
+                  <Text
+                    className="ml-1.5 text-xs font-semibold"
+                    style={{ color: editingEntryId === displayEntry.checkinId ? accent.iconColor : rawColors.primary }}
+                  >
+                    {editingEntryId === displayEntry.checkinId ? "Editing" : "Edit"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  className="flex-row items-center rounded-lg bg-surface-secondary px-3 py-2"
+                  onPress={() => handleDeleteEntry(displayEntry)}
+                  disabled={saving || deletingEntryId !== null}
+                  style={{ opacity: saving || deletingEntryId !== null ? 0.6 : 1 }}
+                >
+                  {deletingEntryId === displayEntry.checkinId ? (
+                    <ActivityIndicator size="small" color={rawColors.destructive} />
+                  ) : (
+                    <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
+                  )}
+                  <Text className="ml-1.5 text-xs font-semibold" style={{ color: rawColors.destructive }}>
+                    Delete
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+
+          {/* ── DATE RANGE + CHART ── */}
+          <View className="rounded-2xl bg-surface px-5 pt-4 pb-2">
+            <DateRangeSelector value={dateRange} onChange={setDateRange} />
+
+            <View className="mt-2 flex-row items-center justify-between">
+              <Text className="text-sm font-semibold text-foreground">Performance Trend</Text>
+              <View className="flex-row gap-2">
+                <View className="rounded-full bg-primary-light px-2.5 py-1">
+                  <Text className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                    {filteredEntries.length} in range
+                  </Text>
+                </View>
               </View>
             </View>
 
-            <View className="mt-5">
-              <DateRangeSelector value={dateRange} onChange={setDateRange} />
-            </View>
-
-            <View className="mt-4 overflow-hidden rounded-2xl border border-border-light bg-surface-secondary py-2">
+            <View className="mt-2 overflow-hidden rounded-xl bg-surface-secondary py-1">
               <UserMetricChart
                 data={chartPoints}
                 variant={chartVariant}
@@ -835,129 +890,40 @@ export default function UserMetricDetailScreen() {
                           ? "bpm"
                           : metric.key === "steps"
                             ? "steps"
-                          : "score"
+                            : "score"
                 }
                 formatYAxisLabel={(value) => formatAxisValue(metric.key, value, unitPreference)}
                 yDomain={chartYDomain}
               />
             </View>
-
-            <View className="mt-4 rounded-2xl border border-border-light bg-surface-secondary p-4">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                {selectedEntry ? "Selected Reading" : "Latest Reading"}
-              </Text>
-              <Text
-                className="mt-2 text-[34px] font-bold text-foreground"
-                style={{ fontVariant: ["tabular-nums"] }}
-              >
-                {selectedValueLabel}
-              </Text>
-              <Text className="mt-1 text-xs text-foreground-muted">
-                {displayEntry
-                  ? `Logged ${formatRecordedAt(displayEntry.recordedAt)}`
-                  : metric.emptyStateLabel}
-              </Text>
-
-              {metric.key === "sleep"
-                ? renderSleepSummary(displayEntry)
-                : null}
-
-              {displayEntry?.note ? (
-                <Text className="mt-3 text-sm leading-5 text-foreground-secondary">
-                  {displayEntry.note}
-                </Text>
-              ) : null}
-
-              {displayEntry ? (
-                <View className="mt-4 flex-row gap-2">
-                  <Pressable
-                    className="flex-1 flex-row items-center justify-center rounded-2xl border border-border-light bg-surface px-4 py-3"
-                    onPress={() => handleStartEditing(displayEntry)}
-                    disabled={saving || deletingEntryId !== null || editingEntryId === displayEntry.checkinId}
-                    style={{
-                      opacity: saving || deletingEntryId !== null ? 0.6 : 1,
-                    }}
-                  >
-                    <MaterialCommunityIcons
-                      name={editingEntryId === displayEntry.checkinId ? "pencil-circle" : "pencil-outline"}
-                      size={18}
-                      color={editingEntryId === displayEntry.checkinId ? accent.iconColor : rawColors.primary}
-                    />
-                    <Text
-                      className="ml-2 text-sm font-semibold"
-                      style={{ color: editingEntryId === displayEntry.checkinId ? accent.iconColor : rawColors.primary }}
-                    >
-                      {editingEntryId === displayEntry.checkinId ? "Editing" : "Edit Entry"}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    className="flex-1 flex-row items-center justify-center rounded-2xl border border-border-light bg-surface px-4 py-3"
-                    onPress={() => handleDeleteEntry(displayEntry)}
-                    disabled={saving || deletingEntryId !== null}
-                    style={{
-                      opacity: saving || deletingEntryId !== null ? 0.6 : 1,
-                    }}
-                  >
-                    {deletingEntryId === displayEntry.checkinId ? (
-                      <ActivityIndicator size="small" color={rawColors.destructive} />
-                    ) : (
-                      <MaterialCommunityIcons name="trash-can-outline" size={18} color={rawColors.destructive} />
-                    )}
-                    <Text className="ml-2 text-sm font-semibold" style={{ color: rawColors.destructive }}>
-                      Delete
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null}
-            </View>
-
-            <View className="mt-4 flex-row flex-wrap gap-2">
-              <View className="rounded-full bg-primary-light px-3 py-1.5">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-primary">
-                  {filteredEntries.length} in range
-                </Text>
-              </View>
-              <View className="rounded-full bg-surface-secondary px-3 py-1.5">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                  {entries.length} total entries
-                </Text>
-              </View>
-              {loading ? (
-                <View className="flex-row items-center gap-2 rounded-full bg-surface-secondary px-3 py-1.5">
-                  <ActivityIndicator size="small" color={rawColors.primary} />
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                    Refreshing
-                  </Text>
-                </View>
-              ) : null}
-            </View>
           </View>
 
-          <View className="rounded-2xl bg-surface p-5" style={cardShadowStyle}>
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-3">
-                  <Text className="text-lg font-semibold text-foreground">
-                    {editingEntry ? `Edit ${metric.label}` : `Log ${metric.label}`}
-                  </Text>
-                  <Text className="mt-1 text-sm text-foreground-secondary">
-                    {editingEntry
-                      ? `Updating the entry from ${formatRecordedAt(editingEntry.recordedAt)}.`
-                      : metric.key === "sleep"
-                        ? "Set bedtime and wake time on the clock, then save the sleep window."
-                        : `This is the main logging area for ${metric.label.toLowerCase()}.`}
-                  </Text>
-                </View>
-                <View
-                  className="h-11 w-11 items-center justify-center rounded-full"
-                  style={{ backgroundColor: accent.iconBackground }}
-                >
-                  <MaterialCommunityIcons
-                    name={editingEntry ? "pencil-outline" : metric.key === "sleep" ? "clock-time-eight-outline" : "plus"}
-                    size={22}
-                    color={accent.iconColor}
-                  />
-                </View>
+          {/* ── LOG INPUT ── */}
+          <View className="rounded-2xl bg-surface p-5">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-base font-semibold text-foreground">
+                  {editingEntry ? `Edit ${metric.label}` : `Log ${metric.label}`}
+                </Text>
+                <Text className="mt-0.5 text-xs text-foreground-muted">
+                  {editingEntry
+                    ? `Updating entry from ${formatRecordedAt(editingEntry.recordedAt)}.`
+                    : metric.key === "sleep"
+                      ? "Set bedtime and wake time, then save."
+                      : metric.subtitle}
+                </Text>
               </View>
+              <View
+                className="h-10 w-10 items-center justify-center rounded-full"
+                style={{ backgroundColor: accent.iconBackground }}
+              >
+                <MaterialCommunityIcons
+                  name={editingEntry ? "pencil-outline" : metric.key === "sleep" ? "clock-time-eight-outline" : "plus"}
+                  size={20}
+                  color={accent.iconColor}
+                />
+              </View>
+            </View>
 
             {metric.key === "sleep" ? (
               <View className="mt-4">
@@ -979,15 +945,14 @@ export default function UserMetricDetailScreen() {
                   return (
                     <Pressable
                       key={score}
-                      className="min-w-[56px] rounded-2xl border px-4 py-3"
+                      className="min-w-[56px] items-center rounded-xl px-4 py-3"
                       onPress={() => handleScoreSelect(score)}
                       style={{
                         backgroundColor: selected ? accent.iconColor : rawColors.surfaceSecondary,
-                        borderColor: selected ? accent.iconColor : rawColors.border,
                       }}
                     >
                       <Text
-                        className="text-center text-base font-semibold"
+                        className="text-base font-semibold"
                         style={{ color: selected ? rawColors.surface : rawColors.foreground }}
                       >
                         {score}
@@ -998,9 +963,9 @@ export default function UserMetricDetailScreen() {
               </View>
             ) : (
               <View className="mt-4">
-                <Text className="mb-2 text-sm font-medium text-foreground-secondary">{inputLabel}</Text>
+                <Text className="mb-2 text-xs font-medium text-foreground-muted">{inputLabel}</Text>
                 <TextInput
-                  className="rounded-2xl border border-border bg-surface-secondary p-4 text-lg text-foreground"
+                  className="rounded-xl bg-surface-secondary p-4 text-lg text-foreground"
                   value={inputValue}
                   onChangeText={handleInputChange}
                   placeholder={metric.inputPlaceholder}
@@ -1010,29 +975,20 @@ export default function UserMetricDetailScreen() {
               </View>
             )}
 
-            <Text className="mt-3 text-xs text-foreground-muted">
-              {metric.key === "sleep"
-                ? "The saved entry stores sleep start, wake time, and duration."
-                : metric.inputHelper}
-            </Text>
-
             <View className="mt-4 flex-row items-center gap-3">
               {editingEntry ? (
                 <Pressable
-                  className="min-h-[48px] flex-row items-center justify-center rounded-2xl border border-border px-4"
+                  className="min-h-[44px] flex-row items-center justify-center rounded-xl bg-surface-secondary px-4"
                   onPress={handleCancelEditing}
                   disabled={saving || deletingEntryId !== null}
-                  style={{
-                    backgroundColor: rawColors.surfaceSecondary,
-                    opacity: saving || deletingEntryId !== null ? 0.6 : 1,
-                  }}
+                  style={{ opacity: saving || deletingEntryId !== null ? 0.6 : 1 }}
                 >
                   <MaterialCommunityIcons name="close" size={18} color={rawColors.foregroundSecondary} />
-                  <Text className="ml-2 text-sm font-semibold text-foreground-secondary">Cancel</Text>
+                  <Text className="ml-1.5 text-sm font-semibold text-foreground-secondary">Cancel</Text>
                 </Pressable>
               ) : null}
               <Pressable
-                className="min-h-[48px] flex-1 flex-row items-center justify-center rounded-2xl px-4"
+                className="min-h-[44px] flex-1 flex-row items-center justify-center rounded-xl px-4"
                 onPress={handleSave}
                 disabled={!canSave || saving || deletingEntryId !== null}
                 style={{
@@ -1052,185 +1008,99 @@ export default function UserMetricDetailScreen() {
                   </>
                 )}
               </Pressable>
-
-              {saveFeedback ? (
-                <Text className="flex-1 text-sm text-foreground-secondary">{saveFeedback}</Text>
-              ) : (
-                <Text className="flex-1 text-sm text-foreground-muted">
-                  {metric.key === "sleep"
-                    ? editingEntry
-                      ? "Adjust the dial, then save your changes."
-                      : "Adjust the dial, then save the window."
-                    : metric.inputMode === "score"
-                      ? editingEntry
-                        ? "Select a score, then save your changes."
-                        : "Select a score, then save it."
-                      : editingEntry
-                        ? "Adjust the value, then save your changes."
-                        : "Enter a value, then save it."}
-                </Text>
-              )}
             </View>
+
+            {saveFeedback ? (
+              <Text className="mt-2 text-xs text-foreground-secondary">{saveFeedback}</Text>
+            ) : null}
           </View>
 
-          <View className="rounded-2xl bg-surface p-5" style={cardShadowStyle}>
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-lg font-semibold text-foreground">Range Snapshot</Text>
-                <Text className="mt-1 text-sm text-foreground-secondary">
-                  Summary stats for the currently selected date range.
-                </Text>
-              </View>
-              <View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
-                <MaterialCommunityIcons name="chart-line" size={22} color={rawColors.foregroundSecondary} />
-              </View>
-            </View>
-
-            <View className="mt-4 flex-row gap-3">
-              <View className="flex-1 rounded-2xl border border-border-light bg-surface-secondary p-4">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                  Latest
-                </Text>
-                <Text className="mt-2 text-xl font-bold text-foreground">
+          {/* ── RANGE SNAPSHOT ── */}
+          <View className="rounded-2xl bg-surface p-5">
+            <Text className="text-sm font-semibold text-foreground">Range Snapshot</Text>
+            <View className="mt-3 flex-row gap-2">
+              <View className="flex-1 rounded-xl bg-surface-secondary p-3">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">Latest</Text>
+                <Text className="mt-1 text-lg font-bold text-foreground" style={{ fontVariant: ["tabular-nums"] }}>
                   {formatUserMetricValue(metric.key, filteredEntries[0]?.value, unitPreference)}
                 </Text>
               </View>
-              <View className="flex-1 rounded-2xl border border-border-light bg-surface-secondary p-4">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                  Average
-                </Text>
-                <Text className="mt-2 text-xl font-bold text-foreground">
+              <View className="flex-1 rounded-xl bg-surface-secondary p-3">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">Average</Text>
+                <Text className="mt-1 text-lg font-bold text-foreground" style={{ fontVariant: ["tabular-nums"] }}>
                   {formatAverageValue(metric.key, averageValue, unitPreference)}
                 </Text>
               </View>
-            </View>
-
-            <View className="mt-3 flex-row gap-3">
-              <View className="flex-1 rounded-2xl border border-border-light bg-surface-secondary p-4">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                  High
-                </Text>
-                <Text className="mt-2 text-xl font-bold text-foreground">
+              <View className="flex-1 rounded-xl bg-surface-secondary p-3">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">High</Text>
+                <Text className="mt-1 text-lg font-bold text-foreground" style={{ fontVariant: ["tabular-nums"] }}>
                   {formatUserMetricValue(metric.key, range?.high, unitPreference)}
                 </Text>
               </View>
-              <View className="flex-1 rounded-2xl border border-border-light bg-surface-secondary p-4">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">
-                  Low
-                </Text>
-                <Text className="mt-2 text-xl font-bold text-foreground">
+              <View className="flex-1 rounded-xl bg-surface-secondary p-3">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">Low</Text>
+                <Text className="mt-1 text-lg font-bold text-foreground" style={{ fontVariant: ["tabular-nums"] }}>
                   {formatUserMetricValue(metric.key, range?.low, unitPreference)}
                 </Text>
               </View>
             </View>
           </View>
 
-          <View className="rounded-2xl bg-surface p-5" style={cardShadowStyle}>
+          {/* ── RECENT HISTORY ── */}
+          <View className="rounded-2xl bg-surface p-5">
             <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-lg font-semibold text-foreground">Recent History</Text>
-                <Text className="mt-1 text-sm text-foreground-secondary">
-                  Individual log points in the active date range.
-                </Text>
-              </View>
-              <View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
-                <MaterialCommunityIcons name="history" size={22} color={rawColors.foregroundSecondary} />
-              </View>
+              <Text className="text-sm font-semibold text-foreground">Recent History</Text>
+              <Text className="text-xs text-foreground-muted">
+                {entries.length} total
+              </Text>
             </View>
 
             {historyEntries.length === 0 ? (
-              <View className="mt-4 rounded-2xl border border-dashed border-border bg-surface-secondary p-5">
-                <View className="items-center">
-                  <View className="h-12 w-12 items-center justify-center rounded-full bg-surface">
-                    <MaterialCommunityIcons
-                      name="timeline-text-outline"
-                      size={24}
-                      color={rawColors.foregroundMuted}
-                    />
-                  </View>
-                  <Text className="mt-3 text-base font-semibold text-foreground">No history in range</Text>
-                  <Text className="mt-1 text-center text-sm text-foreground-secondary">
-                    Change the date range or save a fresh entry to populate this list.
-                  </Text>
-                </View>
+              <View className="mt-4 items-center rounded-xl bg-surface-secondary p-6">
+                <MaterialCommunityIcons
+                  name="timeline-text-outline"
+                  size={28}
+                  color={rawColors.foregroundMuted}
+                />
+                <Text className="mt-2 text-sm font-semibold text-foreground">No history in range</Text>
+                <Text className="mt-1 text-center text-xs text-foreground-muted">
+                  Change the date range or log an entry.
+                </Text>
               </View>
             ) : (
-              <View className="mt-4 gap-3">
+              <View className="mt-3 gap-2">
                 {historyEntries.map((entry) => (
-                  <View
+                  <Pressable
                     key={`${entry.checkinId}-${entry.recordedAt}`}
-                    className="rounded-2xl border border-border-light bg-surface-secondary p-4"
+                    className="flex-row items-center rounded-xl bg-surface-secondary px-4 py-3"
+                    onPress={() => handleStartEditing(entry)}
+                    disabled={saving || deletingEntryId !== null}
+                    style={{ opacity: saving || deletingEntryId !== null ? 0.7 : 1 }}
                   >
-                    <View className="flex-row items-start justify-between gap-3">
-                      <View className="flex-1">
-                        <Text
-                          className="text-xl font-semibold text-foreground"
-                          style={{ fontVariant: ["tabular-nums"] }}
-                        >
-                          {formatUserMetricValue(metric.key, entry.value, unitPreference)}
-                        </Text>
-                        <Text className="mt-1 text-xs text-foreground-muted">
-                          {formatRecordedAt(entry.recordedAt)}
-                        </Text>
-                      </View>
-                      <View
-                        className="h-10 w-10 items-center justify-center rounded-full"
-                        style={{ backgroundColor: accent.iconBackground }}
-                      >
-                        <MaterialCommunityIcons name={metric.icon as never} size={18} color={accent.iconColor} />
-                      </View>
+                    <View
+                      className="h-8 w-8 items-center justify-center rounded-full"
+                      style={{ backgroundColor: accent.iconBackground }}
+                    >
+                      <MaterialCommunityIcons name={metric.icon as never} size={14} color={accent.iconColor} />
                     </View>
-
-                    {metric.key === "sleep"
-                      ? renderSleepSummary(entry)
-                      : null}
-
-                    {renderHistoryMeta(entry)}
-
-                    {entry.note ? (
-                      <Text className="mt-3 text-sm leading-5 text-foreground-secondary">{entry.note}</Text>
-                    ) : null}
-
-                    <View className="mt-4 flex-row gap-2">
-                      <Pressable
-                        className="flex-1 flex-row items-center justify-center rounded-2xl border border-border-light bg-surface px-4 py-3"
-                        onPress={() => handleStartEditing(entry)}
-                        disabled={saving || deletingEntryId !== null || editingEntryId === entry.checkinId}
-                        style={{
-                          opacity: saving || deletingEntryId !== null ? 0.6 : 1,
-                        }}
-                      >
-                        <MaterialCommunityIcons
-                          name={editingEntryId === entry.checkinId ? "pencil-circle" : "pencil-outline"}
-                          size={16}
-                          color={editingEntryId === entry.checkinId ? accent.iconColor : rawColors.primary}
-                        />
-                        <Text
-                          className="ml-2 text-sm font-semibold"
-                          style={{ color: editingEntryId === entry.checkinId ? accent.iconColor : rawColors.primary }}
-                        >
-                          {editingEntryId === entry.checkinId ? "Editing" : "Edit"}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        className="flex-1 flex-row items-center justify-center rounded-2xl border border-border-light bg-surface px-4 py-3"
-                        onPress={() => handleDeleteEntry(entry)}
-                        disabled={saving || deletingEntryId !== null}
-                        style={{
-                          opacity: saving || deletingEntryId !== null ? 0.6 : 1,
-                        }}
-                      >
-                        {deletingEntryId === entry.checkinId ? (
-                          <ActivityIndicator size="small" color={rawColors.destructive} />
-                        ) : (
-                          <MaterialCommunityIcons name="trash-can-outline" size={16} color={rawColors.destructive} />
-                        )}
-                        <Text className="ml-2 text-sm font-semibold" style={{ color: rawColors.destructive }}>
-                          Delete
-                        </Text>
-                      </Pressable>
+                    <View className="ml-3 flex-1">
+                      <Text className="text-xs text-foreground-muted">
+                        {formatRecordedAt(entry.recordedAt)}
+                      </Text>
                     </View>
-                  </View>
+                    <Text
+                      className="text-base font-semibold text-foreground"
+                      style={{ fontVariant: ["tabular-nums"] }}
+                    >
+                      {formatUserMetricValue(metric.key, entry.value, unitPreference)}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={18}
+                      color={rawColors.foregroundMuted}
+                      style={{ marginLeft: 4 }}
+                    />
+                  </Pressable>
                 ))}
               </View>
             )}

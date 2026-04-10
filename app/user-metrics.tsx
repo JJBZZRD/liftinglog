@@ -42,10 +42,7 @@ function getAccentColors(accent: UserMetricAccent, rawColors: RawThemeColors) {
 }
 
 function formatMetricDate(entry: UserMetricEntry | null) {
-  if (!entry) {
-    return null;
-  }
-
+  if (!entry) return null;
   const date = new Date(entry.recordedAt);
   const now = new Date();
   const sameYear = date.getFullYear() === now.getFullYear();
@@ -59,14 +56,6 @@ export default function UserMetricsScreen() {
   const { unitPreference } = useUnitPreference();
   const [checkins, setCheckins] = useState<UserCheckin[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const cardShadowStyle = {
-    shadowColor: rawColors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  } as const;
 
   const loadCheckins = useCallback(async () => {
     try {
@@ -110,128 +99,85 @@ export default function UserMetricsScreen() {
       <ScrollView
         className="flex-1"
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120, gap: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120, gap: 10 }}
       >
-        <View className="rounded-2xl bg-surface p-5" style={cardShadowStyle}>
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 pr-3">
-              <Text className="text-xl font-semibold text-foreground" selectable>
-                Metrics Hub
-              </Text>
-              <Text className="mt-1 text-sm text-foreground-secondary" selectable>
-                Each card is a standing quick-view tile for a metric and your jump-off point for its history, logging, and analytics.
-              </Text>
-            </View>
-            <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-light">
-              <MaterialCommunityIcons name="view-dashboard-outline" size={24} color={rawColors.primary} />
-            </View>
+        {/* Header summary */}
+        <View className="flex-row items-center justify-between px-1 pb-2">
+          <View className="flex-row items-center gap-2">
+            <Text className="text-xs font-semibold uppercase tracking-widest text-foreground-muted">
+              {USER_METRIC_DEFINITIONS.length} metrics
+            </Text>
+            <Text className="text-foreground-muted">·</Text>
+            <Text className="text-xs font-semibold uppercase tracking-widest text-foreground-muted">
+              {checkins.length} check-ins
+            </Text>
           </View>
-
-          <View className="mt-4 flex-row flex-wrap gap-2">
-            <View className="rounded-full bg-surface-secondary px-3 py-2">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary" selectable>
-                {USER_METRIC_DEFINITIONS.length} tracked metrics
-              </Text>
-            </View>
-            <View className="rounded-full bg-surface-secondary px-3 py-2">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary" selectable>
-                {checkins.length} total check-ins
-              </Text>
-            </View>
-            {loading ? (
-              <View className="flex-row items-center gap-2 rounded-full bg-primary-light px-3 py-2">
-                <ActivityIndicator size="small" color={rawColors.primary} />
-                <Text className="text-xs font-semibold uppercase tracking-wide text-primary" selectable>
-                  Refreshing latest values
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          {loading ? (
+            <ActivityIndicator size="small" color={rawColors.primary} />
+          ) : null}
         </View>
 
-        <View className="gap-4">
-          {USER_METRIC_DEFINITIONS.map((metric) => {
-            const accent = getAccentColors(metric.accent, rawColors);
-            const entries = getUserMetricEntries(checkins, metric.key);
-            const latestEntry = entries[0] ?? null;
-            const latestValue = formatUserMetricValue(metric.key, latestEntry?.value, unitPreference);
-            const latestDate = formatMetricDate(latestEntry);
+        {USER_METRIC_DEFINITIONS.map((metric) => {
+          const accent = getAccentColors(metric.accent, rawColors);
+          const entries = getUserMetricEntries(checkins, metric.key);
+          const latestEntry = entries[0] ?? null;
+          const latestValue = formatUserMetricValue(metric.key, latestEntry?.value, unitPreference);
+          const latestDate = formatMetricDate(latestEntry);
 
-            return (
-              <Pressable
-                key={metric.key}
-                className="rounded-2xl bg-surface p-5"
-                onPress={() => handleMetricPress(metric.key)}
-                style={cardShadowStyle}
-              >
-                <View className="flex-row items-start gap-4">
-                  <View
-                    className="h-12 w-12 items-center justify-center rounded-full"
-                    style={{ backgroundColor: accent.iconBackground }}
-                  >
-                    <MaterialCommunityIcons name={metric.icon as never} size={24} color={accent.iconColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-lg font-semibold text-foreground" selectable>
-                      {metric.label}
-                    </Text>
-                    <Text className="mt-1 text-sm text-foreground-secondary" selectable>
-                      {metric.subtitle}
-                    </Text>
-                  </View>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={24}
-                    color={rawColors.foregroundSecondary}
-                  />
+          return (
+            <Pressable
+              key={metric.key}
+              className="rounded-2xl bg-surface"
+              onPress={() => handleMetricPress(metric.key)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+            >
+              <View className="flex-row items-center px-5 pt-4 pb-3">
+                <View
+                  className="h-10 w-10 items-center justify-center rounded-full"
+                  style={{ backgroundColor: accent.iconBackground }}
+                >
+                  <MaterialCommunityIcons name={metric.icon as never} size={20} color={accent.iconColor} />
                 </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-base font-semibold text-foreground">
+                    {metric.label}
+                  </Text>
+                  <Text className="text-xs text-foreground-muted" numberOfLines={1}>
+                    {metric.subtitle}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={rawColors.foregroundMuted}
+                />
+              </View>
 
-                <View className="mt-4 rounded-2xl border border-border-light bg-surface-secondary p-4">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary" selectable>
-                    Quick View
-                  </Text>
-                  <Text
-                    className="mt-2 text-[28px] font-bold text-foreground"
-                    selectable
-                    style={{ fontVariant: ["tabular-nums"] }}
-                  >
-                    {latestValue}
-                  </Text>
-                  <Text className="mt-1 text-xs text-foreground-muted" selectable>
+              <View className="mx-4 mb-4 flex-row items-end rounded-xl bg-surface-secondary px-4 py-3">
+                <Text
+                  className="text-[28px] font-bold text-foreground"
+                  style={{ fontVariant: ["tabular-nums"], lineHeight: 34 }}
+                >
+                  {latestValue}
+                </Text>
+                <View className="ml-3 mb-1 flex-1">
+                  <Text className="text-[11px] text-foreground-muted">
                     {loading
-                      ? "Loading latest value..."
+                      ? "Loading..."
                       : latestEntry
-                        ? `Logged ${latestDate}`
+                        ? `${latestDate}`
                         : metric.emptyStateLabel}
                   </Text>
                 </View>
-
-                <View className="mt-4 flex-row flex-wrap gap-2">
-                  <View className="rounded-full bg-primary-light px-3 py-1.5">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-primary" selectable>
-                      History
-                    </Text>
-                  </View>
-                  <View className="rounded-full bg-surface-secondary px-3 py-1.5">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary" selectable>
-                      Log
-                    </Text>
-                  </View>
-                  <View className="rounded-full bg-surface-secondary px-3 py-1.5">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary" selectable>
-                      Analytics
-                    </Text>
-                  </View>
-                  <View className="rounded-full bg-surface-secondary px-3 py-1.5">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary" selectable>
-                      {entries.length} {entries.length === 1 ? "entry" : "entries"}
-                    </Text>
-                  </View>
+                <View className="mb-0.5 rounded-full bg-primary-light px-2 py-0.5">
+                  <Text className="text-[10px] font-semibold text-primary">
+                    {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                  </Text>
                 </View>
-              </Pressable>
-            );
-          })}
-        </View>
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );
