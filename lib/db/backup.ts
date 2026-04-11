@@ -376,7 +376,7 @@ interface BackupUserCheckin {
   sleep_end_at: number | null;
   sleep_hours: number | null;
   resting_hr_bpm: number | null;
-  readiness_score: number | null;
+  fatigue_score: number | null;
   soreness_score: number | null;
   stress_score: number | null;
   steps: number | null;
@@ -461,7 +461,7 @@ interface LiveUserCheckinCandidate {
   sleep_end_at: number | null;
   sleep_hours: number | null;
   resting_hr_bpm: number | null;
-  readiness_score: number | null;
+  fatigue_score: number | null;
   soreness_score: number | null;
   stress_score: number | null;
   steps: number | null;
@@ -684,7 +684,7 @@ function findExistingUserCheckinId(backupUid: string, row: BackupUserCheckin): n
       sleep_end_at,
       sleep_hours,
       resting_hr_bpm,
-      readiness_score,
+      fatigue_score,
       soreness_score,
       stress_score,
       steps,
@@ -703,7 +703,7 @@ function findExistingUserCheckinId(backupUid: string, row: BackupUserCheckin): n
       candidate.sleep_end_at === row.sleep_end_at &&
       candidate.sleep_hours === row.sleep_hours &&
       candidate.resting_hr_bpm === row.resting_hr_bpm &&
-      candidate.readiness_score === row.readiness_score &&
+      candidate.fatigue_score === row.fatigue_score &&
       candidate.soreness_score === row.soreness_score &&
       candidate.stress_score === row.stress_score &&
       candidate.steps === row.steps &&
@@ -1177,7 +1177,7 @@ function mergeUserCheckins(
     "sleep_end_at",
     "sleep_hours",
     "resting_hr_bpm",
-    "readiness_score",
+    "fatigue_score",
     "soreness_score",
     "stress_score",
     "steps",
@@ -1211,7 +1211,7 @@ function mergeUserCheckins(
           sleep_end_at = COALESCE(sleep_end_at, ${sqlLiteral(row.sleep_end_at)}),
           sleep_hours = COALESCE(sleep_hours, ${sqlLiteral(row.sleep_hours)}),
           resting_hr_bpm = COALESCE(resting_hr_bpm, ${sqlLiteral(row.resting_hr_bpm)}),
-          readiness_score = COALESCE(readiness_score, ${sqlLiteral(row.readiness_score)}),
+          fatigue_score = COALESCE(fatigue_score, ${sqlLiteral(row.fatigue_score)}),
           soreness_score = COALESCE(soreness_score, ${sqlLiteral(row.soreness_score)}),
           stress_score = COALESCE(stress_score, ${sqlLiteral(row.stress_score)}),
           steps = COALESCE(steps, ${sqlLiteral(row.steps)}),
@@ -1234,7 +1234,7 @@ function mergeUserCheckins(
         sleep_end_at,
         sleep_hours,
         resting_hr_bpm,
-        readiness_score,
+        fatigue_score,
         soreness_score,
         stress_score,
         steps,
@@ -1251,7 +1251,7 @@ function mergeUserCheckins(
         ${sqlLiteral(row.sleep_end_at)},
         ${sqlLiteral(row.sleep_hours)},
         ${sqlLiteral(row.resting_hr_bpm)},
-        ${sqlLiteral(row.readiness_score)},
+        ${sqlLiteral(row.fatigue_score)},
         ${sqlLiteral(row.soreness_score)},
         ${sqlLiteral(row.stress_score)},
         ${sqlLiteral(row.steps)},

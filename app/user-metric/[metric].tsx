@@ -140,7 +140,7 @@ function isValidMetricValue(metricKey: UserMetricKey, value: number | null): val
     case "sleep":
     case "steps":
       return value >= 0;
-    case "readiness":
+    case "fatigue":
     case "soreness":
     case "stress":
       return value >= 1 && value <= 5;
@@ -158,7 +158,7 @@ function formatAverageValue(
     return "--";
   }
 
-  if (metricKey === "readiness" || metricKey === "soreness" || metricKey === "stress") {
+  if (metricKey === "fatigue" || metricKey === "soreness" || metricKey === "stress") {
     return `${value.toFixed(1).replace(/\.0$/, "")}/5`;
   }
 
@@ -188,7 +188,7 @@ function formatAxisValue(metricKey: UserMetricKey, value: number, unitPreference
 
 function getChartYDomain(metricKey: UserMetricKey) {
   switch (metricKey) {
-    case "readiness":
+    case "fatigue":
     case "soreness":
     case "stress":
       return { min: 1, max: 5 };
@@ -296,7 +296,7 @@ const ALL_USER_METRIC_KEYS: UserMetricKey[] = [
   "waist",
   "sleep",
   "restingHr",
-  "readiness",
+  "fatigue",
   "soreness",
   "stress",
   "steps",
@@ -318,7 +318,7 @@ function formatEditableMetricValue(
     case "sleep":
       return formatEditableNumericValue(value, 2);
     case "restingHr":
-    case "readiness":
+    case "fatigue":
     case "soreness":
     case "stress":
     case "steps":
@@ -358,8 +358,8 @@ function buildMetricClearUpdate(metricKey: UserMetricKey): Partial<UserCheckinIn
       };
     case "restingHr":
       return { resting_hr_bpm: null };
-    case "readiness":
-      return { readiness_score: null };
+    case "fatigue":
+      return { fatigue_score: null };
     case "soreness":
       return { soreness_score: null };
     case "stress":

@@ -24,7 +24,7 @@ export type UserCheckinInput = {
   sleep_end_at?: number | null;
   sleep_hours?: number | null;
   resting_hr_bpm?: number | null;
-  readiness_score?: number | null;
+  fatigue_score?: number | null;
   soreness_score?: number | null;
   stress_score?: number | null;
   steps?: number | null;
@@ -45,7 +45,7 @@ export async function createUserCheckin(data: UserCheckinInput): Promise<number>
       sleepEndAt: data.sleep_end_at ?? null,
       sleepHours: data.sleep_hours ?? null,
       restingHrBpm: data.resting_hr_bpm ?? null,
-      readinessScore: data.readiness_score ?? null,
+      fatigueScore: data.fatigue_score ?? null,
       sorenessScore: data.soreness_score ?? null,
       stressScore: data.stress_score ?? null,
       steps: data.steps ?? null,
@@ -166,7 +166,7 @@ export async function updateUserCheckin(
   if (updates.sleep_end_at !== undefined) mapped.sleepEndAt = updates.sleep_end_at;
   if (updates.sleep_hours !== undefined) mapped.sleepHours = updates.sleep_hours;
   if (updates.resting_hr_bpm !== undefined) mapped.restingHrBpm = updates.resting_hr_bpm;
-  if (updates.readiness_score !== undefined) mapped.readinessScore = updates.readiness_score;
+  if (updates.fatigue_score !== undefined) mapped.fatigueScore = updates.fatigue_score;
   if (updates.soreness_score !== undefined) mapped.sorenessScore = updates.soreness_score;
   if (updates.stress_score !== undefined) mapped.stressScore = updates.stress_score;
   if (updates.steps !== undefined) mapped.steps = updates.steps;

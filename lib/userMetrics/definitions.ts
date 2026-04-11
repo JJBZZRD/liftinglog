@@ -7,7 +7,7 @@ export type UserMetricKey =
   | "waist"
   | "sleep"
   | "restingHr"
-  | "readiness"
+  | "fatigue"
   | "soreness"
   | "stress"
   | "steps";
@@ -84,7 +84,7 @@ export const USER_METRIC_DEFINITIONS: UserMetricDefinition[] = [
   {
     key: "restingHr",
     label: "Resting HR",
-    subtitle: "A low-friction readiness marker that can explain fatigue or recovery drift.",
+    subtitle: "A low-friction recovery marker that can explain fatigue or recovery drift.",
     icon: "heart-pulse",
     accent: "destructive",
     emptyValue: "--",
@@ -95,17 +95,17 @@ export const USER_METRIC_DEFINITIONS: UserMetricDefinition[] = [
     inputHelper: "Enter beats per minute.",
   },
   {
-    key: "readiness",
-    label: "Readiness",
-    subtitle: "Subjective daily readiness for autoregulation and training notes.",
-    icon: "battery-heart-variant",
-    accent: "primary",
+    key: "fatigue",
+    label: "Fatigue",
+    subtitle: "Subjective daily fatigue tracking for autoregulation and recovery context.",
+    icon: "battery-low",
+    accent: "warning",
     emptyValue: "--",
-    emptyStateLabel: "No readiness score logged yet",
+    emptyStateLabel: "No fatigue score logged yet",
     inputMode: "score",
-    inputLabel: "Readiness score",
+    inputLabel: "Fatigue score",
     inputPlaceholder: "",
-    inputHelper: "Use a 1-5 score.",
+    inputHelper: "Use a 1-5 score where 1 is low fatigue and 5 is very high fatigue.",
   },
   {
     key: "soreness",
@@ -165,8 +165,8 @@ export function getUserMetricNumericValue(
       return checkin.sleepHours;
     case "restingHr":
       return checkin.restingHrBpm;
-    case "readiness":
-      return checkin.readinessScore;
+    case "fatigue":
+      return checkin.fatigueScore;
     case "soreness":
       return checkin.sorenessScore;
     case "stress":
@@ -218,7 +218,7 @@ export function formatSleepHours(hoursValue: number): string {
 export function getUserMetricChartVariant(metricKey: UserMetricKey): UserMetricChartVariant {
   switch (metricKey) {
     case "sleep":
-    case "readiness":
+    case "fatigue":
     case "soreness":
     case "stress":
     case "steps":
@@ -252,7 +252,7 @@ export function formatUserMetricValue(
       return formatSleepHours(value);
     case "restingHr":
       return `${formatNumber(value, 0)} bpm`;
-    case "readiness":
+    case "fatigue":
     case "soreness":
     case "stress":
       return `${formatNumber(value, 0)}/5`;
@@ -283,7 +283,7 @@ export function parseUserMetricInputValue(
     case "waist":
     case "sleep":
       return parsed;
-    case "readiness":
+    case "fatigue":
     case "soreness":
     case "stress":
       return Math.round(parsed);
@@ -305,8 +305,8 @@ export function buildUserMetricCheckinInput(
       return { sleep_hours: value };
     case "restingHr":
       return { resting_hr_bpm: Math.round(value) };
-    case "readiness":
-      return { readiness_score: Math.round(value) };
+    case "fatigue":
+      return { fatigue_score: Math.round(value) };
     case "soreness":
       return { soreness_score: Math.round(value) };
     case "stress":

@@ -21,7 +21,7 @@ const SCHEMA_BOOTSTRAP_SQL = `
     sleep_end_at INTEGER,
     sleep_hours REAL,
     resting_hr_bpm INTEGER,
-    readiness_score INTEGER,
+    fatigue_score INTEGER,
     soreness_score INTEGER,
     stress_score INTEGER,
     steps INTEGER,
@@ -243,6 +243,7 @@ const UID_TABLES = [
 export function initializeDatabase(sqlite: SQLiteDatabase): void {
   sqlite.execSync(SCHEMA_BOOTSTRAP_SQL);
 
+  repairUserCheckinsFatigueSchema(sqlite);
   runColumnMigrations(sqlite);
   dropLegacyProgramTables(sqlite);
   ensureUidColumns(sqlite);
@@ -272,6 +273,7 @@ function runColumnMigrations(sqlite: SQLiteDatabase): void {
   addColumnIfMissing(sqlite, "media", "album_name TEXT");
   addColumnIfMissing(sqlite, "user_checkins", "sleep_start_at INTEGER");
   addColumnIfMissing(sqlite, "user_checkins", "sleep_end_at INTEGER");
+  addColumnIfMissing(sqlite, "user_checkins", "fatigue_score INTEGER");
 }
 
 function addColumnIfMissing(
@@ -283,6 +285,106 @@ function addColumnIfMissing(
     sqlite.execSync(`ALTER TABLE ${table} ADD COLUMN ${columnDefinition};`);
   } catch {
     // Column already exists, ignore.
+  }
+}
+
+function repairUserCheckinsFatigueSchema(sqlite: SQLiteDatabase): void {
+  const columns = loadTableColumns(sqlite, "user_checkins");
+  if (!columns) {
+    return;
+  }
+
+  const hasReadinessScore = columns.has("readiness_score");
+  const hasFatigueScore = columns.has("fatigue_score");
+
+  if (hasFatigueScore && !hasReadinessScore) {
+    return;
+  }
+
+  if (!hasReadinessScore && !hasFatigueScore) {
+    addColumnIfMissing(sqlite, "user_checkins", "fatigue_score INTEGER");
+    return;
+  }
+
+  const fatigueSourceExpression = hasFatigueScore ? "fatigue_score" : "NULL";
+
+  try {
+    sqlite.execSync("BEGIN TRANSACTION;");
+    sqlite.execSync("DROP TABLE IF EXISTS user_checkins_legacy_fatigue_repair;");
+    sqlite.execSync("ALTER TABLE user_checkins RENAME TO user_checkins_legacy_fatigue_repair;");
+    sqlite.execSync(`
+      CREATE TABLE user_checkins (
+        id INTEGER PRIMARY KEY NOT NULL,
+        uid TEXT,
+        recorded_at INTEGER NOT NULL,
+        context TEXT,
+        bodyweight_kg REAL,
+        waist_cm REAL,
+        sleep_start_at INTEGER,
+        sleep_end_at INTEGER,
+        sleep_hours REAL,
+        resting_hr_bpm INTEGER,
+        fatigue_score INTEGER,
+        soreness_score INTEGER,
+        stress_score INTEGER,
+        steps INTEGER,
+        note TEXT,
+        source TEXT
+      );
+    `);
+    sqlite.execSync(`
+      INSERT INTO user_checkins (
+        id,
+        uid,
+        recorded_at,
+        context,
+        bodyweight_kg,
+        waist_cm,
+        sleep_start_at,
+        sleep_end_at,
+        sleep_hours,
+        resting_hr_bpm,
+        fatigue_score,
+        soreness_score,
+        stress_score,
+        steps,
+        note,
+        source
+      )
+      SELECT
+        id,
+        uid,
+        recorded_at,
+        context,
+        bodyweight_kg,
+        waist_cm,
+        sleep_start_at,
+        sleep_end_at,
+        sleep_hours,
+        resting_hr_bpm,
+        ${fatigueSourceExpression},
+        soreness_score,
+        stress_score,
+        steps,
+        note,
+        source
+      FROM user_checkins_legacy_fatigue_repair;
+    `);
+    sqlite.execSync("DROP TABLE user_checkins_legacy_fatigue_repair;");
+    sqlite.execSync(
+      "CREATE INDEX IF NOT EXISTS idx_user_checkins_recorded_at ON user_checkins(recorded_at);"
+    );
+    sqlite.execSync("COMMIT;");
+  } catch (error) {
+    try {
+      sqlite.execSync("ROLLBACK;");
+    } catch {
+      // Ignore rollback failures after a partial transaction error.
+    }
+
+    if (__DEV__) {
+      console.warn("[db] Failed to repair user_checkins fatigue schema:", error);
+    }
   }
 }
 

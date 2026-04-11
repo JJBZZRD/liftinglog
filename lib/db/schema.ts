@@ -27,7 +27,7 @@ export const userCheckins = sqliteTable("user_checkins", {
   sleepEndAt: integer("sleep_end_at"),
   sleepHours: real("sleep_hours"),
   restingHrBpm: integer("resting_hr_bpm"),
-  readinessScore: integer("readiness_score"),
+  fatigueScore: integer("fatigue_score"),
   sorenessScore: integer("soreness_score"),
   stressScore: integer("stress_score"),
   steps: integer("steps"),
