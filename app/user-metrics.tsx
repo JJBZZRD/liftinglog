@@ -1,11 +1,13 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import PerformanceGuideSummaryCard from "../components/performanceGuide/PerformanceGuideSummaryCard";
 import { useUnitPreference } from "../lib/contexts/UnitPreferenceContext";
 import { listAllUserCheckins, type UserCheckin } from "../lib/db/userCheckins";
 import { useTheme, type RawThemeColors } from "../lib/theme/ThemeContext";
+import { buildPerformanceGuideFromCheckins } from "../lib/userMetrics/performanceGuide";
 import {
   USER_METRIC_DEFINITIONS,
   formatUserMetricValue,
@@ -56,13 +58,17 @@ export default function UserMetricsScreen() {
   const { unitPreference } = useUnitPreference();
   const [checkins, setCheckins] = useState<UserCheckin[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadCheckins = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const rows = await listAllUserCheckins();
       setCheckins(rows);
     } catch (error) {
       console.error("Error loading user check-ins:", error);
+      setLoadError("Performance guide is unavailable right now.");
     } finally {
       setLoading(false);
     }
@@ -74,11 +80,30 @@ export default function UserMetricsScreen() {
     }, [loadCheckins])
   );
 
+  const performanceGuideState = useMemo(() => {
+    try {
+      return {
+        result: buildPerformanceGuideFromCheckins(checkins),
+        error: null as string | null,
+      };
+    } catch (error) {
+      console.error("Error building performance guide summary:", error);
+      return {
+        result: null,
+        error: "Performance guide is unavailable right now.",
+      };
+    }
+  }, [checkins]);
+
   const handleMetricPress = useCallback((metric: UserMetricKey) => {
     router.push({
       pathname: "/user-metric/[metric]",
       params: { metric },
     });
+  }, []);
+
+  const handlePerformanceGuidePress = useCallback(() => {
+    router.push("/performance-guide");
   }, []);
 
   return (
@@ -116,6 +141,13 @@ export default function UserMetricsScreen() {
             <ActivityIndicator size="small" color={rawColors.primary} />
           ) : null}
         </View>
+
+        <PerformanceGuideSummaryCard
+          result={performanceGuideState.result}
+          loading={loading}
+          errorMessage={loadError ?? performanceGuideState.error}
+          onPress={handlePerformanceGuidePress}
+        />
 
         {USER_METRIC_DEFINITIONS.map((metric) => {
           const accent = getAccentColors(metric.accent, rawColors);
