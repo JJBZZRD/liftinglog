@@ -59,6 +59,7 @@ Any changes developers need to be aware of.
 
 | Date | Description | Type |
 |------|-------------|------|
+| 2026-04-13 | [Exercise Variations](./2026-04-13-exercise-variations.md) | Feature |
 | 2024-12-30 | [Codebase Refactoring](./2024-12-30-codebase-refactoring.md) | Architecture |
 
 

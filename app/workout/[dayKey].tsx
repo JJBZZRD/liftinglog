@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import VariationExerciseLabel from "../../components/exercise/VariationExerciseLabel";
 import SetItem from "../../components/lists/SetItem";
 import BaseModal from "../../components/modals/BaseModal";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
@@ -305,9 +306,16 @@ export default function WorkoutDayScreen() {
                         <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                       </View>
                       <View style={styles.exerciseTitleBlock}>
-                        <Text style={[styles.exerciseName, { color: rawColors.foreground }]} numberOfLines={1}>
-                          {entry.exerciseName}
-                        </Text>
+                        <VariationExerciseLabel
+                          exercise={{
+                            name: entry.exerciseName,
+                            parentExerciseId: entry.exerciseParentExerciseId,
+                            variationLabel: entry.exerciseVariationLabel,
+                            parentName: entry.exerciseParentName,
+                          }}
+                          style={[styles.exerciseName, { color: rawColors.foreground }]}
+                          numberOfLines={1}
+                        />
                         <View style={styles.exerciseMetaRow}>
                           <MaterialCommunityIcons
                             name="clock-outline"

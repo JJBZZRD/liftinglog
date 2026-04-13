@@ -875,6 +875,73 @@ export async function linkExerciseToDb(
     .where(eq(programCalendarExercises.id, calendarExerciseId));
 }
 
+export async function rewriteCalendarExerciseReferences(params: {
+  fromExerciseId: number | null;
+  fromExerciseName: string;
+  toExerciseId: number | null;
+  toExerciseName: string;
+}): Promise<number[]> {
+  const normalizedFromName = params.fromExerciseName.trim();
+  if (!normalizedFromName) {
+    return [];
+  }
+
+  const matchByExerciseId =
+    params.fromExerciseId !== null
+      ? eq(programCalendarExercises.exerciseId, params.fromExerciseId)
+      : null;
+  const matchByExerciseName = eq(
+    programCalendarExercises.exerciseName,
+    normalizedFromName
+  );
+  const whereClause = matchByExerciseId
+    ? or(matchByExerciseId, matchByExerciseName)
+    : matchByExerciseName;
+
+  const matchedRows = await db
+    .select({
+      id: programCalendarExercises.id,
+      programId: programCalendar.programId,
+      exerciseId: programCalendarExercises.exerciseId,
+      exerciseName: programCalendarExercises.exerciseName,
+    })
+    .from(programCalendarExercises)
+    .innerJoin(programCalendar, eq(programCalendarExercises.calendarId, programCalendar.id))
+    .where(whereClause);
+
+  if (matchedRows.length === 0) {
+    return [];
+  }
+
+  for (const row of matchedRows) {
+    const nextExerciseId =
+      row.exerciseId === params.fromExerciseId || row.exerciseName === normalizedFromName
+        ? params.toExerciseId
+        : row.exerciseId;
+    const nextExerciseName =
+      row.exerciseName === normalizedFromName || row.exerciseId === params.fromExerciseId
+        ? params.toExerciseName
+        : row.exerciseName;
+
+    if (
+      nextExerciseId === row.exerciseId &&
+      nextExerciseName === row.exerciseName
+    ) {
+      continue;
+    }
+
+    await db
+      .update(programCalendarExercises)
+      .set({
+        exerciseId: nextExerciseId,
+        exerciseName: nextExerciseName,
+      })
+      .where(eq(programCalendarExercises.id, row.id));
+  }
+
+  return [...new Set(matchedRows.map((row) => row.programId))];
+}
+
 export async function syncLinkedProgramSetsByWorkoutSetIds(
   workoutSetIds: number[]
 ): Promise<void> {

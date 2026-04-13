@@ -4,8 +4,16 @@ import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { TabBar, TabView } from "react-native-tab-view";
+import VariationExerciseLabel from "../../components/exercise/VariationExerciseLabel";
 import { TabSwipeContext } from "../../lib/contexts/TabSwipeContext";
-import { MAX_PINNED_EXERCISES, getPinnedExercisesCount, isExercisePinned, togglePinExercise } from "../../lib/db/exercises";
+import {
+  MAX_PINNED_EXERCISES,
+  getExerciseWithParentById,
+  getPinnedExercisesCount,
+  isExercisePinned,
+  togglePinExercise,
+  type ExerciseWithParent,
+} from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import AnalyticsTab from "./tabs/AnalyticsTab";
 import HistoryTab from "./tabs/HistoryTab";
@@ -19,6 +27,7 @@ export default function ExerciseModalScreen() {
   const layout = useWindowDimensions();
   const navigation = useNavigation();
   const [index, setIndex] = useState(0);
+  const [headerExercise, setHeaderExercise] = useState<ExerciseWithParent | null>(null);
   const [routes] = useState([
     { key: "record", title: "Record" },
     { key: "history", title: "History" },
@@ -56,6 +65,33 @@ export default function ExerciseModalScreen() {
     if (exerciseId) {
       isExercisePinned(exerciseId).then(setIsPinned);
     }
+  }, [exerciseId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!exerciseId) {
+      setHeaderExercise(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    getExerciseWithParentById(exerciseId)
+      .then((exercise) => {
+        if (!cancelled) {
+          setHeaderExercise(exercise);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHeaderExercise(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [exerciseId]);
 
   // Switch to history tab when returning from edit-workout (indicated by refreshHistory param)
@@ -132,9 +168,21 @@ export default function ExerciseModalScreen() {
       <Stack.Screen
         options={{
           presentation: "modal",
-          title,
           headerStyle: { backgroundColor: rawColors.background },
           headerTitleStyle: { color: rawColors.foreground },
+          headerTitle: () =>
+            headerExercise ? (
+              <VariationExerciseLabel
+                exercise={headerExercise}
+                numberOfLines={1}
+                style={styles.headerTitle}
+                suffixStyle={styles.headerTitleSuffix}
+              />
+            ) : (
+              <Text style={[styles.headerTitle, { color: rawColors.foreground }]} numberOfLines={1}>
+                {title}
+              </Text>
+            ),
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"
@@ -226,5 +274,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     textAlign: "center",
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  headerTitleSuffix: {
+    fontWeight: "500",
   },
 });

@@ -356,6 +356,8 @@ interface BackupExercise {
   id: number;
   uid: string | null;
   name: string;
+  parent_exercise_id: number | null;
+  variation_label: string | null;
   description: string | null;
   muscle_group: string | null;
   equipment: string | null;
@@ -877,7 +879,20 @@ function mergeExercises(
   backupDb: SQLiteDatabase,
   uidMap: Map<number, number> // backup.id -> live.id
 ): { inserted: number; updated: number } {
-  const columns = ["id", "uid", "name", "description", "muscle_group", "equipment", "is_bodyweight", "created_at", "last_rest_seconds", "is_pinned"];
+  const columns = [
+    "id",
+    "uid",
+    "name",
+    "parent_exercise_id",
+    "variation_label",
+    "description",
+    "muscle_group",
+    "equipment",
+    "is_bodyweight",
+    "created_at",
+    "last_rest_seconds",
+    "is_pinned",
+  ];
   const rows = readBackupTable<BackupExercise>(backupDb, "exercises", columns);
 
   let inserted = 0;
@@ -893,6 +908,7 @@ function mergeExercises(
       sqlite.execSync(`
         UPDATE exercises SET
           uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
+          variation_label = COALESCE(variation_label, ${sqlLiteral(row.variation_label)}),
           description = COALESCE(description, ${sqlLiteral(row.description)}),
           muscle_group = COALESCE(muscle_group, ${sqlLiteral(row.muscle_group)}),
           equipment = COALESCE(equipment, ${sqlLiteral(row.equipment)}),
@@ -905,10 +921,24 @@ function mergeExercises(
     } else {
       // Insert new row
       sqlite.execSync(`
-        INSERT INTO exercises (uid, name, description, muscle_group, equipment, is_bodyweight, created_at, last_rest_seconds, is_pinned)
+        INSERT INTO exercises (
+          uid,
+          name,
+          parent_exercise_id,
+          variation_label,
+          description,
+          muscle_group,
+          equipment,
+          is_bodyweight,
+          created_at,
+          last_rest_seconds,
+          is_pinned
+        )
         VALUES (
           ${sqlLiteral(backupUid)},
           ${sqlLiteral(row.name)},
+          NULL,
+          ${sqlLiteral(row.variation_label)},
           ${sqlLiteral(row.description)},
           ${sqlLiteral(row.muscle_group)},
           ${sqlLiteral(row.equipment)},
@@ -929,6 +959,25 @@ function mergeExercises(
       }
       inserted++;
     }
+  }
+
+  for (const row of rows) {
+    if (row.parent_exercise_id === null) {
+      continue;
+    }
+
+    const liveId = uidMap.get(row.id);
+    const liveParentId = uidMap.get(row.parent_exercise_id);
+    if (liveId === undefined || liveParentId === undefined) {
+      continue;
+    }
+
+    sqlite.execSync(`
+      UPDATE exercises SET
+        parent_exercise_id = COALESCE(parent_exercise_id, ${sqlLiteral(liveParentId)}),
+        variation_label = COALESCE(variation_label, ${sqlLiteral(row.variation_label)})
+      WHERE id = ${liveId};
+    `);
   }
 
   return { inserted, updated };

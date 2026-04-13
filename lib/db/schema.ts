@@ -39,6 +39,8 @@ export const exercises = sqliteTable("exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   uid: text("uid"),
   name: text("name").notNull().unique(),
+  parentExerciseId: integer("parent_exercise_id"),
+  variationLabel: text("variation_label"),
   description: text("description"),
   muscleGroup: text("muscle_group"),
   equipment: text("equipment"),

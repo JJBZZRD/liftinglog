@@ -563,6 +563,66 @@ describe('Set CRUD Operations', () => {
   });
 });
 
+describe('Variation-aware history shapes', () => {
+  it('documents parent history entries carrying concrete variation metadata', async () => {
+    const mockGetExerciseHistory = jest.fn().mockResolvedValue([
+      {
+        workout: { id: 1, startedAt: Date.now(), completedAt: Date.now() },
+        workoutExercise: { id: 10, workoutId: 1, exerciseId: 2, performedAt: Date.now(), completedAt: Date.now() },
+        sets: [{ id: 100, workoutExerciseId: 10, exerciseId: 2 }],
+        loggedExerciseId: 2,
+        loggedExerciseName: 'Bench Press (Larson)',
+        loggedExerciseVariationLabel: 'Larson',
+        loggedExerciseParentExerciseId: 1,
+        loggedExerciseParentName: 'Bench Press',
+        isVariation: true,
+      },
+    ]);
+
+    const history = await mockGetExerciseHistory(1);
+    expect(history[0].isVariation).toBe(true);
+    expect(history[0].loggedExerciseName).toBe('Bench Press (Larson)');
+    expect(history[0].loggedExerciseParentName).toBe('Bench Press');
+  });
+
+  it('documents workout-day entries surfacing variation labels for display', async () => {
+    const mockGetWorkoutDayPage = jest.fn().mockResolvedValue({
+      dayKey: '2026-04-13',
+      displayDate: Date.now(),
+      totals: {
+        totalExercises: 1,
+        totalSets: 3,
+        totalReps: 15,
+        totalVolumeKg: 1500,
+        bestE1rmKg: 120,
+      },
+      entries: [
+        {
+          workoutExerciseId: 10,
+          exerciseId: 2,
+          exerciseName: 'Bench Press (Larson)',
+          exerciseVariationLabel: 'Larson',
+          exerciseParentExerciseId: 1,
+          exerciseParentName: 'Bench Press',
+          isVariation: true,
+          performedAt: Date.now(),
+          note: null,
+          sets: [],
+          totalSets: 3,
+          totalReps: 15,
+          totalVolumeKg: 1500,
+          bestSet: { weightKg: 100, reps: 5, e1rm: 117 },
+        },
+      ],
+      hasMore: false,
+    });
+
+    const page = await mockGetWorkoutDayPage('2026-04-13');
+    expect(page.entries[0].exerciseVariationLabel).toBe('Larson');
+    expect(page.entries[0].isVariation).toBe(true);
+  });
+});
+
 describe('Exercise History', () => {
   describe('getExerciseHistory', () => {
     it('should return workout history entries for an exercise', async () => {

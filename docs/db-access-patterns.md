@@ -59,6 +59,8 @@ Files like `exercises.ts`, `workouts.ts`, `programCalendar.ts`, `settings.ts`, e
 - Export small, named functions that express app operations.
 - Use Drizzle by default for selects/inserts/updates/deletes.
 - Keep cross-table invariants close to the write path that owns them.
+- Exercise-family lifecycle belongs in `lib/db/exercises.ts`.
+- Parent exercise rollups are query-time behavior. Do not introduce a second persistence layer for family history or analytics.
 
 ## 2. Query Rules
 
@@ -95,6 +97,8 @@ Important structural rules:
 - `program_calendar*` tables can mirror/link logging state but are not the source of truth for completed history.
 - Deleting a real `workout_exercise` must clear `program_calendar_exercises.workout_exercise_id` first because it is a soft link.
 - Deleting or editing a real set must keep `program_calendar_sets.set_id` linkage synchronized.
+- Variation rename/delete flows must update both main history links and program/calendar references from the same domain write path instead of scattering that logic across screens.
+- Parent exercise history/analytics aggregation should be implemented in read helpers such as `workouts.ts` and `analytics.ts`, not by duplicating rows into alternate tables.
 
 Prefer reusing existing helper functions that already maintain these invariants instead of duplicating partial delete/update logic in another file.
 

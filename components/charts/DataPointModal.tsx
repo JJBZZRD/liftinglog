@@ -21,7 +21,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import VariationExerciseLabel from "../exercise/VariationExerciseLabel";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
+import { getExerciseScopeIdsForView } from "../../lib/db/exercises";
 import { deleteExerciseSession, deleteWorkoutExercise } from "../../lib/db/workouts";
 import { listMediaForSetIds } from "../../lib/db/media";
 import { getCurrentPBEventsForExercise, type PBEvent } from "../../lib/db/pbEvents";
@@ -83,7 +85,8 @@ export default function DataPointModal({
       }
 
       try {
-        const map = await getCurrentPBEventsForExercise(exerciseId);
+        const scopeIds = await getExerciseScopeIdsForView(exerciseId);
+        const map = await getCurrentPBEventsForExercise(scopeIds);
         if (!cancelled) setPbEventsBySetId(map);
       } catch (error) {
         console.error("Error loading PB events:", error);
@@ -157,6 +160,14 @@ export default function DataPointModal({
   const bestSetDisplay = sessionDetails?.bestSet
     ? `${formatWeightFromKg(sessionDetails.bestSet.weight, unitPreference)} x ${sessionDetails.bestSet.reps} reps`
     : null;
+  const sessionExercise = sessionDetails
+    ? {
+        name: sessionDetails.loggedExerciseName,
+        parentExerciseId: sessionDetails.loggedExerciseParentExerciseId,
+        variationLabel: sessionDetails.loggedExerciseVariationLabel,
+        parentName: sessionDetails.loggedExerciseParentName,
+      }
+    : null;
 
   // onLayout handlers
   const handleCardLayout = (event: LayoutChangeEvent) => {
@@ -217,7 +228,7 @@ export default function DataPointModal({
     
     Alert.alert(
       "Delete Session",
-      `Are you sure you want to delete this ${exerciseName || "exercise"} session? This will remove all ${sessionDetails.totalSets} sets and cannot be undone.`,
+      `Are you sure you want to delete this ${sessionDetails.loggedExerciseName || exerciseName || "exercise"} session? This will remove all ${sessionDetails.totalSets} sets and cannot be undone.`,
       [
         {
           text: "Cancel",
@@ -307,11 +318,16 @@ export default function DataPointModal({
                       <Text style={[styles.title, { color: rawColors.foreground }]}>
                         Session
                       </Text>
-                      {exerciseName && (
+                      {sessionExercise ? (
+                        <VariationExerciseLabel
+                          exercise={sessionExercise}
+                          style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}
+                        />
+                      ) : exerciseName ? (
                         <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
                           {exerciseName}
                         </Text>
-                      )}
+                      ) : null}
                     </View>
                     <Pressable 
                       onPress={onClose} 
@@ -364,7 +380,7 @@ export default function DataPointModal({
                                     pathname: "/edit-workout",
                                     params: {
                                       workoutExerciseId: String(sessionDetails.workoutExerciseId),
-                                      exerciseName: exerciseName || "Exercise",
+                                      exerciseName: sessionDetails.loggedExerciseName || exerciseName || "Exercise",
                                     },
                                   });
                                 } else {
@@ -374,7 +390,7 @@ export default function DataPointModal({
                                     params: {
                                       exerciseId: String(exerciseId),
                                       workoutId: String(sessionDetails.workoutId),
-                                      exerciseName: exerciseName || "Exercise",
+                                      exerciseName: sessionDetails.loggedExerciseName || exerciseName || "Exercise",
                                     },
                                   });
                                 }
@@ -502,11 +518,16 @@ export default function DataPointModal({
                     <Text style={[styles.title, { color: rawColors.foreground }]}>
                       Session
                     </Text>
-                    {exerciseName && (
+                    {sessionExercise ? (
+                      <VariationExerciseLabel
+                        exercise={sessionExercise}
+                        style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}
+                      />
+                    ) : exerciseName ? (
                       <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
                         {exerciseName}
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                   <Pressable 
                     onPress={onClose} 
@@ -559,7 +580,7 @@ export default function DataPointModal({
                                   pathname: "/edit-workout",
                                   params: {
                                     workoutExerciseId: String(sessionDetails.workoutExerciseId),
-                                    exerciseName: exerciseName || "Exercise",
+                                    exerciseName: sessionDetails.loggedExerciseName || exerciseName || "Exercise",
                                   },
                                 });
                               } else {
@@ -569,7 +590,7 @@ export default function DataPointModal({
                                   params: {
                                     exerciseId: String(exerciseId),
                                     workoutId: String(sessionDetails.workoutId),
-                                    exerciseName: exerciseName || "Exercise",
+                                    exerciseName: sessionDetails.loggedExerciseName || exerciseName || "Exercise",
                                   },
                                 });
                               }

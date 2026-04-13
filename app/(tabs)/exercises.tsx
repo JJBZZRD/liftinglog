@@ -1,29 +1,67 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link } from "expo-router";
-import { useCallback, useRef, useState } from "react";
-import { Animated, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  Animated,
+  FlatList,
+  LayoutAnimation,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../components/AddExerciseModal";
+import VariationExerciseLabel from "../../components/exercise/VariationExerciseLabel";
 import BaseModal from "../../components/modals/BaseModal";
-import { deleteExercise, lastPerformedAt, listExercises, type Exercise } from "../../lib/db/exercises";
+import {
+  createExerciseVariation,
+  deleteExercise,
+  deleteExerciseVariation,
+  lastPerformedAt,
+  listExerciseLibraryGroups,
+  renameExerciseVariation,
+  type Exercise,
+  type ExerciseLibraryGroup,
+} from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { formatExerciseLibraryTitle } from "../../lib/utils/exerciseVariations";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type SortOption = "alphabetical" | "lastCompleted";
 
 export default function ExercisesScreen() {
   const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [items, setItems] = useState<Exercise[]>([]);
-  const [lastPerformedAtByExerciseId, setLastPerformedAtByExerciseId] = useState<Record<number, number | null>>({});
+  const [items, setItems] = useState<ExerciseLibraryGroup[]>([]);
+  const [lastPerformedAtByExerciseId, setLastPerformedAtByExerciseId] = useState<
+    Record<number, number | null>
+  >({});
+  const [expandedExerciseId, setExpandedExerciseId] = useState<number | null>(null);
   const [isAddModalVisible, setAddModalVisible] = useState(false);
   const [isActionModalVisible, setActionModalVisible] = useState(false);
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isDeleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [isVariationsModalVisible, setVariationsModalVisible] = useState(false);
+  const [isVariationEditorVisible, setVariationEditorVisible] = useState(false);
+  const [isVariationDeleteConfirmVisible, setVariationDeleteConfirmVisible] = useState(false);
+  const [selectedParentExerciseId, setSelectedParentExerciseId] = useState<number | null>(null);
+  const [variationEditorMode, setVariationEditorMode] = useState<"create" | "rename">("create");
+  const [variationDraft, setVariationDraft] = useState("");
+  const [variationError, setVariationError] = useState<string | null>(null);
+  const [variationTarget, setVariationTarget] = useState<Exercise | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  
+
   // Filter and search state
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [showSearchPopup, setShowSearchPopup] = useState(false);
@@ -33,36 +71,46 @@ export default function ExercisesScreen() {
 
   const HEADER_HEIGHT = 105 + insets.top;
 
-  // Filter and sort the items
-  const filteredAndSortedItems = useCallback(() => {
+  const selectedGroup = useMemo(
+    () => items.find((item) => item.exercise.id === selectedParentExerciseId) ?? null,
+    [items, selectedParentExerciseId]
+  );
+  const selectedExercise = selectedGroup?.exercise ?? null;
+
+  const filteredAndSortedItems = useMemo(() => {
     let result = [...items];
-    
-    // Apply search filter
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter((item) => 
-        item.name.toLowerCase().includes(query)
+      result = result.filter(
+        (item) =>
+          item.exercise.name.toLowerCase().includes(query) ||
+          item.exercise.muscleGroup?.toLowerCase().includes(query) ||
+          item.exercise.equipment?.toLowerCase().includes(query) ||
+          item.variations.some(
+            (variation) =>
+              variation.name.toLowerCase().includes(query) ||
+              variation.variationLabel?.toLowerCase().includes(query)
+          )
       );
     }
-    
-    // Apply sort
+
     if (sortOption === "alphabetical") {
       result.sort((a, b) => {
-        const comparison = a.name.localeCompare(b.name);
+        const comparison = a.exercise.name.localeCompare(b.exercise.name);
         return sortAscending ? comparison : -comparison;
       });
-    } else if (sortOption === "lastCompleted") {
+    } else {
       result.sort((a, b) => {
-        const aTime = lastPerformedAtByExerciseId[a.id] ?? 0;
-        const bTime = lastPerformedAtByExerciseId[b.id] ?? 0;
+        const aTime = a.familyLastPerformedAt ?? 0;
+        const bTime = b.familyLastPerformedAt ?? 0;
         return sortAscending ? aTime - bTime : bTime - aTime;
       });
     }
-    
+
     return result;
-  }, [items, searchQuery, sortOption, sortAscending, lastPerformedAtByExerciseId]);
-  
-  // Shadow opacity based on scroll position
+  }, [items, searchQuery, sortOption, sortAscending]);
+
   const headerShadowOpacity = scrollY.interpolate({
     inputRange: [0, 20],
     outputRange: [0, 0.15],
@@ -70,13 +118,38 @@ export default function ExercisesScreen() {
   });
 
   const reloadExercises = useCallback(async () => {
-    const rows = await listExercises();
+    const rows = await listExerciseLibraryGroups();
     setItems(rows);
+
+    if (
+      selectedParentExerciseId !== null &&
+      !rows.some((item) => item.exercise.id === selectedParentExerciseId)
+    ) {
+      setSelectedParentExerciseId(null);
+      setActionModalVisible(false);
+      setEditModalVisible(false);
+      setDeleteConfirmVisible(false);
+      setVariationsModalVisible(false);
+      setVariationEditorVisible(false);
+      setVariationDeleteConfirmVisible(false);
+      setVariationTarget(null);
+    }
+
+    if (
+      expandedExerciseId !== null &&
+      !rows.some((item) => item.exercise.id === expandedExerciseId)
+    ) {
+      setExpandedExerciseId(null);
+    }
+
+    const concreteExercises = rows.flatMap((group) => [group.exercise, ...group.variations]);
     const entries = await Promise.all(
-      rows.map(async (exercise) => [exercise.id, await lastPerformedAt(exercise.id)] as const)
+      concreteExercises.map(
+        async (exercise) => [exercise.id, await lastPerformedAt(exercise.id)] as const
+      )
     );
     setLastPerformedAtByExerciseId(Object.fromEntries(entries));
-  }, []);
+  }, [expandedExerciseId, selectedParentExerciseId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -84,16 +157,116 @@ export default function ExercisesScreen() {
     }, [reloadExercises])
   );
 
+  const formatLastCompletedLabel = useCallback((timestamp: number | null | undefined) => {
+    return timestamp
+      ? `Last completed ${new Date(timestamp).toLocaleDateString()}`
+      : "Never completed";
+  }, []);
+
+  const closeActionModal = useCallback(() => {
+    setActionModalVisible(false);
+  }, []);
+
+  const closeVariationEditor = useCallback(() => {
+    setVariationEditorVisible(false);
+    setVariationDraft("");
+    setVariationError(null);
+    setVariationTarget(null);
+  }, []);
+
+  const closeVariationDeleteConfirm = useCallback(() => {
+    setVariationDeleteConfirmVisible(false);
+    setVariationTarget(null);
+  }, []);
+
+  const handleToggleExpanded = useCallback((exerciseId: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedExerciseId((prev) => (prev === exerciseId ? null : exerciseId));
+  }, []);
+
+  const handleNavigateToExercise = useCallback((exercise: Exercise) => {
+    router.push({
+      pathname: "/exercise/[id]",
+      params: { id: String(exercise.id), name: exercise.name },
+    });
+  }, []);
+
+  const handleOpenActions = useCallback((group: ExerciseLibraryGroup) => {
+    setSelectedParentExerciseId(group.exercise.id);
+    setActionModalVisible(true);
+  }, []);
+
   const handleDelete = useCallback(async () => {
     if (!selectedExercise) {
       setDeleteConfirmVisible(false);
       return;
     }
-    await deleteExercise(selectedExercise.id);
-    setDeleteConfirmVisible(false);
-    setSelectedExercise(null);
-    await reloadExercises();
+    try {
+      await deleteExercise(selectedExercise.id);
+      setDeleteConfirmVisible(false);
+      setSelectedParentExerciseId(null);
+      await reloadExercises();
+    } catch (error: any) {
+      Alert.alert("Unable to delete", error?.message ?? "Please resolve the exercise variations first.");
+      setDeleteConfirmVisible(false);
+    }
   }, [selectedExercise, reloadExercises]);
+
+  const handleOpenVariationEditor = useCallback(
+    (mode: "create" | "rename", variation?: Exercise | null) => {
+      setVariationEditorMode(mode);
+      setVariationTarget(variation ?? null);
+      setVariationDraft(mode === "rename" ? variation?.variationLabel ?? "" : "");
+      setVariationError(null);
+      setVariationEditorVisible(true);
+    },
+    []
+  );
+
+  const handleSaveVariation = useCallback(async () => {
+    if (!selectedGroup) {
+      closeVariationEditor();
+      return;
+    }
+
+    try {
+      if (variationEditorMode === "create") {
+        await createExerciseVariation(selectedGroup.exercise.id, variationDraft);
+      } else if (variationTarget) {
+        await renameExerciseVariation(variationTarget.id, variationDraft);
+      }
+
+      closeVariationEditor();
+      await reloadExercises();
+    } catch (error: any) {
+      setVariationError(error?.message ?? "Unable to save variation.");
+    }
+  }, [
+    closeVariationEditor,
+    reloadExercises,
+    selectedGroup,
+    variationDraft,
+    variationEditorMode,
+    variationTarget,
+  ]);
+
+  const handleDeleteVariation = useCallback(
+    async (mode: "keep_data" | "delete_data") => {
+      if (!variationTarget) {
+        closeVariationDeleteConfirm();
+        return;
+      }
+
+      try {
+        await deleteExerciseVariation(variationTarget.id, mode);
+        closeVariationDeleteConfirm();
+        await reloadExercises();
+      } catch (error: any) {
+        Alert.alert("Unable to delete variation", error?.message ?? "Please try again.");
+      }
+    },
+    [closeVariationDeleteConfirm, reloadExercises, variationTarget]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: rawColors.background }]}>
@@ -162,10 +335,10 @@ export default function ExercisesScreen() {
       </Animated.View>
 
       <FlatList
-        data={filteredAndSortedItems()}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ 
-          padding: 16, 
+        data={filteredAndSortedItems}
+        keyExtractor={(item) => String(item.exercise.id)}
+        contentContainerStyle={{
+          padding: 16,
           gap: 12,
           paddingTop: HEADER_HEIGHT + 45,
           paddingBottom: 100,
@@ -179,17 +352,13 @@ export default function ExercisesScreen() {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
-        renderItem={({ item }) => (
-          <Link
-            href={{ pathname: "/exercise/[id]", params: { id: String(item.id), name: item.name } }}
-            asChild
-          >
-            <Pressable
-              onLongPress={() => {
-                setSelectedExercise(item);
-                setActionModalVisible(true);
-              }}
-              className="rounded-2xl p-5"
+        renderItem={({ item }) => {
+          const isExpanded = expandedExerciseId === item.exercise.id;
+          const hasVariations = item.variations.length > 0;
+          const parentLastCompleted = item.familyLastPerformedAt;
+
+          return (
+            <View
               style={{
                 borderRadius: 16,
                 backgroundColor: rawColors.surface,
@@ -200,24 +369,123 @@ export default function ExercisesScreen() {
                 elevation: 4,
               }}
             >
-              <View className="flex-row items-center justify-between gap-3">
-                <Text className="flex-1 text-base font-semibold text-foreground" numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={rawColors.foregroundSecondary}
-                />
+              <View style={{ flexDirection: "row", alignItems: "stretch" }}>
+                <Pressable
+                  onPress={() => handleNavigateToExercise(item.exercise)}
+                  onLongPress={() => handleOpenActions(item)}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingHorizontal: 20,
+                    paddingVertical: 18,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text
+                    style={{ color: rawColors.foreground, fontSize: 16, fontWeight: "600" }}
+                    numberOfLines={1}
+                  >
+                    {formatExerciseLibraryTitle(item.exercise.name, item.variations.length)}
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      color: rawColors.foregroundSecondary,
+                      fontSize: 12,
+                    }}
+                  >
+                    {formatLastCompletedLabel(parentLastCompleted)}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    hasVariations
+                      ? `${isExpanded ? "Collapse" : "Expand"} variations for ${item.exercise.name}`
+                      : `Open ${item.exercise.name}`
+                  }
+                  onPress={() =>
+                    hasVariations
+                      ? handleToggleExpanded(item.exercise.id)
+                      : handleNavigateToExercise(item.exercise)
+                  }
+                  style={({ pressed }) => ({
+                    width: 56,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: pressed ? 0.75 : 1,
+                  })}
+                >
+                  <MaterialCommunityIcons
+                    name={
+                      hasVariations
+                        ? isExpanded
+                          ? "chevron-up"
+                          : "chevron-down"
+                        : "chevron-right"
+                    }
+                    size={22}
+                    color={rawColors.foregroundSecondary}
+                  />
+                </Pressable>
               </View>
-              <Text className="mt-1 text-xs text-foreground-secondary">
-                {lastPerformedAtByExerciseId[item.id]
-                  ? `Last completed ${new Date(lastPerformedAtByExerciseId[item.id] as number).toLocaleDateString()}`
-                  : "Never completed"}
-              </Text>
-            </Pressable>
-          </Link>
-        )}
+              {hasVariations && isExpanded ? (
+                <View
+                  style={{
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: rawColors.border,
+                    paddingVertical: 8,
+                  }}
+                >
+                  {item.variations.map((variation, index) => (
+                    <Pressable
+                      key={variation.id}
+                      onPress={() => handleNavigateToExercise(variation)}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingLeft: 20,
+                        paddingRight: 16,
+                        paddingVertical: 12,
+                        opacity: pressed ? 0.78 : 1,
+                        borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                        borderTopColor: rawColors.border,
+                      })}
+                    >
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <VariationExerciseLabel
+                          exercise={{
+                            name: variation.name,
+                            parentExerciseId: variation.parentExerciseId,
+                            variationLabel: variation.variationLabel,
+                            parentName: item.exercise.name,
+                          }}
+                          numberOfLines={1}
+                          style={{ fontSize: 15, fontWeight: "600" }}
+                          suffixStyle={{ fontWeight: "500" }}
+                        />
+                        <Text
+                          style={{
+                            marginTop: 4,
+                            color: rawColors.foregroundSecondary,
+                            fontSize: 12,
+                          }}
+                        >
+                          {formatLastCompletedLabel(lastPerformedAtByExerciseId[variation.id])}
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={18}
+                        color={rawColors.foregroundSecondary}
+                      />
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          );
+        }}
       />
 
       <AddExerciseModal
@@ -229,7 +497,7 @@ export default function ExercisesScreen() {
       {/* Actions Modal */}
       <BaseModal
         visible={isActionModalVisible}
-        onClose={() => { setActionModalVisible(false); setSelectedExercise(null); }}
+        onClose={closeActionModal}
         maxWidth={400}
       >
         {selectedExercise && (
@@ -239,7 +507,7 @@ export default function ExercisesScreen() {
             </Text>
             <Pressable
               onPress={() => {
-                setActionModalVisible(false);
+                closeActionModal();
                 setEditModalVisible(true);
               }}
               className="flex-row items-center p-3.5 rounded-xl mb-2 gap-3 bg-surface-secondary"
@@ -250,7 +518,22 @@ export default function ExercisesScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
-                setActionModalVisible(false);
+                closeActionModal();
+                setVariationsModalVisible(true);
+              }}
+              className="flex-row items-center p-3.5 rounded-xl mb-2 gap-3 bg-surface-secondary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <MaterialCommunityIcons
+                name="swap-vertical"
+                size={22}
+                color={rawColors.primary}
+              />
+              <Text className="text-[15px] font-medium text-foreground">Variations</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                closeActionModal();
                 setDeleteConfirmVisible(true);
               }}
               className="flex-row items-center p-3.5 rounded-xl mb-2 gap-3 bg-surface-secondary"
@@ -267,14 +550,187 @@ export default function ExercisesScreen() {
       <AddExerciseModal
         visible={isEditModalVisible}
         exercise={selectedExercise}
-        onDismiss={() => { setEditModalVisible(false); setSelectedExercise(null); }}
+        onDismiss={() => {
+          setEditModalVisible(false);
+        }}
         onSaved={reloadExercises}
       />
+
+      <BaseModal
+        visible={isVariationsModalVisible}
+        onClose={() => {
+          setVariationsModalVisible(false);
+          setVariationTarget(null);
+        }}
+        maxWidth={420}
+      >
+        {selectedGroup ? (
+          <>
+            <Text className="text-xl font-bold mb-2 text-foreground">
+              Manage Variations
+            </Text>
+            <Text className="text-sm mb-4 text-foreground-secondary">
+              {selectedGroup.exercise.name}
+            </Text>
+
+            <Pressable
+              onPress={() => handleOpenVariationEditor("create")}
+              className="flex-row items-center justify-center p-3.5 rounded-xl mb-4 gap-2 bg-primary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+            >
+              <MaterialCommunityIcons name="plus" size={18} color={rawColors.surface} />
+              <Text className="text-[15px] font-semibold text-primary-foreground">
+                Add Variation
+              </Text>
+            </Pressable>
+
+            {selectedGroup.variations.length === 0 ? (
+              <View
+                style={{
+                  borderRadius: 14,
+                  padding: 16,
+                  backgroundColor: rawColors.surfaceSecondary,
+                }}
+              >
+                <Text style={{ color: rawColors.foreground, fontSize: 14, fontWeight: "600" }}>
+                  No variations yet
+                </Text>
+                <Text style={{ marginTop: 4, color: rawColors.foregroundSecondary, fontSize: 13 }}>
+                  Create a variation to log and analyze a concrete version of this exercise.
+                </Text>
+              </View>
+            ) : (
+              <View
+                style={{
+                  borderRadius: 14,
+                  overflow: "hidden",
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: rawColors.border,
+                }}
+              >
+                {selectedGroup.variations.map((variation, index) => (
+                  <View
+                    key={variation.id}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 14,
+                      paddingVertical: 14,
+                      borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                      borderTopColor: rawColors.border,
+                      backgroundColor: rawColors.surfaceSecondary,
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <VariationExerciseLabel
+                        exercise={{
+                          name: variation.name,
+                          parentExerciseId: variation.parentExerciseId,
+                          variationLabel: variation.variationLabel,
+                          parentName: selectedGroup.exercise.name,
+                        }}
+                        numberOfLines={1}
+                        style={{ fontSize: 15, fontWeight: "600" }}
+                      />
+                      <Text
+                        style={{
+                          marginTop: 4,
+                          color: rawColors.foregroundSecondary,
+                          fontSize: 12,
+                        }}
+                      >
+                        {formatLastCompletedLabel(lastPerformedAtByExerciseId[variation.id])}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => handleOpenVariationEditor("rename", variation)}
+                      hitSlop={10}
+                      style={{ padding: 8 }}
+                    >
+                      <MaterialCommunityIcons
+                        name="pencil-outline"
+                        size={18}
+                        color={rawColors.primary}
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setVariationTarget(variation);
+                        setVariationDeleteConfirmVisible(true);
+                      }}
+                      hitSlop={10}
+                      style={{ padding: 8 }}
+                    >
+                      <MaterialCommunityIcons
+                        name="delete-outline"
+                        size={18}
+                        color={rawColors.destructive}
+                      />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        ) : null}
+      </BaseModal>
+
+      <BaseModal
+        visible={isVariationEditorVisible}
+        onClose={closeVariationEditor}
+        maxWidth={380}
+      >
+        <Text className="text-xl font-bold mb-2 text-foreground">
+          {variationEditorMode === "create" ? "New Variation" : "Rename Variation"}
+        </Text>
+        <Text className="text-sm mb-4 text-foreground-secondary">
+          {selectedGroup?.exercise.name ?? "Exercise"}
+        </Text>
+        {variationError ? (
+          <View className="mb-4 px-3 py-2.5 rounded-lg bg-destructive/10">
+            <Text className="text-sm font-medium text-destructive">{variationError}</Text>
+          </View>
+        ) : null}
+        <View className="mb-4">
+          <Text className="text-sm font-medium mb-2 text-foreground-secondary">
+            Variation Label
+          </Text>
+          <TextInput
+            className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
+            value={variationDraft}
+            onChangeText={(text) => {
+              setVariationDraft(text);
+              setVariationError(null);
+            }}
+            placeholder="e.g. Larson"
+            placeholderTextColor={rawColors.foregroundMuted}
+            autoFocus
+          />
+        </View>
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            onPress={closeVariationEditor}
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+          </Pressable>
+          <Pressable
+            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+            onPress={handleSaveVariation}
+          >
+            <Text className="text-base font-semibold text-primary-foreground">
+              {variationEditorMode === "create" ? "Create" : "Save"}
+            </Text>
+          </Pressable>
+        </View>
+      </BaseModal>
 
       {/* Delete Confirm Modal */}
       <BaseModal
         visible={isDeleteConfirmVisible}
-        onClose={() => { setDeleteConfirmVisible(false); setSelectedExercise(null); }}
+        onClose={() => {
+          setDeleteConfirmVisible(false);
+        }}
         maxWidth={380}
       >
         <Text className="text-xl font-bold mb-2 text-foreground">Delete Exercise?</Text>
@@ -286,7 +742,9 @@ export default function ExercisesScreen() {
         <View className="flex-row gap-3">
           <Pressable
             className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
-            onPress={() => { setDeleteConfirmVisible(false); setSelectedExercise(null); }}
+            onPress={() => {
+              setDeleteConfirmVisible(false);
+            }}
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
@@ -300,6 +758,60 @@ export default function ExercisesScreen() {
             <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
           </Pressable>
         </View>
+      </BaseModal>
+
+      <BaseModal
+        visible={isVariationDeleteConfirmVisible}
+        onClose={closeVariationDeleteConfirm}
+        maxWidth={420}
+      >
+        <Text className="text-xl font-bold mb-2 text-foreground">Delete Variation?</Text>
+        {variationTarget ? (
+          <>
+            <VariationExerciseLabel
+              exercise={{
+                name: variationTarget.name,
+                parentExerciseId: variationTarget.parentExerciseId,
+                variationLabel: variationTarget.variationLabel,
+                parentName: selectedGroup?.exercise.name ?? null,
+              }}
+              style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}
+            />
+            <Text className="text-sm mb-4 text-foreground-secondary">
+              Choose what should happen to the variation data that has already been logged.
+            </Text>
+            <Pressable
+              onPress={() => handleDeleteVariation("keep_data")}
+              className="p-3.5 rounded-xl mb-2 bg-surface-secondary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
+            >
+              <Text className="text-[15px] font-semibold text-foreground">
+                Keep data under parent
+              </Text>
+              <Text className="mt-1 text-xs text-foreground-secondary">
+                Logged sessions stay in history and move back under the parent exercise.
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => handleDeleteVariation("delete_data")}
+              className="p-3.5 rounded-xl mb-3 bg-surface-secondary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
+            >
+              <Text className="text-[15px] font-semibold text-destructive">
+                Delete data entirely
+              </Text>
+              <Text className="mt-1 text-xs text-foreground-secondary">
+                Logged sessions for this variation are removed along with the variation row.
+              </Text>
+            </Pressable>
+            <Pressable
+              className="items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+              onPress={closeVariationDeleteConfirm}
+            >
+              <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+            </Pressable>
+          </>
+        ) : null}
       </BaseModal>
 
       {/* Filter popup */}

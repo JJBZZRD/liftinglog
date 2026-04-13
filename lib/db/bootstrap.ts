@@ -33,6 +33,8 @@ const SCHEMA_BOOTSTRAP_SQL = `
     id INTEGER PRIMARY KEY NOT NULL,
     uid TEXT,
     name TEXT NOT NULL UNIQUE,
+    parent_exercise_id INTEGER,
+    variation_label TEXT,
     description TEXT,
     muscle_group TEXT,
     equipment TEXT,
@@ -255,6 +257,8 @@ export function initializeDatabase(sqlite: SQLiteDatabase): void {
 
 function runColumnMigrations(sqlite: SQLiteDatabase): void {
   addColumnIfMissing(sqlite, "exercises", "last_rest_seconds INTEGER");
+  addColumnIfMissing(sqlite, "exercises", "parent_exercise_id INTEGER");
+  addColumnIfMissing(sqlite, "exercises", "variation_label TEXT");
   addColumnIfMissing(sqlite, "workout_exercises", "current_weight REAL");
   addColumnIfMissing(sqlite, "workout_exercises", "current_reps INTEGER");
   addColumnIfMissing(sqlite, "exercises", "is_pinned INTEGER NOT NULL DEFAULT 0");
@@ -508,6 +512,11 @@ function createIndexes(sqlite: SQLiteDatabase): void {
     sqlite,
     "idx_program_calendar_sets_set_id",
     "CREATE INDEX IF NOT EXISTS idx_program_calendar_sets_set_id ON program_calendar_sets(set_id);"
+  );
+  ensureIndex(
+    sqlite,
+    "idx_exercises_parent_exercise_id",
+    "CREATE INDEX IF NOT EXISTS idx_exercises_parent_exercise_id ON exercises(parent_exercise_id);"
   );
 }
 

@@ -333,6 +333,39 @@ describe('Exercise Data Types', () => {
     expect(exercise).toHaveProperty('lastRestSeconds');
     expect(exercise).toHaveProperty('isPinned');
   });
+
+  it('documents the variation-aware exercise shape', () => {
+    const variation = {
+      id: 2,
+      name: 'Bench Press (Larson)',
+      parentExerciseId: 1,
+      variationLabel: 'Larson',
+      description: null,
+      muscleGroup: 'Chest',
+      equipment: 'Barbell',
+      isBodyweight: false,
+      createdAt: Date.now(),
+      lastRestSeconds: null,
+      isPinned: false,
+    };
+
+    expect(variation).toHaveProperty('parentExerciseId', 1);
+    expect(variation).toHaveProperty('variationLabel', 'Larson');
+  });
+
+  it('documents grouped exercise library results for parent families', () => {
+    const libraryGroup = {
+      exercise: { id: 1, name: 'Bench Press' },
+      variations: [
+        { id: 2, name: 'Bench Press (Larson)', parentExerciseId: 1, variationLabel: 'Larson' },
+        { id: 3, name: 'Bench Press (Tempo)', parentExerciseId: 1, variationLabel: 'Tempo' },
+      ],
+      familyLastPerformedAt: 1713000000000,
+    };
+
+    expect(libraryGroup.variations).toHaveLength(2);
+    expect(libraryGroup.familyLastPerformedAt).toBe(1713000000000);
+  });
 });
 
 

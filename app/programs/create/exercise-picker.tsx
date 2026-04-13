@@ -6,21 +6,30 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../../components/AddExerciseModal";
+import VariationExerciseLabel from "../../../components/exercise/VariationExerciseLabel";
 import {
   lastPerformedAt,
-  listExercises,
-  type Exercise,
+  listExerciseLibraryGroups,
+  type ExerciseLibraryGroup,
 } from "../../../lib/db/exercises";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import { formatExerciseLibraryTitle } from "../../../lib/utils/exerciseVariations";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type SortOption = "alphabetical" | "lastCompleted";
 
@@ -35,10 +44,11 @@ export default function ExercisePickerScreen() {
   const targetId = params.targetId ?? "";
   const targetLabel = params.targetLabel ?? targetId;
 
-  const [items, setItems] = useState<Exercise[]>([]);
+  const [items, setItems] = useState<ExerciseLibraryGroup[]>([]);
   const [lastPerformedAtByExerciseId, setLastPerformedAtByExerciseId] = useState<
     Record<number, number | null>
   >({});
+  const [expandedExerciseId, setExpandedExerciseId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState<SortOption>("alphabetical");
@@ -61,12 +71,27 @@ export default function ExercisePickerScreen() {
     extrapolate: "clamp",
   });
 
+  const allExercises = useMemo(
+    () => items.flatMap((item) => [item.exercise, ...item.variations]),
+    [items]
+  );
+
   const reloadExercises = useCallback(async (createdExerciseId?: number) => {
-    const rows = await listExercises();
+    const rows = await listExerciseLibraryGroups();
     setItems(rows);
 
+    if (
+      expandedExerciseId !== null &&
+      !rows.some((item) => item.exercise.id === expandedExerciseId)
+    ) {
+      setExpandedExerciseId(null);
+    }
+
+    const concreteExercises = rows.flatMap((item) => [item.exercise, ...item.variations]);
     const entries = await Promise.all(
-      rows.map(async (exercise) => [exercise.id, await lastPerformedAt(exercise.id)] as const)
+      concreteExercises.map(
+        async (exercise) => [exercise.id, await lastPerformedAt(exercise.id)] as const
+      )
     );
     setLastPerformedAtByExerciseId(Object.fromEntries(entries));
 
@@ -77,7 +102,7 @@ export default function ExercisePickerScreen() {
         return next;
       });
     }
-  }, []);
+  }, [expandedExerciseId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,27 +117,32 @@ export default function ExercisePickerScreen() {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter(
         (item) =>
-          item.name.toLowerCase().includes(query) ||
-          item.muscleGroup?.toLowerCase().includes(query) ||
-          item.equipment?.toLowerCase().includes(query)
+          item.exercise.name.toLowerCase().includes(query) ||
+          item.exercise.muscleGroup?.toLowerCase().includes(query) ||
+          item.exercise.equipment?.toLowerCase().includes(query) ||
+          item.variations.some(
+            (variation) =>
+              variation.name.toLowerCase().includes(query) ||
+              variation.variationLabel?.toLowerCase().includes(query)
+          )
       );
     }
 
     if (sortOption === "alphabetical") {
       result.sort((a, b) => {
-        const comparison = a.name.localeCompare(b.name);
+        const comparison = a.exercise.name.localeCompare(b.exercise.name);
         return sortAscending ? comparison : -comparison;
       });
     } else {
       result.sort((a, b) => {
-        const aTime = lastPerformedAtByExerciseId[a.id] ?? 0;
-        const bTime = lastPerformedAtByExerciseId[b.id] ?? 0;
+        const aTime = a.familyLastPerformedAt ?? 0;
+        const bTime = b.familyLastPerformedAt ?? 0;
         return sortAscending ? aTime - bTime : bTime - aTime;
       });
     }
 
     return result;
-  }, [items, searchQuery, sortOption, sortAscending, lastPerformedAtByExerciseId]);
+  }, [items, searchQuery, sortOption, sortAscending]);
 
   const toggleSelection = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -126,8 +156,13 @@ export default function ExercisePickerScreen() {
     });
   }, []);
 
+  const handleToggleExpanded = useCallback((exerciseId: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedExerciseId((prev) => (prev === exerciseId ? null : exerciseId));
+  }, []);
+
   const handleAdd = useCallback(() => {
-    const selected = items
+    const selected = allExercises
       .filter((exercise) => selectedIds.has(exercise.id))
       .map((exercise) => ({ id: exercise.id, name: exercise.name }));
 
@@ -136,68 +171,118 @@ export default function ExercisePickerScreen() {
     setTimeout(() => {
       (globalThis as any).__exercisePickerCallback?.(selected, targetId);
     }, 100);
-  }, [items, selectedIds, targetId]);
+  }, [allExercises, selectedIds, targetId]);
+
+  const formatLastCompletedLabel = useCallback((timestamp: number | null | undefined) => {
+    return timestamp
+      ? `Last completed ${new Date(timestamp).toLocaleDateString()}`
+      : "Never completed";
+  }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: Exercise }) => {
-      const isSelected = selectedIds.has(item.id);
-      const isAlreadyAdded = existingIdSet.has(item.id);
-      const lastCompletedAt = lastPerformedAtByExerciseId[item.id];
+    ({ item }: { item: ExerciseLibraryGroup }) => {
+      const isParentSelected = selectedIds.has(item.exercise.id);
+      const isParentAlreadyAdded = existingIdSet.has(item.exercise.id);
+      const hasVariations = item.variations.length > 0;
+      const isExpanded = expandedExerciseId === item.exercise.id;
 
       return (
-        <Pressable
-          onPress={() => toggleSelection(item.id)}
-          className={`rounded-[32px] px-6 py-5 border ${
-            isSelected ? 'border-primary bg-primary/10' : 'border-transparent bg-surface'
-          }`}
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.7 : 1,
-          })}
+        <View
+          style={{
+            borderRadius: 24,
+            overflow: "hidden",
+            backgroundColor: rawColors.surface,
+            borderWidth: 1,
+            borderColor: isParentSelected ? rawColors.primary : rawColors.borderLight,
+          }}
         >
-          <View className="flex-row items-center justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Text className="mt-1 text-xs text-foreground-secondary" numberOfLines={1}>
-                {lastCompletedAt
-                  ? `Last completed ${new Date(lastCompletedAt).toLocaleDateString()}`
-                  : "Never completed"}
-              </Text>
-            </View>
-
-            <View
-              className={`w-[26px] h-[26px] rounded-[13px] border-2 items-center justify-center ${
-                isSelected ? 'bg-primary border-primary' : 'bg-transparent border-border-light'
-              }`}
+          <View style={{ flexDirection: "row", alignItems: "stretch" }}>
+            <Pressable
+              onPress={() => toggleSelection(item.exercise.id)}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingHorizontal: 20,
+                paddingVertical: 18,
+                opacity: pressed ? 0.75 : 1,
+                backgroundColor: isParentSelected ? rawColors.primary + "10" : rawColors.surface,
+              })}
             >
-              {isSelected ? (
-                <MaterialCommunityIcons
-                  name="check"
-                  size={16}
-                  color={rawColors.primaryForeground}
-                />
-              ) : null}
-            </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: rawColors.foreground, fontSize: 16, fontWeight: "600" }} numberOfLines={1}>
+                    {formatExerciseLibraryTitle(item.exercise.name, item.variations.length)}
+                  </Text>
+                  <Text
+                    style={{ marginTop: 4, color: rawColors.foregroundSecondary, fontSize: 12 }}
+                    numberOfLines={1}
+                  >
+                    {formatLastCompletedLabel(item.familyLastPerformedAt)}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    borderWidth: 2,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: isParentSelected ? rawColors.primary : "transparent",
+                    borderColor: isParentSelected ? rawColors.primary : rawColors.borderLight,
+                  }}
+                >
+                  {isParentSelected ? (
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={16}
+                      color={rawColors.primaryForeground}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                hasVariations ? handleToggleExpanded(item.exercise.id) : toggleSelection(item.exercise.id)
+              }
+              style={({ pressed }) => ({
+                width: 52,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <MaterialCommunityIcons
+                name={
+                  hasVariations
+                    ? isExpanded
+                      ? "chevron-up"
+                      : "chevron-down"
+                    : "chevron-right"
+                }
+                size={22}
+                color={rawColors.foregroundSecondary}
+              />
+            </Pressable>
           </View>
 
-          {(item.muscleGroup || item.equipment || isAlreadyAdded) ? (
-            <View className="flex-row flex-wrap gap-2 mt-3">
-              {item.muscleGroup ? (
+          {(item.exercise.muscleGroup || item.exercise.equipment || isParentAlreadyAdded) ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 20, paddingBottom: 14 }}>
+              {item.exercise.muscleGroup ? (
                 <View className="px-2.5 py-1.5 rounded-full bg-primary/10">
                   <Text className="text-xs font-semibold text-primary">
-                    {item.muscleGroup}
+                    {item.exercise.muscleGroup}
                   </Text>
                 </View>
               ) : null}
-              {item.equipment ? (
+              {item.exercise.equipment ? (
                 <View className="px-2.5 py-1.5 rounded-full bg-surface-secondary">
                   <Text className="text-xs font-semibold text-foreground-secondary">
-                    {item.equipment}
+                    {item.exercise.equipment}
                   </Text>
                 </View>
               ) : null}
-              {isAlreadyAdded ? (
+              {isParentAlreadyAdded ? (
                 <View className="px-2.5 py-1.5 rounded-full bg-surface-secondary">
                   <Text className="text-xs font-semibold text-foreground-muted">
                     Already added
@@ -206,11 +291,78 @@ export default function ExercisePickerScreen() {
               ) : null}
             </View>
           ) : null}
-        </Pressable>
+
+          {hasVariations && isExpanded ? (
+            <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: rawColors.border }}>
+              {item.variations.map((variation, index) => {
+                const isSelected = selectedIds.has(variation.id);
+                const isAlreadyAdded = existingIdSet.has(variation.id);
+                return (
+                  <Pressable
+                    key={variation.id}
+                    onPress={() => toggleSelection(variation.id)}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingLeft: 20,
+                      paddingRight: 16,
+                      paddingVertical: 14,
+                      opacity: pressed ? 0.75 : 1,
+                      borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                      borderTopColor: rawColors.border,
+                      backgroundColor: isSelected ? rawColors.primary + "10" : rawColors.surfaceSecondary,
+                    })}
+                  >
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <VariationExerciseLabel
+                        exercise={{
+                          name: variation.name,
+                          parentExerciseId: variation.parentExerciseId,
+                          variationLabel: variation.variationLabel,
+                          parentName: item.exercise.name,
+                        }}
+                        numberOfLines={1}
+                        style={{ fontSize: 15, fontWeight: "600" }}
+                      />
+                      <Text style={{ marginTop: 4, color: rawColors.foregroundSecondary, fontSize: 12 }}>
+                        {formatLastCompletedLabel(lastPerformedAtByExerciseId[variation.id])}
+                        {isAlreadyAdded ? " | Already added" : ""}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        borderWidth: 2,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: isSelected ? rawColors.primary : "transparent",
+                        borderColor: isSelected ? rawColors.primary : rawColors.borderLight,
+                      }}
+                    >
+                      {isSelected ? (
+                        <MaterialCommunityIcons
+                          name="check"
+                          size={16}
+                          color={rawColors.primaryForeground}
+                        />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
       );
     },
     [
+      expandedExerciseId,
+      formatLastCompletedLabel,
       existingIdSet,
+      handleToggleExpanded,
       lastPerformedAtByExerciseId,
       rawColors,
       selectedIds,
@@ -299,7 +451,7 @@ export default function ExercisePickerScreen() {
 
       <FlatList
         data={filteredAndSortedItems}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item) => String(item.exercise.id)}
         contentContainerStyle={{
           padding: 16,
           gap: 12,

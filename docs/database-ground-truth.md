@@ -45,6 +45,7 @@ Programs are allowed to mirror, stage, and link into logged history, but they mu
 
 ```text
 exercises
+  <- exercises.parent_exercise_id (nullable self-reference for variations)
   <- workout_exercises.exercise_id
   <- sets.exercise_id
   <- program_calendar_exercises.exercise_id (nullable)
@@ -92,9 +93,18 @@ program_calendar_sets
 
 Canonical exercise catalog.
 
-- One row per exercise name.
+- One row per concrete exercise entry.
+- Parent exercises use `parent_exercise_id = NULL` and `variation_label = NULL`.
+- Managed variations are child `exercises` rows with `parent_exercise_id = <parent id>` and `variation_label = <label>`.
+- Variation rows keep their concrete display name in `name`, for example `Bench Press (Larson)`.
 - Referenced by both manual logging and program logging.
 - Programmed exercises may start as name-only rows in `program_calendar_exercises`; they are linked to a real `exercises.id` later when logging resolves the exercise.
+
+Exercise-family consequences:
+
+- Logging a variation still writes a normal concrete `exercise_id` into `workout_exercises` and `sets`.
+- Parent exercise history and analytics are family rollups done at query time over the parent row plus all child variation rows.
+- Variation screens remain concrete and show only rows logged against that variation's own `exercise_id`.
 
 ### `workouts`
 
@@ -204,14 +214,26 @@ These rules are mandatory.
 
 11. Broad workout history is based on completed `workout_exercises`, not on `program_calendar` statuses.
 12. Exercise history is built from `workout_exercises` plus real `sets`, not from `program_calendar_sets`.
-13. Program UI completion and history visibility are related but not identical concepts.
-14. A program can be "scheduled" or "complete" on the calendar side without that alone being enough for workout history.
+13. Parent exercise history and analytics are read-time family rollups across the parent exercise plus all of its variation children.
+14. Variation exercise history and analytics are concrete-only and must not silently roll back up to the parent row when a variation screen is selected.
+15. Workout-day and workout-history views should surface the concrete logged exercise row so variation sessions remain visible as variations.
+16. Program UI completion and history visibility are related but not identical concepts.
+17. A program can be "scheduled" or "complete" on the calendar side without that alone being enough for workout history.
+
+### Exercise-family lifecycle rules
+
+18. Renaming or deleting a variation must not create a second persistence path. Logged history continues to live in `workouts`, `workout_exercises`, and `sets`.
+19. Deleting a variation with "keep data" remaps existing `workout_exercises.exercise_id` and `sets.exercise_id` rows to the parent exercise before the child exercise row is removed.
+20. Deleting a variation with "delete data" removes the child row's logged history through the normal history-delete path.
+21. Parent exercise deletion is blocked while child variations exist.
+22. Parent exercise renaming is blocked while child variations exist.
+23. Program references must be rewritten on variation rename/delete so stored PSL source, live `program_calendar_exercises`, and percent-intensity config do not point at stale variation names or ids.
 
 ### Durability rules
 
-15. `program_calendar*` rows are materialized schedule rows and can be deleted/rebuilt when a program is rescheduled or reactivated.
-16. Because of that, durable logged history must live in the main history tables, not only in `program_calendar*`.
-17. Backup/import merges the durable history tables plus `media` and standalone durable user-data tables such as `user_checkins`, then rebuilds `pr_events` from the merged `sets`. Program tables are not merged.
+24. `program_calendar*` rows are materialized schedule rows and can be deleted/rebuilt when a program is rescheduled or reactivated.
+25. Because of that, durable logged history must live in the main history tables, not only in `program_calendar*`.
+26. Backup/import merges the durable history tables plus `media` and standalone durable user-data tables such as `user_checkins`, then rebuilds `pr_events` from the merged `sets`. Program tables are not merged.
 
 ## 6. Foreign Keys vs Soft Links
 
@@ -351,7 +373,16 @@ Why:
 - leaving a real program-linked `workout_exercise` open caused `RecordTab` backlog/in-progress pollution
 - completing it immediately keeps the main history model coherent even before the user presses the program screen's final Complete button
 
-### G. Program UI draft vs real history
+### G. Variation logging and program rewrites
+
+1. Selecting a variation in the exercise library or program picker resolves to the child `exercises.id`.
+2. Recording sets for that variation writes the concrete child `exercise_id` into both `workout_exercises` and `sets`.
+3. Parent exercise history and analytics query the full family scope at read time; no alternate family-history table exists.
+4. Variation history and analytics query only the selected child row.
+5. On variation rename, stored PSL source, live `program_calendar_exercises`, and percent-intensity config must be rewritten to the new concrete variation name before active calendars are refreshed.
+6. On variation delete, future program references are rewritten to the parent exercise in both delete modes; the delete mode only changes what happens to already logged history rows.
+
+### H. Program UI draft vs real history
 
 The program screen can hold three states for a set:
 

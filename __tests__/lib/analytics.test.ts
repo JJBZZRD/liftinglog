@@ -14,6 +14,10 @@ jest.mock("../../lib/db/pbEvents", () => ({
   getPBEventsForExercise: jest.fn(async () => []),
 }));
 
+jest.mock("../../lib/db/exercises", () => ({
+  getExerciseScopeIdsForView: jest.fn(async (exerciseId: number) => [exerciseId]),
+}));
+
 jest.mock("../../lib/db/settings", () => ({
   getExerciseFormulaOverride: jest.fn(() => null),
   getGlobalFormula: jest.fn(() => "epley"),

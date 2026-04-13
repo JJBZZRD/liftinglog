@@ -9,6 +9,23 @@ function toSessionKey(workoutId: number, workoutExerciseId: number | null): stri
   return `${workoutId}:${workoutExerciseId ?? "null"}`;
 }
 
+function normalizeExerciseIds(exerciseIdOrIds: number | number[]): number[] {
+  const exerciseIds = Array.isArray(exerciseIdOrIds)
+    ? exerciseIdOrIds
+    : [exerciseIdOrIds];
+
+  return [
+    ...new Set(
+      exerciseIds.filter(
+        (exerciseId): exerciseId is number =>
+          typeof exerciseId === "number" &&
+          Number.isInteger(exerciseId) &&
+          exerciseId > 0
+      )
+    ),
+  ];
+}
+
 function isValidSetForPB(set: {
   weightKg: number | null;
   reps: number | null;
@@ -99,12 +116,23 @@ export async function rebuildPBEventsForExercise(exerciseId: number): Promise<vo
 /**
  * Get all PB events for a specific exercise.
  */
-export async function getPBEventsForExercise(exerciseId: number): Promise<PBEvent[]> {
+export async function getPBEventsForExercise(
+  exerciseIdOrIds: number | number[]
+): Promise<PBEvent[]> {
+  const exerciseIds = normalizeExerciseIds(exerciseIdOrIds);
+  if (exerciseIds.length === 0) {
+    return [];
+  }
+
   const rows = await db
     .select()
     .from(pbEvents)
-    .where(eq(pbEvents.exerciseId, exerciseId))
-    .orderBy(pbEvents.occurredAt);
+    .where(
+      exerciseIds.length === 1
+        ? eq(pbEvents.exerciseId, exerciseIds[0])
+        : inArray(pbEvents.exerciseId, exerciseIds)
+    )
+    .orderBy(pbEvents.occurredAt, pbEvents.id);
   return rows;
 }
 
@@ -135,12 +163,21 @@ export async function getPBEventsBySetIds(setIds: number[]): Promise<Map<number,
  * "Current" is defined as the latest recorded PB event for that type.
  */
 export async function getCurrentPBEventsForExercise(
-  exerciseId: number
+  exerciseIdOrIds: number | number[]
 ): Promise<Map<number, PBEvent>> {
+  const exerciseIds = normalizeExerciseIds(exerciseIdOrIds);
+  if (exerciseIds.length === 0) {
+    return new Map();
+  }
+
   const rows = await db
     .select()
     .from(pbEvents)
-    .where(eq(pbEvents.exerciseId, exerciseId))
+    .where(
+      exerciseIds.length === 1
+        ? eq(pbEvents.exerciseId, exerciseIds[0])
+        : inArray(pbEvents.exerciseId, exerciseIds)
+    )
     .orderBy(desc(pbEvents.occurredAt), desc(pbEvents.id));
 
   const seenTypes = new Set<string>();
@@ -162,8 +199,10 @@ export async function getCurrentPBEventsForExercise(
  * - modern sessions: `${workoutId}:${workoutExerciseId}`
  * - legacy sessions: `${workoutId}:null`
  */
-export async function getCurrentPBSessionKeysForExercise(exerciseId: number): Promise<Set<string>> {
-  const current = await getCurrentPBEventsForExercise(exerciseId);
+export async function getCurrentPBSessionKeysForExercise(
+  exerciseIdOrIds: number | number[]
+): Promise<Set<string>> {
+  const current = await getCurrentPBEventsForExercise(exerciseIdOrIds);
   const setIds = [...current.keys()];
   if (setIds.length === 0) return new Set();
 

@@ -101,6 +101,7 @@ jest.mock("../../lib/theme/ThemeContext", () => ({
 
 jest.mock("../../lib/db/exercises", () => ({
   MAX_PINNED_EXERCISES: 8,
+  getExerciseWithParentById: jest.fn(async () => null),
   getPinnedExercisesCount: jest.fn(async () => 0),
   isExercisePinned: jest.fn(async () => false),
   togglePinExercise: jest.fn(async () => true),

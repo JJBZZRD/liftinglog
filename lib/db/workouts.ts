@@ -1,6 +1,7 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeE1rm } from "../pb";
 import { db, sqlite } from "./connection";
+import { getExerciseScopeIdsForView } from "./exercises";
 import { hasColumn } from "./introspection";
 import { exercises, sets, workoutExercises, workouts, type SetRow as SetRowT, type WorkoutExerciseRow, type WorkoutRow } from "./schema";
 import { rebuildPBEventsForExercise } from "./pbEvents";
@@ -19,6 +20,15 @@ import { refreshUpcomingCalendarForPrograms } from "../programs/psl/programRunti
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
 export type SetRow = SetRowT;
+
+type ExerciseDisplayMeta = {
+  exerciseId: number;
+  exerciseName: string;
+  exerciseVariationLabel: string | null;
+  exerciseParentExerciseId: number | null;
+  exerciseParentName: string | null;
+  isVariation: boolean;
+};
 
 const missingWorkoutExerciseColumnLogs = new Set<string>();
 
@@ -44,6 +54,70 @@ function getWorkoutExerciseColumnStatus(context: string): { hasPerformedAt: bool
 function canQueryWorkoutExercises(context: string): boolean {
   const { hasPerformedAt, hasCompletedAt } = getWorkoutExerciseColumnStatus(context);
   return hasPerformedAt && hasCompletedAt;
+}
+
+async function listExerciseDisplayMeta(
+  exerciseIds: number[]
+): Promise<Map<number, ExerciseDisplayMeta>> {
+  const uniqueExerciseIds = [
+    ...new Set(
+      exerciseIds.filter(
+        (exerciseId): exerciseId is number =>
+          typeof exerciseId === "number" &&
+          Number.isInteger(exerciseId) &&
+          exerciseId > 0
+      )
+    ),
+  ];
+  if (uniqueExerciseIds.length === 0) {
+    return new Map();
+  }
+
+  const exerciseRows = await db
+    .select()
+    .from(exercises)
+    .where(
+      uniqueExerciseIds.length === 1
+        ? eq(exercises.id, uniqueExerciseIds[0])
+        : inArray(exercises.id, uniqueExerciseIds)
+    );
+
+  const parentIds = [
+    ...new Set(
+      exerciseRows
+        .map((exercise) => exercise.parentExerciseId)
+        .filter((exerciseId): exerciseId is number => typeof exerciseId === "number")
+    ),
+  ];
+  const parentRows =
+    parentIds.length === 0
+      ? []
+      : await db
+          .select({ id: exercises.id, name: exercises.name })
+          .from(exercises)
+          .where(
+            parentIds.length === 1
+              ? eq(exercises.id, parentIds[0])
+              : inArray(exercises.id, parentIds)
+          );
+  const parentNameById = new Map(parentRows.map((row) => [row.id, row.name] as const));
+
+  return new Map(
+    exerciseRows.map((exercise) => [
+      exercise.id,
+      {
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        exerciseVariationLabel: exercise.variationLabel ?? null,
+        exerciseParentExerciseId: exercise.parentExerciseId ?? null,
+        exerciseParentName:
+          exercise.parentExerciseId !== null
+            ? parentNameById.get(exercise.parentExerciseId) ?? null
+            : null,
+        isVariation: exercise.parentExerciseId !== null,
+      },
+    ])
+  );
 }
 
 export async function createWorkout(data?: { started_at?: number; note?: string | null }): Promise<number> {
@@ -274,6 +348,10 @@ export type InProgressExercise = {
   workoutExerciseId: number;
   exerciseId: number;
   exerciseName: string;
+  exerciseVariationLabel: string | null;
+  exerciseParentExerciseId: number | null;
+  exerciseParentName: string | null;
+  isVariation: boolean;
   muscleGroup: string | null;
   performedAt: number | null;
 };
@@ -290,7 +368,7 @@ export async function listInProgressExercises(workoutId: number): Promise<InProg
   const rows = await db
     .select({
       workoutExerciseId: workoutExercises.id,
-      exerciseId: exercises.id,
+      exerciseId: workoutExercises.exerciseId,
       exerciseName: exercises.name,
       muscleGroup: exercises.muscleGroup,
       performedAt: workoutExercises.performedAt,
@@ -310,12 +388,24 @@ export async function listInProgressExercises(workoutId: number): Promise<InProg
     )
     .orderBy(desc(workoutExercises.performedAt), desc(workoutExercises.id));
 
+  const exerciseMetaById = await listExerciseDisplayMeta(rows.map((row) => row.exerciseId));
+
   // Defensive de-dupe: if multiple open entries exist for the same exercise, keep the latest.
   const seen = new Set<number>();
   return rows.filter((row) => {
     if (seen.has(row.exerciseId)) return false;
     seen.add(row.exerciseId);
     return true;
+  }).map((row) => {
+    const meta = exerciseMetaById.get(row.exerciseId);
+    return {
+      ...row,
+      exerciseName: meta?.exerciseName ?? row.exerciseName,
+      exerciseVariationLabel: meta?.exerciseVariationLabel ?? null,
+      exerciseParentExerciseId: meta?.exerciseParentExerciseId ?? null,
+      exerciseParentName: meta?.exerciseParentName ?? null,
+      isVariation: meta?.isVariation ?? false,
+    };
   });
 }
 
@@ -482,43 +572,63 @@ export type WorkoutHistoryEntry = {
   workout: Workout;
   workoutExercise: WorkoutExercise | null;
   sets: SetRow[];
+  loggedExerciseId: number;
+  loggedExerciseName: string;
+  loggedExerciseVariationLabel: string | null;
+  loggedExerciseParentExerciseId: number | null;
+  loggedExerciseParentName: string | null;
+  isVariation: boolean;
 };
 
 export async function getExerciseHistory(exerciseId: number): Promise<WorkoutHistoryEntry[]> {
   if (!canQueryWorkoutExercises("getExerciseHistory")) {
     return [];
   }
-  // Get all workout_exercises for this exercise
+  const scopedExerciseIds = await getExerciseScopeIdsForView(exerciseId);
+  if (scopedExerciseIds.length === 0) {
+    return [];
+  }
+
   const allWorkoutExercises = await db
     .select()
     .from(workoutExercises)
-    .where(eq(workoutExercises.exerciseId, exerciseId))
+    .where(
+      scopedExerciseIds.length === 1
+        ? eq(workoutExercises.exerciseId, scopedExerciseIds[0])
+        : inArray(workoutExercises.exerciseId, scopedExerciseIds)
+    )
     .orderBy(desc(workoutExercises.performedAt));
 
   if (allWorkoutExercises.length === 0) {
     return [];
   }
 
-  // Get unique workout IDs
   const workoutIds = [...new Set(allWorkoutExercises.map((we) => we.workoutId))];
+  const workoutExerciseIds = allWorkoutExercises.map((entry) => entry.id);
+  const exerciseMetaById = await listExerciseDisplayMeta(
+    allWorkoutExercises.map((entry) => entry.exerciseId)
+  );
 
-  // Get workout details for each workout ID
-  const workoutMap = new Map<number, Workout>();
-  for (const workoutId of workoutIds) {
-    const workout = await getWorkoutById(workoutId);
-    if (workout) {
-      workoutMap.set(workoutId, workout);
-    }
-  }
+  const workoutRows = await db
+    .select()
+    .from(workouts)
+    .where(
+      workoutIds.length === 1
+        ? eq(workouts.id, workoutIds[0])
+        : inArray(workouts.id, workoutIds)
+    );
+  const workoutMap = new Map<number, Workout>(workoutRows.map((workout) => [workout.id, workout]));
 
-  // Get all sets for this exercise grouped by workout_exercise_id
   const allSets = await db
     .select()
     .from(sets)
-    .where(eq(sets.exerciseId, exerciseId))
+    .where(
+      workoutExerciseIds.length === 1
+        ? eq(sets.workoutExerciseId, workoutExerciseIds[0])
+        : inArray(sets.workoutExerciseId, workoutExerciseIds)
+    )
     .orderBy(sets.setIndex, sets.performedAt, sets.id);
 
-  // Group sets by workout_exercise_id
   const setsByWorkoutExercise = new Map<number, SetRow[]>();
   for (const set of allSets) {
     if (set.workoutExerciseId !== null) {
@@ -529,24 +639,28 @@ export async function getExerciseHistory(exerciseId: number): Promise<WorkoutHis
     }
   }
 
-  // Create history entries for each workout_exercise
   const entries: WorkoutHistoryEntry[] = [];
   for (const we of allWorkoutExercises) {
     const workout = workoutMap.get(we.workoutId);
     if (workout) {
       const weSets = setsByWorkoutExercise.get(we.id) ?? [];
-      // Only include entries that have sets
       if (weSets.length > 0) {
+        const loggedExercise = exerciseMetaById.get(we.exerciseId);
         entries.push({
           workout,
           workoutExercise: we,
           sets: weSets,
+          loggedExerciseId: we.exerciseId,
+          loggedExerciseName: loggedExercise?.exerciseName ?? String(we.exerciseId),
+          loggedExerciseVariationLabel: loggedExercise?.exerciseVariationLabel ?? null,
+          loggedExerciseParentExerciseId: loggedExercise?.exerciseParentExerciseId ?? null,
+          loggedExerciseParentName: loggedExercise?.exerciseParentName ?? null,
+          isVariation: loggedExercise?.isVariation ?? false,
         });
       }
     }
   }
 
-  // Sort entries by performed date (most recent first)
   entries.sort((a, b) => {
     const aTime = a.workoutExercise?.performedAt ?? a.workoutExercise?.completedAt ?? a.workout.startedAt;
     const bTime = b.workoutExercise?.performedAt ?? b.workoutExercise?.completedAt ?? b.workout.startedAt;
@@ -685,6 +799,10 @@ export async function updateWorkoutExercisePerformedAt(workoutExerciseId: number
 export type LastWorkoutDayExercise = {
   exerciseId: number;
   exerciseName: string;
+  exerciseVariationLabel: string | null;
+  exerciseParentExerciseId: number | null;
+  exerciseParentName: string | null;
+  isVariation: boolean;
   workoutExerciseId: number;
   bestSet: {
     weightKg: number;
@@ -762,6 +880,9 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
 
   // Get global E1RM formula
   const formula = getGlobalFormula();
+  const exerciseMetaById = await listExerciseDisplayMeta(
+    entriesToProcess.map((entry) => entry.exerciseId)
+  );
 
   // For each exercise entry, compute best set by E1RM
   const exercisesResult: LastWorkoutDayExercise[] = [];
@@ -798,9 +919,14 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
       }
     }
 
+    const meta = exerciseMetaById.get(entry.exerciseId);
     exercisesResult.push({
       exerciseId: entry.exerciseId,
-      exerciseName: entry.exerciseName,
+      exerciseName: meta?.exerciseName ?? entry.exerciseName,
+      exerciseVariationLabel: meta?.exerciseVariationLabel ?? null,
+      exerciseParentExerciseId: meta?.exerciseParentExerciseId ?? null,
+      exerciseParentName: meta?.exerciseParentName ?? null,
+      isVariation: meta?.isVariation ?? false,
       workoutExerciseId: entry.workoutExerciseId,
       bestSet,
     });
@@ -832,6 +958,10 @@ export type WorkoutDayExerciseDetail = {
   workoutExerciseId: number;
   exerciseId: number;
   exerciseName: string;
+  exerciseVariationLabel: string | null;
+  exerciseParentExerciseId: number | null;
+  exerciseParentName: string | null;
+  isVariation: boolean;
   note: string | null;
   bestSet: { weightKg: number; reps: number; e1rm: number } | null;
 };
@@ -1008,6 +1138,9 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
 
   // Get global E1RM formula
   const formula = getGlobalFormula();
+  const exerciseMetaById = await listExerciseDisplayMeta(
+    entriesToProcess.map((entry) => entry.exerciseId)
+  );
 
   const exercisesResult: WorkoutDayExerciseDetail[] = [];
   let totalVolumeKg = 0;
@@ -1049,10 +1182,15 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
       }
     }
 
+    const meta = exerciseMetaById.get(entry.exerciseId);
     exercisesResult.push({
       workoutExerciseId: entry.workoutExerciseId,
       exerciseId: entry.exerciseId,
-      exerciseName: entry.exerciseName,
+      exerciseName: meta?.exerciseName ?? entry.exerciseName,
+      exerciseVariationLabel: meta?.exerciseVariationLabel ?? null,
+      exerciseParentExerciseId: meta?.exerciseParentExerciseId ?? null,
+      exerciseParentName: meta?.exerciseParentName ?? null,
+      isVariation: meta?.isVariation ?? false,
       note: entry.note,
       bestSet,
     });
@@ -1322,6 +1460,10 @@ export type WorkoutDayExerciseEntry = {
   workoutExerciseId: number;
   exerciseId: number;
   exerciseName: string;
+  exerciseVariationLabel: string | null;
+  exerciseParentExerciseId: number | null;
+  exerciseParentName: string | null;
+  isVariation: boolean;
   performedAt: number;
   note: string | null;
   sets: WorkoutDaySetEntry[];
@@ -1439,6 +1581,9 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
 
   // Get global E1RM formula
   const formula = getGlobalFormula();
+  const exerciseMetaById = await listExerciseDisplayMeta(
+    entriesToProcess.map((entry) => entry.exerciseId)
+  );
 
   // Step 5: Compute per-entry stats
   let pageTotalSets = 0;
@@ -1497,10 +1642,15 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
       note: set.note,
     }));
 
+    const meta = exerciseMetaById.get(entry.exerciseId);
     return {
       workoutExerciseId: entry.workoutExerciseId,
       exerciseId: entry.exerciseId,
-      exerciseName: entry.exerciseName,
+      exerciseName: meta?.exerciseName ?? entry.exerciseName,
+      exerciseVariationLabel: meta?.exerciseVariationLabel ?? null,
+      exerciseParentExerciseId: meta?.exerciseParentExerciseId ?? null,
+      exerciseParentName: meta?.exerciseParentName ?? null,
+      isVariation: meta?.isVariation ?? false,
       performedAt: entry.performedAt,
       note: entry.note,
       sets: setsForDisplay,
@@ -1534,6 +1684,10 @@ export type WorkoutExerciseStatus = {
   workoutExerciseId: number;
   exerciseId: number;
   exerciseName: string;
+  exerciseVariationLabel: string | null;
+  exerciseParentExerciseId: number | null;
+  exerciseParentName: string | null;
+  isVariation: boolean;
   completedAt: number | null;
   performedAt: number | null;
   setCount: number;
@@ -1572,6 +1726,8 @@ export async function getWorkoutExercisesForDate(
       workoutExercises.id
     );
 
+  const exerciseMetaById = await listExerciseDisplayMeta(rows.map((row) => row.exerciseId));
+
   // Get set counts for each workout exercise
   const result: WorkoutExerciseStatus[] = [];
   for (const row of rows) {
@@ -1579,8 +1735,14 @@ export async function getWorkoutExercisesForDate(
       .select({ id: sets.id })
       .from(sets)
       .where(eq(sets.workoutExerciseId, row.workoutExerciseId));
+    const meta = exerciseMetaById.get(row.exerciseId);
     result.push({
       ...row,
+      exerciseName: meta?.exerciseName ?? row.exerciseName,
+      exerciseVariationLabel: meta?.exerciseVariationLabel ?? null,
+      exerciseParentExerciseId: meta?.exerciseParentExerciseId ?? null,
+      exerciseParentName: meta?.exerciseParentName ?? null,
+      isVariation: meta?.isVariation ?? false,
       setCount: setsForExercise.length,
     });
   }

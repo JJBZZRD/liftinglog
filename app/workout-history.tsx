@@ -14,6 +14,7 @@ import {
   UIManager,
   View,
 } from "react-native";
+import VariationExerciseLabel from "../components/exercise/VariationExerciseLabel";
 import DatePickerModal from "../components/modals/DatePickerModal";
 import { useUnitPreference } from "../lib/contexts/UnitPreferenceContext";
 import {
@@ -202,12 +203,16 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                       <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                     </View>
                     <View style={styles.exerciseDetails}>
-                      <Text
+                      <VariationExerciseLabel
+                        exercise={{
+                          name: exercise.exerciseName,
+                          parentExerciseId: exercise.exerciseParentExerciseId,
+                          variationLabel: exercise.exerciseVariationLabel,
+                          parentName: exercise.exerciseParentName,
+                        }}
                         style={[styles.exerciseName, { color: rawColors.foreground }]}
                         numberOfLines={1}
-                      >
-                        {exercise.exerciseName}
-                      </Text>
+                      />
                       <Text style={[styles.bestSetText, { color: rawColors.foregroundSecondary }]}>
                         {exercise.bestSet
                           ? `Best: ${formatWeightFromKg(exercise.bestSet.weightKg, unitPreference)} x ${exercise.bestSet.reps} (e1RM ${formatWeightFromKg(exercise.bestSet.e1rm, unitPreference)})`

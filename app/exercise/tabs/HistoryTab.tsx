@@ -19,11 +19,13 @@ import Animated, {
   Easing,
   interpolate,
 } from "react-native-reanimated";
+import VariationExerciseLabel from "../../../components/exercise/VariationExerciseLabel";
 import SetItem from "../../../components/lists/SetItem";
 import BaseModal from "../../../components/modals/BaseModal";
 import DatePickerModal from "../../../components/modals/DatePickerModal";
 import { useUnitPreference } from "../../../lib/contexts/UnitPreferenceContext";
 import type { UnitPreference } from "../../../lib/db";
+import { getExerciseScopeIdsForView } from "../../../lib/db/exercises";
 import { getCurrentPBEventsForExercise } from "../../../lib/db/pbEvents";
 import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { listMediaForSetIds } from "../../../lib/db/media";
@@ -205,7 +207,6 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   const weightUnitLabel = getWeightUnitLabel(unitPreference);
   const params = useLocalSearchParams<{ id?: string; name?: string; workoutId?: string; refreshHistory?: string }>();
   const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
-  const exerciseName = typeof params.name === "string" ? params.name : "Exercise";
   const [rawHistory, setRawHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -438,9 +439,9 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
 
     try {
       const exerciseHistory = await getExerciseHistory(exerciseId);
-      
-      const pbEventsMap = await getCurrentPBEventsForExercise(exerciseId);
-      
+      const scopeIds = await getExerciseScopeIdsForView(exerciseId);
+      const pbEventsMap = await getCurrentPBEventsForExercise(scopeIds);
+
       // Map PB events to sets
       const historyWithPBs = exerciseHistory.map(entry => ({
         ...entry,
@@ -449,7 +450,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
           pbBadge: pbEventsMap.get(set.id)?.type.toUpperCase() || undefined,
         })),
       }));
-      
+
       setRawHistory(historyWithPBs);
     } catch (error) {
       console.error("Error loading exercise history:", error);
@@ -545,10 +546,10 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
       pathname: "/edit-workout",
       params: {
         workoutExerciseId: String(workoutExerciseId),
-        exerciseName,
+        exerciseName: entry.loggedExerciseName,
       },
     });
-  }, [exerciseName]);
+  }, []);
 
   const handleSetPress = useCallback((setId: number) => {
     router.push({ pathname: "/set/[id]", params: { id: String(setId) } });
@@ -967,6 +968,24 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                 <View style={styles.workoutDateContainer}>
                   <Text style={[styles.workoutDate, { color: rawColors.foreground }]}>{formatDate(workoutDate)}</Text>
                   <Text style={[styles.workoutTime, { color: rawColors.foregroundSecondary }]}>{formatTime(workoutDate)}</Text>
+                  {item.isVariation ? (
+                    <View style={styles.variationTitleRow}>
+                      <VariationExerciseLabel
+                        exercise={{
+                          name: item.loggedExerciseName,
+                          parentExerciseId: item.loggedExerciseParentExerciseId,
+                          variationLabel: item.loggedExerciseVariationLabel,
+                          parentName: item.loggedExerciseParentName,
+                        }}
+                        numberOfLines={1}
+                        style={styles.variationTitle}
+                        suffixStyle={styles.variationTitleSuffix}
+                      />
+                      <Text style={[styles.variationBadge, { color: rawColors.foregroundSecondary }]}>
+                        variation
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <View style={styles.headerActions}>
                   {!isCompleted && (
@@ -1397,6 +1416,25 @@ const styles = StyleSheet.create({
   },
   workoutDateContainer: {
     flex: 1,
+  },
+  variationTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
+  },
+  variationTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  variationTitleSuffix: {
+    fontWeight: "500",
+  },
+  variationBadge: {
+    fontSize: 11,
+    fontWeight: "600",
+    textTransform: "uppercase",
   },
   headerActions: {
     flexDirection: "row",
