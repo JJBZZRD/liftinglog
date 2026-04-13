@@ -21,94 +21,44 @@ export default function CalculatorListCard({
 }: CalculatorListCardProps) {
   const { rawColors } = useTheme();
 
+  const cardShadowStyle = {
+    shadowColor: rawColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  } as const;
+
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={({ pressed }) => ({
-        borderRadius: 22,
-        padding: 18,
-        backgroundColor: rawColors.surface,
-        borderWidth: 1,
-        borderColor: rawColors.borderLight,
-        boxShadow: `0 14px 30px ${rawColors.shadow}12`,
-        opacity: pressed ? 0.88 : 1,
-        gap: 14,
-      })}
+      className="gap-3.5 rounded-2xl bg-surface p-5"
+      style={({ pressed }) => [cardShadowStyle, { opacity: pressed ? 0.88 : 1 }]}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          gap: 14,
-        }}
-      >
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: rawColors.primaryLight,
-          }}
-        >
-          <MaterialCommunityIcons name={icon as never} size={22} color={rawColors.primary} />
+      <View className="flex-row items-start gap-3.5">
+        <View className="h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-light">
+          <MaterialCommunityIcons name={icon as never} size={26} color={rawColors.primary} />
         </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text
-            selectable
-            style={{
-              color: rawColors.foreground,
-              fontSize: 18,
-              fontWeight: "700",
-            }}
-          >
+        <View className="min-w-0 flex-1 gap-1 pr-1">
+          <Text className="text-lg font-semibold text-foreground" selectable>
             {title}
           </Text>
-          <Text
-            selectable
-            style={{
-              color: rawColors.foregroundSecondary,
-              fontSize: 14,
-              lineHeight: 20,
-            }}
-          >
+          <Text className="text-sm leading-5 text-foreground-secondary" selectable>
             {description}
           </Text>
         </View>
         <MaterialCommunityIcons
           name="chevron-right"
-          size={22}
-          color={rawColors.foregroundMuted}
+          size={24}
+          color={rawColors.foregroundSecondary}
         />
       </View>
       {previewChips && previewChips.length > 0 ? (
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
+        <View className="flex-row flex-wrap gap-2">
           {previewChips.map((chip) => (
-            <View
-              key={chip}
-              style={{
-                borderRadius: 999,
-                backgroundColor: rawColors.surfaceSecondary,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-              }}
-            >
-              <Text
-                selectable
-                style={{
-                  color: rawColors.foregroundSecondary,
-                  fontSize: 12,
-                  fontWeight: "700",
-                }}
-              >
+            <View key={chip} className="rounded-full bg-surface-secondary px-2.5 py-1.5">
+              <Text className="text-xs font-bold text-foreground-secondary" selectable>
                 {chip}
               </Text>
             </View>

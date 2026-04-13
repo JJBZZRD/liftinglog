@@ -72,7 +72,7 @@ export const CALCULATORS: CalculatorDefinition[] = [
     description: "Break a target weight into a plate-by-plate bar setup.",
     category: "utility",
     href: "/calculators/plate-loader",
-    icon: "barbell",
+    icon: "dumbbell",
     previewChips: ["Per side", "Remainder"],
   },
 ];

@@ -11,6 +11,14 @@ import { useTheme } from "../../lib/theme/ThemeContext";
 export default function CalculatorsScreen() {
   const { rawColors } = useTheme();
 
+  const cardShadowStyle = {
+    shadowColor: rawColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  } as const;
+
   return (
     <ScrollView
       testID="calculators-screen"
@@ -23,36 +31,11 @@ export default function CalculatorsScreen() {
         gap: 18,
       }}
     >
-      <View
-        style={{
-          borderRadius: 24,
-          padding: 20,
-          backgroundColor: rawColors.surface,
-          borderWidth: 1,
-          borderColor: rawColors.borderLight,
-          boxShadow: `0 18px 32px ${rawColors.shadow}12`,
-          gap: 8,
-        }}
-      >
-        <Text
-          selectable
-          style={{
-            color: rawColors.foreground,
-            fontSize: 24,
-            fontWeight: "800",
-            lineHeight: 30,
-          }}
-        >
+      <View className="gap-2 rounded-2xl bg-surface p-5" style={cardShadowStyle}>
+        <Text className="text-2xl font-extrabold leading-[30px] text-foreground" selectable>
           Offline lifting calculators
         </Text>
-        <Text
-          selectable
-          style={{
-            color: rawColors.foregroundSecondary,
-            fontSize: 15,
-            lineHeight: 22,
-          }}
-        >
+        <Text className="text-[15px] leading-[22px] text-foreground-secondary" selectable>
           Quick tools for estimating strength, comparing totals, and loading the bar without relying
           on any API or external dataset.
         </Text>
