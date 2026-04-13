@@ -74,6 +74,10 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen
+          name="calculators"
+          options={{ presentation: "card", headerShown: false }}
+        />
+        <Stack.Screen
           name="programs/manage"
           options={{ presentation: "card" }}
         />

@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CalculatorsSummaryCard from "../../components/calculators/CalculatorsSummaryCard";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { getTotalPBCount } from "../../lib/db/pbEvents";
 import { getLatestUserMetricsSnapshot, type UserMetricsSnapshot } from "../../lib/db/userCheckins";
@@ -108,6 +109,10 @@ export default function OverviewScreen() {
     router.push("/user-metrics");
   };
 
+  const handleCalculatorsPress = () => {
+    router.push("/calculators");
+  };
+
   // Convert timestamp to dayKey format (YYYY-MM-DD) for navigation
   const timestampToDayKey = (timestamp: number): string => {
     const date = new Date(timestamp);
@@ -167,6 +172,8 @@ export default function OverviewScreen() {
             </View>
           </View>
         </View>
+
+        <CalculatorsSummaryCard onPress={handleCalculatorsPress} />
 
         {/* User Metrics */}
         <View className="rounded-2xl p-5 mb-4 bg-surface" style={cardShadowStyle}>
