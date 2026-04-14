@@ -147,8 +147,8 @@ export default function ProgramBasicsScreen() {
             style={[
               styles.input,
               {
-                backgroundColor: rawColors.surfaceSecondary,
-                borderColor: rawColors.borderLight,
+                backgroundColor: rawColors.surface,
+                borderColor: rawColors.border,
                 color: rawColors.foreground,
               },
             ]}
@@ -169,8 +169,8 @@ export default function ProgramBasicsScreen() {
               styles.input,
               styles.textArea,
               {
-                backgroundColor: rawColors.surfaceSecondary,
-                borderColor: rawColors.borderLight,
+                backgroundColor: rawColors.surface,
+                borderColor: rawColors.border,
                 color: rawColors.foreground,
               },
             ]}
@@ -196,8 +196,8 @@ export default function ProgramBasicsScreen() {
                 style={[
                   styles.unitButton,
                   {
-                    backgroundColor: units === unit ? rawColors.primary : rawColors.surfaceSecondary,
-                    borderColor: units === unit ? rawColors.primary : rawColors.borderLight,
+                    backgroundColor: units === unit ? rawColors.primary : rawColors.surface,
+                    borderColor: units === unit ? rawColors.primary : rawColors.border,
                   },
                 ]}
               >
@@ -227,9 +227,9 @@ export default function ProgramBasicsScreen() {
                   backgroundColor:
                     programStructure === "sessions"
                       ? `${rawColors.primary}15`
-                      : rawColors.surfaceSecondary,
+                      : rawColors.surface,
                   borderColor:
-                    programStructure === "sessions" ? rawColors.primary : rawColors.borderLight,
+                    programStructure === "sessions" ? rawColors.primary : rawColors.border,
                 },
               ]}
             >
@@ -266,9 +266,9 @@ export default function ProgramBasicsScreen() {
                   backgroundColor:
                     programStructure === "blocks"
                       ? `${rawColors.primary}15`
-                      : rawColors.surfaceSecondary,
+                      : rawColors.surface,
                   borderColor:
-                    programStructure === "blocks" ? rawColors.primary : rawColors.borderLight,
+                    programStructure === "blocks" ? rawColors.primary : rawColors.border,
                 },
               ]}
             >
@@ -315,8 +315,8 @@ export default function ProgramBasicsScreen() {
                       backgroundColor:
                         timingMode === option.key
                           ? `${rawColors.primary}15`
-                          : rawColors.surfaceSecondary,
-                      borderColor: timingMode === option.key ? rawColors.primary : rawColors.borderLight,
+                          : rawColors.surface,
+                      borderColor: timingMode === option.key ? rawColors.primary : rawColors.border,
                     },
                   ]}
                 >
