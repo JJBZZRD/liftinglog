@@ -7,7 +7,8 @@ const SCHEMA_BOOTSTRAP_SQL = `
     e1rm_formula TEXT NOT NULL DEFAULT 'epley',
     unit_preference TEXT NOT NULL DEFAULT 'kg',
     theme_preference TEXT NOT NULL DEFAULT 'system',
-    color_theme TEXT NOT NULL DEFAULT 'default'
+    color_theme TEXT NOT NULL DEFAULT 'default',
+    show_all_tab_body_part_grouping INTEGER NOT NULL DEFAULT 1
   );
 
   CREATE TABLE IF NOT EXISTS user_checkins (
@@ -264,6 +265,11 @@ function runColumnMigrations(sqlite: SQLiteDatabase): void {
   addColumnIfMissing(sqlite, "exercises", "is_pinned INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(sqlite, "settings", "theme_preference TEXT NOT NULL DEFAULT 'system'");
   addColumnIfMissing(sqlite, "settings", "color_theme TEXT NOT NULL DEFAULT 'default'");
+  addColumnIfMissing(
+    sqlite,
+    "settings",
+    "show_all_tab_body_part_grouping INTEGER NOT NULL DEFAULT 1"
+  );
   addColumnIfMissing(sqlite, "workout_exercises", "completed_at INTEGER");
   addColumnIfMissing(sqlite, "workout_exercises", "performed_at INTEGER");
   addColumnIfMissing(sqlite, "program_calendar_exercises", "workout_exercise_id INTEGER");

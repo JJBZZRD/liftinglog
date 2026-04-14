@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   unitPreference: "kg" as UnitPreference,
   themePreference: "system" as ThemePreference,
   colorTheme: "default" as ColorThemeId,
+  showAllTabBodyPartGrouping: true,
 };
 
 type SettingsUpdate = {
@@ -27,6 +28,7 @@ type SettingsUpdate = {
   unitPreference?: UnitPreference;
   themePreference?: ThemePreference;
   colorTheme?: ColorThemeId;
+  showAllTabBodyPartGrouping?: boolean;
 };
 
 function getSettingsRow() {
@@ -109,4 +111,14 @@ export function getColorTheme(): ColorThemeId {
 
 export function setColorTheme(theme: ColorThemeId): void {
   upsertSettings({ colorTheme: theme });
+}
+
+export function getShowAllTabBodyPartGrouping(): boolean {
+  return (
+    getSettingsRow()?.showAllTabBodyPartGrouping ?? DEFAULT_SETTINGS.showAllTabBodyPartGrouping
+  );
+}
+
+export function setShowAllTabBodyPartGrouping(value: boolean): void {
+  upsertSettings({ showAllTabBodyPartGrouping: value });
 }

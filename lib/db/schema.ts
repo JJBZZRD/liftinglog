@@ -14,6 +14,9 @@ export const settings = sqliteTable("settings", {
   colorTheme: text("color_theme", {
     enum: ["default", "ocean", "forest", "sunset", "rose", "violet", "slate"],
   }).notNull().default("default"),
+  showAllTabBodyPartGrouping: integer("show_all_tab_body_part_grouping", {
+    mode: "boolean",
+  }).notNull().default(true),
 });
 
 export const userCheckins = sqliteTable("user_checkins", {

@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   UIManager,
@@ -30,6 +31,10 @@ import {
   type Exercise,
   type ExerciseLibraryGroup,
 } from "../../lib/db/exercises";
+import {
+  getShowAllTabBodyPartGrouping as getShowAllTabBodyPartGroupingPreference,
+  setShowAllTabBodyPartGrouping as setShowAllTabBodyPartGroupingPreference,
+} from "../../lib/db/settings";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { formatVariationCountLabel } from "../../lib/utils/exerciseVariations";
 
@@ -209,6 +214,14 @@ export default function ExercisesScreen() {
   const [sortOption, setSortOption] = useState<SortOption>("alphabetical");
   const [sortAscending, setSortAscending] = useState(true);
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const [showAllTabBodyPartGrouping, setShowAllTabBodyPartGrouping] = useState(() => {
+    try {
+      return getShowAllTabBodyPartGroupingPreference();
+    } catch (error) {
+      console.error("Error loading exercise library grouping preference:", error);
+      return true;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState("");
 
   const selectedGroup = useMemo(
@@ -217,10 +230,10 @@ export default function ExercisesScreen() {
   );
   const selectedExercise = selectedGroup?.exercise ?? null;
 
-  const screenBackground = isDark ? rawColors.background : "#EEF2FA";
+  const screenBackground = rawColors.background;
   const heroGradient: readonly [ColorValue, ColorValue] = isDark
     ? [rawColors.background, rawColors.surface]
-    : ["#F7F9FF", "#E6ECF8"];
+    : [rawColors.surface, rawColors.pressed];
   const sectionLabelColor = isDark ? rawColors.foregroundMuted : "#8895AB";
   const raisedSurface = isDark ? rawColors.surface : "#FFFFFF";
   const recessedSurface = isDark ? rawColors.surfaceSecondary : "#F6F8FD";
@@ -274,6 +287,16 @@ export default function ExercisesScreen() {
     );
     setLastPerformedAtByExerciseId(Object.fromEntries(entries));
   }, [expandedExerciseId, selectedParentExerciseId]);
+
+  const handleShowAllTabBodyPartGroupingChange = useCallback((value: boolean) => {
+    setShowAllTabBodyPartGrouping(value);
+
+    try {
+      setShowAllTabBodyPartGroupingPreference(value);
+    } catch (error) {
+      console.error("Error saving exercise library grouping preference:", error);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -339,6 +362,16 @@ export default function ExercisesScreen() {
   }, [items, searchQuery, sortOption, sortAscending]);
 
   const sections = useMemo(() => {
+    if (searchScope === "all" && !showAllTabBodyPartGrouping) {
+      return [
+        {
+          key: "all-exercises",
+          title: "",
+          items: filteredAndSortedItems,
+        },
+      ];
+    }
+
     const grouped = new Map<string, ExerciseLibraryGroup[]>();
 
     for (const item of filteredAndSortedItems) {
@@ -360,7 +393,7 @@ export default function ExercisesScreen() {
     }
 
     return nextSections.sort((a, b) => a.title.localeCompare(b.title));
-  }, [filteredAndSortedItems, searchScope]);
+  }, [filteredAndSortedItems, searchScope, showAllTabBodyPartGrouping]);
 
   const closeActionModal = useCallback(() => {
     setActionModalVisible(false);
@@ -802,17 +835,19 @@ export default function ExercisesScreen() {
           ) : (
             sections.map((section) => (
               <View key={section.key} style={{ gap: 12 }}>
-                <Text
-                  style={{
-                    color: sectionLabelColor,
-                    fontSize: 11,
-                    fontWeight: "700",
-                    letterSpacing: 2.2,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {section.title}
-                </Text>
+                {section.title ? (
+                  <Text
+                    style={{
+                      color: sectionLabelColor,
+                      fontSize: 11,
+                      fontWeight: "700",
+                      letterSpacing: 2.2,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {section.title}
+                  </Text>
+                ) : null}
 
                 <View style={{ gap: 14 }}>
                   {section.items.map((item) => {
@@ -1094,7 +1129,7 @@ export default function ExercisesScreen() {
             fontWeight: "700",
           }}
         >
-          Sort Exercises
+          Sort & Filter
         </Text>
         <Text
           style={{
@@ -1104,7 +1139,7 @@ export default function ExercisesScreen() {
             lineHeight: 20,
           }}
         >
-          Choose how the library is ordered.
+          Choose how the library is ordered and shown.
         </Text>
 
         <View style={{ marginTop: 18, gap: 10 }}>
@@ -1177,6 +1212,57 @@ export default function ExercisesScreen() {
               </Pressable>
             );
           })}
+        </View>
+
+        <View
+          style={{
+            marginTop: 18,
+            borderRadius: 18,
+            paddingHorizontal: 16,
+            paddingVertical: 15,
+            backgroundColor: rawColors.surfaceSecondary,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text
+                style={{
+                  color: rawColors.foreground,
+                  fontSize: 15,
+                  fontWeight: "700",
+                }}
+              >
+                All tab body-part groups
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                Show or hide body-part section headings while viewing the `All` tab.
+              </Text>
+            </View>
+            <Switch
+              value={showAllTabBodyPartGrouping}
+              onValueChange={handleShowAllTabBodyPartGroupingChange}
+              trackColor={{
+                false: isDark ? rawColors.border : "#C9D2E2",
+                true: rawColors.primary,
+              }}
+              thumbColor={rawColors.primaryForeground}
+              ios_backgroundColor={isDark ? rawColors.border : "#C9D2E2"}
+            />
+          </View>
         </View>
       </AppModal>
 
