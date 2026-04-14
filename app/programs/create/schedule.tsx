@@ -390,7 +390,7 @@ function SessionCard({
     <View
       style={[
         styles.sessionCard,
-        { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+        { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
       ]}
     >
       <View style={styles.sessionCardHeader}>
@@ -747,7 +747,7 @@ function BlockCard({
     <View
       style={[
         styles.panel,
-        { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+        { backgroundColor: rawColors.surface, borderColor: rawColors.border },
       ]}
     >
       <View style={styles.panelHeaderRow}>
@@ -1061,8 +1061,8 @@ function ExerciseConfigEditor({
         style={[
           styles.input,
           {
-            backgroundColor: rawColors.surface,
-            borderColor: rawColors.borderLight,
+            backgroundColor: rawColors.surfaceSecondary,
+            borderColor: rawColors.border,
             color: rawColors.foreground,
             marginBottom: 12,
           },
@@ -1074,7 +1074,7 @@ function ExerciseConfigEditor({
           key={index}
           style={[
             styles.setCard,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.border },
           ]}
         >
           <View style={styles.setCardHeader}>
@@ -1101,7 +1101,7 @@ function ExerciseConfigEditor({
                   styles.input,
                   {
                     backgroundColor: rawColors.surface,
-                    borderColor: rawColors.borderLight,
+                    borderColor: rawColors.border,
                     color: rawColors.foreground,
                   },
                 ]}
@@ -1121,7 +1121,7 @@ function ExerciseConfigEditor({
                   styles.input,
                   {
                     backgroundColor: rawColors.surface,
-                    borderColor: rawColors.borderLight,
+                    borderColor: rawColors.border,
                     color: rawColors.foreground,
                   },
                 ]}
@@ -1142,7 +1142,7 @@ function ExerciseConfigEditor({
               styles.input,
               {
                 backgroundColor: rawColors.surface,
-                borderColor: rawColors.borderLight,
+                borderColor: rawColors.border,
                 color: rawColors.foreground,
               },
             ]}
@@ -1173,7 +1173,7 @@ function ExerciseConfigEditor({
                     styles.filterChip,
                     {
                       backgroundColor: selected ? rawColors.primary : rawColors.surface,
-                      borderColor: selected ? rawColors.primary : rawColors.borderLight,
+                      borderColor: selected ? rawColors.primary : rawColors.border,
                     },
                   ]}
                 >
@@ -1213,7 +1213,7 @@ function ExerciseConfigEditor({
                 styles.input,
                 {
                   backgroundColor: rawColors.surface,
-                  borderColor: rawColors.borderLight,
+                  borderColor: rawColors.border,
                   color: rawColors.foreground,
                   marginTop: 8,
                 },
@@ -1240,7 +1240,7 @@ function ExerciseConfigEditor({
                     styles.filterChip,
                     {
                       backgroundColor: selected ? rawColors.primary : rawColors.surface,
-                      borderColor: selected ? rawColors.primary : rawColors.borderLight,
+                      borderColor: selected ? rawColors.primary : rawColors.border,
                     },
                   ]}
                 >
@@ -1274,7 +1274,7 @@ function ExerciseConfigEditor({
               styles.input,
               {
                 backgroundColor: rawColors.surface,
-                borderColor: rawColors.borderLight,
+                borderColor: rawColors.border,
                 color: rawColors.foreground,
               },
             ]}
@@ -1308,7 +1308,7 @@ function ExerciseConfigEditor({
                             : rawColors.surface,
                           borderColor: selected
                             ? rawColors.primary
-                            : rawColors.borderLight,
+                            : rawColors.border,
                         },
                       ]}
                     >
@@ -1354,7 +1354,7 @@ function ExerciseConfigEditor({
                             : rawColors.surface,
                           borderColor: selected
                             ? rawColors.primary
-                            : rawColors.borderLight,
+                            : rawColors.border,
                         },
                       ]}
                     >
@@ -1990,7 +1990,7 @@ function FlatProgramBuilderScreen({
         <View
           style={[
             styles.heroCard,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border },
           ]}
         >
           <View style={styles.heroRow}>
@@ -2043,7 +2043,7 @@ function FlatProgramBuilderScreen({
           <View
             style={[
               styles.panel,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+              { backgroundColor: rawColors.surface, borderColor: rawColors.border },
             ]}
           >
             <View style={styles.toggleRow}>
@@ -2068,7 +2068,7 @@ function FlatProgramBuilderScreen({
         <View
           style={[
             styles.panel,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border },
           ]}
         >
           <View style={styles.panelHeaderRow}>
@@ -2116,7 +2116,7 @@ function FlatProgramBuilderScreen({
         <View
           style={[
             styles.panel,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border },
           ]}
         >
           <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
@@ -2205,7 +2205,7 @@ function FlatProgramBuilderScreen({
         <View
           style={[
             styles.panel,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border },
           ]}
         >
           <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
@@ -2240,7 +2240,7 @@ function FlatProgramBuilderScreen({
         <View
           style={[
             styles.panel,
-            { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+            { backgroundColor: rawColors.surface, borderColor: rawColors.border },
           ]}
         >
           <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
@@ -3097,7 +3097,7 @@ function BlockProgramBuilderScreen({
           <View
             style={[
               styles.heroCard,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+              { backgroundColor: rawColors.surface, borderColor: rawColors.border },
             ]}
           >
             <View style={styles.heroRow}>
@@ -3151,7 +3151,7 @@ function BlockProgramBuilderScreen({
           <View
             style={[
               styles.panel,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+              { backgroundColor: rawColors.surface, borderColor: rawColors.border },
             ]}
           >
             <View style={styles.panelHeaderRow}>
@@ -3204,7 +3204,7 @@ function BlockProgramBuilderScreen({
           <View
             style={[
               styles.panel,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+              { backgroundColor: rawColors.surface, borderColor: rawColors.border },
             ]}
           >
             <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
@@ -3294,7 +3294,7 @@ function BlockProgramBuilderScreen({
           <View
             style={[
               styles.panel,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+              { backgroundColor: rawColors.surface, borderColor: rawColors.border },
             ]}
           >
             <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>Diagnostics</Text>
@@ -3327,7 +3327,7 @@ function BlockProgramBuilderScreen({
           <View
             style={[
               styles.panel,
-              { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight },
+              { backgroundColor: rawColors.surface, borderColor: rawColors.border },
             ]}
           >
             <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>Preview</Text>
@@ -3475,7 +3475,7 @@ const styles = StyleSheet.create({
     paddingBottom: 168,
   },
   heroCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -3523,7 +3523,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   panel: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -3551,7 +3551,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sessionCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 16,
     padding: 14,
   },
@@ -3689,7 +3689,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   exerciseRow: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -3772,7 +3772,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   setCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 14,
     padding: 12,
     marginBottom: 12,
