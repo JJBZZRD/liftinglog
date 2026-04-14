@@ -1,16 +1,15 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import AppModal from "../../components/modals/BaseModal";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import {
   createExercise,
@@ -25,7 +24,6 @@ import {
   getTemplateById,
 } from "../../lib/programs/psl/pslTemplates";
 import {
-  getTemplateExerciseSuggestions,
   matchTemplateExercises,
   type TemplateExerciseMatch,
   type TemplateExerciseRequirement,
@@ -48,12 +46,6 @@ type TemplateImportResolution =
       kind: "create";
       name: string;
     };
-
-type PickerOption = {
-  exercise: Exercise;
-  detail: string;
-  source: "library" | "exact" | "alias" | "fuzzy";
-};
 
 function resolveImportMode(value: string | undefined): ImportMode {
   return value === "activate" ? "activate" : "save";
@@ -98,8 +90,7 @@ export default function TemplateImportScreen() {
   const [resolutions, setResolutions] = useState<
     Record<string, TemplateImportResolution>
   >({});
-  const [pickerRequirementId, setPickerRequirementId] = useState<string | null>(null);
-  const [pickerQuery, setPickerQuery] = useState("");
+  const pendingRequirementRef = useRef<TemplateExerciseRequirement | null>(null);
 
   useEffect(() => {
     if (!template) {
@@ -173,93 +164,6 @@ export default function TemplateImportScreen() {
     );
   }, [exerciseMatches]);
 
-  const pickerRequirement = useMemo(
-    () =>
-      template?.exerciseRequirements.find(
-        (requirement) => requirement.exerciseId === pickerRequirementId
-      ) ?? null,
-    [pickerRequirementId, template]
-  );
-
-  const pickerOptions = useMemo<PickerOption[]>(() => {
-    if (!pickerRequirement) return [];
-
-    if (requiresExplicitExerciseSelection(pickerRequirement)) {
-      const query = pickerQuery.trim().toLowerCase();
-      return [...libraryExercises]
-        .filter((exercise) =>
-          query.length === 0 ? true : exercise.name.toLowerCase().includes(query)
-        )
-        .sort((left, right) => {
-          if (query.length > 0) {
-            const leftStartsWith = left.name.toLowerCase().startsWith(query);
-            const rightStartsWith = right.name.toLowerCase().startsWith(query);
-            if (leftStartsWith !== rightStartsWith) {
-              return leftStartsWith ? -1 : 1;
-            }
-          }
-
-          return left.name.localeCompare(right.name);
-        })
-        .map((exercise) => ({
-          exercise,
-          detail: "Existing exercise",
-          source: "library" as const,
-        }));
-    }
-
-    const suggestions = getTemplateExerciseSuggestions(
-      pickerRequirement,
-      libraryExercises,
-      {
-        includeLowConfidence: true,
-        limit: libraryExercises.length,
-      }
-    );
-
-    if (!pickerQuery.trim()) {
-      return suggestions.map((suggestion) => ({
-        exercise: suggestion.exercise,
-        detail:
-          suggestion.matchType === "alias"
-            ? `Alias match on "${suggestion.matchedName}"`
-            : suggestion.matchType === "exact"
-              ? "Exact template name match"
-              : `Similarity ${Math.round(suggestion.score * 100)}%`,
-        source: suggestion.matchType,
-      }));
-    }
-
-    const query = pickerQuery.trim().toLowerCase();
-    return suggestions
-      .filter(
-        (suggestion) =>
-          suggestion.exercise.name.toLowerCase().includes(query) ||
-          suggestion.matchedName.toLowerCase().includes(query)
-      )
-      .map((suggestion) => ({
-        exercise: suggestion.exercise,
-        detail:
-          suggestion.matchType === "alias"
-            ? `Alias match on "${suggestion.matchedName}"`
-            : suggestion.matchType === "exact"
-              ? "Exact template name match"
-              : `Similarity ${Math.round(suggestion.score * 100)}%`,
-        source: suggestion.matchType,
-      }));
-  }, [libraryExercises, pickerQuery, pickerRequirement]);
-
-  const pickerCreateName = useMemo(() => {
-    if (!pickerRequirement) return "";
-    const trimmedQuery = pickerQuery.trim();
-    if (trimmedQuery.length > 0) {
-      return trimmedQuery;
-    }
-    return requiresExplicitExerciseSelection(pickerRequirement)
-      ? ""
-      : pickerRequirement.canonicalName;
-  }, [pickerQuery, pickerRequirement]);
-
   const counts = useMemo(() => {
     if (!template) {
       return {
@@ -328,6 +232,47 @@ export default function TemplateImportScreen() {
       }));
     },
     []
+  );
+
+  const openExercisePicker = useCallback(
+    (requirement: TemplateExerciseRequirement) => {
+      pendingRequirementRef.current = requirement;
+      router.push({
+        pathname: "/programs/template-exercise-picker",
+        params: {
+          requirementId: requirement.exerciseId,
+          canonicalName: requirement.canonicalName,
+          mode: requirement.resolutionStrategy,
+        },
+      });
+    },
+    []
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const callback = (exercise: Exercise, requirementId: string) => {
+        const requirement = pendingRequirementRef.current;
+        if (requirement && requirement.exerciseId === requirementId) {
+          setExistingResolution(requirement, exercise, "manual");
+          pendingRequirementRef.current = null;
+        }
+      };
+
+      (
+        globalThis as {
+          __templateExercisePickerCallback?: (exercise: Exercise, requirementId: string) => void;
+        }
+      ).__templateExercisePickerCallback = callback;
+
+      return () => {
+        delete (
+          globalThis as {
+            __templateExercisePickerCallback?: (exercise: Exercise, requirementId: string) => void;
+          }
+        ).__templateExercisePickerCallback;
+      };
+    }, [setExistingResolution])
   );
 
   const handleConfirmImport = useCallback(async () => {
@@ -417,7 +362,7 @@ export default function TemplateImportScreen() {
             styles.matchCard,
             {
               backgroundColor: rawColors.surface,
-              borderColor: rawColors.borderLight,
+              borderColor: rawColors.border,
             },
           ]}
         >
@@ -519,7 +464,7 @@ export default function TemplateImportScreen() {
                   styles.secondaryButton,
                   {
                     borderColor: rawColors.primary,
-                    backgroundColor: pressed ? rawColors.primary + "12" : "transparent",
+                    backgroundColor: pressed ? rawColors.primaryLight : "transparent",
                   },
                 ]}
               >
@@ -530,22 +475,19 @@ export default function TemplateImportScreen() {
             ) : null}
 
             <Pressable
-              onPress={() => {
-                setPickerRequirementId(match.requirement.exerciseId);
-                setPickerQuery("");
-              }}
+              onPress={() => openExercisePicker(match.requirement)}
               style={({ pressed }) => [
                 styles.secondaryButton,
                 {
-                  borderColor: rawColors.borderLight,
-                  backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+                  borderColor: rawColors.border,
+                  backgroundColor: pressed ? rawColors.pressed : rawColors.surface,
                 },
               ]}
             >
               <Text
                 style={[
                   styles.secondaryButtonText,
-                  { color: rawColors.foregroundSecondary },
+                  { color: rawColors.foreground },
                 ]}
               >
                 {resolution.kind === "existing"
@@ -562,15 +504,15 @@ export default function TemplateImportScreen() {
                 style={({ pressed }) => [
                   styles.secondaryButton,
                   {
-                    borderColor: rawColors.borderLight,
-                    backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
+                    borderColor: rawColors.border,
+                    backgroundColor: pressed ? rawColors.pressed : rawColors.surface,
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.secondaryButtonText,
-                    { color: rawColors.foregroundSecondary },
+                    { color: rawColors.foreground },
                   ]}
                 >
                   Create New
@@ -616,7 +558,7 @@ export default function TemplateImportScreen() {
                 styles.summaryCard,
                 {
                   backgroundColor: rawColors.surface,
-                  borderColor: rawColors.borderLight,
+                  borderColor: rawColors.border,
                 },
               ]}
             >
@@ -741,144 +683,6 @@ export default function TemplateImportScreen() {
         </>
       )}
 
-      <AppModal
-        visible={pickerRequirement !== null}
-        onClose={() => {
-          setPickerRequirementId(null);
-          setPickerQuery("");
-        }}
-        centerContent={false}
-      >
-        {pickerRequirement ? (
-          <View style={styles.pickerContent}>
-            <Text style={[styles.pickerTitle, { color: rawColors.foreground }]}>
-              Choose exercise
-            </Text>
-            <Text
-              style={[
-                styles.pickerSubtitle,
-                { color: rawColors.foregroundSecondary },
-              ]}
-            >
-              {requiresExplicitExerciseSelection(pickerRequirement)
-                ? "Choose an existing exercise or type a new one to create it."
-                : pickerRequirement.canonicalName}
-            </Text>
-
-            <TextInput
-              value={pickerQuery}
-              onChangeText={setPickerQuery}
-              placeholder={
-                requiresExplicitExerciseSelection(pickerRequirement)
-                  ? "Search or type a new exercise name..."
-                  : "Search your library..."
-              }
-              placeholderTextColor={rawColors.foregroundMuted}
-              style={[
-                styles.pickerInput,
-                {
-                  backgroundColor: rawColors.surfaceSecondary,
-                  borderColor: rawColors.borderLight,
-                  color: rawColors.foreground,
-                },
-              ]}
-            />
-
-            <ScrollView style={styles.pickerList}>
-              {pickerOptions.length > 0 ? (
-                pickerOptions.slice(0, 20).map((option) => (
-                  <Pressable
-                    key={option.exercise.id}
-                    onPress={() => {
-                      setExistingResolution(
-                        pickerRequirement,
-                        option.exercise,
-                        option.source === "exact" ? "exact" : "manual"
-                      );
-                      setPickerRequirementId(null);
-                      setPickerQuery("");
-                    }}
-                    style={({ pressed }) => [
-                      styles.pickerItem,
-                      {
-                        backgroundColor: pressed
-                          ? rawColors.surfaceSecondary
-                          : "transparent",
-                        borderColor: rawColors.borderLight,
-                      },
-                    ]}
-                  >
-                    <View style={styles.pickerItemBody}>
-                      <Text style={[styles.pickerItemName, { color: rawColors.foreground }]}>
-                        {option.exercise.name}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.pickerItemMeta,
-                          { color: rawColors.foregroundSecondary },
-                        ]}
-                      >
-                        {option.detail}
-                      </Text>
-                    </View>
-                    <View style={styles.pickerChevronWrap}>
-                      <MaterialCommunityIcons
-                        name="chevron-right"
-                        size={18}
-                        color={rawColors.foregroundSecondary}
-                      />
-                    </View>
-                  </Pressable>
-                ))
-              ) : (
-                <View style={styles.emptyPickerState}>
-                  <Text
-                    style={[
-                      styles.pickerItemMeta,
-                      { color: rawColors.foregroundMuted },
-                    ]}
-                  >
-                    {requiresExplicitExerciseSelection(pickerRequirement)
-                      ? "No library exercises matched your search. Type a name below to create one."
-                      : "No library exercises matched your search."}
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.pickerActions}>
-              <Pressable
-                onPress={() => {
-                  if (!pickerCreateName) return;
-                  setCreateResolution(pickerRequirement, pickerCreateName);
-                  setPickerRequirementId(null);
-                  setPickerQuery("");
-                }}
-                disabled={!pickerCreateName}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  {
-                    borderColor: rawColors.borderLight,
-                    backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-                    opacity: pickerCreateName ? 1 : 0.5,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.secondaryButtonText,
-                    { color: rawColors.foregroundSecondary },
-                  ]}
-                >
-                  {pickerCreateName
-                    ? `Create "${pickerCreateName}"`
-                    : "Type a name to create"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-      </AppModal>
     </View>
   );
 }
@@ -900,7 +704,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   summaryCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 18,
     padding: 18,
     gap: 10,
@@ -931,7 +735,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   matchCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 18,
     padding: 16,
     gap: 12,
@@ -992,59 +796,5 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontWeight: "600",
-  },
-  pickerContent: {
-    gap: 12,
-  },
-  pickerTitle: {
-    fontSize: 19,
-    fontWeight: "700",
-  },
-  pickerSubtitle: {
-    fontSize: 14,
-  },
-  pickerInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
-  pickerList: {
-    maxHeight: 360,
-  },
-  pickerItem: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-  pickerItemBody: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  pickerItemName: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  pickerItemMeta: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  pickerChevronWrap: {
-    flexShrink: 0,
-    alignSelf: "center",
-  },
-  emptyPickerState: {
-    paddingVertical: 12,
-  },
-  pickerActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
   },
 });
