@@ -1,12 +1,25 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { View } from "react-native";
+import { Tabs, router, useSegments } from "expo-router";
+import { Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
 import { useTheme } from "../../lib/theme/ThemeContext";
 
 const TabsLayout = () => {
   const { rawColors } = useTheme();
-  
+  const insets = useSafeAreaInsets();
+  const segments = useSegments();
+  const activeTab = segments[segments.length - 1];
+  const showAddExerciseFab = activeTab === "exercises";
+  const exerciseCardHorizontalInset = 20;
+  const floatingTabBarBottom = 24;
+  const floatingTabBarHeight = 64;
+  const addExerciseFabGapAboveTabBar = 9;
+  const addExerciseFabBottom = Math.max(
+    insets.bottom + floatingTabBarBottom + floatingTabBarHeight + addExerciseFabGapAboveTabBar,
+    112
+  );
+
   return (
     <View className="flex-1 bg-background">
       <Tabs
@@ -54,6 +67,43 @@ const TabsLayout = () => {
         )}} />
       </Tabs>
       <PinnedExercisesOverlay />
+      {showAddExerciseFab ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            right: exerciseCardHorizontalInset,
+            bottom: addExerciseFabBottom,
+            width: 58,
+            height: 58,
+            borderRadius: 18,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: rawColors.primary,
+            shadowColor: rawColors.primary,
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.22,
+            shadowRadius: 20,
+            elevation: 8,
+            zIndex: 1001,
+          }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add exercise"
+            onPress={() => router.setParams({ addExerciseRequest: `${Date.now()}` })}
+            style={({ pressed }) => ({
+              width: "100%",
+              height: "100%",
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <MaterialCommunityIcons name="plus" size={28} color={rawColors.primaryForeground} />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 };

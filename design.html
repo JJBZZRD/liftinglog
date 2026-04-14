@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                "primary": "#FF6B00",
+                "background": "#F7F7F7",
+                "surface": "#FFFFFF",
+                "secondary-surface": "#FFF0E0",
+                "on-surface": "#000000",
+                "on-surface-variant": "#4A5568",
+                "outline": "#E2E8F0",
+                "outline-variant": "#CBD5E0"
+              },
+              "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+              },
+              "fontFamily": {
+                "headline": ["Manrope"],
+                "body": ["Inter"],
+                "label": ["Inter"]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+          display: inline-block;
+          line-height: 1;
+        }
+        body {
+          background-color: #F7F7F7;
+          color: #000000;
+          font-family: 'Inter', sans-serif;
+        }
+        .lithic-button {
+          background: #FF6B00;
+          color: #FFFFFF;
+        }
+        .no-line-rule { border: none !important; }
+        .glass-effect {
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+        }
+        body {
+          min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="selection:bg-primary/20 selection:text-primary pb-32">
+<header class="fixed top-0 w-full z-50 bg-[#F7F7F7]/80 backdrop-blur-xl flex items-center justify-between px-6 h-16 w-full no-line-rule">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="fitness_center">fitness_center</span>
+<h1 class="text-xl font-bold tracking-tighter text-on-surface font-['Manrope']">Lifting Log</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-black/5 transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-outline-variant overflow-hidden">
+<img alt="professional athlete profile picture" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDI7bBCuG2MCunoC5X0SgUzMlcoV48RK7p2_DVZIBEG0ayyAAWqePu3YT3swk0BAuQNjN1eZNDc5dP25TWydGOG8gtbkGwtPc6lchltKrbLwzp2jOXoKIboxIOnZZthX9lV1Ce7xeCmRIHsqj-QRzhExwthyHcrKPOVrbxFByglGQMs-VYzhFLKysQX1-alG6S9fYbEQNMyz26YVPrKY6ZgN2C3xvKmSIMgYI1HxFbK1Kha2HOUjlFEnkEthICPl-m1qfrz1MuMN1g"/>
+</div>
+</div>
+</header>
+<main class="mt-20 px-6 max-w-2xl mx-auto">
+<section class="mb-10">
+<h2 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-1">Exercises</h2>
+<p class="text-on-surface-variant font-body text-sm">Your exercise library</p>
+</section>
+<section class="mb-8 flex flex-col gap-4">
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface-variant/50" data-icon="search">search</span>
+</div>
+<input class="w-full h-14 bg-surface rounded-xl pl-12 pr-4 border-none shadow-sm focus:ring-2 focus:ring-primary/20 transition-all font-body" placeholder="Search exercises..." type="text"/>
+</div>
+<div class="flex p-1 bg-black/5 rounded-xl">
+<button class="flex-1 py-2 text-xs font-bold uppercase tracking-widest text-primary bg-surface rounded-lg shadow-sm">All</button>
+<button class="flex-1 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:bg-surface/50 transition-colors rounded-lg">Muscle</button>
+<button class="flex-1 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:bg-surface/50 transition-colors rounded-lg">Equipment</button>
+</div>
+</section>
+<div class="space-y-6">
+<div class="space-y-3">
+<div class="flex items-center justify-between px-2">
+<span class="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-on-surface-variant/60">Chest &amp; Triceps</span>
+<span class="h-[1px] flex-grow ml-4 bg-outline"></span>
+</div>
+<div class="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/50 transition-all duration-300">
+<div class="p-5 flex items-center justify-between hover:bg-secondary-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-secondary-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="horizontal_distribute">horizontal_distribute</span>
+</div>
+<div>
+<h3 class="font-headline font-semibold text-on-surface">Bench Press</h3>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-label font-bold uppercase">Barbell</span>
+<span class="text-[10px] text-on-surface-variant font-body">3 Variations</span>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="expand_more">expand_more</span>
+</div>
+<div class="bg-secondary-surface/30 border-t border-outline">
+<div class="px-5 py-4 flex items-center justify-between hover:bg-secondary-surface transition-colors cursor-pointer pl-16">
+<span class="font-body text-sm text-on-surface">Incline Bench Press</span>
+<span class="material-symbols-outlined text-on-surface-variant/40 text-lg" data-icon="chevron_right">chevron_right</span>
+</div>
+<div class="px-5 py-4 flex items-center justify-between hover:bg-secondary-surface transition-colors cursor-pointer pl-16">
+<span class="font-body text-sm text-on-surface">Decline Bench Press</span>
+<span class="material-symbols-outlined text-on-surface-variant/40 text-lg" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between px-2">
+<span class="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-on-surface-variant/60">Back &amp; Biceps</span>
+<span class="h-[1px] flex-grow ml-4 bg-outline"></span>
+</div>
+<div class="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/50">
+<div class="p-5 flex items-center justify-between hover:bg-secondary-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-secondary-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="vertical_align_bottom">vertical_align_bottom</span>
+</div>
+<div>
+<h3 class="font-headline font-semibold text-on-surface">Lat Pulldown</h3>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-label font-bold uppercase">Cable</span>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="more_vert">more_vert</span>
+</div>
+</div>
+<div class="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/50">
+<div class="p-5 flex items-center justify-between hover:bg-secondary-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-secondary-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="fitness_center">fitness_center</span>
+</div>
+<div>
+<h3 class="font-headline font-semibold text-on-surface">Dumbbell Row</h3>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-label font-bold uppercase">Dumbbell</span>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="more_vert">more_vert</span>
+</div>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between px-2">
+<span class="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-on-surface-variant/60">Lower Body</span>
+<span class="h-[1px] flex-grow ml-4 bg-outline"></span>
+</div>
+<div class="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/50">
+<div class="p-5 flex items-center justify-between hover:bg-secondary-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-secondary-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="downhill_skiing">downhill_skiing</span>
+</div>
+<div>
+<h3 class="font-headline font-semibold text-on-surface">Squat</h3>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-label font-bold uppercase">Barbell</span>
+<span class="text-[10px] text-on-surface-variant font-body">2 Variations</span>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<div class="fixed bottom-24 right-6 z-40">
+<button class="w-14 h-14 rounded-2xl lithic-button shadow-xl flex items-center justify-center active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</div>
+<nav class="fixed bottom-0 w-full z-50 bg-surface/80 backdrop-blur-xl flex justify-around items-center h-20 px-4 pb-safe border-t border-outline">
+<div class="flex flex-col items-center justify-center text-on-surface-variant/40 hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1" data-icon="dashboard">dashboard</span>
+<span class="font-['Inter'] text-[10px] font-bold uppercase tracking-widest">Overview</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary scale-110 transition-transform">
+<span class="material-symbols-outlined mb-1" data-icon="list_alt" style="font-variation-settings: 'FILL' 1;">list_alt</span>
+<span class="font-['Inter'] text-[10px] font-bold uppercase tracking-widest">Exercises</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant/40 hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1" data-icon="calendar_today">calendar_today</span>
+<span class="font-['Inter'] text-[10px] font-bold uppercase tracking-widest">Programs</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant/40 hover:text-primary transition-all">
+<span class="material-symbols-outlined mb-1" data-icon="settings">settings</span>
+<span class="font-['Inter'] text-[10px] font-bold uppercase tracking-widest">Settings</span>
+</div>
+</nav>
+<div class="fixed top-0 left-0 w-full h-full pointer-events-none -z-10 overflow-hidden">
+<div class="absolute -top-24 -right-24 w-96 h-96 bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute top-1/2 -left-48 w-[500px] h-[500px] bg-primary/5 blur-[160px] rounded-full"></div>
+</div>
+
+</body></html>

@@ -21,3 +21,15 @@ Non-negotiable rules:
 - `program_calendar_exercises.workout_exercise_id` is a soft link and must be maintained by application code.
 - `program_calendar_sets.set_id` links a programmed set to its real `sets` row and must be kept in sync on create, update, and delete.
 - Do not add new persistence paths that only update `program_calendar_sets` without also considering the main history tables.
+- Always search for plugins or libraries that can fulfill the users needs before creating an implemenation, especially when it comes to UI elements or features. Quite frequently the work has already been done by someone else and in an optimal way and you can save a lot of time.
+
+UI consistency rule (modals and action buttons):
+
+- For modal action rows, reuse the same class-based button styling pattern used in `components/AddExerciseModal.tsx`.
+- Use `Pressable` className-based styles (not ad-hoc inline color/spacing tweaks) so light/dark theme tokens apply consistently.
+- Preferred button classes:
+  - Secondary: `flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary`
+  - Primary: `flex-1 items-center justify-center p-3.5 rounded-lg bg-primary`
+- Preferred button text classes:
+  - Secondary text: `text-base font-semibold text-foreground-secondary`
+  - Primary text: `text-base font-semibold text-primary-foreground`

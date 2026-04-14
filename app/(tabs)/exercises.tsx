@@ -1,26 +1,25 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Animated,
-  FlatList,
+  type ColorValue,
   LayoutAnimation,
-  Modal,
   Platform,
   Pressable,
-  StyleSheet,
+  ScrollView,
   Text,
   TextInput,
   UIManager,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddExerciseModal from "../../components/AddExerciseModal";
 import VariationExerciseLabel from "../../components/exercise/VariationExerciseLabel";
-import BaseModal from "../../components/modals/BaseModal";
+import AppModal from "../../components/modals/BaseModal";
 import {
   createExerciseVariation,
   deleteExercise,
@@ -32,17 +31,163 @@ import {
   type ExerciseLibraryGroup,
 } from "../../lib/db/exercises";
 import { useTheme } from "../../lib/theme/ThemeContext";
-import { formatExerciseLibraryTitle } from "../../lib/utils/exerciseVariations";
+import { formatVariationCountLabel } from "../../lib/utils/exerciseVariations";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 type SortOption = "alphabetical" | "lastCompleted";
+type SearchScope = "all" | "muscle" | "equipment";
+
+type ExerciseSection = {
+  key: string;
+  title: string;
+  items: ExerciseLibraryGroup[];
+};
+
+const SEARCH_SCOPE_OPTIONS: { id: SearchScope; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "muscle", label: "Muscle" },
+  { id: "equipment", label: "Equipment" },
+];
+
+const SECTION_ORDER = [
+  "Chest & Triceps",
+  "Back & Biceps",
+  "Shoulders",
+  "Lower Body",
+  "Core",
+  "Conditioning",
+  "Uncategorized",
+];
+
+function titleCaseWords(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatSectionTitle(muscleGroup: string | null | undefined): string {
+  const value = muscleGroup?.trim().toLowerCase() ?? "";
+  if (!value) {
+    return "Uncategorized";
+  }
+  if (value.includes("chest") || value.includes("tricep")) {
+    return "Chest & Triceps";
+  }
+  if (
+    value.includes("back") ||
+    value.includes("lat") ||
+    value.includes("bicep") ||
+    value.includes("row")
+  ) {
+    return "Back & Biceps";
+  }
+  if (
+    value.includes("leg") ||
+    value.includes("quad") ||
+    value.includes("hamstring") ||
+    value.includes("glute") ||
+    value.includes("calf") ||
+    value.includes("lower")
+  ) {
+    return "Lower Body";
+  }
+  if (
+    value.includes("shoulder") ||
+    value.includes("delt") ||
+    value.includes("trap")
+  ) {
+    return "Shoulders";
+  }
+  if (value.includes("core") || value.includes("ab")) {
+    return "Core";
+  }
+  if (value.includes("cardio") || value.includes("conditioning")) {
+    return "Conditioning";
+  }
+
+  return titleCaseWords(muscleGroup!);
+}
+
+function formatMuscleGroupTitle(muscleGroup: string | null | undefined): string {
+  if (!muscleGroup?.trim()) {
+    return "Uncategorized";
+  }
+
+  return titleCaseWords(muscleGroup);
+}
+
+function getSectionTitleForMode(
+  mode: SearchScope,
+  exercise: Exercise
+): string {
+  if (mode === "equipment") {
+    return getEquipmentBadgeLabel(exercise);
+  }
+
+  if (mode === "muscle") {
+    return formatMuscleGroupTitle(exercise.muscleGroup);
+  }
+
+  return formatSectionTitle(exercise.muscleGroup);
+}
+
+function getEquipmentBadgeLabel(exercise: Exercise): string {
+  if (exercise.isBodyweight) {
+    return "BODYWEIGHT";
+  }
+
+  const equipment = exercise.equipment?.trim();
+  if (!equipment) {
+    return "GENERAL";
+  }
+
+  const normalized = equipment.toLowerCase();
+  if (normalized.includes("barbell")) return "BARBELL";
+  if (normalized.includes("dumbbell")) return "DUMBBELL";
+  if (normalized.includes("cable")) return "CABLE";
+  if (normalized.includes("machine")) return "MACHINE";
+  if (normalized.includes("kettlebell")) return "KETTLEBELL";
+
+  return equipment.toUpperCase();
+}
+
+function sortSections(sections: ExerciseSection[]): ExerciseSection[] {
+  return [...sections].sort((a, b) => {
+    const aIndex = SECTION_ORDER.indexOf(a.title);
+    const bIndex = SECTION_ORDER.indexOf(b.title);
+    const resolvedA = aIndex === -1 ? SECTION_ORDER.length : aIndex;
+    const resolvedB = bIndex === -1 ? SECTION_ORDER.length : bIndex;
+
+    if (resolvedA !== resolvedB) {
+      return resolvedA - resolvedB;
+    }
+
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function formatCompactDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const showYear = date.getFullYear() !== now.getFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(showYear ? { year: "numeric" } : {}),
+  });
+}
 
 export default function ExercisesScreen() {
-  const { rawColors } = useTheme();
+  const { rawColors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const { addExerciseRequest } = useLocalSearchParams<{ addExerciseRequest?: string | string[] }>();
   const [items, setItems] = useState<ExerciseLibraryGroup[]>([]);
   const [lastPerformedAtByExerciseId, setLastPerformedAtByExerciseId] = useState<
     Record<number, number | null>
@@ -60,16 +205,11 @@ export default function ExercisesScreen() {
   const [variationDraft, setVariationDraft] = useState("");
   const [variationError, setVariationError] = useState<string | null>(null);
   const [variationTarget, setVariationTarget] = useState<Exercise | null>(null);
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Filter and search state
-  const [showFilterPopup, setShowFilterPopup] = useState(false);
-  const [showSearchPopup, setShowSearchPopup] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
   const [sortOption, setSortOption] = useState<SortOption>("alphabetical");
   const [sortAscending, setSortAscending] = useState(true);
+  const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [searchQuery, setSearchQuery] = useState("");
-
-  const HEADER_HEIGHT = 105 + insets.top;
 
   const selectedGroup = useMemo(
     () => items.find((item) => item.exercise.id === selectedParentExerciseId) ?? null,
@@ -77,45 +217,29 @@ export default function ExercisesScreen() {
   );
   const selectedExercise = selectedGroup?.exercise ?? null;
 
-  const filteredAndSortedItems = useMemo(() => {
-    let result = [...items];
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (item) =>
-          item.exercise.name.toLowerCase().includes(query) ||
-          item.exercise.muscleGroup?.toLowerCase().includes(query) ||
-          item.exercise.equipment?.toLowerCase().includes(query) ||
-          item.variations.some(
-            (variation) =>
-              variation.name.toLowerCase().includes(query) ||
-              variation.variationLabel?.toLowerCase().includes(query)
-          )
-      );
-    }
-
-    if (sortOption === "alphabetical") {
-      result.sort((a, b) => {
-        const comparison = a.exercise.name.localeCompare(b.exercise.name);
-        return sortAscending ? comparison : -comparison;
-      });
-    } else {
-      result.sort((a, b) => {
-        const aTime = a.familyLastPerformedAt ?? 0;
-        const bTime = b.familyLastPerformedAt ?? 0;
-        return sortAscending ? aTime - bTime : bTime - aTime;
-      });
-    }
-
-    return result;
-  }, [items, searchQuery, sortOption, sortAscending]);
-
-  const headerShadowOpacity = scrollY.interpolate({
-    inputRange: [0, 20],
-    outputRange: [0, 0.15],
-    extrapolate: "clamp",
-  });
+  const screenBackground = isDark ? rawColors.background : "#EEF2FA";
+  const heroGradient: readonly [ColorValue, ColorValue] = isDark
+    ? [rawColors.background, rawColors.surface]
+    : ["#F7F9FF", "#E6ECF8"];
+  const sectionLabelColor = isDark ? rawColors.foregroundMuted : "#8895AB";
+  const raisedSurface = isDark ? rawColors.surface : "#FFFFFF";
+  const recessedSurface = isDark ? rawColors.surfaceSecondary : "#F6F8FD";
+  const subtleBorder = isDark ? rawColors.border : "#E3EAF5";
+  const lightShadowColor = isDark ? rawColors.shadow : "#9AA9C3";
+  const selectorTrayWidth = Math.max(280, windowWidth - 40);
+  const selectorSegmentWidth = Math.floor((selectorTrayWidth - 8) / 3);
+  const selectorSegmentHeight = 36;
+  const activeSearchScopeIndex = SEARCH_SCOPE_OPTIONS.findIndex(
+    (option) => option.id === searchScope
+  );
+  const sortSummaryLabel =
+    sortOption === "alphabetical"
+      ? `A-Z / ${sortAscending ? "Asc" : "Desc"}`
+      : `Recent / ${sortAscending ? "Oldest" : "Newest"}`;
+  const searchPlaceholder = "Search exercises...";
+  const addExerciseRequestToken = Array.isArray(addExerciseRequest)
+    ? addExerciseRequest[0]
+    : addExerciseRequest;
 
   const reloadExercises = useCallback(async () => {
     const rows = await listExerciseLibraryGroups();
@@ -157,11 +281,86 @@ export default function ExercisesScreen() {
     }, [reloadExercises])
   );
 
+  useEffect(() => {
+    if (addExerciseRequestToken) {
+      setAddModalVisible(true);
+    }
+  }, [addExerciseRequestToken]);
+
+  const closeAddExerciseModal = useCallback(() => {
+    setAddModalVisible(false);
+    if (addExerciseRequestToken) {
+      router.setParams({ addExerciseRequest: undefined });
+    }
+  }, [addExerciseRequestToken]);
+
   const formatLastCompletedLabel = useCallback((timestamp: number | null | undefined) => {
-    return timestamp
-      ? `Last completed ${new Date(timestamp).toLocaleDateString()}`
-      : "Never completed";
+    return timestamp ? `Last completed ${formatCompactDate(timestamp)}` : "Never logged";
   }, []);
+
+  const filteredAndSortedItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    let result = [...items];
+
+    if (query) {
+      result = result.filter((item) => {
+        const searchableTerms = [
+          item.exercise.name,
+          item.exercise.muscleGroup ?? "",
+          item.exercise.equipment ?? "",
+          ...item.variations.flatMap((variation) => [
+            variation.name,
+            variation.variationLabel ?? "",
+            variation.muscleGroup ?? "",
+            variation.equipment ?? "",
+          ]),
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return searchableTerms.includes(query);
+      });
+    }
+
+    if (sortOption === "alphabetical") {
+      result.sort((a, b) => {
+        const comparison = a.exercise.name.localeCompare(b.exercise.name);
+        return sortAscending ? comparison : -comparison;
+      });
+    } else {
+      result.sort((a, b) => {
+        const aTime = a.familyLastPerformedAt ?? 0;
+        const bTime = b.familyLastPerformedAt ?? 0;
+        return sortAscending ? aTime - bTime : bTime - aTime;
+      });
+    }
+
+    return result;
+  }, [items, searchQuery, sortOption, sortAscending]);
+
+  const sections = useMemo(() => {
+    const grouped = new Map<string, ExerciseLibraryGroup[]>();
+
+    for (const item of filteredAndSortedItems) {
+      const sectionTitle = getSectionTitleForMode(searchScope, item.exercise);
+      if (!grouped.has(sectionTitle)) {
+        grouped.set(sectionTitle, []);
+      }
+      grouped.get(sectionTitle)!.push(item);
+    }
+
+    const nextSections = Array.from(grouped.entries()).map(([title, groupedItems]) => ({
+      key: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      title,
+      items: groupedItems,
+    }));
+
+    if (searchScope === "all") {
+      return sortSections(nextSections);
+    }
+
+    return nextSections.sort((a, b) => a.title.localeCompare(b.title));
+  }, [filteredAndSortedItems, searchScope]);
 
   const closeActionModal = useCallback(() => {
     setActionModalVisible(false);
@@ -269,238 +468,720 @@ export default function ExercisesScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: rawColors.background }]}>
-      {/* Fixed Header */}
-      <Animated.View 
-        style={[
-          styles.headerContainer, 
-          { paddingTop: insets.top, backgroundColor: rawColors.background },
-          {
-            shadowColor: rawColors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: headerShadowOpacity,
-            shadowRadius: 8,
-            elevation: scrollY.interpolate({
-              inputRange: [0, 20],
-              outputRange: [0, 4],
-              extrapolate: "clamp",
-            }),
-          }
-        ]}
-      >
-        <View style={styles.headerContent}>
-          <Text style={[styles.headerTitle, { color: rawColors.foreground }]}>Exercises</Text>
-          <Text style={[styles.headerSubtitle, { color: rawColors.foregroundSecondary }]}>Your exercise library</Text>
-          <View style={[styles.headerIcons, { alignItems: 'center' }]}>
-            <Pressable 
-              style={styles.headerIconButton}
-              onPress={() => setShowFilterPopup(true)}
-            >
-              <MaterialCommunityIcons 
-                name="sort" 
-                size={22} 
-                color={(sortOption !== "alphabetical" || !sortAscending) ? rawColors.primary : rawColors.foregroundSecondary} 
-              />
-            </Pressable>
-            <Pressable 
-              style={styles.headerIconButton}
-              onPress={() => setShowSearchPopup(true)}
-            >
-              <MaterialCommunityIcons 
-                name="magnify" 
-                size={22} 
-                color={searchQuery ? rawColors.primary : rawColors.foregroundSecondary} 
-              />
-            </Pressable>
-
-            <Pressable
-              onPress={() => setAddModalVisible(true)}
-              className="flex-row items-center px-4 py-2 rounded-full border ml-auto"
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? rawColors.surfaceSecondary : "transparent",
-                borderColor: rawColors.borderLight,
-              })}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color={rawColors.foregroundSecondary} />
-              <Text className="ml-1.5 text-sm font-semibold" style={{ color: rawColors.foregroundSecondary }}>
-                Add Exercise
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-        <LinearGradient
-          colors={[rawColors.background, "transparent"]}
-          style={styles.headerFade}
-        />
-      </Animated.View>
-
-      <FlatList
-        data={filteredAndSortedItems}
-        keyExtractor={(item) => String(item.exercise.id)}
+    <View style={{ flex: 1, backgroundColor: screenBackground }}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          padding: 16,
-          gap: 12,
-          paddingTop: HEADER_HEIGHT + 45,
-          paddingBottom: 100,
+          paddingBottom: Math.max(insets.bottom + 144, 164),
         }}
-        bounces
-        alwaysBounceVertical
-        overScrollMode="always"
-        decelerationRate="fast"
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        renderItem={({ item }) => {
-          const isExpanded = expandedExerciseId === item.exercise.id;
-          const hasVariations = item.variations.length > 0;
-          const parentLastCompleted = item.familyLastPerformedAt;
+      >
+        <LinearGradient
+          colors={heroGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            paddingTop: insets.top + 22,
+            paddingHorizontal: 20,
+            paddingBottom: 24,
+            borderBottomLeftRadius: 34,
+            borderBottomRightRadius: 34,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: rawColors.foreground,
+                  fontSize: 38,
+                  lineHeight: 42,
+                  fontWeight: "700",
+                  letterSpacing: -1,
+                }}
+              >
+                Exercises
+              </Text>
+              <Text
+                style={{
+                  marginTop: 6,
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 14,
+                }}
+              >
+                Your exercise library
+              </Text>
+            </View>
+          </View>
 
-          return (
+          <View style={{ marginTop: 20, gap: 14 }}>
             <View
               style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
                 borderRadius: 16,
-                backgroundColor: rawColors.surface,
-                shadowColor: rawColors.shadow,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
+                backgroundColor: raisedSurface,
+                paddingHorizontal: 14,
+                paddingVertical: 9,
+                borderWidth: 1,
+                borderColor: subtleBorder,
+                shadowColor: lightShadowColor,
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: isDark ? 0.14 : 0.12,
+                shadowRadius: 24,
                 elevation: 4,
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "stretch" }}>
+              <MaterialCommunityIcons name="magnify" size={22} color={rawColors.foregroundMuted} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={rawColors.foregroundMuted}
+                style={{
+                  flex: 1,
+                  color: rawColors.foreground,
+                  fontSize: 16,
+                }}
+              />
+              {searchQuery.length > 0 ? (
                 <Pressable
-                  onPress={() => handleNavigateToExercise(item.exercise)}
-                  onLongPress={() => handleOpenActions(item)}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    paddingHorizontal: 20,
-                    paddingVertical: 18,
-                    opacity: pressed ? 0.8 : 1,
-                  })}
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={10}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                >
+                  <MaterialCommunityIcons
+                    name="close-circle"
+                    size={18}
+                    color={rawColors.foregroundMuted}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+
+            <View
+              style={{
+                width: selectorTrayWidth,
+                borderRadius: 11,
+                padding: 3,
+                backgroundColor: isDark ? rawColors.surfaceSecondary : "#D9E1EE",
+                borderWidth: 1,
+                borderColor: isDark ? rawColors.border : "#D1D9E6",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: 3 + activeSearchScopeIndex * selectorSegmentWidth,
+                  width: selectorSegmentWidth,
+                  height: selectorSegmentHeight,
+                  borderRadius: 11,
+                  backgroundColor: raisedSurface,
+                  borderWidth: 1,
+                  borderColor: "#E5EAF3",
+                  shadowColor: lightShadowColor,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isDark ? 0.12 : 0.06,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              />
+
+              <View style={{ width: "100%", flexDirection: "row", alignItems: "center" }}>
+                {SEARCH_SCOPE_OPTIONS.map((option) => {
+                  const isSelected = searchScope === option.id;
+                  return (
+                    <View
+                      key={option.id}
+                      style={{
+                        width: selectorSegmentWidth,
+                        height: selectorSegmentHeight,
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => setSearchScope(option.id)}
+                        style={({ pressed }) => ({
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: 11,
+                          opacity: pressed ? 0.82 : 1,
+                        })}
+                      >
+                        <View
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            paddingHorizontal: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: isSelected ? rawColors.primary : rawColors.foregroundSecondary,
+                              fontSize: 14,
+                              fontWeight: "700",
+                              includeFontPadding: false,
+                              lineHeight: 16,
+                              letterSpacing: 0.8,
+                              textAlign: "center",
+                              textAlignVertical: "center",
+                              textTransform: "uppercase",
+                              width: "100%",
+                            }}
+                          >
+                            {option.label}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text
+                style={{
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 13,
+                  fontWeight: "500",
+                }}
+              >
+                {filteredLabel(filteredAndSortedItems.length)}
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open sort options"
+                  onPress={() => setShowSortModal(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
                 >
                   <Text
-                    style={{ color: rawColors.foreground, fontSize: 16, fontWeight: "600" }}
-                    numberOfLines={1}
-                  >
-                    {formatExerciseLibraryTitle(item.exercise.name, item.variations.length)}
-                  </Text>
-                  <Text
                     style={{
-                      marginTop: 4,
-                      color: rawColors.foregroundSecondary,
+                      color: rawColors.foregroundMuted,
                       fontSize: 12,
+                      fontWeight: "600",
+                      letterSpacing: 0.2,
                     }}
                   >
-                    {formatLastCompletedLabel(parentLastCompleted)}
+                    {sortSummaryLabel}
                   </Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    hasVariations
-                      ? `${isExpanded ? "Collapse" : "Expand"} variations for ${item.exercise.name}`
-                      : `Open ${item.exercise.name}`
-                  }
-                  onPress={() =>
-                    hasVariations
-                      ? handleToggleExpanded(item.exercise.id)
-                      : handleNavigateToExercise(item.exercise)
-                  }
+                  accessibilityLabel="Open sort options"
+                  onPress={() => setShowSortModal(true)}
                   style={({ pressed }) => ({
-                    width: 56,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 10,
                     alignItems: "center",
                     justifyContent: "center",
-                    opacity: pressed ? 0.75 : 1,
+                    backgroundColor: isDark ? rawColors.surfaceSecondary : "rgba(255,255,255,0.82)",
+                    borderWidth: 1,
+                    borderColor: subtleBorder,
+                    opacity: pressed ? 0.78 : 1,
                   })}
                 >
                   <MaterialCommunityIcons
-                    name={
-                      hasVariations
-                        ? isExpanded
-                          ? "chevron-up"
-                          : "chevron-down"
-                        : "chevron-right"
-                    }
-                    size={22}
+                    name="tune-variant"
+                    size={16}
                     color={rawColors.foregroundSecondary}
                   />
                 </Pressable>
               </View>
-              {hasVariations && isExpanded ? (
-                <View
-                  style={{
-                    borderTopWidth: StyleSheet.hairlineWidth,
-                    borderTopColor: rawColors.border,
-                    paddingVertical: 8,
-                  }}
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 24 }}>
+          {sections.length === 0 ? (
+            <View
+              style={{
+                borderRadius: 26,
+                paddingHorizontal: 24,
+                paddingVertical: 28,
+                alignItems: "center",
+                backgroundColor: raisedSurface,
+                borderWidth: 1,
+                borderColor: subtleBorder,
+                shadowColor: lightShadowColor,
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: isDark ? 0.14 : 0.1,
+                shadowRadius: 24,
+                elevation: 3,
+              }}
+            >
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 18,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isDark ? rawColors.primaryLight : "#EEF4FF",
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="dumbbell"
+                  size={24}
+                  color={rawColors.primary}
+                />
+              </View>
+              <Text
+                style={{
+                  marginTop: 16,
+                  color: rawColors.foreground,
+                  fontSize: 18,
+                  fontWeight: "700",
+                }}
+              >
+                {items.length === 0 ? "No exercises yet" : "No matches found"}
+              </Text>
+              <Text
+                style={{
+                  marginTop: 8,
+                  textAlign: "center",
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 14,
+                  lineHeight: 20,
+                }}
+              >
+                {items.length === 0
+                  ? "Create your first exercise to start building out the library."
+                  : "Try adjusting the search scope or clearing your current query."}
+              </Text>
+              {items.length === 0 ? (
+                <Pressable
+                  onPress={() => setAddModalVisible(true)}
+                  style={({ pressed }) => ({
+                    marginTop: 18,
+                    paddingHorizontal: 18,
+                    paddingVertical: 12,
+                    borderRadius: 16,
+                    backgroundColor: rawColors.primary,
+                    opacity: pressed ? 0.84 : 1,
+                  })}
                 >
-                  {item.variations.map((variation, index) => (
-                    <Pressable
-                      key={variation.id}
-                      onPress={() => handleNavigateToExercise(variation)}
-                      style={({ pressed }) => ({
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        paddingLeft: 20,
-                        paddingRight: 16,
-                        paddingVertical: 12,
-                        opacity: pressed ? 0.78 : 1,
-                        borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
-                        borderTopColor: rawColors.border,
-                      })}
-                    >
-                      <View style={{ flex: 1, paddingRight: 12 }}>
-                        <VariationExerciseLabel
-                          exercise={{
-                            name: variation.name,
-                            parentExerciseId: variation.parentExerciseId,
-                            variationLabel: variation.variationLabel,
-                            parentName: item.exercise.name,
-                          }}
-                          numberOfLines={1}
-                          style={{ fontSize: 15, fontWeight: "600" }}
-                          suffixStyle={{ fontWeight: "500" }}
-                        />
-                        <Text
-                          style={{
-                            marginTop: 4,
-                            color: rawColors.foregroundSecondary,
-                            fontSize: 12,
-                          }}
-                        >
-                          {formatLastCompletedLabel(lastPerformedAtByExerciseId[variation.id])}
-                        </Text>
-                      </View>
-                      <MaterialCommunityIcons
-                        name="chevron-right"
-                        size={18}
-                        color={rawColors.foregroundSecondary}
-                      />
-                    </Pressable>
-                  ))}
-                </View>
+                  <Text
+                    style={{
+                      color: rawColors.primaryForeground,
+                      fontSize: 14,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Add Exercise
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
-          );
-        }}
-      />
+          ) : (
+            sections.map((section) => (
+              <View key={section.key} style={{ gap: 12 }}>
+                <Text
+                  style={{
+                    color: sectionLabelColor,
+                    fontSize: 11,
+                    fontWeight: "700",
+                    letterSpacing: 2.2,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {section.title}
+                </Text>
+
+                <View style={{ gap: 14 }}>
+                  {section.items.map((item) => {
+                    const isExpanded = expandedExerciseId === item.exercise.id;
+                    const hasVariations = item.variations.length > 0;
+                    const primaryBadgeLabel =
+                      searchScope === "equipment"
+                        ? formatMuscleGroupTitle(item.exercise.muscleGroup).toUpperCase()
+                        : getEquipmentBadgeLabel(item.exercise);
+
+                    return (
+                      <View
+                        key={item.exercise.id}
+                        style={{
+                          borderRadius: 18,
+                          backgroundColor: raisedSurface,
+                          borderWidth: 1,
+                          borderColor: subtleBorder,
+                          paddingTop: 8,
+                          paddingBottom: hasVariations && isExpanded ? 8 : 8,
+                          shadowColor: lightShadowColor,
+                          shadowOffset: { width: 0, height: 8 },
+                          shadowOpacity: isDark ? 0.14 : 0.08,
+                          shadowRadius: 18,
+                          elevation: 3,
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                          }}
+                        >
+                          <View
+                            style={{
+                              flex: 1,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 12,
+                              paddingRight: 8,
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 10,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: isDark ? rawColors.primaryLight : "#EFF4FF",
+                              }}
+                            >
+                              <MaterialCommunityIcons
+                                name={item.exercise.isBodyweight ? "human-handsup" : "dumbbell"}
+                                size={18}
+                                color={rawColors.primary}
+                              />
+                            </View>
+
+                            <Pressable
+                              onPress={() => handleNavigateToExercise(item.exercise)}
+                              onLongPress={() => handleOpenActions(item)}
+                              style={({ pressed }) => ({
+                                flex: 1,
+                                opacity: pressed ? 0.8 : 1,
+                              })}
+                            >
+                              <Text
+                                numberOfLines={1}
+                                style={{
+                                  color: rawColors.foreground,
+                                  fontSize: 15,
+                                  lineHeight: 20,
+                                  fontWeight: "600",
+                                }}
+                              >
+                                {item.exercise.name}
+                              </Text>
+
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                  gap: 8,
+                                  marginTop: 6,
+                                }}
+                              >
+                                <View
+                                  style={{
+                                    borderRadius: 8,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 3,
+                                    backgroundColor: isDark ? rawColors.primaryLight : "#EEF4FF",
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: rawColors.primary,
+                                      fontSize: 10,
+                                      fontWeight: "700",
+                                      letterSpacing: 1,
+                                      textTransform: "uppercase",
+                                    }}
+                                  >
+                                    {primaryBadgeLabel}
+                                  </Text>
+                                </View>
+
+                                {hasVariations ? (
+                                  <Text
+                                    style={{
+                                      color: rawColors.foregroundSecondary,
+                                      fontSize: 12,
+                                    }}
+                                  >
+                                    {formatVariationCountLabel(item.variations.length)}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </Pressable>
+                          </View>
+
+                          <View
+                            style={{
+                              width: hasVariations ? 74 : 36,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                              gap: 2,
+                            }}
+                          >
+                            {hasVariations ? (
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                  isExpanded
+                                    ? `Collapse variations for ${item.exercise.name}`
+                                    : `Expand variations for ${item.exercise.name}`
+                                }
+                                onPress={() => handleToggleExpanded(item.exercise.id)}
+                                style={({ pressed }) => ({
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 12,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  backgroundColor: pressed ? recessedSurface : "transparent",
+                                })}
+                              >
+                                <MaterialCommunityIcons
+                                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                                  size={20}
+                                  color={rawColors.foregroundSecondary}
+                                />
+                              </Pressable>
+                            ) : null}
+
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Open actions for ${item.exercise.name}`}
+                              onPress={() => handleOpenActions(item)}
+                              style={({ pressed }) => ({
+                                width: 36,
+                                height: 36,
+                                borderRadius: 12,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: pressed ? recessedSurface : "transparent",
+                              })}
+                            >
+                              <MaterialCommunityIcons
+                                name="dots-vertical"
+                                size={18}
+                                color={rawColors.foregroundSecondary}
+                              />
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        {hasVariations && isExpanded ? (
+                          <View
+                            style={{
+                              paddingTop: 2,
+                              paddingBottom: 6,
+                            }}
+                          >
+                            <View
+                              style={{
+                                height: 1,
+                                marginHorizontal: 14,
+                                marginBottom: 2,
+                                backgroundColor: subtleBorder,
+                              }}
+                            />
+                            {item.variations.map((variation) => (
+                              <View
+                                key={variation.id}
+                                style={{
+                                  paddingHorizontal: 14,
+                                }}
+                              >
+                                <Pressable
+                                  onPress={() => handleNavigateToExercise(variation)}
+                                  style={({ pressed }) => ({
+                                    opacity: pressed ? 0.75 : 1,
+                                  })}
+                                >
+                                  <View
+                                    style={{
+                                      width: "100%",
+                                      minHeight: 56,
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      paddingVertical: 8,
+                                    }}
+                                  >
+                                    <View style={{ width: 42 }} />
+                                    <View
+                                      style={{
+                                        flex: 1,
+                                        justifyContent: "center",
+                                        paddingRight: 12,
+                                      }}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: rawColors.foreground,
+                                          fontSize: 15,
+                                          lineHeight: 20,
+                                          fontWeight: "500",
+                                        }}
+                                      >
+                                        {variation.name}
+                                      </Text>
+                                    </View>
+                                    <View
+                                      style={{
+                                        width: 24,
+                                        alignItems: "flex-end",
+                                        justifyContent: "center",
+                                      }}
+                                    >
+                                      <MaterialCommunityIcons
+                                        name="chevron-right"
+                                        size={20}
+                                        color={rawColors.foregroundMuted}
+                                      />
+                                    </View>
+                                  </View>
+                                </Pressable>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
 
       <AddExerciseModal
         visible={isAddModalVisible}
-        onDismiss={() => setAddModalVisible(false)}
+        onDismiss={closeAddExerciseModal}
         onSaved={reloadExercises}
       />
 
-      {/* Actions Modal */}
-      <BaseModal
-        visible={isActionModalVisible}
-        onClose={closeActionModal}
-        maxWidth={400}
-      >
-        {selectedExercise && (
+      <AppModal visible={showSortModal} onClose={() => setShowSortModal(false)} maxWidth={380}>
+        <Text
+          style={{
+            color: rawColors.foreground,
+            fontSize: 22,
+            fontWeight: "700",
+          }}
+        >
+          Sort Exercises
+        </Text>
+        <Text
+          style={{
+            marginTop: 6,
+            color: rawColors.foregroundSecondary,
+            fontSize: 14,
+            lineHeight: 20,
+          }}
+        >
+          Choose how the library is ordered.
+        </Text>
+
+        <View style={{ marginTop: 18, gap: 10 }}>
+          {[
+            {
+              id: "alphabetical" as const,
+              label: "Alphabetical",
+              icon: "sort-alphabetical-ascending" as const,
+            },
+            {
+              id: "lastCompleted" as const,
+              label: "Last completed",
+              icon: "clock-outline" as const,
+            },
+          ].map((option) => {
+            const isSelected = sortOption === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                onPress={() => setSortOption(option.id)}
+                className={`flex-row items-center gap-3 p-3.5 rounded-lg ${
+                  isSelected ? "bg-primary" : "bg-surface-secondary"
+                }`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.84 : 1 })}
+              >
+                <MaterialCommunityIcons
+                  name={option.icon}
+                  size={20}
+                  color={isSelected ? rawColors.primaryForeground : rawColors.foregroundSecondary}
+                />
+                <Text
+                  className={`flex-1 text-base font-semibold ${
+                    isSelected ? "text-primary-foreground" : "text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </Text>
+                {isSelected ? (
+                  <MaterialCommunityIcons name="check" size={18} color={rawColors.primaryForeground} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          {[
+            { id: "ascending", label: sortOption === "alphabetical" ? "Ascending" : "Oldest" },
+            { id: "descending", label: sortOption === "alphabetical" ? "Descending" : "Newest" },
+          ].map((option) => {
+            const isSelected =
+              (option.id === "ascending" && sortAscending) ||
+              (option.id === "descending" && !sortAscending);
+            return (
+              <Pressable
+                key={option.id}
+                onPress={() => setSortAscending(option.id === "ascending")}
+                className={`flex-1 items-center justify-center p-3.5 rounded-lg ${
+                  isSelected ? "bg-primary" : "bg-surface-secondary"
+                }`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.84 : 1 })}
+              >
+                <Text
+                  className={`text-base font-semibold ${
+                    isSelected ? "text-primary-foreground" : "text-foreground-secondary"
+                  }`}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </AppModal>
+
+      <AppModal visible={isActionModalVisible} onClose={closeActionModal} maxWidth={400}>
+        {selectedExercise ? (
           <>
             <Text className="text-xl font-bold mb-5 text-foreground">
               {selectedExercise.name}
@@ -516,6 +1197,7 @@ export default function ExercisesScreen() {
               <MaterialCommunityIcons name="pencil-outline" size={22} color={rawColors.primary} />
               <Text className="text-[15px] font-medium text-foreground">Edit Details</Text>
             </Pressable>
+
             <Pressable
               onPress={() => {
                 closeActionModal();
@@ -524,13 +1206,10 @@ export default function ExercisesScreen() {
               className="flex-row items-center p-3.5 rounded-xl mb-2 gap-3 bg-surface-secondary"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <MaterialCommunityIcons
-                name="swap-vertical"
-                size={22}
-                color={rawColors.primary}
-              />
+              <MaterialCommunityIcons name="swap-vertical" size={22} color={rawColors.primary} />
               <Text className="text-[15px] font-medium text-foreground">Variations</Text>
             </Pressable>
+
             <Pressable
               onPress={() => {
                 closeActionModal();
@@ -543,10 +1222,9 @@ export default function ExercisesScreen() {
               <Text className="text-[15px] font-medium text-destructive">Delete</Text>
             </Pressable>
           </>
-        )}
-      </BaseModal>
+        ) : null}
+      </AppModal>
 
-      {/* Edit Exercise Modal */}
       <AddExerciseModal
         visible={isEditModalVisible}
         exercise={selectedExercise}
@@ -556,7 +1234,7 @@ export default function ExercisesScreen() {
         onSaved={reloadExercises}
       />
 
-      <BaseModal
+      <AppModal
         visible={isVariationsModalVisible}
         onClose={() => {
           setVariationsModalVisible(false);
@@ -566,62 +1244,90 @@ export default function ExercisesScreen() {
       >
         {selectedGroup ? (
           <>
-            <Text className="text-xl font-bold mb-2 text-foreground">
-              Manage Variations
-            </Text>
-            <Text className="text-sm mb-4 text-foreground-secondary">
-              {selectedGroup.exercise.name}
-            </Text>
-
-            <Pressable
-              onPress={() => handleOpenVariationEditor("create")}
-              className="flex-row items-center justify-center p-3.5 rounded-xl mb-4 gap-2 bg-primary"
-              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+            <View
+              style={{
+                position: "relative",
+                marginBottom: 18,
+                paddingRight: 118,
+              }}
             >
-              <MaterialCommunityIcons name="plus" size={18} color={rawColors.surface} />
-              <Text className="text-[15px] font-semibold text-primary-foreground">
-                Add Variation
+              <Text
+                style={{
+                  color: rawColors.foreground,
+                  fontSize: 22,
+                  fontWeight: "700",
+                }}
+              >
+                Manage Variations
               </Text>
-            </Pressable>
+              <Text
+                style={{
+                  marginTop: 6,
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 14,
+                }}
+              >
+                {selectedGroup.exercise.name}
+              </Text>
+
+              <View
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 0,
+                  width: 104,
+                  height: 48,
+                }}
+              >
+                <Pressable
+                  onPress={() => handleOpenVariationEditor("create")}
+                  className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
+                >
+                  <Text className="text-base font-semibold text-primary-foreground">+ Add</Text>
+                </Pressable>
+              </View>
+            </View>
 
             {selectedGroup.variations.length === 0 ? (
               <View
                 style={{
-                  borderRadius: 14,
+                  marginTop: 16,
+                  borderRadius: 18,
                   padding: 16,
                   backgroundColor: rawColors.surfaceSecondary,
                 }}
               >
-                <Text style={{ color: rawColors.foreground, fontSize: 14, fontWeight: "600" }}>
+                <Text style={{ color: rawColors.foreground, fontSize: 15, fontWeight: "700" }}>
                   No variations yet
                 </Text>
-                <Text style={{ marginTop: 4, color: rawColors.foregroundSecondary, fontSize: 13 }}>
+                <Text
+                  style={{
+                    marginTop: 6,
+                    color: rawColors.foregroundSecondary,
+                    fontSize: 13,
+                    lineHeight: 18,
+                  }}
+                >
                   Create a variation to log and analyze a concrete version of this exercise.
                 </Text>
               </View>
             ) : (
-              <View
-                style={{
-                  borderRadius: 14,
-                  overflow: "hidden",
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: rawColors.border,
-                }}
-              >
-                {selectedGroup.variations.map((variation, index) => (
+              <View style={{ marginTop: 16, gap: 10 }}>
+                {selectedGroup.variations.map((variation) => (
                   <View
                     key={variation.id}
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
+                      gap: 10,
+                      borderRadius: 18,
                       paddingHorizontal: 14,
                       paddingVertical: 14,
-                      borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
-                      borderTopColor: rawColors.border,
                       backgroundColor: rawColors.surfaceSecondary,
                     }}
                   >
-                    <View style={{ flex: 1, paddingRight: 12 }}>
+                    <View style={{ flex: 1 }}>
                       <VariationExerciseLabel
                         exercise={{
                           name: variation.name,
@@ -630,7 +1336,8 @@ export default function ExercisesScreen() {
                           parentName: selectedGroup.exercise.name,
                         }}
                         numberOfLines={1}
-                        style={{ fontSize: 15, fontWeight: "600" }}
+                        style={{ color: rawColors.foreground, fontSize: 15, fontWeight: "600" }}
+                        suffixStyle={{ color: rawColors.foregroundSecondary, fontWeight: "600" }}
                       />
                       <Text
                         style={{
@@ -642,10 +1349,18 @@ export default function ExercisesScreen() {
                         {formatLastCompletedLabel(lastPerformedAtByExerciseId[variation.id])}
                       </Text>
                     </View>
+
                     <Pressable
                       onPress={() => handleOpenVariationEditor("rename", variation)}
                       hitSlop={10}
-                      style={{ padding: 8 }}
+                      style={({ pressed }) => ({
+                        width: 34,
+                        height: 34,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: pressed ? 0.75 : 1,
+                      })}
                     >
                       <MaterialCommunityIcons
                         name="pencil-outline"
@@ -653,13 +1368,21 @@ export default function ExercisesScreen() {
                         color={rawColors.primary}
                       />
                     </Pressable>
+
                     <Pressable
                       onPress={() => {
                         setVariationTarget(variation);
                         setVariationDeleteConfirmVisible(true);
                       }}
                       hitSlop={10}
-                      style={{ padding: 8 }}
+                      style={({ pressed }) => ({
+                        width: 34,
+                        height: 34,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: pressed ? 0.75 : 1,
+                      })}
                     >
                       <MaterialCommunityIcons
                         name="delete-outline"
@@ -673,41 +1396,77 @@ export default function ExercisesScreen() {
             )}
           </>
         ) : null}
-      </BaseModal>
+      </AppModal>
 
-      <BaseModal
-        visible={isVariationEditorVisible}
-        onClose={closeVariationEditor}
-        maxWidth={380}
-      >
-        <Text className="text-xl font-bold mb-2 text-foreground">
+      <AppModal visible={isVariationEditorVisible} onClose={closeVariationEditor} maxWidth={380}>
+        <Text
+          style={{
+            color: rawColors.foreground,
+            fontSize: 22,
+            fontWeight: "700",
+          }}
+        >
           {variationEditorMode === "create" ? "New Variation" : "Rename Variation"}
         </Text>
-        <Text className="text-sm mb-4 text-foreground-secondary">
+        <Text
+          style={{
+            marginTop: 6,
+            marginBottom: 16,
+            color: rawColors.foregroundSecondary,
+            fontSize: 14,
+          }}
+        >
           {selectedGroup?.exercise.name ?? "Exercise"}
         </Text>
+
         {variationError ? (
-          <View className="mb-4 px-3 py-2.5 rounded-lg bg-destructive/10">
-            <Text className="text-sm font-medium text-destructive">{variationError}</Text>
+          <View
+            style={{
+              marginBottom: 14,
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              backgroundColor: isDark ? `${rawColors.destructive}20` : "#FFF1F0",
+            }}
+          >
+            <Text style={{ color: rawColors.destructive, fontSize: 13, fontWeight: "600" }}>
+              {variationError}
+            </Text>
           </View>
         ) : null}
-        <View className="mb-4">
-          <Text className="text-sm font-medium mb-2 text-foreground-secondary">
-            Variation Label
-          </Text>
-          <TextInput
-            className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground"
-            value={variationDraft}
-            onChangeText={(text) => {
-              setVariationDraft(text);
-              setVariationError(null);
-            }}
-            placeholder="e.g. Larson"
-            placeholderTextColor={rawColors.foregroundMuted}
-            autoFocus
-          />
-        </View>
-        <View className="flex-row gap-3">
+
+        <Text
+          style={{
+            color: rawColors.foregroundSecondary,
+            fontSize: 13,
+            fontWeight: "600",
+            marginBottom: 8,
+          }}
+        >
+          Variation Label
+        </Text>
+        <TextInput
+          value={variationDraft}
+          onChangeText={(text) => {
+            setVariationDraft(text);
+            setVariationError(null);
+          }}
+          placeholder="e.g. Larson"
+          placeholderTextColor={rawColors.foregroundMuted}
+          autoFocus
+          style={{
+            borderRadius: 16,
+            paddingHorizontal: 14,
+            paddingVertical: 14,
+            backgroundColor: rawColors.surfaceSecondary,
+            color: rawColors.foreground,
+            fontSize: 15,
+            borderWidth: 1,
+            borderColor: subtleBorder,
+          }}
+        />
+
+        <View className="flex-row gap-3 mt-2">
           <Pressable
             className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
             onPress={closeVariationEditor}
@@ -719,348 +1478,206 @@ export default function ExercisesScreen() {
             onPress={handleSaveVariation}
           >
             <Text className="text-base font-semibold text-primary-foreground">
-              {variationEditorMode === "create" ? "Create" : "Save"}
+              {variationEditorMode === "create" ? "Add" : "Save"}
             </Text>
           </Pressable>
         </View>
-      </BaseModal>
+      </AppModal>
 
-      {/* Delete Confirm Modal */}
-      <BaseModal
+      <AppModal
         visible={isDeleteConfirmVisible}
         onClose={() => {
           setDeleteConfirmVisible(false);
         }}
         maxWidth={380}
       >
-        <Text className="text-xl font-bold mb-2 text-foreground">Delete Exercise?</Text>
-        <Text className="text-base mb-4 text-foreground-secondary">
-          This will permanently delete{" "}
-          <Text className="font-semibold text-foreground">{selectedExercise?.name}</Text>.
-          {" "}This action cannot be undone.
+        <Text
+          style={{
+            color: rawColors.foreground,
+            fontSize: 22,
+            fontWeight: "700",
+          }}
+        >
+          Delete Exercise?
         </Text>
-        <View className="flex-row gap-3">
+        <Text
+          style={{
+            marginTop: 8,
+            color: rawColors.foregroundSecondary,
+            fontSize: 14,
+            lineHeight: 20,
+          }}
+        >
+          This will permanently delete{" "}
+          <Text style={{ color: rawColors.foreground, fontWeight: "700" }}>
+            {selectedExercise?.name}
+          </Text>
+          . This action cannot be undone.
+        </Text>
+
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
           <Pressable
-            className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
             onPress={() => {
               setDeleteConfirmVisible(false);
             }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 16,
+              paddingVertical: 14,
+              backgroundColor: rawColors.surfaceSecondary,
+              opacity: pressed ? 0.82 : 1,
+            })}
           >
-            <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+            <Text style={{ color: rawColors.foregroundSecondary, fontSize: 15, fontWeight: "700" }}>
+              Cancel
+            </Text>
           </Pressable>
+
           <Pressable
-            className="flex-1 flex-row items-center justify-center p-3.5 rounded-lg gap-1.5 bg-destructive"
             onPress={handleDelete}
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              borderRadius: 16,
+              paddingVertical: 14,
+              backgroundColor: rawColors.destructive,
+              opacity: pressed ? 0.88 : 1,
+            })}
           >
-            <MaterialCommunityIcons name="delete" size={20} color={rawColors.surface} />
-            <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
+            <MaterialCommunityIcons name="delete" size={18} color={rawColors.primaryForeground} />
+            <Text style={{ color: rawColors.primaryForeground, fontSize: 15, fontWeight: "700" }}>
+              Delete
+            </Text>
           </Pressable>
         </View>
-      </BaseModal>
+      </AppModal>
 
-      <BaseModal
+      <AppModal
         visible={isVariationDeleteConfirmVisible}
         onClose={closeVariationDeleteConfirm}
         maxWidth={420}
       >
-        <Text className="text-xl font-bold mb-2 text-foreground">Delete Variation?</Text>
+        <Text
+          style={{
+            color: rawColors.foreground,
+            fontSize: 22,
+            fontWeight: "700",
+          }}
+        >
+          Delete Variation?
+        </Text>
         {variationTarget ? (
           <>
-            <VariationExerciseLabel
-              exercise={{
-                name: variationTarget.name,
-                parentExerciseId: variationTarget.parentExerciseId,
-                variationLabel: variationTarget.variationLabel,
-                parentName: selectedGroup?.exercise.name ?? null,
+            <View style={{ marginTop: 12 }}>
+              <VariationExerciseLabel
+                exercise={{
+                  name: variationTarget.name,
+                  parentExerciseId: variationTarget.parentExerciseId,
+                  variationLabel: variationTarget.variationLabel,
+                  parentName: selectedGroup?.exercise.name ?? null,
+                }}
+                style={{ color: rawColors.foreground, fontSize: 16, fontWeight: "700" }}
+                suffixStyle={{ color: rawColors.foregroundSecondary, fontWeight: "700" }}
+              />
+            </View>
+
+            <Text
+              style={{
+                marginTop: 10,
+                marginBottom: 14,
+                color: rawColors.foregroundSecondary,
+                fontSize: 14,
+                lineHeight: 20,
               }}
-              style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}
-            />
-            <Text className="text-sm mb-4 text-foreground-secondary">
+            >
               Choose what should happen to the variation data that has already been logged.
             </Text>
+
             <Pressable
               onPress={() => handleDeleteVariation("keep_data")}
-              className="p-3.5 rounded-xl mb-2 bg-surface-secondary"
-              style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
+              style={({ pressed }) => ({
+                borderRadius: 18,
+                paddingHorizontal: 14,
+                paddingVertical: 14,
+                backgroundColor: rawColors.surfaceSecondary,
+                opacity: pressed ? 0.82 : 1,
+              })}
             >
-              <Text className="text-[15px] font-semibold text-foreground">
+              <Text style={{ color: rawColors.foreground, fontSize: 15, fontWeight: "700" }}>
                 Keep data under parent
               </Text>
-              <Text className="mt-1 text-xs text-foreground-secondary">
+              <Text
+                style={{
+                  marginTop: 6,
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 12,
+                  lineHeight: 18,
+                }}
+              >
                 Logged sessions stay in history and move back under the parent exercise.
               </Text>
             </Pressable>
+
             <Pressable
               onPress={() => handleDeleteVariation("delete_data")}
-              className="p-3.5 rounded-xl mb-3 bg-surface-secondary"
-              style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
+              style={({ pressed }) => ({
+                borderRadius: 18,
+                paddingHorizontal: 14,
+                paddingVertical: 14,
+                backgroundColor: isDark ? `${rawColors.destructive}22` : "#FFF1F0",
+                marginTop: 10,
+                opacity: pressed ? 0.82 : 1,
+              })}
             >
-              <Text className="text-[15px] font-semibold text-destructive">
+              <Text
+                style={{
+                  color: rawColors.destructive,
+                  fontSize: 15,
+                  fontWeight: "700",
+                }}
+              >
                 Delete data entirely
               </Text>
-              <Text className="mt-1 text-xs text-foreground-secondary">
+              <Text
+                style={{
+                  marginTop: 6,
+                  color: rawColors.foregroundSecondary,
+                  fontSize: 12,
+                  lineHeight: 18,
+                }}
+              >
                 Logged sessions for this variation are removed along with the variation row.
               </Text>
             </Pressable>
+
             <Pressable
-              className="items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
               onPress={closeVariationDeleteConfirm}
+              style={({ pressed }) => ({
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 16,
+                paddingVertical: 14,
+                backgroundColor: rawColors.surfaceSecondary,
+                marginTop: 14,
+                opacity: pressed ? 0.82 : 1,
+              })}
             >
-              <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+              <Text style={{ color: rawColors.foregroundSecondary, fontSize: 15, fontWeight: "700" }}>
+                Cancel
+              </Text>
             </Pressable>
           </>
         ) : null}
-      </BaseModal>
-
-      {/* Filter popup */}
-      <Modal
-        visible={showFilterPopup}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowFilterPopup(false)}
-      >
-        <Pressable
-          style={styles.popupOverlay}
-          onPress={() => setShowFilterPopup(false)}
-        >
-          <View style={[styles.popupContainerLeft, { top: insets.top + 125 }]}>
-            <View style={[styles.popupArrowLeft, { borderBottomColor: rawColors.surface }]} />
-            <Pressable style={[styles.popup, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]} onPress={() => {}}>
-              <Text style={[styles.popupTitle, { color: rawColors.foregroundMuted }]}>Sort by</Text>
-              <Pressable
-                style={styles.popupOption}
-                onPress={() => setSortOption("alphabetical")}
-              >
-                <MaterialCommunityIcons 
-                  name="sort-alphabetical-ascending" 
-                  size={20} 
-                  color={sortOption === "alphabetical" ? rawColors.primary : rawColors.foregroundSecondary} 
-                />
-                <Text style={[
-                  styles.popupOptionText,
-                  { color: rawColors.foreground },
-                  sortOption === "alphabetical" && { color: rawColors.primary, fontWeight: "600" }
-                ]}>
-                  Alphabetically
-                </Text>
-                {sortOption === "alphabetical" && (
-                  <MaterialCommunityIcons name="check" size={18} color={rawColors.primary} />
-                )}
-              </Pressable>
-              <Pressable
-                style={styles.popupOption}
-                onPress={() => setSortOption("lastCompleted")}
-              >
-                <MaterialCommunityIcons 
-                  name="clock-outline" 
-                  size={20} 
-                  color={sortOption === "lastCompleted" ? rawColors.primary : rawColors.foregroundSecondary} 
-                />
-                <Text style={[
-                  styles.popupOptionText,
-                  { color: rawColors.foreground },
-                  sortOption === "lastCompleted" && { color: rawColors.primary, fontWeight: "600" }
-                ]}>
-                  Last completed
-                </Text>
-                {sortOption === "lastCompleted" && (
-                  <MaterialCommunityIcons name="check" size={18} color={rawColors.primary} />
-                )}
-              </Pressable>
-              
-              <View style={[styles.popupDivider, { backgroundColor: rawColors.borderLight }]} />
-              
-              <Text style={[styles.popupTitle, { color: rawColors.foregroundMuted }]}>Order</Text>
-              <Pressable
-                style={styles.popupOption}
-                onPress={() => setSortAscending(true)}
-              >
-                <MaterialCommunityIcons 
-                  name="arrow-up" 
-                  size={20} 
-                  color={sortAscending ? rawColors.primary : rawColors.foregroundSecondary} 
-                />
-                <Text style={[
-                  styles.popupOptionText,
-                  { color: rawColors.foreground },
-                  sortAscending && { color: rawColors.primary, fontWeight: "600" }
-                ]}>
-                  Ascending
-                </Text>
-                {sortAscending && (
-                  <MaterialCommunityIcons name="check" size={18} color={rawColors.primary} />
-                )}
-              </Pressable>
-              <Pressable
-                style={styles.popupOption}
-                onPress={() => setSortAscending(false)}
-              >
-                <MaterialCommunityIcons 
-                  name="arrow-down" 
-                  size={20} 
-                  color={!sortAscending ? rawColors.primary : rawColors.foregroundSecondary} 
-                />
-                <Text style={[
-                  styles.popupOptionText,
-                  { color: rawColors.foreground },
-                  !sortAscending && { color: rawColors.primary, fontWeight: "600" }
-                ]}>
-                  Descending
-                </Text>
-                {!sortAscending && (
-                  <MaterialCommunityIcons name="check" size={18} color={rawColors.primary} />
-                )}
-              </Pressable>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Search popup */}
-      <Modal
-        visible={showSearchPopup}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSearchPopup(false)}
-      >
-        <Pressable
-          style={styles.popupOverlay}
-          onPress={() => setShowSearchPopup(false)}
-        >
-          <View style={[styles.popupContainerLeft, { top: insets.top + 125, left: 64 }]}>
-            <View style={[styles.popupArrowLeft, { borderBottomColor: rawColors.surface }]} />
-            <Pressable style={[styles.popup, { backgroundColor: rawColors.surface, shadowColor: rawColors.shadow }]} onPress={() => {}}>
-              <View style={styles.searchInputContainer}>
-                <MaterialCommunityIcons name="magnify" size={20} color={rawColors.foregroundMuted} />
-                <TextInput
-                  style={[styles.searchInput, { color: rawColors.foreground }]}
-                  placeholder="Search exercises..."
-                  placeholderTextColor={rawColors.foregroundMuted}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoFocus
-                />
-                {searchQuery.length > 0 && (
-                  <Pressable onPress={() => setSearchQuery("")}>
-                    <MaterialCommunityIcons name="close-circle" size={18} color={rawColors.foregroundMuted} />
-                  </Pressable>
-                )}
-              </View>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      </AppModal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  headerContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  headerIcons: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
-  },
-  headerIconButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  headerTitle: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: "700",
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    marginTop: 4,
-  },
-  headerFade: {
-    height: 8,
-  },
-  // Popup styles (kept as-is for custom positioning)
-  popupOverlay: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  popupContainerLeft: {
-    position: "absolute",
-    left: 16,
-    alignItems: "flex-start",
-  },
-  popupArrowLeft: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderBottomWidth: 8,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    marginLeft: 12,
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  popup: {
-    borderRadius: 12,
-    paddingVertical: 8,
-    minWidth: 200,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  popupTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  popupDivider: {
-    height: 1,
-    marginVertical: 8,
-  },
-  popupOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  popupOptionText: {
-    flex: 1,
-    fontSize: 16,
-  },
-  popupOptionTextActive: {
-    fontWeight: "600",
-  },
-  searchInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 4,
-  },
-});
+function filteredLabel(count: number): string {
+  return `${count} exercise${count === 1 ? "" : "s"}`;
+}
