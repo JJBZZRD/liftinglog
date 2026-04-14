@@ -581,15 +581,15 @@ export default function ProgramPslEditorScreen() {
           style={[
             styles.editor,
             {
-              backgroundColor: rawColors.surfaceSecondary,
-              borderColor: rawColors.borderLight,
+              backgroundColor: rawColors.surface,
+              borderColor: rawColors.border,
               color: rawColors.foreground,
             },
           ]}
         />
 
         {showPreviewDatesPanel && (
-          <View style={[styles.panel, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}>
+          <View style={[styles.panel, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
             <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
               Preview / Activation Dates
             </Text>
@@ -671,7 +671,7 @@ export default function ProgramPslEditorScreen() {
           </View>
         )}
 
-        <View style={[styles.panel, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}>
+        <View style={[styles.panel, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
           <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
             Diagnostics
           </Text>
@@ -704,7 +704,7 @@ export default function ProgramPslEditorScreen() {
           )}
         </View>
 
-        <View style={[styles.panel, { backgroundColor: rawColors.surfaceSecondary, borderColor: rawColors.borderLight }]}>
+        <View style={[styles.panel, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
           <Text style={[styles.panelTitle, { color: rawColors.foreground }]}>
             Preview
           </Text>
@@ -818,7 +818,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SKELETON_SESSIONS, { replace: true })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="file-document-edit-outline" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -828,7 +828,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SKELETON_SEQUENCE, { replace: true })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="playlist-play" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -838,7 +838,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SKELETON_BLOCKS, { replace: true })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="view-week-outline" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -848,7 +848,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SNIPPET_SCHEDULE_WEEKDAYS, { replace: false })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="calendar-week" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -858,7 +858,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SNIPPET_SCHEDULE_INTERVAL, { replace: false })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="calendar-refresh" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -868,7 +868,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SNIPPET_SEQUENCE, { replace: false })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="playlist-plus" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -878,7 +878,7 @@ export default function ProgramPslEditorScreen() {
 
         <Pressable
           onPress={() => handleInsert(SNIPPET_EXERCISE_SHORTHAND, { replace: false })}
-          style={[styles.helperOption, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.helperOption, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}
         >
           <MaterialCommunityIcons name="dumbbell" size={22} color={rawColors.primary} />
           <Text style={[styles.helperOptionText, { color: rawColors.foreground }]}>
@@ -924,7 +924,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: 14,
     marginBottom: 12,
   },
@@ -1008,6 +1008,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
+    borderWidth: 1,
     gap: 10,
     marginBottom: 10,
   },
