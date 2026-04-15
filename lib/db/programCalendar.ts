@@ -13,7 +13,6 @@ import type {
   ProgramCalendarSetRow,
 } from "./schema";
 import type { CalendarEntry } from "../programs/psl/pslService";
-import { listExercisesByNames } from "./exercises";
 
 export type { ProgramCalendarRow, ProgramCalendarExerciseRow, ProgramCalendarSetRow };
 
@@ -40,6 +39,11 @@ export type ProgramCalendarEntrySnapshot = {
   calendar: ProgramCalendarRow;
   exercises: ProgramCalendarExerciseSnapshot[];
 };
+
+async function listExerciseRowsByNames(names: string[]) {
+  const { listExercisesByNames } = await import("./exercises");
+  return listExercisesByNames(names);
+}
 
 export function parseSessionCompletionOverrideExerciseIds(
   value: string | null | undefined
@@ -111,7 +115,7 @@ export async function insertCalendarEntries(
   programId: number,
   entries: CalendarEntry[]
 ): Promise<void> {
-  const exerciseRows = await listExercisesByNames(
+  const exerciseRows = await listExerciseRowsByNames(
     entries.flatMap((entry) => entry.exercises.map((exercise) => exercise.exerciseName))
   );
   const exerciseIdByName = new Map(

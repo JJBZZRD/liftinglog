@@ -11,7 +11,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from "react-native";
 import VariationExerciseLabel from "../components/exercise/VariationExerciseLabel";
@@ -25,12 +24,10 @@ import {
   type WorkoutDaySummary,
 } from "../lib/db/workouts";
 import { useTheme, type RawThemeColors } from "../lib/theme/ThemeContext";
+import { enableLegacyAndroidLayoutAnimationsIfNeeded } from "../lib/utils/layoutAnimation";
 import { formatVolumeFromKg, formatWeightFromKg, getWeightUnitLabel } from "../lib/utils/units";
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+enableLegacyAndroidLayoutAnimationsIfNeeded();
 
 const PAGE_SIZE = 20;
 const COLLAPSED_ITEM_HEIGHT = 88; // Approximate height of collapsed card + margin

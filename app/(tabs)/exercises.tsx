@@ -7,13 +7,11 @@ import {
   Alert,
   type ColorValue,
   LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   Switch,
   Text,
   TextInput,
-  UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -36,11 +34,10 @@ import {
   setShowAllTabBodyPartGrouping as setShowAllTabBodyPartGroupingPreference,
 } from "../../lib/db/settings";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { enableLegacyAndroidLayoutAnimationsIfNeeded } from "../../lib/utils/layoutAnimation";
 import { formatVariationCountLabel } from "../../lib/utils/exerciseVariations";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+enableLegacyAndroidLayoutAnimationsIfNeeded();
 
 type SortOption = "alphabetical" | "lastCompleted";
 type SearchScope = "all" | "muscle" | "equipment";

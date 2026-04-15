@@ -5,7 +5,6 @@ import {
   getDefaultActivationStartDateIso,
 } from "../programs/psl/activationDates";
 import { introspectPslSource } from "../programs/psl/pslIntrospection";
-import { refreshUpcomingCalendarForPrograms } from "../programs/psl/programRuntime";
 import { compilePslSource } from "../programs/psl/pslService";
 import {
   buildVariationExerciseName,
@@ -235,6 +234,11 @@ function buildProgramValidationOverride(program: Pick<PslProgramRow, "startDate"
   };
 }
 
+async function refreshUpcomingCalendar(programIds: number[]): Promise<void> {
+  const { refreshUpcomingCalendarForPrograms } = await import("../programs/psl/programRuntime");
+  await refreshUpcomingCalendarForPrograms(programIds);
+}
+
 async function rewriteStoredProgramReferences(
   params: RewriteProgramReferencesParams
 ): Promise<number[]> {
@@ -322,7 +326,7 @@ async function deleteExerciseHistoryAndRow(exerciseId: number): Promise<void> {
   await db.delete(pbEvents).where(eq(pbEvents.exerciseId, exerciseId)).run();
   await db.delete(exerciseFormulaOverrides).where(eq(exerciseFormulaOverrides.exerciseId, exerciseId)).run();
   await db.delete(exercises).where(eq(exercises.id, exerciseId)).run();
-  await refreshUpcomingCalendarForPrograms(affectedProgramIds);
+  await refreshUpcomingCalendar(affectedProgramIds);
 }
 
 async function getSiblingVariations(parentExerciseId: number): Promise<Exercise[]> {
@@ -683,7 +687,7 @@ export async function renameExerciseVariation(
     toExerciseName: nextName,
   });
 
-  await refreshUpcomingCalendarForPrograms([
+  await refreshUpcomingCalendar([
     ...affectedActiveProgramIds,
     ...affectedCalendarProgramIds,
   ]);
@@ -730,7 +734,7 @@ export async function deleteExerciseVariation(
     await deleteExerciseHistoryAndRow(variation.id);
   }
 
-  return refreshUpcomingCalendarForPrograms([
+  return refreshUpcomingCalendar([
     ...affectedActiveProgramIds,
     ...affectedCalendarProgramIds,
   ]);

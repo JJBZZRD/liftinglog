@@ -6,13 +6,11 @@ import { useCallback, useMemo, useState } from "react";
 import {
   type ColorValue,
   LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   Switch,
   Text,
   TextInput,
-  UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -27,11 +25,10 @@ import {
   type ExerciseLibraryGroup,
 } from "../../../lib/db/exercises";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import { enableLegacyAndroidLayoutAnimationsIfNeeded } from "../../../lib/utils/layoutAnimation";
 import { formatVariationCountLabel } from "../../../lib/utils/exerciseVariations";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+enableLegacyAndroidLayoutAnimationsIfNeeded();
 
 type SortOption = "alphabetical" | "lastCompleted";
 type SearchScope = "all" | "muscle" | "equipment";

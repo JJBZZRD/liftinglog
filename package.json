@@ -7,7 +7,7 @@
     "start:tunnel": "expo start --tunnel",
     "start:lan": "expo start --lan",
     "start:localhost": "expo start --localhost",
-    "postinstall": "node ./scripts/patch-expo-camera-orientation.js",
+    "postinstall": "node ./scripts/patch-expo-camera-orientation.js && node ./scripts/patch-react-native-css-interop-safe-area.js",
     "sync:android-rest-timer-native": "node ./scripts/sync-android-rest-timer-native.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
