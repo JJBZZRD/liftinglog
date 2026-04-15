@@ -444,10 +444,14 @@ export default function ProgramsScreen() {
         </Text>
         <Pressable
           onPress={() => router.push("/programs/manage")}
-          style={[styles.manageButton, { backgroundColor: rawColors.surfaceSecondary }]}
+          style={[styles.manageButton, { backgroundColor: rawColors.primary }]}
         >
-          <MaterialCommunityIcons name="cog-outline" size={18} color={rawColors.primary} />
-          <Text style={[styles.manageButtonText, { color: rawColors.primary }]}>
+          <MaterialCommunityIcons
+            name="cog-outline"
+            size={18}
+            color={rawColors.primaryForeground}
+          />
+          <Text style={[styles.manageButtonText, { color: rawColors.primaryForeground }]}>
             Manage
           </Text>
         </Pressable>
