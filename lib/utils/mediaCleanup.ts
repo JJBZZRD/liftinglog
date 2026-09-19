@@ -1,4 +1,4 @@
-import * as MediaLibrary from "expo-media-library";
+import * as MediaLibrary from "expo-media-library/legacy";
 import { listMediaForAssetIds, listMediaForLocalUris, listMediaForSetIds } from "../db/media";
 import { deleteManagedVideoUri, isManagedVideoUri } from "./videoStorage";
 

@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useNavigation } from "@react-navigation/native";
+import { Stack, router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { TabBar, TabView } from "react-native-tab-view";

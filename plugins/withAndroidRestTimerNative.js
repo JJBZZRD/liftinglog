@@ -1,4 +1,4 @@
-const { withDangerousMod } = require("@expo/config-plugins");
+const { withDangerousMod } = require("expo/config-plugins");
 const { syncAndroidRestTimerNative } = require("../scripts/sync-android-rest-timer-native");
 
 function withAndroidRestTimerNative(config) {

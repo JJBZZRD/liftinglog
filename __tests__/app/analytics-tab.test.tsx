@@ -54,9 +54,6 @@ jest.mock("expo-router", () => ({
     id: "1",
     name: "Bench Press",
   })),
-}));
-
-jest.mock("@react-navigation/native", () => ({
   useFocusEffect: jest.fn(),
 }));
 

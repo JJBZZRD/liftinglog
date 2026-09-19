@@ -36,9 +36,6 @@ jest.mock("expo-router", () => ({
     push: (...args: unknown[]) => mockPush(...args),
     back: (...args: unknown[]) => mockBack(...args),
   },
-}));
-
-jest.mock("@react-navigation/native", () => ({
   useFocusEffect: jest.fn((callback: () => void | (() => void)) => {
     const React = require("react");
     React.useEffect(() => callback(), [callback]);

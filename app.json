@@ -42,7 +42,9 @@
         {
           "photosPermission": "Allow LiftingLog to access your media library.",
           "savePhotosPermission": "Allow LiftingLog to save lift videos to your media library.",
-          "granularPermissions": ["video"]
+          "granularPermissions": [
+            "video"
+          ]
         }
       ],
       [
@@ -63,7 +65,12 @@
       ],
       "./plugins/withAndroidRestTimerNative",
       "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-image",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

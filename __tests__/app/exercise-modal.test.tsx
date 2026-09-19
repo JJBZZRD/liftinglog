@@ -48,9 +48,6 @@ jest.mock("expo-router", () => ({
     id: "1",
     name: "Bench Press",
   })),
-}));
-
-jest.mock("@react-navigation/native", () => ({
   useNavigation: jest.fn(() => ({
     addListener: jest.fn(() => jest.fn()),
   })),

@@ -7,18 +7,10 @@ module.exports = {
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: {
-        jsx: 'react-jsx',
-        esModuleInterop: true,
-        allowSyntheticDefaultImports: true,
-        moduleResolution: 'node',
-        target: 'ES2020',
-        module: 'commonjs',
-        strict: false,
-      },
-    }],
-    '^.+\\.jsx?$': 'babel-jest',
+    '^.+\\.[jt]sx?$': [
+      'babel-jest',
+      { configFile: './babel.test.config.js' },
+    ],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(drizzle-orm|program-specification-language)/)',

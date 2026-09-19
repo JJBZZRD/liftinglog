@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View, type ViewStyle } from "react-native";
 import Animated, {

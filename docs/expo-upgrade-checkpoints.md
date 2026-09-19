@@ -61,12 +61,85 @@ suppressed.
   View, WebView, Screens, and the custom rest-timer package. They do not fail the SDK
   55 build and must be reassessed at SDK 57.
 
+## SDK 56
+
+Status: automated gate passed on branch `upgrade-expo-56` on 2026-09-20.
+
+### Installed baseline
+
+- Expo `56.0.22`
+- React Native `0.85.3`
+- React, React DOM, and React Test Renderer `19.2.3`
+- TypeScript `6.0.3`
+- Reanimated `4.3.1`, Worklets `0.8.3`, Gesture Handler `2.31.2`
+- Gradle `9.3.1`
+
+### Compatibility changes
+
+- Regenerated the checked-in Android project with a clean SDK 56 prebuild and
+  preserved the custom rest-timer package, receivers, Kotlin sources, layouts,
+  notification icon, and exact-alarm permission.
+- Updated the custom config plugin to use the supported `expo/config-plugins`
+  sub-export and made its direct `jimp-compact` script dependency explicit.
+- Migrated application navigation hooks and test mocks from direct
+  `@react-navigation/*` imports to Expo Router SDK 56 exports, then removed the four
+  forbidden direct React Navigation dependencies.
+- Kept the procedural media APIs on the SDK 56 `expo-media-library/legacy` entry point.
+- Replaced the removed `StyleSheet.absoluteFillObject` type usage with explicit
+  absolute positioning.
+- Replaced `ts-jest`, which does not support TypeScript 6, with a dedicated
+  `babel-jest` test transform and the Node dynamic-import transform. Test mocks were
+  updated to remain deterministic under Babel's hoisting behavior.
+- Preserved the SDK 55 lint gate by disabling only the React Compiler diagnostic
+  rules newly enabled through React Hooks ESLint 7. `rules-of-hooks` and
+  `exhaustive-deps` remain enabled.
+- Accepted Expo's explicit app-plugin entries for installed modules during prebuild.
+
+### Gate results
+
+| Gate | Result |
+| --- | --- |
+| `npm ls --depth=0` | Pass |
+| `npm run postinstall` | Pass; camera patch applied and CSS interop verified upstream-safe |
+| `npm run lint -- --no-cache` | Pass; 20 baseline warnings, 0 errors |
+| `npm run typecheck` | Pass |
+| `npm test -- --runInBand` | Pass; 26 suites, 337 tests |
+| `npx expo config --type public` | Pass; SDK 56 and native plugin configuration confirmed |
+| `npx expo export --platform android` | Pass; production Hermes bundle generated |
+| `npx expo-doctor@latest` | 20/22 checks pass |
+| `android\\gradlew.bat :app:compileDebugKotlin` | Pass after final clean prebuild |
+| `git diff --check` | Pass |
+
+The remaining Expo Doctor findings are understood and intentionally unsuppressed:
+
+1. SDK 56's Hermes V1 build has a known memory regression. SDK 56 is therefore an
+   intermediate checkpoint and must not become the release baseline; SDK 57 is the
+   required next platform step.
+2. App configuration is not automatically synchronized when a native directory is
+   checked in. This checkpoint ran and reviewed a final clean Android prebuild.
+
+### Deferred checks and risks
+
+- Android/iOS development-build and real-device scenarios remain part of the final
+  SDK 57 gate; this checkpoint proves regeneration, compilation, and JS behavior.
+- `npm audit --omit=dev` reports 28 production-tree advisories (1 critical, 8 high,
+  17 moderate, 2 low). Do not run `npm audit fix --force`: suggested changes include
+  incompatible Expo package downgrades. Address compatible transitive updates and the
+  direct `drizzle-orm` advisory in `MVP-PRE-001E` with database regression coverage.
+- React Compiler diagnostics are deferred as an explicit post-platform task rather
+  than being mixed into the SDK upgrade. Their SDK 56 lint rules are listed in
+  `eslint.config.js` so that adoption can be reviewed deliberately.
+- Native dependency and Gradle deprecation warnings remain non-fatal and must be
+  reassessed after SDK 57 regeneration.
+
 ## Resume Point
 
-1. Confirm `upgrade-expo-55` is committed and integrated into `main` after review.
-2. Branch `upgrade-expo-56` from that exact integrated commit.
-3. Upgrade only to the latest stable SDK 56 patch and run the same automated gate.
-4. Do not start MVP feature branches until SDK 57, dependency review, native patch
+1. Confirm `upgrade-expo-56` is committed and integrated into `main` after review.
+2. Branch `upgrade-expo-57` from that exact integrated commit.
+3. Upgrade only to the latest stable SDK 57 patch and run the same automated gate.
+4. Resolve the Hermes regression by confirming SDK 57 uses React Native `0.86.2` or
+   later and Expo `57.0.9` or later.
+5. Do not start MVP feature branches until SDK 57, dependency review, native patch
    review, and final development-build checks are complete.
 
 The pre-existing `.gitignore` modification and
