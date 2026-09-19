@@ -1195,7 +1195,7 @@ export default function AnalyticsInsightsDeck({
           ]}
           scrollableDotsConfig={{
             setIndex: setActiveIndex,
-            onNewIndex: (newIndex) => {
+            onNewIndex: (newIndex: number) => {
               onGestureStart?.();
               scrollToCard(newIndex, false);
               onGestureEnd?.();

@@ -6,7 +6,7 @@ import type { TimerNotificationData } from "./restTimerNotificationTypes";
 
 // Hook to set up notification response handling
 export function useNotificationHandler() {
-  const responseListener = useRef<Notifications.Subscription>();
+  const responseListener = useRef<Notifications.Subscription | null>(null);
   const lastNotificationResponse = useRef<{ key: string; handledAt: number } | null>(null);
   const pathname = usePathname();
 

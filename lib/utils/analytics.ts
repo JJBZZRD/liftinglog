@@ -2227,7 +2227,10 @@ export async function getExerciseAnalyticsDataset(
     ? await listExerciseDisplayMeta(scopedExerciseIds)
     : new Map<number, ExerciseDisplayMeta>();
   const sessions = buildSessionsFromRows(rows).map((session) => {
-    const meta = exerciseMetaById.get(session.loggedExerciseId);
+    const meta =
+      typeof session.loggedExerciseId === "number"
+        ? exerciseMetaById.get(session.loggedExerciseId)
+        : undefined;
     return {
       ...session,
       loggedExerciseName: meta?.exerciseName ?? session.loggedExerciseName,

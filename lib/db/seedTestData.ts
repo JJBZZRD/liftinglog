@@ -482,7 +482,9 @@ async function seedUserMetrics(): Promise<void> {
 // SMOLOV JR PROGRAM (3-week intensive cycle, repeated)
 // ============================================================================
 
-const SMOLOV_WEEKS = [
+const SMOLOV_WEEKS: Array<
+  Array<{ day: number; sets: number; reps: number; percent: number; addKg?: number }>
+> = [
   // Week 1
   [
     { day: 1, sets: 6, reps: 6, percent: 0.70 },

@@ -319,7 +319,9 @@ export default function TemplateExercisePickerScreen() {
   );
 
   const handleCreateAndSelect = useCallback(
-    (createdExerciseId: number) => {
+    (createdExerciseId: number | undefined) => {
+      if (createdExerciseId === undefined) return;
+
       const findExercise = (id: number): Exercise | null => {
         for (const item of items) {
           if (item.exercise.id === id) return item.exercise;
@@ -997,7 +999,6 @@ export default function TemplateExercisePickerScreen() {
           setAddModalVisible(false);
         }}
         onSaved={handleCreateAndSelect}
-        initialName={searchQuery.trim() || canonicalName || undefined}
       />
 
       <AppModal visible={showSortModal} onClose={() => setShowSortModal(false)} maxWidth={380}>

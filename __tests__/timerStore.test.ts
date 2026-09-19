@@ -145,7 +145,9 @@ describe("TimerStore", () => {
 
     expect(nativeModule.showCountdownNotification).not.toHaveBeenCalled();
 
-    resolvePermissions?.({ status: "granted" });
+    (resolvePermissions as ((value: { status: string }) => void) | null)?.({
+      status: "granted",
+    });
     await startPromise;
 
     expect(nativeModule.showCountdownNotification).toHaveBeenCalledWith(

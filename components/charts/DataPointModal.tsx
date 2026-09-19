@@ -160,7 +160,7 @@ export default function DataPointModal({
   const bestSetDisplay = sessionDetails?.bestSet
     ? `${formatWeightFromKg(sessionDetails.bestSet.weight, unitPreference)} x ${sessionDetails.bestSet.reps} reps`
     : null;
-  const sessionExercise = sessionDetails
+  const sessionExercise = sessionDetails?.loggedExerciseName
     ? {
         name: sessionDetails.loggedExerciseName,
         parentExerciseId: sessionDetails.loggedExerciseParentExerciseId,
