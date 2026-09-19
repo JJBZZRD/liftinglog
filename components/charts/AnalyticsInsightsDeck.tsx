@@ -5,9 +5,8 @@ import {
   useRef,
   useState,
   type ComponentProps,
-  type ComponentRef,
 } from "react";
-import { Text, View, useWindowDimensions } from "react-native";
+import { Text, View, useWindowDimensions, type ScrollView } from "react-native";
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -389,7 +388,7 @@ export default function AnalyticsInsightsDeck({
   const { rawColors } = useTheme();
   const { unitPreference } = useUnitPreference();
   const { width: windowWidth } = useWindowDimensions();
-  const scrollViewRef = useRef<ComponentRef<typeof Animated.ScrollView> | null>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
   const scrollX = useSharedValue(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const containerWidth = Math.max(280, windowWidth - 32);

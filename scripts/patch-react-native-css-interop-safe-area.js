@@ -56,7 +56,25 @@ function patchReactNativeCssInteropSafeArea() {
     return;
   }
 
-  console.log("[patch-react-native-css-interop-safe-area] Already patched.");
+  const distSource = fs.existsSync(distTargetPath)
+    ? fs.readFileSync(distTargetPath, "utf8")
+    : "";
+  const srcSource = fs.existsSync(srcTargetPath)
+    ? fs.readFileSync(srcTargetPath, "utf8")
+    : "";
+  const usesSafeAreaContext =
+    distSource.includes('require("react-native-safe-area-context").SafeAreaView') &&
+    srcSource.includes('require("react-native-safe-area-context").SafeAreaView');
+
+  if (!usesSafeAreaContext) {
+    throw new Error(
+      "Could not verify a supported SafeAreaView registration in react-native-css-interop"
+    );
+  }
+
+  console.log(
+    "[patch-react-native-css-interop-safe-area] Upstream uses react-native-safe-area-context; no patch required."
+  );
 }
 
 patchReactNativeCssInteropSafeArea();

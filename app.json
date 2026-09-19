@@ -5,9 +5,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "LiftingLog",
+    "scheme": "liftinglog",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -24,11 +23,11 @@
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
+        "SCHEDULE_EXACT_ALARM",
         "READ_MEDIA_VIDEO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-      "edgeToEdgeEnabled": true,
       "package": "com.anonymous.LiftingLog"
     },
     "web": {

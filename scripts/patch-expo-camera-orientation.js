@@ -95,7 +95,7 @@ function patchExpoCameraOrientation() {
       "      if (mirror) {",
       "        setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY)",
       "      }",
-      "      setVideoStabilizationEnabled(true)",
+      "      setVideoStabilizationEnabled(videoStabilizationMode.isEnabled())",
       "    }.build()",
     ].join("\n"),
     [
@@ -103,7 +103,7 @@ function patchExpoCameraOrientation() {
       "      if (mirror) {",
       "        setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY)",
       "      }",
-      "      setVideoStabilizationEnabled(true)",
+      "      setVideoStabilizationEnabled(videoStabilizationMode.isEnabled())",
       "    }.build().also {",
       "      it.targetRotation = currentTargetRotation",
       "      videoCaptureUseCase = it",
