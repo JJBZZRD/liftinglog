@@ -312,7 +312,7 @@ object RestTimerNotificationManager {
     Intent(
       Intent.ACTION_VIEW,
       Uri.Builder()
-        .scheme("LiftingLog")
+        .scheme("liftinglog")
         .authority("exercise")
         .appendPath(exerciseId.toString())
         .appendQueryParameter("name", exerciseName)
@@ -383,7 +383,7 @@ object RestTimerNotificationManager {
   ) = Intent(context, RestTimerCompletionReceiver::class.java).apply {
     action = ACTION_COMPLETE
     data = Uri.Builder()
-      .scheme("LiftingLog")
+      .scheme("liftinglog")
       .authority("rest-timer-complete")
       .appendPath(exerciseId.toString())
       .build()
@@ -395,7 +395,7 @@ object RestTimerNotificationManager {
   ) = Intent(context, RestTimerCountdownDismissedReceiver::class.java).apply {
     action = ACTION_RESTORE_COUNTDOWN
     data = Uri.Builder()
-      .scheme("LiftingLog")
+      .scheme("liftinglog")
       .authority("rest-timer-dismissed")
       .appendPath(exerciseId.toString())
       .build()

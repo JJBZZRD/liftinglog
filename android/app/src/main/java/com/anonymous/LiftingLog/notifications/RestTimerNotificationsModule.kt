@@ -14,7 +14,7 @@ class RestTimerNotificationsModule(
   reactContext: ReactApplicationContext
 ) : ReactContextBaseJavaModule(reactContext) {
 
-  override fun getName(): String = MODULE_NAME
+  override fun getName(): String = NAME
 
   @ReactMethod
   fun showCountdownNotification(
@@ -153,6 +153,6 @@ class RestTimerNotificationsModule(
   }
 
   companion object {
-    private const val MODULE_NAME = "RestTimerNotifications"
+    const val NAME = "RestTimerNotifications"
   }
 }

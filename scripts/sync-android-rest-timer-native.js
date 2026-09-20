@@ -1,11 +1,74 @@
 const fs = require("fs");
 const Jimp = require("jimp-compact");
 const path = require("path");
+const { AndroidConfig } = require("expo/config-plugins");
 
-const importLine = "import com.anonymous.LiftingLog.notifications.RestTimerNotificationsPackage";
-const packageLine = "              add(RestTimerNotificationsPackage())";
+const KOTLIN_TEMPLATES = [
+  "RestTimerNotificationsModule.kt",
+  "RestTimerNotificationManager.kt",
+  "RestTimerCompletionReceiver.kt",
+  "RestTimerCountdownDismissedReceiver.kt",
+  "RestTimerNotificationsPackage.kt",
+];
+const LAYOUT_TEMPLATES = [
+  "rest_timer_countdown_notification.xml",
+  "rest_timer_countdown_notification_compact.xml",
+];
+const EXACT_ALARM_PERMISSION = "android.permission.SCHEDULE_EXACT_ALARM";
+const RECEIVERS = [
+  ".notifications.RestTimerCompletionReceiver",
+  ".notifications.RestTimerCountdownDismissedReceiver",
+];
+
+function countOccurrences(source, snippet) {
+  return source.split(snippet).length - 1;
+}
+
+function getPackageListApplyBlock(contents) {
+  const anchorPattern = /PackageList\(this\)\.packages\.apply\s*\{/g;
+  const matches = [...contents.matchAll(anchorPattern)];
+  if (matches.length !== 1) {
+    throw new Error("Could not find the unique PackageList apply block in MainApplication.kt");
+  }
+
+  const blockStart = matches[0].index;
+  const openingBrace = contents.indexOf("{", blockStart);
+  let depth = 0;
+  for (let index = openingBrace; index < contents.length; index += 1) {
+    if (contents[index] === "{") {
+      depth += 1;
+    } else if (contents[index] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return contents.slice(blockStart, index + 1);
+      }
+    }
+  }
+
+  throw new Error("PackageList apply block is not balanced in MainApplication.kt");
+}
+
+function getExpoIdentity(projectRoot) {
+  const appJsonPath = path.join(projectRoot, "app.json");
+  if (!fs.existsSync(appJsonPath)) {
+    throw new Error(`Missing Expo app configuration: ${appJsonPath}`);
+  }
+
+  const appJson = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+  const packageName = appJson?.expo?.android?.package;
+  const scheme = appJson?.expo?.scheme;
+  if (typeof packageName !== "string" || !packageName) {
+    throw new Error("app.json must define expo.android.package for the rest-timer native module");
+  }
+  if (typeof scheme !== "string" || !scheme) {
+    throw new Error("app.json must define one Expo scheme for the rest-timer native module");
+  }
+
+  return { appJson, appJsonPath, packageName, scheme };
+}
 
 function getPaths(projectRoot) {
+  const { packageName } = getExpoIdentity(projectRoot);
   const androidRoot = path.join(projectRoot, "android");
   const javaRoot = path.join(
     androidRoot,
@@ -13,13 +76,12 @@ function getPaths(projectRoot) {
     "src",
     "main",
     "java",
-    "com",
-    "anonymous",
-    "LiftingLog"
+    ...packageName.split(".")
   );
 
   return {
     projectRoot,
+    packageName,
     androidRoot,
     javaRoot,
     notificationsDir: path.join(javaRoot, "notifications"),
@@ -33,31 +95,16 @@ function getPaths(projectRoot) {
 }
 
 function ensureAndroidExists(paths) {
-  const { androidRoot } = paths;
-  if (!fs.existsSync(androidRoot)) {
+  if (!fs.existsSync(paths.androidRoot)) {
     throw new Error(
       "android/ does not exist. Run `npx expo prebuild --platform android --clean` first."
     );
   }
 }
 
-function copyTemplate(paths, filename) {
+function copyTemplate(paths, filename, destinationDir) {
   const sourcePath = path.join(paths.templateDir, filename);
-  const destinationPath = path.join(paths.notificationsDir, filename);
-
-  if (!fs.existsSync(sourcePath)) {
-    throw new Error(`Missing template file: ${sourcePath}`);
-  }
-
-  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-  fs.copyFileSync(sourcePath, destinationPath);
-  console.log(`Synced ${path.relative(paths.projectRoot, destinationPath)}`);
-}
-
-function copyLayoutTemplate(paths, filename) {
-  const sourcePath = path.join(paths.templateDir, filename);
-  const destinationPath = path.join(paths.layoutDir, filename);
-
+  const destinationPath = path.join(destinationDir, filename);
   if (!fs.existsSync(sourcePath)) {
     throw new Error(`Missing template file: ${sourcePath}`);
   }
@@ -114,10 +161,8 @@ function getSplashIconContentBounds(image) {
   };
 }
 
-async function generateNotificationSmallIcon(paths) {
+async function buildNotificationSmallIcon(paths) {
   const sourcePath = path.join(paths.assetsImageDir, "splash-icon.png");
-  const destinationPath = path.join(paths.drawableDir, "rest_timer_notification_icon.png");
-
   if (!fs.existsSync(sourcePath)) {
     throw new Error(`Missing asset image: ${sourcePath}`);
   }
@@ -127,7 +172,6 @@ async function generateNotificationSmallIcon(paths) {
   const sourceImage = await Jimp.read(sourcePath);
   const bounds = getSplashIconContentBounds(sourceImage);
   const backgroundPixel = getImagePixel(sourceImage, 0, 0);
-
   const iconMask = sourceImage
     .clone()
     .crop(bounds.left, bounds.top, bounds.width, bounds.height)
@@ -152,90 +196,160 @@ async function generateNotificationSmallIcon(paths) {
     Math.round((outputSize - iconMask.bitmap.width) / 2),
     Math.round((outputSize - iconMask.bitmap.height) / 2)
   );
+  return outputImage;
+}
 
+async function generateNotificationSmallIcon(paths) {
+  const destinationPath = path.join(paths.drawableDir, "rest_timer_notification_icon.png");
+  const outputImage = await buildNotificationSmallIcon(paths);
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
   await outputImage.writeAsync(destinationPath);
   console.log(`Generated ${path.relative(paths.projectRoot, destinationPath)} from splash-icon.png`);
 }
 
-function patchMainApplication(paths) {
-  const { mainApplicationPath, projectRoot } = paths;
-  if (!fs.existsSync(mainApplicationPath)) {
-    throw new Error(`Missing MainApplication.kt: ${mainApplicationPath}`);
+function patchMainApplicationContents(contents, packageName) {
+  const importLine = `import ${packageName}.notifications.RestTimerNotificationsPackage`;
+  const packageRegistration = "add(RestTimerNotificationsPackage())";
+
+  if (!contents.includes(`package ${packageName}`)) {
+    throw new Error(`MainApplication.kt package does not match ${packageName}`);
   }
 
-  let contents = fs.readFileSync(mainApplicationPath, "utf8");
-
-  if (!contents.includes(importLine)) {
-    if (contents.includes("import expo.modules.ApplicationLifecycleDispatcher")) {
-      contents = contents.replace(
-        "import expo.modules.ApplicationLifecycleDispatcher",
-        `${importLine}\nimport expo.modules.ApplicationLifecycleDispatcher`
-      );
-    } else {
-      contents = contents.replace(
-        /package\s+com\.anonymous\.LiftingLog\s*\n+/,
-        (match) => `${match}${importLine}\n`
-      );
+  const importCount = countOccurrences(contents, importLine);
+  const anyRestTimerImportCount = (
+    contents.match(/^import .*\.notifications\.RestTimerNotificationsPackage$/gm) || []
+  ).length;
+  if (anyRestTimerImportCount !== importCount) {
+    throw new Error("MainApplication.kt contains a rest-timer import for a different package");
+  }
+  if (importCount > 1) {
+    throw new Error("MainApplication.kt contains duplicate rest-timer package imports");
+  }
+  if (importCount === 0) {
+    const importAnchor = "import expo.modules.ApplicationLifecycleDispatcher";
+    if (countOccurrences(contents, importAnchor) !== 1) {
+      throw new Error("Could not find the unique Expo import anchor in MainApplication.kt");
     }
+    contents = contents.replace(importAnchor, `${importLine}\n${importAnchor}`);
   }
 
-  if (!contents.includes(packageLine)) {
+  const registrationPattern = /add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)/g;
+  const registrationCount = (contents.match(registrationPattern) || []).length;
+  if (registrationCount > 1) {
+    throw new Error("MainApplication.kt contains duplicate rest-timer package registrations");
+  }
+  if (registrationCount === 0) {
+    const packageListAnchor = /PackageList\(this\)\.packages\.apply\s*\{\r?\n/g;
+    if ((contents.match(packageListAnchor) || []).length !== 1) {
+      throw new Error("Could not find the unique PackageList apply block in MainApplication.kt");
+    }
     contents = contents.replace(
-      /PackageList\(this\)\.packages\.apply\s*\{\n/,
-      (match) => `${match}${packageLine}\n`
+      packageListAnchor,
+      (match) => `${match}          ${packageRegistration}\n`
     );
   }
 
-  fs.writeFileSync(mainApplicationPath, contents, "utf8");
-  console.log(`Patched ${path.relative(projectRoot, mainApplicationPath)}`);
+  if (countOccurrences(contents, importLine) !== 1) {
+    throw new Error("Failed to write exactly one rest-timer package import");
+  }
+  if ((contents.match(registrationPattern) || []).length !== 1) {
+    throw new Error("Failed to write exactly one rest-timer package registration");
+  }
+  if ((getPackageListApplyBlock(contents).match(registrationPattern) || []).length !== 1) {
+    throw new Error("Rest-timer package registration is outside the PackageList apply block");
+  }
+  return contents;
 }
 
-function patchAndroidManifest(paths) {
-  const { manifestPath, projectRoot } = paths;
-  if (!fs.existsSync(manifestPath)) {
-    throw new Error(`Missing AndroidManifest.xml: ${manifestPath}`);
+function ensureRestTimerManifestEntries(androidManifest) {
+  const manifest = androidManifest.manifest;
+  let foundExactAlarmPermission = false;
+  manifest["uses-permission"] = (manifest["uses-permission"] || []).filter((permission) => {
+    if (permission?.$?.["android:name"] !== EXACT_ALARM_PERMISSION) {
+      return true;
+    }
+    if (foundExactAlarmPermission) {
+      return false;
+    }
+    foundExactAlarmPermission = true;
+    permission.$ = { "android:name": EXACT_ALARM_PERMISSION };
+    return true;
+  });
+  if (!foundExactAlarmPermission) {
+    manifest["uses-permission"].push({
+      $: { "android:name": EXACT_ALARM_PERMISSION },
+    });
   }
 
-  let contents = fs.readFileSync(manifestPath, "utf8");
-  const exactAlarmPermission =
-    '  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>';
-  const receiverSnippet =
-    '    <receiver android:name=".notifications.RestTimerCompletionReceiver" android:exported="false"/>';
-  const dismissReceiverSnippet =
-    '    <receiver android:name=".notifications.RestTimerCountdownDismissedReceiver" android:exported="false"/>';
-
-  if (!contents.includes("android.permission.SCHEDULE_EXACT_ALARM")) {
-    contents = contents.replace("<uses-permission android:name=\"android.permission.RECORD_AUDIO\"/>",
-      `<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n${exactAlarmPermission}`
-    );
+  const mainApplication = AndroidConfig.Manifest.getMainApplicationOrThrow(androidManifest);
+  const foundReceivers = new Set();
+  mainApplication.receiver = (mainApplication.receiver || []).filter((receiver) => {
+    const receiverName = receiver?.$?.["android:name"];
+    if (!RECEIVERS.includes(receiverName)) {
+      return true;
+    }
+    if (foundReceivers.has(receiverName)) {
+      return false;
+    }
+    foundReceivers.add(receiverName);
+    receiver.$ = {
+      "android:name": receiverName,
+      "android:exported": "false",
+    };
+    return true;
+  });
+  for (const receiverName of RECEIVERS) {
+    if (!foundReceivers.has(receiverName)) {
+      mainApplication.receiver.push({
+        $: {
+          "android:name": receiverName,
+          "android:exported": "false",
+        },
+      });
+    }
   }
+  return androidManifest;
+}
 
-  if (!contents.includes("RestTimerCompletionReceiver")) {
-    contents = contents.replace("</application>", `${receiverSnippet}\n  </application>`);
+function patchMainApplication(paths) {
+  if (!fs.existsSync(paths.mainApplicationPath)) {
+    throw new Error(`Missing MainApplication.kt: ${paths.mainApplicationPath}`);
   }
-
-  if (!contents.includes("RestTimerCountdownDismissedReceiver")) {
-    contents = contents.replace("</application>", `${dismissReceiverSnippet}\n  </application>`);
+  const original = fs.readFileSync(paths.mainApplicationPath, "utf8");
+  const next = patchMainApplicationContents(original, paths.packageName);
+  if (next !== original) {
+    fs.writeFileSync(paths.mainApplicationPath, next, "utf8");
   }
+  console.log(`Verified ${path.relative(paths.projectRoot, paths.mainApplicationPath)}`);
+}
 
-  fs.writeFileSync(manifestPath, contents, "utf8");
-  console.log(`Patched ${path.relative(projectRoot, manifestPath)}`);
+async function patchAndroidManifest(paths) {
+  if (!fs.existsSync(paths.manifestPath)) {
+    throw new Error(`Missing AndroidManifest.xml: ${paths.manifestPath}`);
+  }
+  const androidManifest = await AndroidConfig.Manifest.readAndroidManifestAsync(paths.manifestPath);
+  ensureRestTimerManifestEntries(androidManifest);
+  await AndroidConfig.Manifest.writeAndroidManifestAsync(paths.manifestPath, androidManifest);
+  console.log(`Verified ${path.relative(paths.projectRoot, paths.manifestPath)}`);
+}
+
+async function syncAndroidRestTimerNativeAssets(projectRoot = path.resolve(__dirname, "..")) {
+  const paths = getPaths(projectRoot);
+  ensureAndroidExists(paths);
+  for (const filename of KOTLIN_TEMPLATES) {
+    copyTemplate(paths, filename, paths.notificationsDir);
+  }
+  for (const filename of LAYOUT_TEMPLATES) {
+    copyTemplate(paths, filename, paths.layoutDir);
+  }
+  await generateNotificationSmallIcon(paths);
+  return paths;
 }
 
 async function syncAndroidRestTimerNative(projectRoot = path.resolve(__dirname, "..")) {
-  const paths = getPaths(projectRoot);
-  ensureAndroidExists(paths);
-  copyTemplate(paths, "RestTimerNotificationsModule.kt");
-  copyTemplate(paths, "RestTimerNotificationManager.kt");
-  copyTemplate(paths, "RestTimerCompletionReceiver.kt");
-  copyTemplate(paths, "RestTimerCountdownDismissedReceiver.kt");
-  copyTemplate(paths, "RestTimerNotificationsPackage.kt");
-  copyLayoutTemplate(paths, "rest_timer_countdown_notification.xml");
-  copyLayoutTemplate(paths, "rest_timer_countdown_notification_compact.xml");
-  await generateNotificationSmallIcon(paths);
+  const paths = await syncAndroidRestTimerNativeAssets(projectRoot);
   patchMainApplication(paths);
-  patchAndroidManifest(paths);
+  await patchAndroidManifest(paths);
   console.log("Android rest timer native files are in sync.");
 }
 
@@ -250,4 +364,17 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { syncAndroidRestTimerNative };
+module.exports = {
+  EXACT_ALARM_PERMISSION,
+  KOTLIN_TEMPLATES,
+  LAYOUT_TEMPLATES,
+  RECEIVERS,
+  buildNotificationSmallIcon,
+  ensureRestTimerManifestEntries,
+  getExpoIdentity,
+  getPackageListApplyBlock,
+  getPaths,
+  patchMainApplicationContents,
+  syncAndroidRestTimerNative,
+  syncAndroidRestTimerNativeAssets,
+};
