@@ -429,9 +429,64 @@ no repository defect, so no application change is required for that harness issu
   Missing UIDs alone do not force insertion because the current importer also attempts
   natural-key matching. Preserve both the backup and its pre-import live state so
   `MVP-006A/006E` can reproduce the candidate ambiguity and verify exact replacement.
-- Expo ImagePicker emits its existing `MediaTypeOptions` deprecation warning during
-  gallery selection. Selection and playback work; migrate to the current media-type
-  API in a separate scoped ticket rather than broadening this native-build checkpoint.
+- The Expo ImagePicker `MediaTypeOptions` deprecation observed during the first
+  gallery run was repaired separately in commit `d8ee8cf` by using the SDK 57
+  `MediaType` value `"videos"`. The provisional PRE-001H rerun opened Android Photo
+  Picker without the warning. The earlier PRE-001G run contains attachment and
+  playback evidence, but the clean rerun emulator contained no selectable media, so
+  those behaviors were not revalidated on `d8ee8cf` and remain in the final matrix.
+
+## Android Console Audit Checkpoint (MVP-PRE-001H)
+
+Status: Provisional Android pass on `main` commit
+`d8ee8cf474815ea40d3a768b42ffcea991caae3e` on 2026-09-20. PRE-001H remains
+formally open because its execution contract starts after PRE-001G, whose iOS and
+physical-device evidence is still blocked.
+
+### Scoped repair
+
+- Replaced the deprecated `ImagePicker.MediaTypeOptions.Videos` call with the SDK 57
+  `MediaType` value `"videos"` in `app/set/[id].tsx`.
+- The repair was isolated on `fix/MVP-PRE-001H-image-picker-media-types`, passed
+  typecheck, focused ESLint, and commit whitespace validation, and was merged as
+  `d8ee8cf`. The organizer independently repeated those checks after integration.
+
+### Runtime evidence
+
+| Surface | Result |
+| --- | --- |
+| Clean startup | Pass; Android bundle loaded, both workout-exercise migrations reported OK, and development fixtures seeded |
+| Populated restart | Pass; one-time UID backfill completed and fixture seeding inserted no duplicate sessions |
+| Calculator | Pass; 100 kg x 5 displayed a 116.7 kg Epley estimate |
+| Manual logging | Pass; a 100 kg x 5 set created one active Test_531 entry with 500 kg volume |
+| In-progress history | Pass; the new entry appeared immediately with the In Progress badge |
+| Completion/history | Pass; completion updated and verified one row, and the same entry then appeared without In Progress |
+| Analytics/PB read | Pass; chart, insight controls, PB markers, and visible-point logs loaded for Test_531 |
+| Gallery picker | Partial; Set Info opened Android Photo Picker and emitted no `MediaTypeOptions` warning, but the emulator contained no selectable media |
+| Camera route | Partial; the camera/microphone permission gate loaded, but physical recording remained outside this emulator run |
+| Console | Pass for exercised routes; no app-owned fatal exception, ReactNativeJS error, unhandled rejection, or database failure was observed |
+
+The first headless attempt exposed a harness problem rather than an application
+defect. On this Windows host, `expo start --localhost` selected IPv6 `::1`; Android
+`adb reverse` expected the host IPv4 loopback and Dev Launcher reported an unexpected
+EOF. The successful organizer launch sequence was:
+
+```powershell
+$env:EXPO_OFFLINE = "1"
+$env:NODE_OPTIONS = "--dns-result-order=ipv4first"
+npm.cmd start -- --localhost
+adb -s emulator-5554 reverse tcp:8081 tcp:8081
+adb -s emulator-5554 shell am start -W -a android.intent.action.VIEW -d "exp+liftinglog://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
+```
+
+Verify that Metro listens on `127.0.0.1:8081` before launching. Do not type the URL
+into Dev Launcher through `adb shell input text`; that command encoded `:` as `%3A`
+and produced an invalid-port error in the discarded attempt.
+
+The run also confirmed expected Expo/React Native development warnings and Android
+emulator/Google service noise. Broad workout history, backup/import, rest-timer
+notifications, gallery attachment/playback, and physical camera recording were not
+rerun in this provisional sweep and must not be inferred from it.
 
 ## Resume Point
 
@@ -440,15 +495,13 @@ no repository defect, so no application change is required for that harness issu
 2. Complete the iOS matrix and physical-device camera evidence above; carry the
    characterized replacement-restore gaps into `MVP-006` rather than this platform
    checkpoint, and keep any platform fixes in new narrowly scoped tickets.
-3. Run `MVP-PRE-001H` against the accepted SDK 57 Android development build. Use a
-   read-only emulator operator to capture Metro, JavaScript, and logcat output for
-   clean-install and populated/update scenarios; classify every relevant message and
-   delegate each project-owned issue to a separate narrowly scoped repair agent.
-   Include the known Expo ImagePicker media-type deprecation. After each repair,
-   rerun its focused reproduction, then rerun the complete sweep on the resulting
-   `main` SHA. Close only when no project-owned issue remains, external noise is
-   recorded, and the transcript, route matrix, log signatures, and repair links are
-   committed.
+3. After PRE-001G closes, complete `MVP-PRE-001H` against the accepted SDK 57
+   Android development build. Reuse the IPv4 Metro launch contract above. The
+   provisional clean/populated, calculator, logging, history, analytics, and gallery
+   picker checks pass on `d8ee8cf`; rerun the complete matrix, including the surfaces
+   explicitly left unexercised above, on the final accepted `main` SHA. Close only
+   when no project-owned issue remains, external noise is recorded, and the
+   transcript, route matrix, log signatures, and repair links are committed.
 4. Run the read-only `MVP-PRE-001R` audit, resolve findings, and pin the accepted SDK
    57 `main` SHA as the base for Wave 1.
 5. Do not start MVP feature branches until the final development-build evidence,
