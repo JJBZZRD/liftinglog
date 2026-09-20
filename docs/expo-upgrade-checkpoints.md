@@ -593,6 +593,27 @@ byte-for-byte unchanged during this run.
 
 ## Resume Point
 
+### User-requested pause, 2026-09-20
+
+The current detailed checkpoint is
+[PRE-001H Android audit](android-console-audit-2026-09-20.md). PRE-001G is accepted
+for Android ordering with the explicit iOS/camera deferrals below; **PRE-001H is
+still in progress and PRE-001R has not started**. Wave 1 remains blocked.
+
+Physical gallery attach/playback/persistence/replacement passed and the phone can
+be unplugged. The remaining work is emulator-only: complete the populated gallery
+and backup matrix, reconcile reviewed evidence/log classifications, then accept H
+and run independent R. The organiser has verified the clean-instance exact-set
+logging lifecycle, background timer/notification return, backup round-trip with
+SQLite integrity/count checks, cold relaunch, and gallery playback. No feature
+implementation, camera removal, or feature-branch dispatch has occurred yet.
+
+Use the x86_64 emulator APK identified in the linked checkpoint; the ARM64 phone
+APK cannot serve as the emulator artifact. Initial white DevLauncher state can
+last about 45 seconds before JS starts; wait for settled UI and inspect logs before
+classifying a defect. Local evidence and app-data archives are preserved under
+`.codex-artifacts/pre001h-final/`. All pre-existing dirty/untracked work is retained.
+
 ### Android PRE-001G acceptance with explicit scope exceptions
 
 After the user's iOS deferral and gallery-only MVP clarification, the organiser
