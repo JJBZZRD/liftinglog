@@ -342,8 +342,10 @@ Status: automated gate passed on branch `upgrade/MVP-PRE-001F-native-patches` on
 ## Development-Build Smoke Checkpoint (MVP-PRE-001G)
 
 Status: Android emulator matrix and automated gates passed on branch
-`upgrade/MVP-PRE-001G-development-builds` on 2026-09-20. The checkpoint remains
-open for the iOS build and the device-only cases listed below.
+`upgrade/MVP-PRE-001G-development-builds` on 2026-09-20. Subsequently accepted for
+the Android MVP prerequisite under the explicit iOS and camera deferrals recorded
+below. This is not iOS or full-profile camera runtime acceptance. PRE-001H still
+owns the complete final-SHA Android console matrix, including gallery revalidation.
 
 ### Compatibility changes found by the smoke run
 
@@ -591,17 +593,32 @@ byte-for-byte unchanged during this run.
 
 ## Resume Point
 
+### Android PRE-001G acceptance with explicit scope exceptions
+
+After the user's iOS deferral and gallery-only MVP clarification, the organiser
+accepts the existing PRE-001G Android build/runtime matrix for prerequisite
+ordering. The original open iOS and physical-camera cases are now explicitly
+deferred, not marked passed. Evidence is the clean-build/emulator matrix above,
+the unchanged native inputs from `81a181f` to `4d8a61b`, installed/local APK hash
+identity, physical populated Overview rendering, and the resumed automated gate
+(27 suites / 344 tests, clean typecheck, baseline-only lint warnings, native
+verifier). The post-`d8ee8cf` gallery rerun remains mandatory within PRE-001H's
+final-SHA complete matrix; the supplementary physical gallery run can proceed in
+parallel. No gallery result is inferred from the camera exception.
+
+Next executable gate: **PRE-001H** on the current Android baseline, followed by
+the independent **PRE-001R** review. Wave 1 remains blocked until both are accepted.
+
 1. Keep iOS build/runtime work deferred under `PRE-001G-IOS-DEFERRED` above. When
    resumed, authenticate EAS or use a macOS operator to build and run the SDK 57
    iOS development client with scene support enabled.
-2. Complete the remaining Android gallery evidence above. Keep physical camera
+2. Complete the remaining Android gallery evidence as part of PRE-001H. Keep physical camera
    tests deferred under `PRE-001G-CAMERA-DEFERRED`; carry the characterized
    replacement-restore gaps into `MVP-006` rather
    than this platform checkpoint, and keep any platform fixes in new narrowly
    scoped tickets.
-3. After the Android PRE-001G gate is accepted with the explicit iOS and camera
-   deferrals,
-   complete `MVP-PRE-001H` against the accepted SDK 57 Android development build.
+3. Complete `MVP-PRE-001H` against the accepted SDK 57 Android development build,
+   carrying the explicit iOS and camera deferrals.
    Reuse the IPv4 Metro launch contract above. The
    provisional clean/populated, calculator, logging, history, analytics, and gallery
    picker checks pass on `d8ee8cf`; rerun the complete matrix, including the surfaces
