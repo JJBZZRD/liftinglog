@@ -440,10 +440,19 @@ no repository defect, so no application change is required for that harness issu
 2. Complete the iOS matrix and physical-device camera evidence above; carry the
    characterized replacement-restore gaps into `MVP-006` rather than this platform
    checkpoint, and keep any platform fixes in new narrowly scoped tickets.
-3. Run the read-only `MVP-PRE-001R` audit, resolve findings, and pin the accepted SDK
+3. Run `MVP-PRE-001H` against the accepted SDK 57 Android development build. Use a
+   read-only emulator operator to capture Metro, JavaScript, and logcat output for
+   clean-install and populated/update scenarios; classify every relevant message and
+   delegate each project-owned issue to a separate narrowly scoped repair agent.
+   Include the known Expo ImagePicker media-type deprecation. After each repair,
+   rerun its focused reproduction, then rerun the complete sweep on the resulting
+   `main` SHA. Close only when no project-owned issue remains, external noise is
+   recorded, and the transcript, route matrix, log signatures, and repair links are
+   committed.
+4. Run the read-only `MVP-PRE-001R` audit, resolve findings, and pin the accepted SDK
    57 `main` SHA as the base for Wave 1.
-4. Do not start MVP feature branches until the final development-build evidence and
-   audit are accepted.
+5. Do not start MVP feature branches until the final development-build evidence,
+   Android console audit, and independent audit are accepted.
 
 The pre-existing `.gitignore` modification and
 `docs/codebase-analysis-2026-06-21/` directory are unrelated and excluded from these

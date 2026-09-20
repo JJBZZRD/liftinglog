@@ -359,11 +359,45 @@ a canary or preview release.
 | MVP-PRE-001E | Audit direct third-party dependencies in small risk groups; upgrade only justified packages and move NativeWind to stable SDK 57 support | Terra, high | dependency manifests/lockfile, Metro/Babel/style compatibility, focused tests | PRE-001D |
 | MVP-PRE-001F | Revalidate or retire both postinstall patches and validate the custom Android rest-timer plugin | Sol, high | `scripts/**`, `plugins/**`, `android/**`, focused native tests | PRE-001D, PRE-001E |
 | MVP-PRE-001G | Run clean Android and iOS development-build smoke matrices and document accepted exceptions | Organizer plus device operator | test evidence/docs; fixes require a new scoped ticket | PRE-001F |
-| MVP-PRE-001R | Independently review version alignment, lockfile, native diffs, patch necessity, and upgrade evidence | Sol audit, high | Read-only | MVP-PRE-001B through MVP-PRE-001G |
+| MVP-PRE-001H | Run the accepted SDK 57 build in an Android emulator, audit Metro and logcat, delegate scoped fixes, and repeat until clean | Luna/Terra operator plus organizer-selected fix agents | operator: evidence/docs only; repair agents: explicitly assigned files on separate scoped branches | PRE-001G |
+| MVP-PRE-001R | Independently review version alignment, lockfile, native diffs, patch necessity, and upgrade evidence | Sol audit, high | Read-only | MVP-PRE-001B through MVP-PRE-001H |
 
 The SDK implementation tickets are not parallel work. PRE-001A may delegate
 read-only package and native-patch inspections concurrently, and PRE-001G can split
-Android and iOS device runs, but all writes to the platform seam remain serialized.
+Android and iOS device runs. PRE-001H may use one device operator while the organizer
+dispatches independent findings, but all writes to the platform seam remain
+serialized.
+
+**MVP-PRE-001H execution contract:**
+
+- Start only after PRE-001G has accepted the Android and iOS development-build
+  evidence. Record the tested commit, APK/build identity, emulator model, Android API
+  level, and exact launch commands.
+- Run both clean-install and populated/update scenarios. Exercise startup, database
+  migration, manual logging, history, analytics/PBs, calculators, backup/import,
+  gallery attachment and playback, and rest-timer/notification paths while capturing
+  Metro output, React Native JavaScript logs, Android logcat, crashes, and ANRs.
+- The operator classifies every relevant message as a project defect,
+  dependency/upstream issue, expected development-only behavior, or emulator/OS
+  noise. Accepted exceptions require evidence, rationale, an owner, and a follow-up
+  ticket; absence of an observed crash is not sufficient evidence of a clean run.
+- The operator is read-only and returns reproducible log signatures and routes to the
+  organizer. The organizer gives each repair agent only the reproduction, affected
+  symbols/files, expected behavior, and focused verification target. Use Sol for
+  native, database, or data-integrity risk; Terra for JavaScript/UI integration; and
+  Luna for focused configuration, tests, or documentation.
+- Repair agents may edit only the files and symbols explicitly named in their ticket.
+  Any additional file, dependency, schema, or data-model change requires a new ticket
+  and organizer approval before work proceeds.
+- Every project-owned error, unhandled rejection, native exception, database failure,
+  and actionable warning is fixed on a separate narrowly scoped branch. This includes
+  replacing the already-observed deprecated Expo ImagePicker media-type API. Do not
+  combine unrelated findings into one repair ticket.
+- After each repair, rerun its focused reproduction. Then rerun the complete Android
+  console sweep on the resulting `main` SHA. PRE-001H closes only when no
+  project-owned console issue remains and all external noise is explicitly recorded.
+- Commit the final command transcript, exercised-route matrix, relevant log
+  signatures, repair ticket/commit links, and accepted exceptions before PRE-001R.
 
 ### MVP-001: Centralized capability profile and route containment
 
@@ -621,7 +655,7 @@ ticket from current `main`; it is not patched directly on the release branch.
 - MVP-PRE-001A records the SDK 54 baseline after MVP-000 passes.
 - MVP-PRE-001B, PRE-001C, and PRE-001D merge sequentially.
 - MVP-PRE-001E and PRE-001F complete dependency and custom-native stabilization.
-- MVP-PRE-001G and PRE-001R approve the SDK 57 baseline.
+- MVP-PRE-001G, PRE-001H, and PRE-001R approve the SDK 57 baseline.
 - Organizer refreshes codebase-memory and pins the accepted baseline SHA. No MVP
   feature implementation branch starts before this gate.
 
