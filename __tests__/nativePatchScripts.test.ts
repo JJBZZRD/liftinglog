@@ -115,6 +115,42 @@ describe("Android rest-timer native integration", () => {
     );
     expect(commentedRegistration).toContain("  // add(RestTimerNotificationsPackage())");
     expect(commentedRegistration).toContain("          add(RestTimerNotificationsPackage())");
+
+    const blockCommentedRegistration = patchMainApplicationContents(
+      fixture.replace(
+        "PackageList(this).packages.apply {\n}",
+        [
+          "PackageList(this).packages.apply {",
+          "  /*",
+          "  add(RestTimerNotificationsPackage())",
+          "  */",
+          "}",
+        ].join("\n")
+      ),
+      "com.example.app"
+    );
+    expect(blockCommentedRegistration).toContain("  add(RestTimerNotificationsPackage())\n  */");
+    expect(blockCommentedRegistration).toContain(
+      "          add(RestTimerNotificationsPackage())\n  /*"
+    );
+
+    const nestedBlockCommentedRegistration = patchMainApplicationContents(
+      fixture.replace(
+        "PackageList(this).packages.apply {\n}",
+        [
+          "PackageList(this).packages.apply {",
+          "  /* outer",
+          "    /* inner */",
+          "    add(RestTimerNotificationsPackage())",
+          "  */",
+          "}",
+        ].join("\n")
+      ),
+      "com.example.app"
+    );
+    expect(nestedBlockCommentedRegistration).toContain(
+      "          add(RestTimerNotificationsPackage())\n  /* outer"
+    );
   });
 
   test("normalizes required manifest entries without duplicates", () => {

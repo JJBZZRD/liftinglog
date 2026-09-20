@@ -24,6 +24,79 @@ function countOccurrences(source, snippet) {
   return source.split(snippet).length - 1;
 }
 
+function stripKotlinComments(source) {
+  let result = "";
+  let state = "code";
+  let blockCommentDepth = 0;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index];
+    const next = source[index + 1];
+
+    if (state === "lineComment") {
+      if (current === "\n") {
+        state = "code";
+        result += current;
+      } else {
+        result += " ";
+      }
+      continue;
+    }
+
+    if (state === "blockComment") {
+      if (current === "/" && next === "*") {
+        result += "  ";
+        index += 1;
+        blockCommentDepth += 1;
+      } else if (current === "*" && next === "/") {
+        result += "  ";
+        index += 1;
+        blockCommentDepth -= 1;
+        if (blockCommentDepth === 0) {
+          state = "code";
+        }
+      } else {
+        result += current === "\n" ? "\n" : " ";
+      }
+      continue;
+    }
+
+    if (state === "string" || state === "character") {
+      result += current;
+      if (current === "\\" && next !== undefined) {
+        result += next;
+        index += 1;
+      } else if (
+        (state === "string" && current === '"') ||
+        (state === "character" && current === "'")
+      ) {
+        state = "code";
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "/") {
+      result += "  ";
+      index += 1;
+      state = "lineComment";
+    } else if (current === "/" && next === "*") {
+      result += "  ";
+      index += 1;
+      state = "blockComment";
+      blockCommentDepth = 1;
+    } else {
+      result += current;
+      if (current === '"') {
+        state = "string";
+      } else if (current === "'") {
+        state = "character";
+      }
+    }
+  }
+
+  return result;
+}
+
 function getPackageListApplyBlock(contents) {
   const anchorPattern = /PackageList\(this\)\.packages\.apply\s*\{/g;
   const matches = [...contents.matchAll(anchorPattern)];
@@ -223,14 +296,15 @@ async function generateNotificationSmallIcon(paths) {
 function patchMainApplicationContents(contents, packageName) {
   const importLine = `import ${packageName}.notifications.RestTimerNotificationsPackage`;
   const packageRegistration = "add(RestTimerNotificationsPackage())";
+  let activeContents = stripKotlinComments(contents);
 
-  if (!contents.includes(`package ${packageName}`)) {
+  if (!activeContents.includes(`package ${packageName}`)) {
     throw new Error(`MainApplication.kt package does not match ${packageName}`);
   }
 
-  const importCount = countOccurrences(contents, importLine);
+  const importCount = countOccurrences(activeContents, importLine);
   const anyRestTimerImportCount = (
-    contents.match(/^import .*\.notifications\.RestTimerNotificationsPackage$/gm) || []
+    activeContents.match(/^import .*\.notifications\.RestTimerNotificationsPackage$/gm) || []
   ).length;
   if (anyRestTimerImportCount !== importCount) {
     throw new Error("MainApplication.kt contains a rest-timer import for a different package");
@@ -240,36 +314,40 @@ function patchMainApplicationContents(contents, packageName) {
   }
   if (importCount === 0) {
     const importAnchor = "import expo.modules.ApplicationLifecycleDispatcher";
-    if (countOccurrences(contents, importAnchor) !== 1) {
+    if (countOccurrences(activeContents, importAnchor) !== 1) {
       throw new Error("Could not find the unique Expo import anchor in MainApplication.kt");
     }
-    contents = contents.replace(importAnchor, `${importLine}\n${importAnchor}`);
+    const importIndex = activeContents.indexOf(importAnchor);
+    contents = `${contents.slice(0, importIndex)}${importLine}\n${contents.slice(importIndex)}`;
+    activeContents = stripKotlinComments(contents);
   }
 
   const registrationPattern =
     /^\s*add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)\s*$/gm;
-  const registrationCount = (contents.match(registrationPattern) || []).length;
+  const registrationCount = (activeContents.match(registrationPattern) || []).length;
   if (registrationCount > 1) {
     throw new Error("MainApplication.kt contains duplicate rest-timer package registrations");
   }
   if (registrationCount === 0) {
     const packageListAnchor = /PackageList\(this\)\.packages\.apply\s*\{\r?\n/g;
-    if ((contents.match(packageListAnchor) || []).length !== 1) {
+    const packageListMatches = [...activeContents.matchAll(packageListAnchor)];
+    if (packageListMatches.length !== 1) {
       throw new Error("Could not find the unique PackageList apply block in MainApplication.kt");
     }
-    contents = contents.replace(
-      packageListAnchor,
-      (match) => `${match}          ${packageRegistration}\n`
-    );
+    const insertionIndex = packageListMatches[0].index + packageListMatches[0][0].length;
+    contents =
+      `${contents.slice(0, insertionIndex)}          ${packageRegistration}\n` +
+      contents.slice(insertionIndex);
+    activeContents = stripKotlinComments(contents);
   }
 
-  if (countOccurrences(contents, importLine) !== 1) {
+  if (countOccurrences(activeContents, importLine) !== 1) {
     throw new Error("Failed to write exactly one rest-timer package import");
   }
-  if ((contents.match(registrationPattern) || []).length !== 1) {
+  if ((activeContents.match(registrationPattern) || []).length !== 1) {
     throw new Error("Failed to write exactly one rest-timer package registration");
   }
-  if ((getPackageListApplyBlock(contents).match(registrationPattern) || []).length !== 1) {
+  if ((getPackageListApplyBlock(activeContents).match(registrationPattern) || []).length !== 1) {
     throw new Error("Rest-timer package registration is outside the PackageList apply block");
   }
   return contents;
@@ -398,6 +476,7 @@ module.exports = {
   getPackageListApplyBlock,
   getPaths,
   patchMainApplicationContents,
+  stripKotlinComments,
   syncAndroidRestTimerNative,
   syncAndroidRestTimerNativeAssets,
 };

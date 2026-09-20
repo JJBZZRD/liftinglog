@@ -12,6 +12,7 @@ const {
   getPackageListApplyBlock,
   getExpoIdentity,
   getPaths,
+  stripKotlinComments,
 } = require("./sync-android-rest-timer-native");
 
 function countOccurrences(source, snippet) {
@@ -60,17 +61,21 @@ async function verifyNotificationIcon(paths) {
 
 function verifyMainApplication(paths) {
   const source = readRequiredFile(paths.mainApplicationPath).toString("utf8");
+  const activeSource = stripKotlinComments(source);
   const importLine =
     `import ${paths.packageName}.notifications.RestTimerNotificationsPackage`;
   const registrationPattern =
     /^\s*add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)\s*$/gm;
-  assert(countOccurrences(source, importLine) === 1, "Expected one rest-timer package import");
   assert(
-    (source.match(registrationPattern) || []).length === 1,
-    "Expected one rest-timer package registration"
+    countOccurrences(activeSource, importLine) === 1,
+    "Expected one active rest-timer package import"
   );
   assert(
-    (getPackageListApplyBlock(source).match(registrationPattern) || []).length === 1,
+    (activeSource.match(registrationPattern) || []).length === 1,
+    "Expected one active rest-timer package registration"
+  );
+  assert(
+    (getPackageListApplyBlock(activeSource).match(registrationPattern) || []).length === 1,
     "Rest-timer package registration is outside the PackageList apply block"
   );
 }
