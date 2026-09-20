@@ -550,6 +550,8 @@ result matches the selected backup.
 - Media rows are restored as links/metadata; video bytes are not embedded.
 - Media reconciliation runs after data commit and can produce a non-fatal unresolved
   result.
+- Exported backup filenames and MIME types match the advertised `.db` contract and
+  round trip through supported Android and iOS pickers.
 - A mid-restore failure rolls back to the pre-restore database.
 - The app can immediately reopen or deliberately restart into the restored DB.
 
@@ -559,13 +561,22 @@ ADR must cover Expo SQLite connection lifecycle, schema compatibility, rollback,
 and post-restore migration. Do not assume that overwriting an open database file is
 safe.
 
+**Characterization input from PRE-001G:** The current Android path successfully
+exports a valid SQLite file through SAF and reopens it through the document picker,
+but current import is a non-destructive merge whose success message says existing
+data was preserved. The export helper strips `.db` before SAF and the tested provider
+did not restore it. A same-database import of development fixtures exported before
+their one-time UID backfill inserted 112 workouts, 112 workout-exercise rows, and 112
+sets. Preserve both that backup and the pre-import live state as a candidate-ambiguity
+fixture for 006A/006E; replacement restore must not inherit these merge semantics.
+
 | Ticket | Subtask | Agent | Write scope | Depends on |
 | --- | --- | --- | --- | --- |
-| MVP-006A | Build legacy/current backup fixtures and write the replacement-restore ADR | Sol, xhigh | ADR and tests/fixtures only | MVP-003, MVP-004 |
+| MVP-006A | Build paired backup/live-state fixtures, define the filename/MIME contract, and write the replacement-restore ADR | Sol, xhigh | ADR and tests/fixtures only | MVP-003, MVP-004 |
 | MVP-006B | Implement the restore engine and atomic rollback behavior behind a narrow API | Sol, xhigh | `lib/db/backup.ts` or extracted restore module, DB tests | 006A |
 | MVP-006C | Integrate media reconciliation and unresolved attachment results | Sol, high | backup/media integration and tests | 006B |
 | MVP-006D | Update Settings confirmation, progress, cancellation, and result UI | Terra, high | `app/(tabs)/settings.tsx`, focused UI tests | API contract from 006A; implementation can run parallel with 006B |
-| MVP-006E | Add exact-replacement, invalid-backup, rollback, migration, PB, note, and media tests | Sol, high | backup integration tests only | 006B, 006C |
+| MVP-006E | Add exact-replacement, invalid-backup, rollback, migration, PB, note, media, and filename/MIME tests | Sol, high | backup integration tests only | 006B, 006C |
 | MVP-006R | Independent corruption and data-loss audit with failure injection | Sol audit, xhigh | Read-only | 006B-006E |
 
 006D may work against a mocked contract while 006B is in progress. The organizer

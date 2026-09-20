@@ -373,6 +373,7 @@ open for the iOS build and the device-only cases listed below.
 | History/filtering | Pass; exercise history changed from In Progress to completed and the global history search found the smoke entry |
 | Gallery video | Pass; a gallery MP4 attached to one set, copied into app storage, rendered inline, played fullscreen, and displayed its history indicator |
 | Rest timer | Pass; exact-alarm prompt, foreground countdown, background completion notification, notification deep link, pause, delete, and notification cancellation were exercised |
+| Backup export/import | Platform path passed; Android SAF saved a 1.11 MB SQLite backup, the picker reopened it, header validation passed, and import completed. Current merge semantics do not satisfy MVP replacement restore |
 | Camera surface | Partial; route launch and native permission handoff passed, but recording/orientation capture was not exercised |
 | Crash check | Pass; no crash reports on either emulator |
 
@@ -381,6 +382,12 @@ fixture rows are inserted after the startup UID migration, so the next launch
 backfills those seeded rows once. A third launch proved the initialized database is
 then stable. This does not affect production builds, where development fixture
 seeding is disabled.
+
+In the restricted agent environment, an expired global Expo session combined with
+blocked Expo GraphQL access caused the SDK 57 manifest endpoint to return HTTP 500.
+Starting Metro with `EXPO_OFFLINE=1` bypassed the account lookup; the Android manifest
+then returned HTTP 200 and the app bundled normally. Package/config inspection found
+no repository defect, so no application change is required for that harness issue.
 
 ### Final automated gates
 
@@ -406,9 +413,22 @@ seeding is disabled.
 - Front/back camera recording, portrait/landscape encoded-video orientation, rotation
   during recording, and consecutive clips still require an explicitly authorized
   full-profile physical-device run. The MVP recording surface remains deferred.
-- Backup export and replacement restore were not run end to end on a device in this
-  checkpoint. Automated database/backup tests remain green, but the release matrix
-  still requires a document-picker round trip before accepting the platform baseline.
+- The Android backup picker round trip works, but the implementation is explicitly a
+  merge that reports existing data was preserved. It has no replacement warning and
+  does not remove live rows missing from the backup, so `MVP-006` remains responsible
+  for the agreed replacement-restore behavior.
+- The export helper removed `.db` before handing the display name to Android SAF,
+  assuming the provider would infer the extension from the MIME type. The provider
+  did not, producing `LiftingLog-backup-20260920-141130`. The document picker could
+  still select it and SQLite-header validation succeeded, but `MVP-006` must make the
+  user-visible file contract consistent and test extension/MIME handling on both
+  platforms.
+- The smoke backup was captured immediately after development fixture seeding, before
+  the next-launch UID backfill. Importing it into the same database updated 7,700
+  records but also inserted 112 workouts, 112 workout-exercise rows, and 112 sets.
+  Missing UIDs alone do not force insertion because the current importer also attempts
+  natural-key matching. Preserve both the backup and its pre-import live state so
+  `MVP-006A/006E` can reproduce the candidate ambiguity and verify exact replacement.
 - Expo ImagePicker emits its existing `MediaTypeOptions` deprecation warning during
   gallery selection. Selection and playback work; migrate to the current media-type
   API in a separate scoped ticket rather than broadening this native-build checkpoint.
@@ -417,8 +437,9 @@ seeding is disabled.
 
 1. Authenticate EAS or use a macOS operator to build and run the SDK 57 iOS
    development client with scene support enabled.
-2. Complete the iOS matrix plus the remaining backup/restore and physical-device
-   camera evidence above; keep any fixes in new narrowly scoped tickets.
+2. Complete the iOS matrix and physical-device camera evidence above; carry the
+   characterized replacement-restore gaps into `MVP-006` rather than this platform
+   checkpoint, and keep any platform fixes in new narrowly scoped tickets.
 3. Run the read-only `MVP-PRE-001R` audit, resolve findings, and pin the accepted SDK
    57 `main` SHA as the base for Wave 1.
 4. Do not start MVP feature branches until the final development-build evidence and
