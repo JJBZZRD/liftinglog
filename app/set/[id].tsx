@@ -481,7 +481,7 @@ export default function SetInfoScreen() {
     setPickerLoading(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: "videos",
         allowsMultipleSelection: false,
         quality: 1,
       });
