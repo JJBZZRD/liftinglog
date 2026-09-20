@@ -339,16 +339,92 @@ Status: automated gate passed on branch `upgrade/MVP-PRE-001F-native-patches` on
 - The checked-in-native-directory Doctor warning remains intentional. The successful
   clean prebuild plus the read-only native verifier are the synchronization controls.
 
+## Development-Build Smoke Checkpoint (MVP-PRE-001G)
+
+Status: Android emulator matrix and automated gates passed on branch
+`upgrade/MVP-PRE-001G-development-builds` on 2026-09-20. The checkpoint remains
+open for the iOS build and the device-only cases listed below.
+
+### Compatibility changes found by the smoke run
+
+- Added `expo-dev-client` because the existing EAS development profile declares
+  `developmentClient: true`. A clean native development build now contains the SDK
+  57 launcher/menu modules and the generated `exp+liftinglog` Android scheme.
+- Added `expo-build-properties` with `ios.enableSceneSupport: true`, the SDK 57
+  configuration required for Xcode 27 scene lifecycle builds. Public Expo config
+  evaluation confirms the setting, but an iOS build still requires an authenticated
+  EAS session or a macOS build host.
+- Removed the literal `sound: "default"` value from the Expo Notifications completion
+  channel. SDK 57 interprets a non-null string as a bundled custom sound filename;
+  omitting the field retains Android's system-default channel sound without the
+  runtime warning. A focused regression test protects the channel importance,
+  vibration, and default-sound semantics.
+
+### Android runtime evidence
+
+| Surface | Result |
+| --- | --- |
+| Clean native build | Pass; universal debug APK compiled and installed on a Pixel 9 Pro XL emulator |
+| Fresh install | Pass; x86_64 APK installed on a separate clean API 36 emulator |
+| SQLite startup | Pass; migrations ran, development fixtures seeded, one-time UID backfill ran after seeding, and the following cold start made no further backfills |
+| NativeWind/theme | Pass; Dark/Ocean applied visually and persisted across a cold start |
+| Calculator | Pass; 100 kg x 5 produced a 116.7 kg estimated 1RM and projection table |
+| Manual logging | Pass; completion was disabled with no sets, the first 100 kg x 5 set created an In Progress history entry, and completion closed only that entry |
+| History/filtering | Pass; exercise history changed from In Progress to completed and the global history search found the smoke entry |
+| Gallery video | Pass; a gallery MP4 attached to one set, copied into app storage, rendered inline, played fullscreen, and displayed its history indicator |
+| Rest timer | Pass; exact-alarm prompt, foreground countdown, background completion notification, notification deep link, pause, delete, and notification cancellation were exercised |
+| Camera surface | Partial; route launch and native permission handoff passed, but recording/orientation capture was not exercised |
+| Crash check | Pass; no crash reports on either emulator |
+
+The clean-install sequence exposed an existing development-only ordering detail:
+fixture rows are inserted after the startup UID migration, so the next launch
+backfills those seeded rows once. A third launch proved the initialized database is
+then stable. This does not affect production builds, where development fixture
+seeding is disabled.
+
+### Final automated gates
+
+| Gate | Result |
+| --- | --- |
+| `npm ci` | Pass; clean lockfile install and both postinstall guards completed |
+| `npx expo install --check` | Pass; dependencies are up to date |
+| `npm ls --depth=0` | Pass |
+| Native dependency and rest-timer verifiers | Pass |
+| `npm run typecheck` | Pass |
+| `npm run lint -- --no-cache` | Pass; 20 baseline warnings, 0 errors |
+| `npm test -- --runInBand --silent` | Pass; 27 suites, 344 tests |
+| `npx expo config --type public` | Pass; iOS scene support is enabled |
+| `npx expo export --platform android` | Pass; production bundle generated |
+| `npx expo-doctor@latest` | 20/21 checks pass; expected checked-in-native-directory warning only |
+| `git diff --check` | Pass |
+
+### Open evidence and accepted blockers
+
+- `npx eas-cli whoami` reports `Not logged in`. Windows cannot generate the missing
+  iOS project locally, so the clean iOS development build and iOS runtime matrix are
+  blocked until an authenticated EAS session or macOS build operator is available.
+- Front/back camera recording, portrait/landscape encoded-video orientation, rotation
+  during recording, and consecutive clips still require an explicitly authorized
+  full-profile physical-device run. The MVP recording surface remains deferred.
+- Backup export and replacement restore were not run end to end on a device in this
+  checkpoint. Automated database/backup tests remain green, but the release matrix
+  still requires a document-picker round trip before accepting the platform baseline.
+- Expo ImagePicker emits its existing `MediaTypeOptions` deprecation warning during
+  gallery selection. Selection and playback work; migrate to the current media-type
+  API in a separate scoped ticket rather than broadening this native-build checkpoint.
+
 ## Resume Point
 
-1. Integrate the independently reviewed `MVP-PRE-001F` checkpoint into `main`
-   without the unrelated local files listed below.
-2. Complete `MVP-PRE-001G` Android/iOS development-build smoke matrices, including
-   the Xcode 27 scene-support decision and NativeWind visual/runtime checks.
-3. Run the final `MVP-PRE-001R` audit and pin the accepted SDK 57 baseline SHA.
-4. Do not start MVP feature branches until the native patch review and final
-   development-build checks are complete.
+1. Authenticate EAS or use a macOS operator to build and run the SDK 57 iOS
+   development client with scene support enabled.
+2. Complete the iOS matrix plus the remaining backup/restore and physical-device
+   camera evidence above; keep any fixes in new narrowly scoped tickets.
+3. Run the read-only `MVP-PRE-001R` audit, resolve findings, and pin the accepted SDK
+   57 `main` SHA as the base for Wave 1.
+4. Do not start MVP feature branches until the final development-build evidence and
+   audit are accepted.
 
 The pre-existing `.gitignore` modification and
 `docs/codebase-analysis-2026-06-21/` directory are unrelated and excluded from these
-upgrade commits.
+upgrade commits. Local `.codex-artifacts/` screenshots are evidence only and are not
+committed.

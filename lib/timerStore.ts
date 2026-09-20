@@ -120,7 +120,6 @@ export class TimerStore {
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: "#007AFF",
-          sound: "default",
           enableVibrate: true,
         });
       }

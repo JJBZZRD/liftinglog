@@ -102,6 +102,27 @@ describe("TimerStore", () => {
     jest.clearAllMocks();
   });
 
+  it("creates the Android completion channel with default system sound semantics", async () => {
+    const { TimerStore, notifications } = loadTimerStore("android");
+    const store = new TimerStore();
+    await flushPromises();
+
+    const completionChannelCall = notifications.setNotificationChannelAsync.mock.calls.find(
+      ([channelId]: [string]) => channelId === "rest-timer-complete"
+    );
+
+    expect(completionChannelCall).toBeDefined();
+    expect(completionChannelCall[1]).toEqual(
+      expect.objectContaining({
+        importance: notifications.AndroidImportance.HIGH,
+        enableVibrate: true,
+      })
+    );
+    expect(completionChannelCall[1]).not.toHaveProperty("sound");
+
+    store.dispose();
+  });
+
   it("starts Android timers with a native countdown notification and leaves completion scheduling to native Android", async () => {
     const { TimerStore, notifications, nativeModule, alert } = loadTimerStore("android");
     const store = new TimerStore();
