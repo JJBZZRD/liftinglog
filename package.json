@@ -48,7 +48,7 @@
     "expo-system-ui": "~57.0.4",
     "expo-video": "~57.0.4",
     "expo-web-browser": "~57.0.3",
-    "nativewind": "^4.1.23",
+    "nativewind": "^4.2.7",
     "program-specification-language": "github:JJBZZRD/Program-Specification-Language#v0.3.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
