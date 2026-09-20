@@ -209,19 +209,86 @@ development-build validation, so the warning remains visible rather than suppres
   plan's SDK 57-supported stable patch belongs to the isolated dependency batch in
   `MVP-PRE-001E`.
 
+## Dependency Modernization (MVP-PRE-001E)
+
+Status: automated gate passed on branch `upgrade/MVP-PRE-001E-dependencies` on
+2026-09-20. Runtime/device smoke coverage remains part of `MVP-PRE-001G`.
+
+### Compatibility and security batches
+
+Changes were kept in separately tested commits rather than applied through a blanket
+upgrade or `npm audit fix`:
+
+1. NativeWind moved from `4.2.1` to the SDK 57-supported stable `4.2.7`; its pinned
+   `react-native-css-interop` dependency moved from `0.2.1` to `0.2.7`. The existing
+   Babel, Metro, Tailwind 3, global CSS, and root-layout configuration remains valid.
+2. Runtime transitive leaves moved from `yaml` `2.8.2` to `2.9.1` and `lodash`
+   `4.17.23` to `4.18.1` within their parents' existing semver ranges. Focused PSL,
+   program-calendar, and program-history tests passed before the full gate.
+3. Drizzle ORM moved from `0.44.7` to `0.45.2` as an isolated database batch. The
+   update removes its SQL-identifier advisory and remains compatible with Expo SQLite
+   57. Thirteen database/logging/analytics/PB/media/backup suites (252 tests) passed
+   before the full gate.
+4. Compatible build-tool leaves were refreshed without adding overrides: Babel core,
+   XML DOM, both JS YAML lines, Minimatch and Brace Expansion lines, Picomatch lines,
+   PostCSS Selector Parser, Shell Quote, and both WebSocket lines.
+5. Reviewer-identified development leaves were refreshed within their parent ranges:
+   HumanFS, Once, AJV, Flatted, and Form Data. This removed the remaining fixable
+   lint/test-tree audit records without changing direct tooling versions.
+
+The CSS interop postinstall guard remains valid: against CSS interop `0.2.7` it
+confirms the upstream `react-native-safe-area-context` implementation and performs no
+mutation. The Expo Camera orientation patch still applies. Final patch retirement or
+hardening remains owned by `MVP-PRE-001F`.
+
+### Gate results
+
+| Gate | Result |
+| --- | --- |
+| `npm ci` | Pass; both postinstall checks pass |
+| `npm ls --depth=0` | Pass |
+| `npx expo install --check` | Pass; dependencies are up to date |
+| `npm run lint -- --no-cache` | Pass; 20 baseline warnings, 0 errors |
+| `npm run typecheck` | Pass |
+| `npm test -- --runInBand --silent` | Pass; 26 suites, 337 tests |
+| Focused Drizzle regression gate | Pass; 13 suites, 252 tests |
+| `npx expo config --type public` | Pass |
+| `npx expo export --platform android` | Pass; production bundle generated |
+| `npx expo-doctor@latest` | 20/21 checks pass; expected native-directory warning only |
+| `android\\gradlew.bat :app:compileDebugKotlin` | Pass |
+| `git diff --check` | Pass |
+
+### Remaining advisories and risks
+
+`npm audit --omit=dev` is reduced from 28 records (including 1 critical and 8 high)
+to 16 moderate records. They form two upstream-blocked groups:
+
+- Thirteen Expo configuration records flow through `xcode@3.0.1` and `uuid@7.0.3`.
+  Current Expo 57 packages are already at their latest compatible patches; npm's
+  proposed Expo 46 downgrade is invalid.
+- Three routing records flow through Expo Router's `query-string@7.1.3` and
+  `decode-uri-component@0.2.2`. Patched major versions are outside Expo Router 57's
+  declared ranges and must not be forced without an upstream-compatible Router update.
+
+No critical, high, or low production audit records remain. Reassess both moderate
+groups when another stable Expo 57 patch is available or during the next SDK upgrade.
+The full audit, including development dependencies, reports the same 16 moderate
+records and no additional development-only advisories.
+NativeWind theme switching, modal/navigation styling, and Fast Refresh still require
+the device smoke matrix in `MVP-PRE-001G`; a successful Metro export is not a visual
+runtime test.
+
 ## Resume Point
 
-1. Independently review the `upgrade-expo-57` diff and gate evidence, then commit and
-   integrate it into `main` without the unrelated local files listed below.
-2. Branch `MVP-PRE-001E` from the accepted SDK 57 `main` commit. Inventory dependency
-   ownership and update small compatibility/security risk groups separately; start
-   with NativeWind stable 4.x support and audit findings that have non-breaking fixes.
-3. Run database regression coverage for any dependency batch that can affect SQLite,
-   Drizzle, backup, or restore. Never use `npm audit fix --force`.
-4. Complete `MVP-PRE-001F` patch/native-plugin review and `MVP-PRE-001G` Android/iOS
-   development-build smoke matrices before accepting `MVP-PRE-001`.
-5. Do not start MVP feature branches until dependency review, native patch review,
-   and final development-build checks are complete.
+1. Independently review the complete `MVP-PRE-001E` dependency diff and evidence,
+   then integrate it into `main` without the unrelated local files listed below.
+2. Branch `MVP-PRE-001F` from the accepted PRE-001E `main` commit. Revalidate or
+   retire both postinstall scripts and add the documented automated rest-timer native
+   invariant check before reviewing the checked-in Android integration.
+3. Complete `MVP-PRE-001G` Android/iOS development-build smoke matrices, including
+   the Xcode 27 scene-support decision and NativeWind visual/runtime checks.
+4. Do not start MVP feature branches until the native patch review and final
+   development-build checks are complete.
 
 The pre-existing `.gitignore` modification and
 `docs/codebase-analysis-2026-06-21/` directory are unrelated and excluded from these
