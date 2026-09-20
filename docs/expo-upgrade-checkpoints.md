@@ -488,15 +488,105 @@ emulator/Google service noise. Broad workout history, backup/import, rest-timer
 notifications, gallery attachment/playback, and physical camera recording were not
 rerun in this provisional sweep and must not be inferred from it.
 
+## Organiser Resume Review (2026-09-20)
+
+The organiser resumed from `main` / `origin/main`
+`2311f55216453f5a62b5aeb0e86a894711f5dcab`; the SDK transitions and PRE-001E/F
+were not restarted. PRE-001G, PRE-001H, and PRE-001R remain open.
+
+### Explicit iOS deferral
+
+The user instructed **"ignore ios for now"** during this resume. iOS build and
+runtime evidence are deferred under exception `PRE-001G-IOS-DEFERRED`, owned by
+the organiser. This removes iOS from the current execution queue; it does not
+constitute iOS acceptance or cross-platform release approval. Revisit the iOS
+build/runtime matrix before iOS release approval. Android PRE-001G evidence,
+PRE-001H, and the independent PRE-001R audit remain required before Wave 1.
+
+### Physical Android readiness
+
+- The attached CPH2841 phone reports Android 16 / API 36 and is ADB-authorized.
+- ADB reverse already maps `tcp:8081` to `tcp:8081`; the existing Metro server
+  responds over IPv4 at `http://127.0.0.1:8081/status` with HTTP 200.
+- The ignored `.env.local` retains `REACT_NATIVE_PACKAGER_HOSTNAME=localhost`.
+- The installed APK and local `android/app/build/outputs/apk/debug/app-debug.apk`
+  have identical SHA-256 hashes:
+  `2e0b4e4472da64cd8b3a9fc2564932dfce3bef3750ad106b354e197bd1deb8f2`.
+  This identifies the installed artifact, not a reproducible clean-build proof.
+- Launching the encoded development-client localhost URL returned `Status: ok`.
+  UI hierarchy and screenshot inspection confirmed the populated Overview renders.
+  This is readiness evidence only, not a completed runtime matrix.
+- Physical camera recordings/rotations and the post-picker-fix gallery attachment
+  and playback checks remain pending. No new recording was made in this readiness
+  run.
+
+Local evidence is in `.codex-artifacts/pre001g-resume-20260920/`. All pre-existing
+changes and untracked evidence are preserved, including the five Android files
+reported modified by Git and the unrelated `.gitignore` change. The organiser
+dispatched independent, read-only native-provenance and Android-matrix packets to
+Sol/high and Luna/medium respectively, each pinned to `2311f55`, in separate
+worktrees, with no inherited conversation. These are PRE-001G preparation, not
+the final PRE-001R audit.
+
+The organiser independently checked the native review: the five Android files
+match their HEAD blobs, and `git diff 81a181f 2311f55 -- android package.json
+package-lock.json app.json plugins scripts` is empty. The documented clean native
+build remains applicable to the unchanged native inputs; no SDK restart or rebuild
+is required solely because of those Git status entries. The pinned-worktree and
+main-worktree native verifiers both pass. The repository-root `.gitignore` still
+has its pre-existing three-line `.codebase-memory/` addition; it is not part of
+the five-file native finding.
+
+Reviewed remaining Android operator matrix:
+
+| Check | Required evidence |
+| --- | --- |
+| Camera facing and initial rotation | Front and back camera clips in portrait and both landscape directions; verify the encoded clip through playback, not just preview/icon rotation |
+| Rotation during capture | Start in portrait, rotate to landscape, stop; repeat in the other direction; verify playable output and no stuck recording state |
+| Consecutive clips | Record, stop, and record again without leaving the camera route; verify the second URI replaces the first and the controls recover |
+| Durable camera save | Use a disposable test exercise entry; Save Video and its Add Set modal create one real set and linked media; inspect playback from that set after saving |
+| Gallery after `d8ee8cf` | On a disposable test set, select an MP4, verify inline/fullscreen playback and persistence after navigating away and back; verify replacement and absence of the old picker deprecation |
+
+Enter recording from the normal Record tab so `id`, `name`, `workoutId`,
+`workoutExerciseId`, `performedAt`, and `setIndex` are supplied by the app. Do not
+invent database IDs. Saving a recording adds real training data and can also add a
+gallery asset; do not use an existing personal training entry for these tests.
+The camera screen has no encoded-video preview: inspect saved output through the
+set screen. Physical rotation and a non-sensitive camera scene need the device
+operator. No pending operator response is treated as a pass or waiver.
+
+### Resumed automated verification
+
+| Command | Result on `2311f55` |
+| --- | --- |
+| `npm ls --depth=0` | Pass; SDK 57.0.24 dependency tree |
+| `npm run verify:android-rest-timer-native` | Pass |
+| `npm run typecheck` | Pass |
+| `npm run lint -- --no-cache` | Pass; 20 baseline warnings, 0 errors |
+| `npm test -- --runInBand --silent` | Pass; 27 suites, 344 tests |
+
+The first two Jest attempts incorrectly discovered the two temporary review
+worktrees nested beneath `.codex-artifacts/`: 81 suites, with six missing-local-
+dependency failures in the duplicate native-patch suites. This was an organiser
+harness error, not an app regression. Both newly created, clean worktrees were
+removed after their read-only handoffs; the unchanged standard Jest command then
+passed with exactly 27 suites. Future worker worktrees must be outside the app
+directory. The review branches remain pinned to `2311f55`; no worker code merged.
+Hashes confirm all six pre-existing modified files and `.env.local` stayed
+byte-for-byte unchanged during this run.
+
 ## Resume Point
 
-1. Authenticate EAS or use a macOS operator to build and run the SDK 57 iOS
-   development client with scene support enabled.
-2. Complete the iOS matrix and physical-device camera evidence above; carry the
-   characterized replacement-restore gaps into `MVP-006` rather than this platform
-   checkpoint, and keep any platform fixes in new narrowly scoped tickets.
-3. After PRE-001G closes, complete `MVP-PRE-001H` against the accepted SDK 57
-   Android development build. Reuse the IPv4 Metro launch contract above. The
+1. Keep iOS build/runtime work deferred under `PRE-001G-IOS-DEFERRED` above. When
+   resumed, authenticate EAS or use a macOS operator to build and run the SDK 57
+   iOS development client with scene support enabled.
+2. Complete the remaining Android physical-device camera and gallery evidence
+   above; carry the characterized replacement-restore gaps into `MVP-006` rather
+   than this platform checkpoint, and keep any platform fixes in new narrowly
+   scoped tickets.
+3. After the Android PRE-001G gate is accepted with the explicit iOS deferral,
+   complete `MVP-PRE-001H` against the accepted SDK 57 Android development build.
+   Reuse the IPv4 Metro launch contract above. The
    provisional clean/populated, calculator, logging, history, analytics, and gallery
    picker checks pass on `d8ee8cf`; rerun the complete matrix, including the surfaces
    explicitly left unexercised above, on the final accepted `main` SHA. Close only
