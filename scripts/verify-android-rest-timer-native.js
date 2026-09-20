@@ -8,6 +8,7 @@ const {
   LAYOUT_TEMPLATES,
   RECEIVERS,
   buildNotificationSmallIcon,
+  canonicalizeAndroidComponentName,
   getPackageListApplyBlock,
   getExpoIdentity,
   getPaths,
@@ -61,7 +62,8 @@ function verifyMainApplication(paths) {
   const source = readRequiredFile(paths.mainApplicationPath).toString("utf8");
   const importLine =
     `import ${paths.packageName}.notifications.RestTimerNotificationsPackage`;
-  const registrationPattern = /add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)/g;
+  const registrationPattern =
+    /^\s*add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)\s*$/gm;
   assert(countOccurrences(source, importLine) === 1, "Expected one rest-timer package import");
   assert(
     (source.match(registrationPattern) || []).length === 1,
@@ -82,8 +84,16 @@ async function verifyManifest(paths) {
 
   const mainApplication = AndroidConfig.Manifest.getMainApplicationOrThrow(androidManifest);
   for (const receiverName of RECEIVERS) {
+    const expectedCanonicalName = canonicalizeAndroidComponentName(
+      paths.packageName,
+      receiverName
+    );
     const matches = (mainApplication.receiver || []).filter(
-      (receiver) => receiver?.$?.["android:name"] === receiverName
+      (receiver) =>
+        canonicalizeAndroidComponentName(
+          paths.packageName,
+          receiver?.$?.["android:name"]
+        ) === expectedCanonicalName
     );
     assert(matches.length === 1, `Expected one ${receiverName} receiver`);
     assert(
@@ -91,6 +101,28 @@ async function verifyManifest(paths) {
       `${receiverName} must set android:exported="false"`
     );
   }
+}
+
+function getPendingIntentCalls(source) {
+  const calls = [];
+  const callPattern = /PendingIntent\.get(?:Activity|Broadcast)\s*\(/g;
+  for (const match of source.matchAll(callPattern)) {
+    const start = match.index;
+    const openingParenthesis = source.indexOf("(", start);
+    let depth = 0;
+    for (let index = openingParenthesis; index < source.length; index += 1) {
+      if (source[index] === "(") {
+        depth += 1;
+      } else if (source[index] === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          calls.push(source.slice(start, index + 1));
+          break;
+        }
+      }
+    }
+  }
+  return calls;
 }
 
 function verifyAppConfiguration(identity) {
@@ -146,20 +178,42 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     "TypeScript adapter module name has drifted"
   );
 
+  const packageSource = readRequiredFile(
+    path.join(paths.templateDir, "RestTimerNotificationsPackage.kt")
+  ).toString("utf8");
+  const packageMetadataSnippets = [
+    "class RestTimerNotificationsPackage : BaseReactPackage()",
+    "override fun getModule(",
+    "RestTimerNotificationsModule.NAME -> RestTimerNotificationsModule(reactContext)",
+    "override fun getReactModuleInfoProvider(): ReactModuleInfoProvider",
+    "RestTimerNotificationsModule.NAME to ReactModuleInfo(",
+    "RestTimerNotificationsModule::class.java.name",
+  ];
+  for (const snippet of packageMetadataSnippets) {
+    assert(packageSource.includes(snippet), `Missing RN package metadata: ${snippet}`);
+  }
+  assert(
+    /ReactModuleInfo\(\s*RestTimerNotificationsModule\.NAME\s*,\s*RestTimerNotificationsModule::class\.java\.name\s*,\s*false\s*,\s*false\s*,\s*false\s*,\s*false\s*\)/.test(
+      packageSource
+    ),
+    "Rest-timer ReactModuleInfo metadata does not match the legacy native module contract"
+  );
+
   const managerSource = readRequiredFile(
     path.join(paths.templateDir, "RestTimerNotificationManager.kt")
   ).toString("utf8");
-  const pendingIntentCount = (managerSource.match(/PendingIntent\.get(?:Activity|Broadcast)\s*\(/g) || [])
-    .length;
-  assert(pendingIntentCount > 0, "Rest-timer manager must create pending intents");
-  assert(
-    countOccurrences(managerSource, "PendingIntent.FLAG_IMMUTABLE") === pendingIntentCount,
-    "Every rest-timer pending intent must include FLAG_IMMUTABLE"
-  );
-  assert(
-    countOccurrences(managerSource, "PendingIntent.FLAG_UPDATE_CURRENT") === pendingIntentCount,
-    "Every rest-timer pending intent must include FLAG_UPDATE_CURRENT"
-  );
+  const pendingIntentCalls = getPendingIntentCalls(managerSource);
+  assert(pendingIntentCalls.length > 0, "Rest-timer manager must create pending intents");
+  for (const call of pendingIntentCalls) {
+    assert(
+      countOccurrences(call, "PendingIntent.FLAG_IMMUTABLE") === 1,
+      "Every rest-timer pending intent must include FLAG_IMMUTABLE exactly once"
+    );
+    assert(
+      countOccurrences(call, "PendingIntent.FLAG_UPDATE_CURRENT") === 1,
+      "Every rest-timer pending intent must include FLAG_UPDATE_CURRENT exactly once"
+    );
+  }
   assert(
     managerSource.includes("setExactAndAllowWhileIdle"),
     "Rest-timer manager must retain exact idle alarm scheduling"
@@ -220,4 +274,5 @@ module.exports = {
   verifyManifest,
   verifyNotificationIcon,
   verifyTemplateParity,
+  getPendingIntentCalls,
 };

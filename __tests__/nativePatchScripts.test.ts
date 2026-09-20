@@ -32,6 +32,19 @@ describe("native dependency patches", () => {
 
     expect(applyExpoCameraOrientationPatchToSource(upstreamSource)).toBe(patchedSource);
     expect(applyExpoCameraOrientationPatchToSource(patchedSource)).toBe(patchedSource);
+
+    const semanticInvariants = [
+      "currentTargetRotation = rotation",
+      "videoCaptureUseCase?.targetRotation = rotation",
+      "private var videoCaptureUseCase: VideoCapture<Recorder>? = null",
+      "private var currentTargetRotation = Surface.ROTATION_0",
+      "videoCaptureUseCase?.targetRotation = currentTargetRotation",
+      "it.targetRotation = currentTargetRotation",
+      "videoCaptureUseCase = it",
+    ];
+    for (const invariant of semanticInvariants) {
+      expect(patchedSource.split(invariant)).toHaveLength(2);
+    }
   });
 
   test("rejects partial, duplicate, and unsupported Expo Camera patch states", () => {
@@ -93,6 +106,15 @@ describe("Android rest-timer native integration", () => {
         "com.example.app"
       )
     ).toThrow("outside the PackageList apply block");
+    const commentedRegistration = patchMainApplicationContents(
+      fixture.replace(
+        "PackageList(this).packages.apply {\n}",
+        "PackageList(this).packages.apply {\n  // add(RestTimerNotificationsPackage())\n}"
+      ),
+      "com.example.app"
+    );
+    expect(commentedRegistration).toContain("  // add(RestTimerNotificationsPackage())");
+    expect(commentedRegistration).toContain("          add(RestTimerNotificationsPackage())");
   });
 
   test("normalizes required manifest entries without duplicates", () => {
@@ -110,7 +132,8 @@ describe("Android rest-timer native integration", () => {
             receiver: [
               {
                 $: {
-                  "android:name": ".notifications.RestTimerCompletionReceiver",
+                  "android:name":
+                    "com.example.app.notifications.RestTimerCompletionReceiver",
                   "android:exported": "true",
                 },
               },
@@ -126,7 +149,7 @@ describe("Android rest-timer native integration", () => {
       },
     };
 
-    ensureRestTimerManifestEntries(manifest);
+    ensureRestTimerManifestEntries(manifest, "com.example.app");
     const permissions = manifest.manifest["uses-permission"].filter(
       (permission: { $: Record<string, string> }) =>
         permission.$["android:name"] === "android.permission.SCHEDULE_EXACT_ALARM"

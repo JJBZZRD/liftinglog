@@ -278,15 +278,74 @@ NativeWind theme switching, modal/navigation styling, and Fast Refresh still req
 the device smoke matrix in `MVP-PRE-001G`; a successful Metro export is not a visual
 runtime test.
 
+## Native Patch and Plugin Review (MVP-PRE-001F)
+
+Status: automated gate passed on branch `upgrade/MVP-PRE-001F-native-patches` on
+2026-09-20. Device behavior remains part of `MVP-PRE-001G`.
+
+### Patch decisions and native hardening
+
+- Retained the Expo Camera Android orientation patch because `expo-camera` `57.0.5`
+  still does not propagate target rotation to `VideoCapture`. The postinstall script
+  now supports only the explicitly reviewed package version, requires every source
+  anchor exactly once, rejects partial or duplicate patch states, fails if the target
+  is absent, verifies all postconditions before writing, and is byte-idempotent.
+- Retired the obsolete CSS Interop SafeAreaView mutation. NativeWind `4.2.7` and its
+  locked CSS Interop `0.2.7` already register `react-native-safe-area-context` in the
+  runtime artifact. A read-only postinstall assertion now rejects a return to the
+  deprecated React Native core `SafeAreaView` registration.
+- Replaced unchecked manifest text replacement with Expo's structured manifest mod
+  and moved `MainApplication.kt` registration into `withMainApplication`. The
+  dangerous mod is now limited to generated Kotlin, layout, and image resources.
+- Added `verify:android-rest-timer-native`, which checks template/output byte parity,
+  notification icon pixel parity, package registration, manifest permission and
+  receivers, app-plugin configuration, package/Gradle identity, module naming,
+  immutable pending intents, exact-alarm scheduling, resources, and URI schemes.
+- Normalized native notification URIs to the configured lowercase `liftinglog`
+  scheme and made package/output paths derive from `expo.android.package`.
+- Migrated the custom package from deprecated `ReactPackage.createNativeModules` to
+  the React Native 0.86 `BaseReactPackage` and `ReactModuleInfoProvider` contract.
+- Independent review then closed false-pass paths for commented package additions,
+  equivalent fully qualified receiver names, aggregate pending-intent flag counts,
+  and missing React Native package metadata assertions.
+
+### Gate results
+
+| Gate | Result |
+| --- | --- |
+| `npm ci` | Pass; camera patch applied to a clean install and CSS runtime verified |
+| Second `npm run postinstall` | Pass; camera patch byte-idempotent |
+| `npm ls --depth=0` | Pass |
+| `npx expo install --check` | Pass; dependencies are up to date |
+| `npx expo prebuild --platform android --clean --no-install` | Pass; structured plugin regenerated all required integration |
+| `npm run verify:android-rest-timer-native` | Pass |
+| `npm run lint -- --no-cache` | Pass; 20 baseline warnings, 0 errors |
+| `npm run typecheck` | Pass |
+| `npm test -- --runInBand --silent` | Pass; 27 suites, 343 tests |
+| `npx expo config --type public` | Pass |
+| `npx expo export --platform android` | Pass; production bundle generated |
+| `npx expo-doctor@latest` | 20/21 checks pass; expected native-directory warning only |
+| `android\\gradlew.bat :app:compileDebugKotlin` | Pass after clean prebuild |
+| `git diff --check` | Pass |
+
+### Deferred device checks
+
+- Static checks and compilation cannot prove encoded MP4 orientation across CameraX
+  implementations. `MVP-PRE-001G` must cover front/back cameras, portrait and both
+  landscape rotations, rotation before and during recording, and consecutive clips.
+- `MVP-PRE-001G` must exercise rest-timer countdown, completion, cancellation,
+  notification taps, exact-alarm permission states, and process/background behavior
+  on an Android development build.
+- The checked-in-native-directory Doctor warning remains intentional. The successful
+  clean prebuild plus the read-only native verifier are the synchronization controls.
+
 ## Resume Point
 
-1. Independently review the complete `MVP-PRE-001E` dependency diff and evidence,
-   then integrate it into `main` without the unrelated local files listed below.
-2. Branch `MVP-PRE-001F` from the accepted PRE-001E `main` commit. Revalidate or
-   retire both postinstall scripts and add the documented automated rest-timer native
-   invariant check before reviewing the checked-in Android integration.
-3. Complete `MVP-PRE-001G` Android/iOS development-build smoke matrices, including
+1. Integrate the independently reviewed `MVP-PRE-001F` checkpoint into `main`
+   without the unrelated local files listed below.
+2. Complete `MVP-PRE-001G` Android/iOS development-build smoke matrices, including
    the Xcode 27 scene-support decision and NativeWind visual/runtime checks.
+3. Run the final `MVP-PRE-001R` audit and pin the accepted SDK 57 baseline SHA.
 4. Do not start MVP feature branches until the native patch review and final
    development-build checks are complete.
 

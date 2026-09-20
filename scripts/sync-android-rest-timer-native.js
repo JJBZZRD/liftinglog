@@ -48,6 +48,19 @@ function getPackageListApplyBlock(contents) {
   throw new Error("PackageList apply block is not balanced in MainApplication.kt");
 }
 
+function canonicalizeAndroidComponentName(packageName, componentName) {
+  if (typeof componentName !== "string" || !componentName) {
+    return componentName;
+  }
+  if (componentName.startsWith(".")) {
+    return `${packageName}${componentName}`;
+  }
+  if (!componentName.includes(".")) {
+    return `${packageName}.${componentName}`;
+  }
+  return componentName;
+}
+
 function getExpoIdentity(projectRoot) {
   const appJsonPath = path.join(projectRoot, "app.json");
   if (!fs.existsSync(appJsonPath)) {
@@ -233,7 +246,8 @@ function patchMainApplicationContents(contents, packageName) {
     contents = contents.replace(importAnchor, `${importLine}\n${importAnchor}`);
   }
 
-  const registrationPattern = /add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)/g;
+  const registrationPattern =
+    /^\s*add\s*\(\s*RestTimerNotificationsPackage\s*\(\s*\)\s*\)\s*$/gm;
   const registrationCount = (contents.match(registrationPattern) || []).length;
   if (registrationCount > 1) {
     throw new Error("MainApplication.kt contains duplicate rest-timer package registrations");
@@ -261,7 +275,7 @@ function patchMainApplicationContents(contents, packageName) {
   return contents;
 }
 
-function ensureRestTimerManifestEntries(androidManifest) {
+function ensureRestTimerManifestEntries(androidManifest, packageName) {
   const manifest = androidManifest.manifest;
   let foundExactAlarmPermission = false;
   manifest["uses-permission"] = (manifest["uses-permission"] || []).filter((permission) => {
@@ -283,23 +297,31 @@ function ensureRestTimerManifestEntries(androidManifest) {
 
   const mainApplication = AndroidConfig.Manifest.getMainApplicationOrThrow(androidManifest);
   const foundReceivers = new Set();
+  const expectedReceivers = new Map(
+    RECEIVERS.map((receiverName) => [
+      canonicalizeAndroidComponentName(packageName, receiverName),
+      receiverName,
+    ])
+  );
   mainApplication.receiver = (mainApplication.receiver || []).filter((receiver) => {
     const receiverName = receiver?.$?.["android:name"];
-    if (!RECEIVERS.includes(receiverName)) {
+    const canonicalName = canonicalizeAndroidComponentName(packageName, receiverName);
+    if (!expectedReceivers.has(canonicalName)) {
       return true;
     }
-    if (foundReceivers.has(receiverName)) {
+    if (foundReceivers.has(canonicalName)) {
       return false;
     }
-    foundReceivers.add(receiverName);
+    foundReceivers.add(canonicalName);
     receiver.$ = {
-      "android:name": receiverName,
+      "android:name": expectedReceivers.get(canonicalName),
       "android:exported": "false",
     };
     return true;
   });
   for (const receiverName of RECEIVERS) {
-    if (!foundReceivers.has(receiverName)) {
+    const canonicalName = canonicalizeAndroidComponentName(packageName, receiverName);
+    if (!foundReceivers.has(canonicalName)) {
       mainApplication.receiver.push({
         $: {
           "android:name": receiverName,
@@ -328,7 +350,7 @@ async function patchAndroidManifest(paths) {
     throw new Error(`Missing AndroidManifest.xml: ${paths.manifestPath}`);
   }
   const androidManifest = await AndroidConfig.Manifest.readAndroidManifestAsync(paths.manifestPath);
-  ensureRestTimerManifestEntries(androidManifest);
+  ensureRestTimerManifestEntries(androidManifest, paths.packageName);
   await AndroidConfig.Manifest.writeAndroidManifestAsync(paths.manifestPath, androidManifest);
   console.log(`Verified ${path.relative(paths.projectRoot, paths.manifestPath)}`);
 }
@@ -370,6 +392,7 @@ module.exports = {
   LAYOUT_TEMPLATES,
   RECEIVERS,
   buildNotificationSmallIcon,
+  canonicalizeAndroidComponentName,
   ensureRestTimerManifestEntries,
   getExpoIdentity,
   getPackageListApplyBlock,

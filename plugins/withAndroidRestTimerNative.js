@@ -27,7 +27,7 @@ function withAndroidRestTimerNative(config) {
   });
 
   config = withAndroidManifest(config, (modConfig) => {
-    modConfig.modResults = ensureRestTimerManifestEntries(modConfig.modResults);
+    modConfig.modResults = ensureRestTimerManifestEntries(modConfig.modResults, packageName);
     return modConfig;
   });
 
