@@ -505,6 +505,17 @@ PRE-001H, and the independent PRE-001R audit remain required before Wave 1.
 
 ### Physical Android readiness
 
+**Subsequent user scope clarification:** in-app recording is excluded from the
+MVP; only gallery video attachment/playback remains. Under exception
+`PRE-001G-CAMERA-DEFERRED`, the organiser defers physical front/back recording,
+encoded-orientation, rotation-during-capture, consecutive-clip, and camera-save
+checks to a future full-profile camera release. These checks no longer block the
+MVP prerequisite. Static/native compilation coverage remains required and passed.
+MVP-001D and MVP-004C must still remove recording entry points and protect the
+recording route in the MVP profile; retain the source/dependencies for the full
+profile as required by product facts sections 9 and 11. This exception does not
+waive gallery attachment/playback, Android console verification, or PRE-001R.
+
 - The attached CPH2841 phone reports Android 16 / API 36 and is ADB-authorized.
 - ADB reverse already maps `tcp:8081` to `tcp:8081`; the existing Metro server
   responds over IPv4 at `http://127.0.0.1:8081/status` with HTTP 200.
@@ -516,9 +527,9 @@ PRE-001H, and the independent PRE-001R audit remain required before Wave 1.
 - Launching the encoded development-client localhost URL returned `Status: ok`.
   UI hierarchy and screenshot inspection confirmed the populated Overview renders.
   This is readiness evidence only, not a completed runtime matrix.
-- Physical camera recordings/rotations and the post-picker-fix gallery attachment
-  and playback checks remain pending. No new recording was made in this readiness
-  run.
+- Physical camera recordings/rotations are deferred under the exception above.
+  Post-picker-fix gallery attachment and playback remain pending. No new recording
+  was made in this readiness run.
 
 Local evidence is in `.codex-artifacts/pre001g-resume-20260920/`. All pre-existing
 changes and untracked evidence are preserved, including the five Android files
@@ -537,7 +548,8 @@ main-worktree native verifiers both pass. The repository-root `.gitignore` still
 has its pre-existing three-line `.codebase-memory/` addition; it is not part of
 the five-file native finding.
 
-Reviewed remaining Android operator matrix:
+Reviewed Android operator matrix (camera rows are now deferred; gallery remains
+required):
 
 | Check | Required evidence |
 | --- | --- |
@@ -553,7 +565,9 @@ invent database IDs. Saving a recording adds real training data and can also add
 gallery asset; do not use an existing personal training entry for these tests.
 The camera screen has no encoded-video preview: inspect saved output through the
 set screen. Physical rotation and a non-sensitive camera scene need the device
-operator. No pending operator response is treated as a pass or waiver.
+operator when this deferred matrix resumes. The previous camera-operator prompt
+is superseded by the user's MVP scope clarification; no camera interaction is
+required for the current gate.
 
 ### Resumed automated verification
 
@@ -580,11 +594,13 @@ byte-for-byte unchanged during this run.
 1. Keep iOS build/runtime work deferred under `PRE-001G-IOS-DEFERRED` above. When
    resumed, authenticate EAS or use a macOS operator to build and run the SDK 57
    iOS development client with scene support enabled.
-2. Complete the remaining Android physical-device camera and gallery evidence
-   above; carry the characterized replacement-restore gaps into `MVP-006` rather
+2. Complete the remaining Android gallery evidence above. Keep physical camera
+   tests deferred under `PRE-001G-CAMERA-DEFERRED`; carry the characterized
+   replacement-restore gaps into `MVP-006` rather
    than this platform checkpoint, and keep any platform fixes in new narrowly
    scoped tickets.
-3. After the Android PRE-001G gate is accepted with the explicit iOS deferral,
+3. After the Android PRE-001G gate is accepted with the explicit iOS and camera
+   deferrals,
    complete `MVP-PRE-001H` against the accepted SDK 57 Android development build.
    Reuse the IPv4 Metro launch contract above. The
    provisional clean/populated, calculator, logging, history, analytics, and gallery
