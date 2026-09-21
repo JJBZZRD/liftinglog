@@ -595,8 +595,20 @@ byte-for-byte unchanged during this run.
 
 ### Current checkpoint, 2026-09-21
 
-**PRE-001G and PRE-001H are accepted for Android prerequisite ordering;
-PRE-001R is next and Wave 1 remains blocked until R acceptance.** The resumed
+**PRE-001G, PRE-001H and PRE-001R are accepted for Android prerequisite ordering.
+Wave 1 may begin.** Independent Sol/high PRE-001R passed at
+`287e55ff9c31542e450d7603783f578e20572b9f` with no findings. It checked lockfile/root
+manifest identity, Expo dependency alignment, native-input identity, retained camera
+patch guards, CSS verifier retirement, timer template/generated parity, focused
+native tests (6/6), and raw build/runtime evidence. No files were changed by the
+reviewer. The organiser reviewed the result against the inspected source/evidence.
+This remains Android prerequisite acceptance, not release approval.
+
+The organiser reread the implementation plan after the gates and refreshed
+codebase-memory (3,026 nodes / 6,918 edges). The acceptance/documentation commit
+containing this entry is the common Wave 1 base; its application/native source is
+identical to audited `287e55f`. Track ticket scopes and integration in
+[the execution register](mvp-execution-status.md). The resumed
 [Android audit](android-console-audit-2026-09-20.md) records completed populated
 gallery persistence/replacement, SAF export/import, independent SQLite integrity
 and foreign-key checks, and final console classifications on `99c1033` (unchanged
@@ -605,9 +617,8 @@ remain a documented MVP-006 regression fixture, not replacement-restore approval
 
 Typecheck, 27 suites/344 tests, baseline-only lint, dependency tree and Android
 native verifier passed again. The user authorised proceeding into plan-ordered
-implementation after the checks without another permission prompt. Run independent
-Sol/high PRE-001R on the committed H checkpoint; resolve findings, reread the plan,
-refresh codebase-memory and pin the accepted SHA before dispatching Wave 1.
+implementation after the checks without another permission prompt. Dispatch the
+prepared Wave 1 packets from the recorded accepted base.
 Keep iOS/camera exceptions below, phone disconnected, original dirty/untracked
 work preserved, and worker worktrees outside the app directory.
 
