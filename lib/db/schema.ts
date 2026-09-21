@@ -41,7 +41,7 @@ export const userCheckins = sqliteTable("user_checkins", {
 export const exercises = sqliteTable("exercises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   uid: text("uid"),
-  name: text("name").notNull().unique(),
+  name: text("name").notNull(),
   parentExerciseId: integer("parent_exercise_id"),
   variationLabel: text("variation_label"),
   description: text("description"),

@@ -1,5 +1,20 @@
 import { initializeDatabase } from "../../lib/db/bootstrap";
 
+const TARGET_EXERCISES_SQL = `CREATE TABLE exercises (
+  id INTEGER PRIMARY KEY NOT NULL,
+  uid TEXT,
+  name TEXT NOT NULL,
+  parent_exercise_id INTEGER,
+  variation_label TEXT,
+  description TEXT,
+  muscle_group TEXT,
+  equipment TEXT,
+  is_bodyweight INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER,
+  last_rest_seconds INTEGER,
+  is_pinned INTEGER NOT NULL DEFAULT 0
+)`;
+
 type MockSqlite = {
   execCalls: string[];
   execSync: jest.Mock<void, [string]>;
@@ -8,6 +23,7 @@ type MockSqlite = {
 
 function createMockSqlite(columnMap: Record<string, string[]>): MockSqlite {
   const execCalls: string[] = [];
+  const exerciseIndexes = new Set<string>();
   const liveColumns = new Map(
     Object.entries(columnMap).map(([table, columns]) => [table, new Set(columns)])
   );
@@ -15,6 +31,12 @@ function createMockSqlite(columnMap: Record<string, string[]>): MockSqlite {
   return {
     execCalls,
     execSync: jest.fn((sql: string) => {
+      if (sql.includes("idx_exercises_uid ON exercises(uid)")) {
+        exerciseIndexes.add("idx_exercises_uid");
+      }
+      if (sql.includes("idx_exercises_parent_exercise_id ON exercises(parent_exercise_id)")) {
+        exerciseIndexes.add("idx_exercises_parent_exercise_id");
+      }
       if (
         sql.includes(
           "CREATE INDEX IF NOT EXISTS idx_exercises_parent_exercise_id ON exercises(parent_exercise_id);"
@@ -47,7 +69,58 @@ function createMockSqlite(columnMap: Record<string, string[]>): MockSqlite {
       execCalls.push(sql);
     }),
     prepareSync: jest.fn((query: string) => ({
-      executeSync: jest.fn(() => {
+      executeSync: jest.fn((params: unknown[] = []) => {
+        if (
+          query.includes(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'exercises'"
+          )
+        ) {
+          return { getAllSync: () => [{ sql: TARGET_EXERCISES_SQL }] };
+        }
+
+        if (query.includes("PRAGMA index_list('exercises')")) {
+          return {
+            getAllSync: () =>
+              [...exerciseIndexes].map((name) => ({
+                name,
+                origin: "c",
+                partial: 0,
+                unique: name === "idx_exercises_uid" ? 1 : 0,
+              })),
+          };
+        }
+
+        const indexXinfoMatch = query.match(/PRAGMA index_xinfo\("([^"]+)"\)/);
+        if (indexXinfoMatch) {
+          return {
+            getAllSync: () => [
+              {
+                coll: "BINARY",
+                desc: 0,
+                key: 1,
+                name:
+                  indexXinfoMatch[1] === "idx_exercises_uid"
+                    ? "uid"
+                    : "parent_exercise_id",
+              },
+            ],
+          };
+        }
+
+        if (query.includes("SELECT sql FROM sqlite_schema WHERE type = 'index'")) {
+          const indexName = params[0];
+          return {
+            getAllSync: () => [
+              {
+                sql:
+                  indexName === "idx_exercises_uid"
+                    ? "CREATE UNIQUE INDEX idx_exercises_uid ON exercises(uid)"
+                    : "CREATE INDEX idx_exercises_parent_exercise_id ON exercises(parent_exercise_id)",
+              },
+            ],
+          };
+        }
+
         const pragmaMatch = query.match(/PRAGMA table_info\(([^)]+)\);?/);
         if (pragmaMatch) {
           const table = pragmaMatch[1];

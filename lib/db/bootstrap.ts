@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from "expo-sqlite";
+import type { SQLiteBindParams, SQLiteDatabase } from "expo-sqlite";
 
 const SCHEMA_BOOTSTRAP_SQL = `
   -- Core tables
@@ -33,7 +33,7 @@ const SCHEMA_BOOTSTRAP_SQL = `
   CREATE TABLE IF NOT EXISTS exercises (
     id INTEGER PRIMARY KEY NOT NULL,
     uid TEXT,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     parent_exercise_id INTEGER,
     variation_label TEXT,
     description TEXT,
@@ -243,6 +243,225 @@ const UID_TABLES = [
   "pr_events",
 ] as const;
 
+type ExerciseSchemaShape = {
+  name: string;
+  columns: readonly string[];
+  legacyDefinition: string;
+  targetDefinition: string;
+};
+
+type ExerciseSchemaState = {
+  kind: "legacy" | "target";
+  shape: ExerciseSchemaShape;
+};
+
+type ExerciseIndexRow = {
+  name: string;
+  origin: string;
+  partial: number;
+  unique: number;
+};
+
+type ExerciseIndexColumnRow = {
+  coll: string;
+  desc: number;
+  key: number;
+  name: string | null;
+};
+
+type ExerciseSchemaObject = {
+  name: string;
+  sql: string;
+  type: "index" | "trigger";
+};
+
+type CatalogEntry = {
+  name: string;
+  sql: string | null;
+  tbl_name: string;
+  type: string;
+};
+
+const EXERCISE_NAME_MIGRATION_TABLE = "__mvp003b_exercises_new";
+const EXERCISE_UID_INDEX_SQL = "CREATE UNIQUE INDEX idx_exercises_uid ON exercises(uid)";
+const EXERCISE_PARENT_INDEX_SQL =
+  "CREATE INDEX idx_exercises_parent_exercise_id ON exercises(parent_exercise_id)";
+
+function exerciseShape(
+  name: string,
+  columns: readonly string[],
+  legacyDefinition: string
+): ExerciseSchemaShape {
+  const targetDefinition = legacyDefinition.replace(
+    "name TEXT NOT NULL UNIQUE",
+    "name TEXT NOT NULL"
+  );
+  if (targetDefinition === legacyDefinition) {
+    throw new Error(`Invalid exercises migration shape ${name}: legacy name constraint is missing`);
+  }
+  return { name, columns, legacyDefinition, targetDefinition };
+}
+
+// These are the five post-column-migration layouts evidenced by Git history.
+// They deliberately preserve column order instead of canonicalizing upgraded databases.
+const EXERCISE_SCHEMA_SHAPES: readonly ExerciseSchemaShape[] = [
+  exerciseShape(
+    "current-canonical",
+    [
+      "id",
+      "uid",
+      "name",
+      "parent_exercise_id",
+      "variation_label",
+      "description",
+      "muscle_group",
+      "equipment",
+      "is_bodyweight",
+      "created_at",
+      "last_rest_seconds",
+      "is_pinned",
+    ],
+    `(
+      id INTEGER PRIMARY KEY NOT NULL,
+      uid TEXT,
+      name TEXT NOT NULL UNIQUE,
+      parent_exercise_id INTEGER,
+      variation_label TEXT,
+      description TEXT,
+      muscle_group TEXT,
+      equipment TEXT,
+      is_bodyweight INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER,
+      last_rest_seconds INTEGER,
+      is_pinned INTEGER NOT NULL DEFAULT 0
+    )`
+  ),
+  exerciseShape(
+    "uid-era-fresh-then-variations",
+    [
+      "id",
+      "uid",
+      "name",
+      "description",
+      "muscle_group",
+      "equipment",
+      "is_bodyweight",
+      "created_at",
+      "last_rest_seconds",
+      "is_pinned",
+      "parent_exercise_id",
+      "variation_label",
+    ],
+    `(
+      id INTEGER PRIMARY KEY NOT NULL,
+      uid TEXT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      muscle_group TEXT,
+      equipment TEXT,
+      is_bodyweight INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER,
+      last_rest_seconds INTEGER,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      parent_exercise_id INTEGER,
+      variation_label TEXT
+    )`
+  ),
+  exerciseShape(
+    "pre-uid-direct-upgrade",
+    [
+      "id",
+      "name",
+      "description",
+      "muscle_group",
+      "equipment",
+      "is_bodyweight",
+      "created_at",
+      "last_rest_seconds",
+      "parent_exercise_id",
+      "variation_label",
+      "is_pinned",
+      "uid",
+    ],
+    `(
+      id INTEGER PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      muscle_group TEXT,
+      equipment TEXT,
+      is_bodyweight INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER,
+      last_rest_seconds INTEGER,
+      parent_exercise_id INTEGER,
+      variation_label TEXT,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      uid TEXT
+    )`
+  ),
+  exerciseShape(
+    "pre-uid-sequential-upgrade",
+    [
+      "id",
+      "name",
+      "description",
+      "muscle_group",
+      "equipment",
+      "is_bodyweight",
+      "created_at",
+      "last_rest_seconds",
+      "is_pinned",
+      "uid",
+      "parent_exercise_id",
+      "variation_label",
+    ],
+    `(
+      id INTEGER PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      muscle_group TEXT,
+      equipment TEXT,
+      is_bodyweight INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER,
+      last_rest_seconds INTEGER,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      uid TEXT,
+      parent_exercise_id INTEGER,
+      variation_label TEXT
+    )`
+  ),
+  exerciseShape(
+    "0923b8d-fresh-direct-upgrade",
+    [
+      "id",
+      "name",
+      "description",
+      "muscle_group",
+      "equipment",
+      "is_bodyweight",
+      "created_at",
+      "last_rest_seconds",
+      "is_pinned",
+      "parent_exercise_id",
+      "variation_label",
+      "uid",
+    ],
+    `(
+      id INTEGER PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      muscle_group TEXT,
+      equipment TEXT,
+      is_bodyweight INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER,
+      last_rest_seconds INTEGER,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      parent_exercise_id INTEGER,
+      variation_label TEXT,
+      uid TEXT
+    )`
+  ),
+];
+
 export function initializeDatabase(sqlite: SQLiteDatabase): void {
   sqlite.execSync(SCHEMA_BOOTSTRAP_SQL);
 
@@ -251,9 +470,342 @@ export function initializeDatabase(sqlite: SQLiteDatabase): void {
   dropLegacyProgramTables(sqlite);
   ensureUidColumns(sqlite);
   backfillUids(sqlite);
+  assertExerciseUidsBackfilled(sqlite);
+  migrateExerciseNameUniqueness(sqlite);
   createIndexes(sqlite);
+  assertExerciseIndexes(sqlite, false, true);
   logWorkoutExerciseColumnStatus(sqlite);
   repairProgramLinkedWorkoutExercises(sqlite);
+}
+
+function queryRows<T>(sqlite: SQLiteDatabase, sql: string, params: SQLiteBindParams = []): T[] {
+  const statement = sqlite.prepareSync(sql);
+  try {
+    return statement.executeSync(params).getAllSync() as T[];
+  } finally {
+    statement.finalizeSync();
+  }
+}
+
+function normalizeExerciseDefinition(sql: string): string {
+  const openingParenthesis = sql.indexOf("(");
+  if (openingParenthesis === -1) {
+    return "";
+  }
+  return sql
+    .slice(openingParenthesis)
+    .replace(/\s+/g, " ")
+    .replace(/\s*([(),])\s*/g, "$1")
+    .replace(/;$/, "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeSchemaStatement(sql: string): string {
+  return sql
+    .replace(/\s+/g, " ")
+    .replace(/\s*([(),])\s*/g, "$1")
+    .replace(/;$/, "")
+    .trim()
+    .toLowerCase();
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+function getForeignKeysEnabled(sqlite: SQLiteDatabase): boolean {
+  const row = queryRows<{ foreign_keys: number }>(sqlite, "PRAGMA foreign_keys;")[0];
+  return row?.foreign_keys === 1;
+}
+
+function getExercisesDefinition(sqlite: SQLiteDatabase): string {
+  const row = queryRows<{ sql: string | null }>(
+    sqlite,
+    "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'exercises';"
+  )[0];
+  if (!row?.sql) {
+    throw new Error("Unsupported exercises schema: exercises table is missing");
+  }
+  return row.sql;
+}
+
+function getIndexSql(sqlite: SQLiteDatabase, indexName: string): string | null {
+  return (
+    queryRows<{ sql: string | null }>(
+      sqlite,
+      "SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = ?;",
+      [indexName]
+    )[0]?.sql ?? null
+  );
+}
+
+function assertKnownExerciseIndex(
+  sqlite: SQLiteDatabase,
+  index: ExerciseIndexRow,
+  expected: { column: string; sql: string; unique: number }
+): void {
+  const indexSql = getIndexSql(sqlite, index.name);
+  const keyColumns = queryRows<ExerciseIndexColumnRow>(
+    sqlite,
+    `PRAGMA index_xinfo(${quoteIdentifier(index.name)});`
+  ).filter((column) => column.key === 1);
+  const validKey =
+    keyColumns.length === 1 &&
+    keyColumns[0].name === expected.column &&
+    keyColumns[0].coll === "BINARY" &&
+    keyColumns[0].desc === 0;
+  if (
+    index.origin !== "c" ||
+    index.partial !== 0 ||
+    index.unique !== expected.unique ||
+    indexSql === null ||
+    normalizeSchemaStatement(indexSql) !== normalizeSchemaStatement(expected.sql) ||
+    !validKey
+  ) {
+    throw new Error(`Unsupported exercises index drift: ${index.name}`);
+  }
+}
+
+function assertExerciseIndexes(
+  sqlite: SQLiteDatabase,
+  expectedLegacyNameConstraint: boolean,
+  requireBootstrapIndexes = false
+): void {
+  const indexes = queryRows<ExerciseIndexRow>(sqlite, "PRAGMA index_list('exercises');");
+  const implicitUniqueIndexes = indexes.filter((index) => index.origin === "u");
+  const nameConstraintIndexes = implicitUniqueIndexes.filter((index) => {
+    const keyColumns = queryRows<ExerciseIndexColumnRow>(
+      sqlite,
+      `PRAGMA index_xinfo(${quoteIdentifier(index.name)});`
+    ).filter((column) => column.key === 1);
+    return keyColumns.length === 1 && keyColumns[0].name === "name";
+  });
+  const expectedNameConstraintCount = expectedLegacyNameConstraint ? 1 : 0;
+  if (
+    implicitUniqueIndexes.length !== expectedNameConstraintCount ||
+    nameConstraintIndexes.length !== expectedNameConstraintCount
+  ) {
+    throw new Error(
+      `Unsupported exercises schema: expected ${expectedNameConstraintCount} implicit name uniqueness constraint(s), found ${nameConstraintIndexes.length}`
+    );
+  }
+
+  if (
+    requireBootstrapIndexes &&
+    (!indexes.some((index) => index.name === "idx_exercises_uid") ||
+      !indexes.some((index) => index.name === "idx_exercises_parent_exercise_id"))
+  ) {
+    throw new Error("Required exercises UID or parent index is missing after bootstrap");
+  }
+
+  for (const index of indexes.filter((candidate) => candidate.origin === "c")) {
+    if (index.name === "idx_exercises_uid") {
+      assertKnownExerciseIndex(sqlite, index, {
+        column: "uid",
+        sql: EXERCISE_UID_INDEX_SQL,
+        unique: 1,
+      });
+      continue;
+    }
+    if (index.name === "idx_exercises_parent_exercise_id") {
+      assertKnownExerciseIndex(sqlite, index, {
+        column: "parent_exercise_id",
+        sql: EXERCISE_PARENT_INDEX_SQL,
+        unique: 0,
+      });
+      continue;
+    }
+    if (index.unique === 1) {
+      throw new Error(
+        `Unsupported exercises index drift: unique index ${index.name} is outside the supported set`
+      );
+    }
+  }
+}
+
+function assertNoDuplicateExerciseUids(sqlite: SQLiteDatabase): void {
+  const duplicate = queryRows<{ count: number; uid: string }>(
+    sqlite,
+    `SELECT uid, COUNT(*) AS count
+     FROM exercises
+     WHERE uid IS NOT NULL
+     GROUP BY uid
+     HAVING COUNT(*) > 1
+     LIMIT 1;`
+  )[0];
+  if (duplicate) {
+    throw new Error(`Unsupported exercises UID drift: duplicate uid ${duplicate.uid}`);
+  }
+}
+
+function classifyExerciseSchema(sqlite: SQLiteDatabase): ExerciseSchemaState {
+  const actualDefinition = normalizeExerciseDefinition(getExercisesDefinition(sqlite));
+  for (const shape of EXERCISE_SCHEMA_SHAPES) {
+    if (actualDefinition === normalizeExerciseDefinition(shape.legacyDefinition)) {
+      assertExerciseIndexes(sqlite, true);
+      return { kind: "legacy", shape };
+    }
+    if (actualDefinition === normalizeExerciseDefinition(shape.targetDefinition)) {
+      assertExerciseIndexes(sqlite, false);
+      return { kind: "target", shape };
+    }
+  }
+  throw new Error(
+    "Unsupported exercises schema: expected an evidenced MVP-003B legacy or target definition"
+  );
+}
+
+function assertNoExerciseMigrationTable(sqlite: SQLiteDatabase): void {
+  const row = queryRows<{ present: number }>(
+    sqlite,
+    "SELECT 1 AS present FROM sqlite_schema WHERE name = ?;",
+    [EXERCISE_NAME_MIGRATION_TABLE]
+  )[0];
+  if (row) {
+    throw new Error(
+      `Unsupported exercises schema: temporary table ${EXERCISE_NAME_MIGRATION_TABLE} already exists`
+    );
+  }
+}
+
+function assertNoDependentExerciseViews(sqlite: SQLiteDatabase): void {
+  const dependentViews = queryRows<{ name: string; sql: string | null }>(
+    sqlite,
+    "SELECT name, sql FROM sqlite_schema WHERE type = 'view' ORDER BY name;"
+  ).filter((view) => view.sql !== null && /\bexercises\b/i.test(view.sql));
+  if (dependentViews.length > 0) {
+    throw new Error(
+      `Unsupported exercises schema: dependent view(s) require a separate proven migration: ${dependentViews
+        .map((view) => view.name)
+        .join(", ")}`
+    );
+  }
+}
+
+function loadExerciseSchemaObjects(sqlite: SQLiteDatabase): ExerciseSchemaObject[] {
+  return queryRows<ExerciseSchemaObject>(
+    sqlite,
+    `SELECT type, name, sql
+     FROM sqlite_schema
+     WHERE tbl_name = 'exercises'
+       AND type IN ('index', 'trigger')
+       AND sql IS NOT NULL
+     ORDER BY type, name;`
+  );
+}
+
+function loadCatalogForExerciseMigration(sqlite: SQLiteDatabase): CatalogEntry[] {
+  return queryRows<CatalogEntry>(
+    sqlite,
+    `SELECT type, name, tbl_name, sql
+     FROM sqlite_schema
+     WHERE NOT (type = 'table' AND name = 'exercises')
+       AND NOT (type = 'index' AND tbl_name = 'exercises' AND sql IS NULL)
+     ORDER BY type, name;`
+  );
+}
+
+function getTableRowCount(sqlite: SQLiteDatabase, table: string): number {
+  return queryRows<{ count: number }>(sqlite, `SELECT COUNT(*) AS count FROM ${table};`)[0].count;
+}
+
+function assertExerciseForeignKeysValid(sqlite: SQLiteDatabase): void {
+  const violations = queryRows<Record<string, unknown>>(sqlite, "PRAGMA foreign_key_check;");
+  if (violations.length > 0) {
+    throw new Error(
+      `Foreign key check failed after exercises rebuild: ${JSON.stringify(violations)}`
+    );
+  }
+}
+
+function restoreForeignKeySetting(sqlite: SQLiteDatabase, enabled: boolean): void {
+  sqlite.execSync(`PRAGMA foreign_keys = ${enabled ? "ON" : "OFF"};`);
+  if (getForeignKeysEnabled(sqlite) !== enabled) {
+    throw new Error("Could not restore the original foreign_keys setting");
+  }
+}
+
+function migrateExerciseNameUniqueness(sqlite: SQLiteDatabase): void {
+  const state = classifyExerciseSchema(sqlite);
+  if (state.kind === "target") {
+    return;
+  }
+
+  assertNoExerciseMigrationTable(sqlite);
+  assertNoDependentExerciseViews(sqlite);
+  assertNoDuplicateExerciseUids(sqlite);
+  const schemaObjects = loadExerciseSchemaObjects(sqlite);
+  const catalogBefore = loadCatalogForExerciseMigration(sqlite);
+  const foreignKeysWereEnabled = getForeignKeysEnabled(sqlite);
+  let transactionStarted = false;
+  let migrationError: unknown;
+
+  try {
+    sqlite.execSync("PRAGMA foreign_keys = OFF;");
+    if (getForeignKeysEnabled(sqlite)) {
+      throw new Error("Could not disable foreign key enforcement before exercises rebuild");
+    }
+
+    sqlite.execSync("BEGIN IMMEDIATE;");
+    transactionStarted = true;
+    sqlite.execSync(
+      `CREATE TABLE ${EXERCISE_NAME_MIGRATION_TABLE} ${state.shape.targetDefinition};`
+    );
+
+    const sourceRowCount = getTableRowCount(sqlite, "exercises");
+    const columns = state.shape.columns.join(", ");
+    sqlite.execSync(
+      `INSERT INTO ${EXERCISE_NAME_MIGRATION_TABLE} (${columns}) SELECT ${columns} FROM exercises;`
+    );
+    const copiedRowCount = getTableRowCount(sqlite, EXERCISE_NAME_MIGRATION_TABLE);
+    if (copiedRowCount !== sourceRowCount) {
+      throw new Error(
+        `Exercise row-count mismatch during rebuild: expected ${sourceRowCount}, copied ${copiedRowCount}`
+      );
+    }
+
+    sqlite.execSync("DROP TABLE exercises;");
+    sqlite.execSync(`ALTER TABLE ${EXERCISE_NAME_MIGRATION_TABLE} RENAME TO exercises;`);
+    for (const schemaObject of schemaObjects) {
+      sqlite.execSync(schemaObject.sql);
+    }
+
+    const catalogAfter = loadCatalogForExerciseMigration(sqlite);
+    if (JSON.stringify(catalogAfter) !== JSON.stringify(catalogBefore)) {
+      throw new Error("Unexpected sqlite_schema change while rebuilding exercises");
+    }
+    assertExerciseForeignKeysValid(sqlite);
+    sqlite.execSync("COMMIT;");
+    transactionStarted = false;
+  } catch (error) {
+    migrationError = error;
+    if (transactionStarted) {
+      try {
+        sqlite.execSync("ROLLBACK;");
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "Exercise-name migration failed and rollback also failed"
+        );
+      }
+    }
+    throw error;
+  } finally {
+    try {
+      restoreForeignKeySetting(sqlite, foreignKeysWereEnabled);
+    } catch (restoreError) {
+      if (migrationError) {
+        throw new AggregateError(
+          [migrationError, restoreError],
+          "Exercise-name migration failed and foreign-key restoration also failed"
+        );
+      }
+      throw restoreError;
+    }
+  }
+
+  classifyExerciseSchema(sqlite);
 }
 
 function runColumnMigrations(sqlite: SQLiteDatabase): void {
@@ -473,10 +1025,26 @@ function backfillUids(sqlite: SQLiteDatabase): void {
         console.log(`[db] Backfilled ${processed} uid values for ${table}`);
       }
     } catch (error) {
+      if (table === "exercises") {
+        const detail = error instanceof Error ? `: ${error.message}` : "";
+        throw new Error(`Failed to backfill required exercise UIDs${detail}`);
+      }
       if (__DEV__) {
         console.warn(`[db] Failed to backfill uid for ${table}:`, error);
       }
     }
+  }
+}
+
+function assertExerciseUidsBackfilled(sqlite: SQLiteDatabase): void {
+  const missingUid = queryRows<{ id: number }>(
+    sqlite,
+    "SELECT id FROM exercises WHERE uid IS NULL LIMIT 1;"
+  )[0];
+  if (missingUid) {
+    throw new Error(
+      `Failed to backfill required exercise UIDs: exercise ${missingUid.id} still has a null uid`
+    );
   }
 }
 
