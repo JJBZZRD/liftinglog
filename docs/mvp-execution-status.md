@@ -26,7 +26,7 @@ siblings of this repository, never nested under the app or its test discovery tr
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
-001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C and 003B have been deleted after
+001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C and 003D have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -50,8 +50,11 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-002C | Terra / high | Workout history/day screens, Overview status, focused UI tests | Reviewed status rendering and foreground correction; 18/18 targeted tests pass, merged `90554d9` |
 | MVP-000B-R1 | Luna / medium | `.github/workflows/quality.yml`, release-profile testing notes | Reviewed both-profile matrix and clean-checkout Expo types; merged `87b0fba`; remote run/protections unverified |
 | MVP-004B-R1 | Terra / medium | `lib/db/workouts.ts` set lookup only, `__tests__/db/setLookup.test.ts` | Reviewed and independently passed 9/9 lookup/lifecycle tests; merged `ea56f4e`; file ownership released |
-| MVP-004C | Terra / high | `app/set/[id].tsx`, focused set-detail UI/characterization tests/helper | Handoff `f84d718` returned for repair persistence, post-commit cleanup and stale-callback corrections; unmerged |
-| MVP-002B-R2 | Sol / high | Six broad-history read helpers in `lib/db/workouts.ts`, focused legacy-date/history tests | Running in isolated branch/worktree, pinned `aef1e68d39912746fe16dea48fb2845520f7dce4` |
+| MVP-004C | Terra / high | `app/set/[id].tsx`, focused set-detail UI/characterization tests/helper | Corrected candidate `2366824` reviewed; organiser 31/31 targeted tests pass; merged `a1925ec` |
+| MVP-002B-R2 | Sol / high | Six broad-history read helpers in `lib/db/workouts.ts`, focused legacy-date/history tests | Candidate `bae156e` under independent Sol/high read-only audit; 22 worker targeted tests pass |
+| MVP-003D | Terra / high | Focused exercise identity UI tests; production correction only if necessary | No production defect found; organiser 9/9 targeted tests pass; merged `fd6ab92` |
+| MVP-004D | Terra / medium | New DB/media cleanup tests and optional findings only | Running from `a1925ecc66db4bb7d78380db20fe1b8f961936b7`; production corrections require a separate scoped decision |
+| MVP-003E | Terra / medium | New real-DB exercise data-isolation tests, local fixture and optional findings only | Running from `fd6ab92cf6689807894e6ec689c5fd0d95645a15` |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -142,6 +145,23 @@ directly where graph results are absent/stale. The existing graph artifact was
 preserved; a successful tool response alone is not evidence of a fresh index.
 
 ### Next-ticket review notes
+
+The next continuation reread the delivery and implementation rules, reconfirmed
+`main` at `e5233bb`, and preserved the original dirty/untracked paths. MVP-004C
+required additional review iterations before acceptance: canonical rediscovery
+repairs remain persisted, cleanup errors after a successful link do not undo the
+result, stale route callbacks cannot invalidate the next route's media load, and
+failed link/unlink writes recover the stored attachment instead of leaving a
+loading spinner. A deferred-read/failed-upsert regression was proved failing
+before the recovery fix. The worker passed 35 focused tests; the organiser
+independently passed 31 route/storage/lookup tests before integration.
+
+MVP-003D adds actual-component tests with mocked native/database boundaries for
+same-name creation, search, navigation, editing, deletion, variation guards and
+pin/unpin. Existing production UI already uses IDs. These tests do not establish
+database isolation; that is the separate real-SQLite MVP-003E ticket. MVP-004D
+likewise checks actual deletion relationships and managed-file cleanup before the
+later physical gallery review. No new device verification is claimed here.
 
 The organiser reread plan sections 2-4 and 7-10 before this continuation, reconfirmed
 `main` at `9a8ecc1`, and inspected all active worktrees before further mutations.
