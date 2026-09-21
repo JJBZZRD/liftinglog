@@ -62,3 +62,28 @@ ambiguous lookup must remain unresolved without damaging the training rows.
 Neither physical-device permission behavior nor missing-file restore recovery was
 accepted by this run. The emulator was left force-stopped with fixture A attached;
 the database snapshots and screenshots remain available for continued review.
+
+### Metadata follow-up constraints
+
+The installed Expo picker copies the video into its cache, obtains the filename
+from the source URI, and derives an asset ID only for supported document-provider
+URIs (`MediaHandler.kt` and `ImagePickerUtils.kt`). The observed null ID is therefore
+not evidence that the gallery original is absent. Expo's SDK 57 contract permits a
+null asset ID and describes `fileName` as a preferred save name; neither promises a
+canonical gallery filename. Its `legacy` option changes the Android picker and
+allows sources outside the photo library, so toggling it is not yet an accepted
+metadata fix. See [Expo ImagePicker](https://docs.expo.dev/versions/v57.0.0/sdk/imagepicker/).
+
+Android documents picker URIs as a restricted, read-only URI class. Its
+`getMediaUri` conversion supports specified document providers; it does not promise
+conversion of every photo-picker URI. Do not infer a MediaStore asset ID from a
+numeric filename or parse undocumented URI segments. See
+[Android MediaStore](https://developer.android.com/reference/android/provider/MediaStore).
+
+A bounded follow-up must demonstrate metadata acquisition with the installed
+libraries on Android, preserve selection/cancellation and gallery originals, and
+test missing or ambiguous metadata conservatively. Changes to picker behavior,
+native patches, schema or stored fingerprints require their own reviewed scope;
+none was made in this review. The existing resolver's filename/time score and
+first-best-match behavior must not be reused as proof of unique identity for
+replacement restore.
