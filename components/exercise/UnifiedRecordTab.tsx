@@ -85,6 +85,20 @@ type RecordTabProps = {
   onHistoryRefresh?: () => void;
 };
 
+type SessionNoteFlushResult = {
+  workoutId: number | null;
+  workoutExerciseId: number | null;
+  didSave: boolean;
+};
+
+type SessionNoteDraftSnapshot = {
+  draftVersion: number;
+  routeGeneration: number;
+  noteValue: string | null;
+  workoutId: number | null;
+  workoutExerciseId: number | null;
+};
+
 type ProgrammedSetsPanelProps = {
   programEntries: ProgrammedExerciseForDate[];
   selectedProgramExerciseId: number | null;
@@ -615,6 +629,9 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const [reps, setRepsState] = useState("");
   const [note, setNote] = useState("");
   const [sessionNote, setSessionNote] = useState("");
+  const [sessionNoteSaveError, setSessionNoteSaveError] = useState<string | null>(
+    null
+  );
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -669,10 +686,24 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const sessionNoteRef = useRef("");
   const sessionNoteDirtyRef = useRef(false);
   const sessionNoteContextRef = useRef<number | null>(null);
+  const sessionNoteEntryRef = useRef<number | null>(null);
+  const sessionNoteWorkoutRef = useRef<number | null>(null);
+  const sessionNoteDraftVersionRef = useRef(0);
+  const sessionNoteRouteGenerationRef = useRef(0);
+  const sessionNoteRouteKeyRef = useRef<string | null>(null);
+  const sessionNoteCreatedSessionsRef = useRef<
+    Map<number, { workoutId: number; workoutExerciseId: number }>
+  >(new Map());
+  const sessionNoteSavedVersionByGenerationRef = useRef<Map<number, number>>(
+    new Map()
+  );
+  const sessionNoteFlushTailRef = useRef<Promise<SessionNoteFlushResult>>(
+    Promise.resolve({ workoutId: null, workoutExerciseId: null, didSave: true })
+  );
   const hydratedManualEntryDateRef = useRef<number | null>(null);
   const flushSessionNoteDraftRef = useRef<
-    () => Promise<{ workoutId: number | null; workoutExerciseId: number | null }>
-  >(async () => ({ workoutId: null, workoutExerciseId: null }));
+    () => Promise<SessionNoteFlushResult>
+  >(async () => ({ workoutId: null, workoutExerciseId: null, didSave: true }));
   const persistDirtyProgramSetCommitsOnBlurRef = useRef<
     () => Promise<void>
   >(async () => {});
@@ -684,6 +715,13 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   >(async () => {});
 
   const selectedDateIso = useMemo(() => toDateIso(selectedDate), [selectedDate]);
+  const sessionNoteRouteKey = [
+    exerciseId ?? "none",
+    paramWeId ?? "new",
+    paramProgramExerciseId ?? "manual",
+    paramDateIso ?? "today",
+    paramPlannedDate ?? "unplanned",
+  ].join(":");
 
   const activeProgramEntry = useMemo(
     () =>
@@ -776,15 +814,21 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       }
 
       const nextValue = nextNote ?? "";
+      if (sessionNoteEntryRef.current !== nextWorkoutExerciseId) {
+        sessionNoteRouteGenerationRef.current += 1;
+      }
+      sessionNoteDraftVersionRef.current += 1;
       sessionNoteDirtyRef.current = false;
       sessionNoteContextRef.current = nextWorkoutExerciseId;
+      sessionNoteEntryRef.current = nextWorkoutExerciseId;
       sessionNoteRef.current = nextValue;
+      setSessionNoteSaveError(null);
       setSessionNote(nextValue);
     },
     []
   );
 
-  const ensureManualWorkoutSession = useCallback(async () => {
+  const ensureManualWorkoutSession = useCallback(async (options?: { shouldApply?: () => boolean }) => {
     if (!exerciseId) {
       return null;
     }
@@ -802,8 +846,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
         performed_at: selectedDate.getTime(),
       }));
 
-    setWorkoutId(nextWorkoutId);
-    setWorkoutExerciseId(nextWorkoutExerciseId);
+    if (options?.shouldApply?.() ?? true) {
+      setWorkoutId(nextWorkoutId);
+      setWorkoutExerciseId(nextWorkoutExerciseId);
+    }
 
     return {
       workoutId: nextWorkoutId,
@@ -1076,6 +1122,17 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     selectedDateIso,
   ]);
 
+  useEffect(() => {
+    if (sessionNoteRouteKeyRef.current === null) {
+      sessionNoteRouteKeyRef.current = sessionNoteRouteKey;
+      return;
+    }
+    if (sessionNoteRouteKeyRef.current !== sessionNoteRouteKey) {
+      sessionNoteRouteKeyRef.current = sessionNoteRouteKey;
+      sessionNoteRouteGenerationRef.current += 1;
+    }
+  }, [sessionNoteRouteKey]);
+
   useFocusEffect(
     useCallback(() => {
       void loadRecordState();
@@ -1093,6 +1150,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   useEffect(() => {
     sessionNoteRef.current = sessionNote;
   }, [sessionNote]);
+
+  useEffect(() => {
+    sessionNoteWorkoutRef.current = workoutId;
+  }, [workoutId]);
 
   useEffect(() => {
     if (!inProgramMode) {
@@ -1302,7 +1363,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     [isProgramSetReadyForCompletion, prescribedSets, userSets]
   );
 
-  const ensureProgramWorkoutSession = useCallback(async () => {
+  const ensureProgramWorkoutSession = useCallback(async (options?: { shouldApply?: () => boolean }) => {
     if (!activeProgramEntry) {
       return null;
     }
@@ -1314,74 +1375,187 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       performedAt: selectedDate.getTime(),
     });
 
-    setWorkoutId(session.workoutId);
-    setWorkoutExerciseId(session.workoutExerciseId);
+    if (options?.shouldApply?.() ?? true) {
+      setWorkoutId(session.workoutId);
+      setWorkoutExerciseId(session.workoutExerciseId);
+    }
     return session;
   }, [activeProgramEntry, selectedDate]);
 
-  const flushSessionNoteDraft = useCallback(async () => {
-    let nextWorkoutId = workoutId;
-    let nextWorkoutExerciseId = workoutExerciseId;
+  const flushSessionNoteDraft = useCallback(() => {
+    const initialWorkoutExerciseId =
+      sessionNoteEntryRef.current ?? workoutExerciseId;
+    const initialSnapshot: SessionNoteDraftSnapshot = {
+      draftVersion: sessionNoteDraftVersionRef.current,
+      routeGeneration: sessionNoteRouteGenerationRef.current,
+      noteValue: sessionNoteRef.current.trim() || null,
+      workoutId: sessionNoteWorkoutRef.current ?? workoutId,
+      workoutExerciseId: initialWorkoutExerciseId,
+    };
 
     if (!sessionNoteDirtyRef.current) {
-      return {
-        workoutId: nextWorkoutId,
-        workoutExerciseId: nextWorkoutExerciseId,
-      };
+      return Promise.resolve({
+        workoutId: initialSnapshot.workoutId,
+        workoutExerciseId: initialSnapshot.workoutExerciseId,
+        didSave: true,
+      });
     }
 
-    const noteValue = sessionNoteRef.current.trim() || null;
+    const write = sessionNoteFlushTailRef.current.then(async () => {
+      let snapshot = initialSnapshot;
 
-    if (!nextWorkoutExerciseId) {
-      if (!noteValue) {
-        sessionNoteDirtyRef.current = false;
-        sessionNoteContextRef.current = null;
-        return {
-          workoutId: nextWorkoutId,
-          workoutExerciseId: nextWorkoutExerciseId,
-        };
-      }
+      while (true) {
+        let nextWorkoutId = snapshot.workoutId;
+        let nextWorkoutExerciseId = snapshot.workoutExerciseId;
+        const isCurrentRoute = () =>
+          sessionNoteRouteGenerationRef.current === snapshot.routeGeneration;
+        const savedVersion = sessionNoteSavedVersionByGenerationRef.current.get(
+          snapshot.routeGeneration
+        );
 
-      if (inProgramMode && activeProgramEntry) {
-        const session = await ensureProgramWorkoutSession();
-        if (!session) {
+        if (
+          savedVersion !== undefined &&
+          savedVersion >= snapshot.draftVersion
+        ) {
           return {
             workoutId: nextWorkoutId,
             workoutExerciseId: nextWorkoutExerciseId,
+            didSave: isCurrentRoute(),
           };
         }
-        nextWorkoutId = session.workoutId;
-        nextWorkoutExerciseId = session.workoutExerciseId;
-      } else {
-        const session = await ensureManualWorkoutSession();
-        if (!session) {
+
+        if (
+          isCurrentRoute() &&
+          snapshot.draftVersion !== sessionNoteDraftVersionRef.current
+        ) {
+          if (!sessionNoteDirtyRef.current) {
+            return {
+              workoutId: sessionNoteWorkoutRef.current ?? nextWorkoutId,
+              workoutExerciseId:
+                sessionNoteEntryRef.current ?? nextWorkoutExerciseId,
+              didSave: true,
+            };
+          }
+          snapshot = {
+            draftVersion: sessionNoteDraftVersionRef.current,
+            routeGeneration: sessionNoteRouteGenerationRef.current,
+            noteValue: sessionNoteRef.current.trim() || null,
+            workoutId: sessionNoteWorkoutRef.current ?? nextWorkoutId,
+            workoutExerciseId:
+              sessionNoteEntryRef.current ?? nextWorkoutExerciseId,
+          };
+          continue;
+        }
+
+        try {
+          if (!nextWorkoutExerciseId) {
+            if (!snapshot.noteValue) {
+              if (
+                isCurrentRoute() &&
+                sessionNoteDraftVersionRef.current === snapshot.draftVersion
+              ) {
+                sessionNoteDirtyRef.current = false;
+                sessionNoteContextRef.current = null;
+                setSessionNoteSaveError(null);
+              }
+              return {
+                workoutId: nextWorkoutId,
+                workoutExerciseId: nextWorkoutExerciseId,
+                didSave: isCurrentRoute(),
+              };
+            }
+
+            const createdSession = sessionNoteCreatedSessionsRef.current.get(
+              snapshot.routeGeneration
+            );
+            if (createdSession) {
+              nextWorkoutId = createdSession.workoutId;
+              nextWorkoutExerciseId = createdSession.workoutExerciseId;
+            } else {
+              const session =
+                inProgramMode && activeProgramEntry
+                  ? await ensureProgramWorkoutSession({ shouldApply: isCurrentRoute })
+                  : await ensureManualWorkoutSession({ shouldApply: isCurrentRoute });
+              if (!session) {
+                throw new Error("The exercise entry could not be prepared for saving.");
+              }
+              nextWorkoutId = session.workoutId;
+              nextWorkoutExerciseId = session.workoutExerciseId;
+              sessionNoteCreatedSessionsRef.current.set(snapshot.routeGeneration, {
+                workoutId: nextWorkoutId,
+                workoutExerciseId: nextWorkoutExerciseId,
+              });
+            }
+
+            if (isCurrentRoute()) {
+              sessionNoteEntryRef.current = nextWorkoutExerciseId;
+              sessionNoteWorkoutRef.current = nextWorkoutId;
+              sessionNoteContextRef.current = nextWorkoutExerciseId;
+            }
+          }
+
+          await updateWorkoutExerciseNote(nextWorkoutExerciseId, snapshot.noteValue);
+          sessionNoteSavedVersionByGenerationRef.current.set(
+            snapshot.routeGeneration,
+            Math.max(
+              sessionNoteSavedVersionByGenerationRef.current.get(
+                snapshot.routeGeneration
+              ) ?? -1,
+              snapshot.draftVersion
+            )
+          );
+
+          if (!isCurrentRoute()) {
+            return {
+              workoutId: nextWorkoutId,
+              workoutExerciseId: nextWorkoutExerciseId,
+              didSave: false,
+            };
+          }
+
+          if (
+            sessionNoteDirtyRef.current &&
+            sessionNoteDraftVersionRef.current !== snapshot.draftVersion
+          ) {
+            snapshot = {
+              draftVersion: sessionNoteDraftVersionRef.current,
+              routeGeneration: sessionNoteRouteGenerationRef.current,
+              noteValue: sessionNoteRef.current.trim() || null,
+              workoutId: sessionNoteWorkoutRef.current ?? nextWorkoutId,
+              workoutExerciseId:
+                sessionNoteEntryRef.current ?? nextWorkoutExerciseId,
+            };
+            continue;
+          }
+
+          sessionNoteDirtyRef.current = false;
+          sessionNoteContextRef.current = nextWorkoutExerciseId;
+          setSessionNoteSaveError(null);
+          onHistoryRefresh?.();
+
           return {
             workoutId: nextWorkoutId,
             workoutExerciseId: nextWorkoutExerciseId,
+            didSave: true,
+          };
+        } catch {
+          if (isCurrentRoute()) {
+            sessionNoteDirtyRef.current = true;
+            setSessionNoteSaveError(
+              "Couldn’t save your exercise note. Tap Retry save to try again."
+            );
+          }
+          return {
+            workoutId: nextWorkoutId,
+            workoutExerciseId: nextWorkoutExerciseId,
+            didSave: false,
           };
         }
-        nextWorkoutId = session.workoutId;
-        nextWorkoutExerciseId = session.workoutExerciseId;
       }
-    }
+    });
 
-    await updateWorkoutExerciseNote(nextWorkoutExerciseId, noteValue);
-
-    if (nextWorkoutId !== workoutId) {
-      setWorkoutId(nextWorkoutId);
-    }
-    if (nextWorkoutExerciseId !== workoutExerciseId) {
-      setWorkoutExerciseId(nextWorkoutExerciseId);
-    }
-
-    sessionNoteDirtyRef.current = false;
-    sessionNoteContextRef.current = nextWorkoutExerciseId;
-    onHistoryRefresh?.();
-
-    return {
-      workoutId: nextWorkoutId,
-      workoutExerciseId: nextWorkoutExerciseId,
-    };
+    sessionNoteFlushTailRef.current = write;
+    return write;
   }, [
     activeProgramEntry,
     ensureManualWorkoutSession,
@@ -1393,7 +1567,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   ]);
 
   const reloadRecordState = useCallback(async () => {
-    await flushSessionNoteDraft();
+    const flushResult = await flushSessionNoteDraft();
+    if (!flushResult.didSave) {
+      return;
+    }
     await loadRecordState();
   }, [flushSessionNoteDraft, loadRecordState]);
 
@@ -1404,8 +1581,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const handleSessionNoteChange = useCallback(
     (value: string) => {
       sessionNoteDirtyRef.current = true;
-      sessionNoteContextRef.current = workoutExerciseId;
+      sessionNoteDraftVersionRef.current += 1;
+      sessionNoteContextRef.current =
+        sessionNoteEntryRef.current ?? workoutExerciseId;
       sessionNoteRef.current = value;
+      setSessionNoteSaveError(null);
       setSessionNote(value);
     },
     [workoutExerciseId]
@@ -1801,7 +1981,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const handleSelectProgramExercise = useCallback(
     async (programExerciseId: number) => {
       Keyboard.dismiss();
-      await flushSessionNoteDraft();
+      const flushResult = await flushSessionNoteDraft();
+      if (!flushResult.didSave) {
+        return;
+      }
       await flushDirtyProgramSetCommits();
       setSelectedProgramExerciseId(programExerciseId);
       await loadProgramWorkout(programEntries, programExerciseId);
@@ -1818,7 +2001,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     async (setId: number, calendarSetId: number) => {
       Keyboard.dismiss();
 
-      await flushSessionNoteDraft();
+      const flushResult = await flushSessionNoteDraft();
+      if (!flushResult.didSave) {
+        return;
+      }
 
       if (programDirtySetIdsRef.current.has(calendarSetId)) {
         await flushDirtyProgramSetCommits();
@@ -1834,7 +2020,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       const normalizedDate = normalizeDate(date);
       Keyboard.dismiss();
 
-      await flushSessionNoteDraft();
+      const flushResult = await flushSessionNoteDraft();
+      if (!flushResult.didSave) {
+        return;
+      }
 
       if (inProgramMode) {
         await flushDirtyProgramSetCommits();
@@ -1879,6 +2068,9 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const handleAddSet = useCallback(async () => {
     Keyboard.dismiss();
     const flushedSession = await flushSessionNoteDraft();
+    if (!flushedSession.didSave) {
+      return;
+    }
     let nextWorkoutId = flushedSession.workoutId ?? workoutId;
     let nextWorkoutExerciseId =
       flushedSession.workoutExerciseId ?? workoutExerciseId;
@@ -1973,6 +2165,9 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
 
   const handleCompleteManualExercise = useCallback(async () => {
     const flushedSession = await flushSessionNoteDraft();
+    if (!flushedSession.didSave) {
+      return;
+    }
     const targetWorkoutExerciseId =
       flushedSession.workoutExerciseId ?? workoutExerciseId;
 
@@ -2013,7 +2208,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     Keyboard.dismiss();
 
     try {
-      await flushSessionNoteDraft();
+      const flushResult = await flushSessionNoteDraft();
+      if (!flushResult.didSave) {
+        return;
+      }
       await flushDirtyProgramSetCommits();
 
       let nextWorkoutExerciseId = workoutExerciseId;
@@ -2158,6 +2356,9 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     }
 
     const flushedSession = await flushSessionNoteDraft();
+    if (!flushedSession.didSave) {
+      return;
+    }
     let nextWorkoutId = flushedSession.workoutId ?? workoutId;
     let nextWorkoutExerciseId =
       flushedSession.workoutExerciseId ?? workoutExerciseId;
@@ -2788,18 +2989,36 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
           }}
         >
           <Text className="text-base font-semibold mb-3 text-foreground" selectable>
-            Session Note (Optional)
+            Exercise Note (Optional)
           </Text>
           <TextInput
+            accessibilityLabel="Exercise note"
             className="border border-border rounded-xl p-3.5 text-base min-h-[88px] bg-surface-secondary text-foreground"
             style={{ textAlignVertical: "top" }}
             value={sessionNote}
             onChangeText={handleSessionNoteChange}
             onBlur={handleSessionNoteBlur}
-            placeholder="Add a session note..."
+            placeholder="Add an exercise note..."
             placeholderTextColor={rawColors.foregroundMuted}
             multiline
           />
+          {sessionNoteSaveError && (
+            <View className="mt-3">
+              <Text className="text-sm text-destructive" selectable>
+                {sessionNoteSaveError}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry saving exercise note"
+                className="items-center justify-center self-start mt-2 px-3 py-2 rounded-lg bg-surface-secondary"
+                onPress={handleSessionNoteBlur}
+              >
+                <Text className="text-sm font-semibold text-foreground-secondary" selectable>
+                  Retry save
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </ScrollView>
 
