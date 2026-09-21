@@ -91,13 +91,15 @@ describe("persistVideoForSetLink", () => {
     expect(result).not.toBeNull();
     expect(result?.localUri).toMatch(/^file:\/\/\/app\/documents\/set-videos\//);
     expect(result?.assetId).toBe("existing-asset");
-    expect(result?.originalFilename).toBe("picker-video.mp4");
+    expect(result?.originalFilename).toBe("lift.mp4");
   });
 
   it("creates MediaLibrary assets from the managed file copy instead of the original content URI", async () => {
     const result = await persistVideoForSetLink({
       sourceUri: "content://picker/video/2",
       filenameHint: "set-video.mp4",
+      mediaCreatedAt: 1_600_000_000_000,
+      durationMs: 99_999,
       albumName: "LiftingLog",
       saveToLibrary: true,
     });
@@ -107,6 +109,11 @@ describe("persistVideoForSetLink", () => {
     expect(mockCreateAssetAsync).not.toHaveBeenCalledWith("content://picker/video/2");
     expect(mockCreateAlbumAsync).toHaveBeenCalled();
     expect(result?.assetId).toBe("created-asset");
+    expect(result).toMatchObject({
+      originalFilename: "lift.mp4",
+      mediaCreatedAt: 1_700_000_000_000,
+      durationMs: 12_400,
+    });
   });
 
   it("keeps the durable app copy even when MediaLibrary asset creation fails", async () => {
@@ -122,6 +129,43 @@ describe("persistVideoForSetLink", () => {
     expect(result).not.toBeNull();
     expect(result?.localUri).toMatch(/^file:\/\/\/app\/documents\/set-videos\//);
     expect(result?.assetId).toBeNull();
+  });
+
+  it("uses canonical asset metadata over transport hints and converts duration seconds once", async () => {
+    const result = await persistVideoForSetLink({
+      sourceUri: "content://picker/video/3",
+      assetId: "existing-asset",
+      filenameHint: "51.mp4",
+      mediaCreatedAt: 1_600_000_000_000,
+      durationMs: 99_999,
+      saveToLibrary: false,
+    });
+
+    expect(result).toMatchObject({
+      originalFilename: "lift.mp4",
+      mediaCreatedAt: 1_700_000_000_000,
+      durationMs: 12_400,
+    });
+    expect(mockCreateAssetAsync).not.toHaveBeenCalled();
+  });
+
+  it("retains supplied hints when canonical asset metadata cannot be resolved", async () => {
+    mockGetAssetInfoAsync.mockRejectedValueOnce(new Error("metadata unavailable"));
+
+    await expect(persistVideoForSetLink({
+      sourceUri: "content://picker/video/4",
+      assetId: "existing-asset",
+      filenameHint: "picked.mov",
+      mediaCreatedAt: 1_700_000_001_000,
+      durationMs: 8_500,
+      albumName: "Camera",
+      saveToLibrary: false,
+    })).resolves.toMatchObject({
+      originalFilename: "picked.mov",
+      mediaCreatedAt: 1_700_000_001_000,
+      durationMs: 8_500,
+      albumName: "Camera",
+    });
   });
 });
 

@@ -154,6 +154,35 @@ async function getSafeAssetInfo(assetId: string): Promise<MediaLibrary.AssetInfo
   }
 }
 
+function getCanonicalAssetMetadata(assetInfo: MediaLibrary.AssetInfo | null): {
+  originalFilename: string | null;
+  mediaCreatedAt: number | null;
+  durationMs: number | null;
+} {
+  if (!assetInfo) {
+    return {
+      originalFilename: null,
+      mediaCreatedAt: null,
+      durationMs: null,
+    };
+  }
+
+  return {
+    originalFilename:
+      typeof assetInfo.filename === "string" && assetInfo.filename.trim().length > 0
+        ? assetInfo.filename
+        : null,
+    mediaCreatedAt:
+      typeof assetInfo.creationTime === "number" && Number.isFinite(assetInfo.creationTime)
+        ? assetInfo.creationTime
+        : null,
+    durationMs:
+      typeof assetInfo.duration === "number" && Number.isFinite(assetInfo.duration)
+        ? Math.round(assetInfo.duration * 1000)
+        : null,
+  };
+}
+
 export async function ensureVideoLibraryPermission(): Promise<boolean> {
   try {
     let permission = await MediaLibrary.getPermissionsAsync(false, ["video"]);
@@ -411,17 +440,10 @@ export async function persistVideoForSetLink(args: {
 
   if (nextAssetId) {
     const assetInfo = await getSafeAssetInfo(nextAssetId);
-    if (assetInfo) {
-      if (!nextOriginalFilename && assetInfo.filename) {
-        nextOriginalFilename = assetInfo.filename;
-      }
-      if (nextMediaCreatedAt == null && assetInfo.creationTime != null) {
-        nextMediaCreatedAt = assetInfo.creationTime;
-      }
-      if (nextDurationMs == null && assetInfo.duration != null) {
-        nextDurationMs = Math.round(assetInfo.duration * 1000);
-      }
-    }
+    const canonical = getCanonicalAssetMetadata(assetInfo);
+    nextOriginalFilename = canonical.originalFilename ?? nextOriginalFilename;
+    nextMediaCreatedAt = canonical.mediaCreatedAt ?? nextMediaCreatedAt;
+    nextDurationMs = canonical.durationMs ?? nextDurationMs;
   } else if (args.saveToLibrary) {
     const albumName = nextAlbumName ?? DEFAULT_MEDIA_ALBUM_NAME;
     const createdAsset = await createLibraryAssetFromManagedVideo(durableLocalUri, albumName);
@@ -429,17 +451,10 @@ export async function persistVideoForSetLink(args: {
       nextAssetId = String(createdAsset.id);
       nextAlbumName = albumName;
       const assetInfo = await getSafeAssetInfo(nextAssetId);
-      if (assetInfo) {
-        if (!nextOriginalFilename && assetInfo.filename) {
-          nextOriginalFilename = assetInfo.filename;
-        }
-        if (nextMediaCreatedAt == null && assetInfo.creationTime != null) {
-          nextMediaCreatedAt = assetInfo.creationTime;
-        }
-        if (nextDurationMs == null && assetInfo.duration != null) {
-          nextDurationMs = Math.round(assetInfo.duration * 1000);
-        }
-      }
+      const canonical = getCanonicalAssetMetadata(assetInfo);
+      nextOriginalFilename = canonical.originalFilename ?? nextOriginalFilename;
+      nextMediaCreatedAt = canonical.mediaCreatedAt ?? nextMediaCreatedAt;
+      nextDurationMs = canonical.durationMs ?? nextDurationMs;
     }
   }
 

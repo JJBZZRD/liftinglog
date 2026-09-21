@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe("set detail video storage characterization", () => {
-  it("keeps a durable app copy and carries picker metadata into the descriptor", async () => {
+  it("keeps a durable app copy and treats incoming picker duration as milliseconds", async () => {
     const result = await persistVideoForSetLink({
       sourceUri: "content://picker/video",
       assetId: "asset-1",
@@ -56,9 +56,9 @@ describe("set detail video storage characterization", () => {
     expect(file.copyAsync).toHaveBeenCalledWith(expect.objectContaining({ from: "content://picker/video" }));
     expect(result).toMatchObject({
       assetId: "asset-1",
-      originalFilename: "picked.mov",
-      mediaCreatedAt: 1_700_000_001_000,
-      durationMs: 8_500,
+      originalFilename: "lift.mp4",
+      mediaCreatedAt: 1_700_000_000_000,
+      durationMs: 12_400,
       albumName: "LiftingLog",
     });
   });

@@ -1,8 +1,95 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "./connection";
-import { media, type MediaRow } from "./schema";
+import { media, sets, type MediaRow } from "./schema";
+import type { PersistedVideoDescriptor } from "../utils/videoStorage";
 
 export type Media = MediaRow;
+
+type VideoForSet = PersistedVideoDescriptor & {
+  mime: string | null;
+};
+
+function isValidSetId(setId: number): boolean {
+  return Number.isSafeInteger(setId) && setId > 0;
+}
+
+function isNonEmptyUri(uri: string): boolean {
+  return typeof uri === "string" && uri.trim().length > 0;
+}
+
+/**
+ * Replaces the single user-facing video for a set while preserving any older
+ * media rows that callers still use as legacy attachments.
+ *
+ * The synchronous Drizzle SQLite transaction deliberately has no async work in
+ * its callback. File copying and MediaLibrary metadata resolution happen
+ * before this function is called.
+ */
+export async function upsertVideoForSet(
+  setId: number,
+  video: VideoForSet
+): Promise<number> {
+  if (!isValidSetId(setId)) {
+    throw new Error("A valid set ID is required to save a video.");
+  }
+  if (!isNonEmptyUri(video.localUri)) {
+    throw new Error("A non-empty local video URI is required to save a video.");
+  }
+
+  return db.transaction((tx) => {
+    const set = tx
+      .select({ id: sets.id })
+      .from(sets)
+      .where(eq(sets.id, setId))
+      .get();
+    if (!set) {
+      throw new Error(`Cannot save a video for missing set ${setId}.`);
+    }
+
+    const existing = tx
+      .select({ id: media.id })
+      .from(media)
+      .where(eq(media.setId, setId))
+      .orderBy(desc(media.createdAt), desc(media.id))
+      .limit(1)
+      .get();
+
+    if (existing) {
+      tx
+        .update(media)
+        .set({
+          localUri: video.localUri,
+          assetId: video.assetId,
+          mime: video.mime,
+          originalFilename: video.originalFilename,
+          mediaCreatedAt: video.mediaCreatedAt,
+          durationMs: video.durationMs,
+          albumName: video.albumName,
+        })
+        .where(eq(media.id, existing.id))
+        .run();
+      return existing.id;
+    }
+
+    const inserted = tx
+      .insert(media)
+      .values({
+        localUri: video.localUri,
+        assetId: video.assetId,
+        mime: video.mime,
+        setId,
+        workoutId: null,
+        note: null,
+        createdAt: Date.now(),
+        originalFilename: video.originalFilename,
+        mediaCreatedAt: video.mediaCreatedAt,
+        durationMs: video.durationMs,
+        albumName: video.albumName,
+      })
+      .run();
+    return inserted.lastInsertRowId;
+  });
+}
 
 export async function listMediaForAssetIds(assetIds: string[]): Promise<Media[]> {
   if (assetIds.length === 0) return [];
