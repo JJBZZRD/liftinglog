@@ -19,10 +19,15 @@ npm.cmd start -- --localhost
 includes the value in the JavaScript bundle at build time, so the development
 profile uses `full` while preview and production use `mvp`.
 
-Changing the value does not change an already-installed native binary. Restart
-Metro after changing it and perform a full reload so the JavaScript bundle is
-rebuilt with the selected profile. A new native build is required when the
-native binary itself must change.
+For a development client connected to Metro, restart Metro after changing the
+value and perform a full reload. The newly served JavaScript bundle selects the
+profile without rebuilding native code. An installed standalone preview or
+production app uses its embedded bundle: changing the local shell variable does
+not update that app. Build and install a new candidate with the required profile;
+this ticket does not configure an over-the-air update pipeline.
+
+This follows Expo's documented [build-profile environment configuration](https://docs.expo.dev/build/eas-json/)
+and [public environment variable bundling](https://docs.expo.dev/guides/environment-variables/).
 
 The repository's `.env.local` remains the local source for the ignored
 localhost hostname and is not modified by the release-profile setup.

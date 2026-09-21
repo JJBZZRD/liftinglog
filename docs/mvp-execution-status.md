@@ -25,7 +25,8 @@ receive no inherited conversation, only their section 4.3 packet. Worktrees are
 siblings of this repository, never nested under the app or its test discovery tree.
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
-Merged ticket branches 001A, 002A, 002A-R1, 001B and 003A have been deleted after
+Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
+001D-R1, 001C and 004B have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -39,9 +40,14 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md`; bounded Jest configuration exception below | Reviewed and merged `aa762bc`; 32 suites / 401 tests pass including real-root direct URL tests |
 | MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Independently accepted; organiser reran 76/76 after rebase, merged `01dbffd` with ground-truth update |
 | MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, focused capability/manual UI tests and findings | Reviewed; organiser targeted 29/29 pass, merged `3a3a6c3`; file ownership released |
-| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, focused identity tests | Running in `mvp/MVP-003C-exercise-identity`, base `c162637deb29e321ab8efbc5b7e069bcb7783ead` |
-| MVP-004B | Terra / high | `lib/db/media.ts`, `lib/utils/videoStorage.ts`, focused DB/storage tests | Running in `mvp/MVP-004B-media-contract`, base `c162637deb29e321ab8efbc5b7e069bcb7783ead` |
-| MVP-001C | Terra / medium | Programs tab wrapper/extracted components and focused profile UI tests | Running in `mvp/MVP-001C-programs-coming-soon`, base `01dbffd2eee94710d2ff11051bc3d741a5d66477` |
+| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, focused identity tests | Handoff `35e34d9` rejected by independent Sol/high audit; real active-program refresh correction in progress |
+| MVP-004B | Terra / high | `lib/db/media.ts`, `lib/utils/videoStorage.ts`, focused DB/storage tests | Drizzle correction reviewed; organiser 22/22 targeted pass, merged `e03e6a7` |
+| MVP-001C | Terra / medium | Programs tab wrapper/extracted components and focused profile UI tests | Reviewed unchanged full-screen extraction and real route gate; 16/16 targeted pass, merged `bad6930` |
+| MVP-001D-R1 | Luna / medium | `__tests__/setup.ts` | Reviewed shared Expo environment mock; full/MVP 38 suites / 437 tests pass, merged `215e75b` |
+| MVP-001E | Luna / medium | `eas.json`, configuration tests and profile documentation | Reviewed and independently passed 53 tests across five configuration/route/UI suites; merged `9fb149d` |
+| MVP-001R | Organiser | Read-only profile/route review | Accepted automated capability boundary after 001B-001E; release device matrix remains 007 scope |
+| MVP-003B | Sol / xhigh | `lib/db/bootstrap.ts`, `lib/db/schema.ts`, production migration tests/fixtures and historical-shape ADR | Running in `mvp/MVP-003B-duplicate-name-migration`, base `956988647e13f6dd974fa1581a88b45e39535aeb`; cannot integrate before 003C and independent migration audit |
+| MVP-002C | Terra / high | Workout history/day screens, Overview status, focused UI tests | Running in `mvp/MVP-002C-history-status`, base `e03e6a78507df8a18d7471d24463b6abb152c902`; Overview scope extension approved after 001D |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -101,6 +107,21 @@ wave check is required before accepting their complete stories. The 002B review
 also hardened pagination coverage so empty drafts sort before real entries,
 demonstrating that filtering occurs before LIMIT.
 
+The next integrated run exposed an Expo virtual-environment parse error in the
+calculator UI harness after Overview began importing the capability module.
+MVP-001D-R1 fixes this in shared unit-test setup without mocking the capability
+module or forcing a profile. Both profiles then passed 38 suites / 437 tests;
+the organiser independently reran MVP before merging. Following 001C/004B
+integration at `e03e6a7`, full and MVP each pass 40 suites / 449 tests, typecheck
+passes, and lint remains zero errors / 20 baseline warnings.
+
+MVP-004B initially used raw SQL CRUD and was returned for correction against the
+DB access policy. The accepted implementation uses a synchronous Drizzle
+transaction and real SQLite tests prove rollback after an AFTER UPDATE failure,
+failed first insert recovery, deterministic legacy-row selection, nullable metadata
+replacement, and same-connection call serialization. Cross-connection contention
+and native gallery behavior are not established by these host tests.
+
 The post-integration codebase-memory refresh was attempted in both fast and full
 modes, but the service still reports the original 3,026 nodes and cannot find the
 new capability symbols. Continue graph-first discovery and verify current source
@@ -148,6 +169,11 @@ preserved; a successful tool response alone is not evidence of a fresh index.
   003C's bounded write scope. Explicit IDs must win; ambiguous name-only references
   must not be silently retargeted. Stored PSL/config name rewrites also need that
   audit. This protects retained data and does not redesign the Programs experience.
+  The first 003C independent audit rejected `35e34d9`: real active-program refresh
+  deletes/recreates pristine future rows from PSL, undoing ID-safe direct rewrites
+  and resolving ambiguous names to another exercise. Mocked refresh/inactive
+  fixtures missed this. Acceptance requires preserving explicit bindings through
+  the real refresh boundary and regression coverage of active dated programs.
 - MVP-001D owns `app/(tabs)/index.tsx` while removing the health entry and suppressing
   its snapshot query. MVP-002C's later Overview status rendering must wait for that
   ownership to be released; the history/day screens remain a separate UI scope.
