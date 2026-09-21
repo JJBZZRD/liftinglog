@@ -11,19 +11,22 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import {
-  addMedia,
   getLatestMediaForSet,
   listMediaForLocalUris,
   unlinkMediaForSet,
   updateMedia,
+  upsertVideoForSet,
   type Media,
 } from "../../lib/db/media";
+import { getSetById, updateSet, type SetRow } from "../../lib/db/workouts";
+import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { formatWeightFromKg } from "../../lib/utils/units";
 import {
-  DEFAULT_MEDIA_ALBUM_NAME,
   deleteManagedVideoUri,
   doesFileUriExist,
   getUriScheme,
@@ -54,6 +57,9 @@ async function attemptVideoRediscovery(media: Media): Promise<{
   assetId: string;
   localUri: string | null;
   uri: string | null;
+  filename: string | null;
+  creationTime: number | null;
+  durationMs: number | null;
 } | null> {
   // Need at least some metadata to search
   const hasFilename = !!media.originalFilename;
@@ -126,6 +132,9 @@ async function attemptVideoRediscovery(media: Media): Promise<{
             assetId: candidate.id,
             localUri: assetInfo?.localUri ?? null,
             uri: assetInfo?.uri ?? null,
+            filename: assetInfo?.filename ?? candidate.filename ?? null,
+            creationTime: assetInfo?.creationTime ?? candidate.creationTime ?? null,
+            durationMs: assetInfo?.duration != null ? Math.round(assetInfo.duration * 1000) : null,
           };
         }
 
@@ -148,6 +157,9 @@ async function attemptVideoRediscovery(media: Media): Promise<{
               assetId: candidate.id,
               localUri: assetInfo?.localUri ?? null,
               uri: assetInfo?.uri ?? null,
+              filename: assetInfo?.filename ?? candidate.filename ?? null,
+              creationTime: assetInfo?.creationTime ?? candidate.creationTime ?? null,
+              durationMs: assetInfo?.duration != null ? Math.round(assetInfo.duration * 1000) : null,
             };
           }
         }
@@ -173,10 +185,16 @@ async function attemptVideoRediscovery(media: Media): Promise<{
 
 export default function SetInfoScreen() {
   const { rawColors } = useTheme();
+  const { unitPreference } = useUnitPreference();
   const params = useLocalSearchParams<{ id?: string }>();
   const setId = typeof params.id === "string" ? Number(params.id) : null;
-  const isValidId = typeof setId === "number" && Number.isFinite(setId) && setId > 0;
+  const isValidId = typeof setId === "number" && Number.isSafeInteger(setId) && setId > 0;
 
+  const [setRecord, setSetRecord] = useState<SetRow | null>(null);
+  const [loadingSet, setLoadingSet] = useState(true);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [editingNote, setEditingNote] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [videoMedia, setVideoMedia] = useState<Media | null>(null);
   const [loadingVideo, setLoadingVideo] = useState(false);
   const [pickerLoading, setPickerLoading] = useState(false);
@@ -185,12 +203,92 @@ export default function SetInfoScreen() {
   const [resolvedVideoUri, setResolvedVideoUri] = useState<string | null>(null);
 
   const videoViewRef = useRef<VideoView | null>(null);
+  const loadSetRequestRef = useRef(0);
   const loadVideoRequestRef = useRef(0);
+  const routeGenerationRef = useRef(0);
+  const routeSetIdRef = useRef<number | null>(null);
+  const mediaMutationRef = useRef(0);
+  const pickerInFlightRef = useRef(false);
+  const pickerRequestRef = useRef(0);
+  const noteSaveInFlightRef = useRef(false);
+  const noteSaveRequestRef = useRef(0);
+  const unlinkInFlightRef = useRef(false);
+  const unlinkRequestRef = useRef(0);
   const videoUri = resolvedVideoUri;
+  routeSetIdRef.current = isValidId ? setId : null;
   const player = useVideoPlayer(null, (player) => {
     player.loop = true;
     player.muted = true;
   });
+
+  const loadSet = useCallback(async () => {
+    const requestId = ++loadSetRequestRef.current;
+    const routeGeneration = ++routeGenerationRef.current;
+    mediaMutationRef.current += 1;
+    setLoadingSet(true);
+
+    if (!isValidId || !setId) {
+      setSetRecord(null);
+      setVideoMedia(null);
+      setResolvedVideoUri(null);
+      setLoadingSet(false);
+      return;
+    }
+
+    // Do not let a previous route's set or attachment remain actionable while
+    // the next route result is still in flight.
+    setSetRecord(null);
+    setVideoMedia(null);
+    setResolvedVideoUri(null);
+    pickerInFlightRef.current = false;
+    pickerRequestRef.current += 1;
+    setPickerLoading(false);
+    setSavingSelection(false);
+    unlinkInFlightRef.current = false;
+    unlinkRequestRef.current += 1;
+    setUnlinkingVideo(false);
+    noteSaveInFlightRef.current = false;
+    noteSaveRequestRef.current += 1;
+    setSavingNote(false);
+
+    try {
+      const nextSet = await getSetById(setId);
+      if (
+        requestId !== loadSetRequestRef.current ||
+        routeGeneration !== routeGenerationRef.current ||
+        routeSetIdRef.current !== setId
+      ) return;
+      setSetRecord(nextSet);
+      setNoteDraft(nextSet?.note ?? "");
+      setEditingNote(false);
+      if (!nextSet) {
+        setVideoMedia(null);
+        setResolvedVideoUri(null);
+      }
+    } catch (error) {
+      if (__DEV__) console.error("[SetInfo] Failed loading set:", error);
+      if (
+        requestId !== loadSetRequestRef.current ||
+        routeGeneration !== routeGenerationRef.current ||
+        routeSetIdRef.current !== setId
+      ) return;
+      setSetRecord(null);
+      setVideoMedia(null);
+      setResolvedVideoUri(null);
+    } finally {
+      if (requestId === loadSetRequestRef.current) setLoadingSet(false);
+    }
+  }, [isValidId, setId]);
+
+  useEffect(() => {
+    void loadSet();
+  }, [loadSet]);
+
+  useEffect(() => () => {
+    routeGenerationRef.current += 1;
+    mediaMutationRef.current += 1;
+    loadVideoRequestRef.current += 1;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,18 +339,29 @@ export default function SetInfoScreen() {
   }, [player]);
 
   const loadVideoMedia = useCallback(async () => {
-    const requestId = ++loadVideoRequestRef.current;
+    // A stale callback can still hold this function after route params change.
+    // Reject it before touching the shared request counter or loading state.
+    if (
+      !isValidId ||
+      !setId ||
+      setRecord?.id !== setId ||
+      routeSetIdRef.current !== setId
+    ) return;
 
-    if (!isValidId || !setId) {
-      setVideoMedia(null);
-      setResolvedVideoUri(null);
-      return;
-    }
+    const requestId = ++loadVideoRequestRef.current;
+    const routeGeneration = routeGenerationRef.current;
+    const mutationGeneration = mediaMutationRef.current;
+    const isCurrentRequest = () =>
+      requestId === loadVideoRequestRef.current &&
+      routeGeneration === routeGenerationRef.current &&
+      mutationGeneration === mediaMutationRef.current &&
+      routeSetIdRef.current === setId;
 
     setLoadingVideo(true);
+    let loadedMedia: Media | null = null;
     try {
       const media = await getLatestMediaForSet(setId);
-      if (requestId !== loadVideoRequestRef.current) return;
+      if (!isCurrentRequest()) return;
 
       if (!media) {
         setVideoMedia(null);
@@ -261,6 +370,7 @@ export default function SetInfoScreen() {
       }
 
       setVideoMedia(media);
+      loadedMedia = media;
 
       const storedUri: string | null = media.localUri ?? null;
       let nextUri: string | null = storedUri;
@@ -317,10 +427,6 @@ export default function SetInfoScreen() {
           if (nextDurationMs == null && assetInfo?.duration != null) {
             nextDurationMs = Math.round(assetInfo.duration * 1000);
           }
-          if (!nextAlbumName) {
-            nextAlbumName = media.albumName ?? DEFAULT_MEDIA_ALBUM_NAME;
-          }
-
           if (__DEV__) {
             console.log("[SetInfo] Resolved media URI from assetId:", {
               setId,
@@ -364,6 +470,15 @@ export default function SetInfoScreen() {
         const rediscovered = await attemptVideoRediscovery(media);
         if (rediscovered) {
           nextAssetId = rediscovered.assetId;
+          if (!nextOriginalFilename && rediscovered.filename) {
+            nextOriginalFilename = rediscovered.filename;
+          }
+          if (nextMediaCreatedAt == null && rediscovered.creationTime != null) {
+            nextMediaCreatedAt = rediscovered.creationTime;
+          }
+          if (nextDurationMs == null && rediscovered.durationMs != null) {
+            nextDurationMs = rediscovered.durationMs;
+          }
           const rediscoveredCandidate = rediscovered.localUri ?? rediscovered.uri;
           if (rediscoveredCandidate) {
             nextUri = rediscoveredCandidate;
@@ -374,10 +489,6 @@ export default function SetInfoScreen() {
               }
             }
             assetResolved = true;
-          }
-
-          if (!nextAlbumName) {
-            nextAlbumName = media.albumName ?? DEFAULT_MEDIA_ALBUM_NAME;
           }
 
           if (__DEV__) {
@@ -409,7 +520,7 @@ export default function SetInfoScreen() {
       const fallbackUri = storedFileMissing ? null : storedUri;
       const finalUri = nextUri ?? fallbackUri;
 
-      const shouldPersistMediaChanges =
+      const shouldPersistRepair =
         typeof finalUri === "string" &&
         (finalUri !== media.localUri ||
           nextAssetId !== media.assetId ||
@@ -418,7 +529,7 @@ export default function SetInfoScreen() {
           nextDurationMs !== media.durationMs ||
           nextAlbumName !== media.albumName);
 
-      if (shouldPersistMediaChanges) {
+      if (shouldPersistRepair && isCurrentRequest()) {
         try {
           await updateMedia(media.id, {
             local_uri: finalUri,
@@ -429,9 +540,7 @@ export default function SetInfoScreen() {
             album_name: nextAlbumName,
           });
         } catch (updateError) {
-          if (__DEV__) {
-            console.warn("[SetInfo] Failed to persist repaired media linkage:", updateError);
-          }
+          if (__DEV__) console.warn("[SetInfo] Failed to persist repaired media linkage:", updateError);
         }
       }
 
@@ -444,18 +553,20 @@ export default function SetInfoScreen() {
         });
       }
 
-      if (requestId !== loadVideoRequestRef.current) return;
+      if (!isCurrentRequest()) return;
       setResolvedVideoUri(finalUri);
     } catch (error) {
       if (__DEV__) console.error("[SetInfo] Failed loading media:", error);
-      if (requestId !== loadVideoRequestRef.current) return;
-      setVideoMedia(null);
+      if (!isCurrentRequest()) return;
+      // A broken gallery asset is still a real link. Keep it available for
+      // replacement or unlinking instead of presenting it as no attachment.
+      setVideoMedia(loadedMedia);
       setResolvedVideoUri(null);
     } finally {
-      if (requestId !== loadVideoRequestRef.current) return;
+      if (!isCurrentRequest()) return;
       setLoadingVideo(false);
     }
-  }, [isValidId, setId]);
+  }, [isValidId, setId, setRecord]);
 
   useEffect(() => {
     loadVideoMedia();
@@ -470,22 +581,31 @@ export default function SetInfoScreen() {
   }, []);
 
   const openVideoPicker = useCallback(async () => {
-    if (!isValidId || !setId) return;
+    if (!isValidId || !setId || !setRecord || pickerInFlightRef.current) return;
+    const targetSetId = setId;
+    const routeGeneration = routeGenerationRef.current;
+    const canContinue = () =>
+      routeGeneration === routeGenerationRef.current && routeSetIdRef.current === targetSetId;
+    if (!canContinue() || setRecord.id !== targetSetId) return;
+    const pickerRequest = ++pickerRequestRef.current;
 
-    const hasPermission = await ensureVideoLibraryPermission();
-    if (!hasPermission) {
-      Alert.alert("Permission required", "Allow video library access to link a video to this set.");
-      return;
-    }
-
+    pickerInFlightRef.current = true;
     setPickerLoading(true);
     try {
+      const hasPermission = await ensureVideoLibraryPermission();
+      if (!canContinue()) return;
+      if (!hasPermission) {
+        Alert.alert("Permission required", "Allow video library access to link a video to this set.");
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: "videos",
         allowsMultipleSelection: false,
         quality: 1,
       });
 
+      if (!canContinue()) return;
       if (result.canceled || result.assets.length === 0) return;
 
       const selectedAsset = result.assets[0];
@@ -500,11 +620,12 @@ export default function SetInfoScreen() {
         filenameHint: selectedAsset.fileName ?? null,
         durationMs:
           selectedAsset.duration != null
-            ? Math.round(selectedAsset.duration * 1000)
+            ? Math.round(selectedAsset.duration)
             : null,
         saveToLibrary: false,
       });
 
+      if (!canContinue()) return;
       if (!persistedVideo) {
         Alert.alert("Error", "Failed to save a durable copy of the selected video.");
         return;
@@ -513,40 +634,35 @@ export default function SetInfoScreen() {
       setSavingSelection(true);
       try {
         const previousLocalUri = videoMedia?.localUri ?? null;
+        // Invalidate any read/repair begun before this replacement. The route
+        // guard above prevents a picker result from starting a write for a new route.
+        mediaMutationRef.current += 1;
+        loadVideoRequestRef.current += 1;
+        await upsertVideoForSet(targetSetId, {
+          ...persistedVideo,
+          mime: selectedAsset.mimeType ?? inferVideoMimeFromUri(persistedVideo.localUri),
+        });
 
-        if (videoMedia) {
-          await updateMedia(videoMedia.id, {
-            local_uri: persistedVideo.localUri,
-            asset_id: persistedVideo.assetId,
-            mime: selectedAsset.mimeType ?? inferVideoMimeFromUri(persistedVideo.localUri),
-            set_id: setId,
-            created_at: Date.now(),
-            original_filename: persistedVideo.originalFilename,
-            media_created_at: persistedVideo.mediaCreatedAt,
-            duration_ms: persistedVideo.durationMs,
-            album_name: persistedVideo.albumName,
-          });
-        } else {
-          await addMedia({
-            local_uri: persistedVideo.localUri,
-            asset_id: persistedVideo.assetId,
-            mime: selectedAsset.mimeType ?? inferVideoMimeFromUri(persistedVideo.localUri),
-            set_id: setId,
-            created_at: Date.now(),
-            original_filename: persistedVideo.originalFilename,
-            media_created_at: persistedVideo.mediaCreatedAt,
-            duration_ms: persistedVideo.durationMs,
-            album_name: persistedVideo.albumName,
-          });
-        }
-
-        if (
-          previousLocalUri &&
-          previousLocalUri !== persistedVideo.localUri
-        ) {
-          const remainingRows = await listMediaForLocalUris([previousLocalUri]);
-          if (remainingRows.length === 0) {
-            await deleteManagedVideoUri(previousLocalUri);
+        if (canContinue()) {
+          try {
+            if (previousLocalUri && previousLocalUri !== persistedVideo.localUri) {
+              const remainingRows = await listMediaForLocalUris([previousLocalUri]);
+              if (remainingRows.length === 0) {
+                try {
+                  await deleteManagedVideoUri(previousLocalUri);
+                } catch (cleanupError) {
+                  if (__DEV__) console.warn("[SetInfo] Video replacement succeeded but old-file cleanup failed:", cleanupError);
+                  Alert.alert("Video linked", "The new video was linked, but the previous local copy could not be removed.");
+                }
+              }
+            }
+          } catch (cleanupError) {
+            if (__DEV__) console.warn("[SetInfo] Video replacement succeeded but reference cleanup failed:", cleanupError);
+            Alert.alert("Video linked", "The new video was linked, but the previous local copy could not be checked or removed.");
+          } finally {
+            // A committed replacement always refreshes the current route, even
+            // when the optional cleanup/reference lookup fails.
+            if (canContinue()) await loadVideoMedia();
           }
         }
 
@@ -565,46 +681,67 @@ export default function SetInfoScreen() {
           });
         }
 
-        await loadVideoMedia();
       } catch (error) {
         if (__DEV__) console.error("[SetInfo] Failed linking selected video:", error);
-        Alert.alert("Error", "Failed to link video to this set.");
+        if (canContinue()) {
+          Alert.alert("Error", "Failed to link video to this set.");
+          // The failed write invalidated an earlier read/repair. Re-read the
+          // persisted link so a current route cannot remain loading forever.
+          await loadVideoMedia();
+        }
       } finally {
-        setSavingSelection(false);
+        if (canContinue()) setSavingSelection(false);
       }
     } catch (error) {
       if (__DEV__) console.error("[SetInfo] Failed opening system gallery picker:", error);
-      Alert.alert("Error", "Failed to open gallery.");
+      if (canContinue()) Alert.alert("Error", "Failed to open gallery.");
     } finally {
-      setPickerLoading(false);
+      if (pickerRequest === pickerRequestRef.current) {
+        pickerInFlightRef.current = false;
+        if (canContinue()) setPickerLoading(false);
+      }
     }
-  }, [ensureVideoLibraryPermission, isValidId, setId, videoMedia, loadVideoMedia]);
+  }, [ensureVideoLibraryPermission, isValidId, loadVideoMedia, setId, setRecord, videoMedia]);
 
   const unlinkVideo = useCallback(async () => {
-    if (!isValidId || !setId) return;
-    if (!videoUri) return;
+    if (!isValidId || !setId || !setRecord || !videoMedia || unlinkInFlightRef.current) return;
+    const targetSetId = setId;
+    const routeGeneration = routeGenerationRef.current;
+    const canApply = () =>
+      routeGeneration === routeGenerationRef.current && routeSetIdRef.current === targetSetId;
+    if (!canApply() || setRecord.id !== targetSetId) return;
+    const unlinkRequest = ++unlinkRequestRef.current;
 
+    unlinkInFlightRef.current = true;
     setUnlinkingVideo(true);
     try {
-      await unlinkMediaForSet(setId);
+      mediaMutationRef.current += 1;
+      loadVideoRequestRef.current += 1;
+      await unlinkMediaForSet(targetSetId);
 
       if (__DEV__) {
         console.log("[SetInfo] Unlinked video from set:", { setId });
       }
 
-      await loadVideoMedia();
+      if (canApply()) await loadVideoMedia();
     } catch (error) {
       if (__DEV__) console.error("[SetInfo] Failed unlinking video:", error);
-      Alert.alert("Error", "Failed to unlink video from this set.");
+      if (canApply()) {
+        Alert.alert("Error", "Failed to unlink video from this set.");
+        await loadVideoMedia();
+      }
     } finally {
-      setUnlinkingVideo(false);
+      if (unlinkRequest === unlinkRequestRef.current) {
+        unlinkInFlightRef.current = false;
+        if (canApply()) setUnlinkingVideo(false);
+      }
     }
-  }, [isValidId, setId, videoUri, loadVideoMedia]);
+  }, [isValidId, loadVideoMedia, setId, setRecord, videoMedia]);
 
   const handleVideoActionPress = useCallback(() => {
-    if (!isValidId || !setId) return;
+    if (!isValidId || !setId || !setRecord) return;
 
-    if (!videoUri) {
+    if (!videoMedia) {
       void openVideoPicker();
       return;
     }
@@ -614,7 +751,47 @@ export default function SetInfoScreen() {
       { text: "Unlink video", style: "destructive", onPress: () => void unlinkVideo() },
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [isValidId, setId, videoUri, openVideoPicker, unlinkVideo]);
+  }, [isValidId, setId, setRecord, videoMedia, openVideoPicker, unlinkVideo]);
+
+  const beginNoteEdit = useCallback(() => {
+    if (!setRecord || savingNote) return;
+    setNoteDraft(setRecord.note ?? "");
+    setEditingNote(true);
+  }, [savingNote, setRecord]);
+
+  const cancelNoteEdit = useCallback(() => {
+    if (!setRecord || savingNote) return;
+    setNoteDraft(setRecord.note ?? "");
+    setEditingNote(false);
+  }, [savingNote, setRecord]);
+
+  const saveNote = useCallback(async () => {
+    if (!isValidId || !setId || !setRecord || noteSaveInFlightRef.current) return;
+    const targetSetId = setId;
+    const routeGeneration = routeGenerationRef.current;
+    const canApply = () =>
+      routeGeneration === routeGenerationRef.current && routeSetIdRef.current === targetSetId;
+    if (!canApply() || setRecord.id !== targetSetId) return;
+    const saveRequest = ++noteSaveRequestRef.current;
+    const nextNote = noteDraft.trim() || null;
+    noteSaveInFlightRef.current = true;
+    setSavingNote(true);
+    try {
+      await updateSet(targetSetId, { note: nextNote });
+      if (!canApply()) return;
+      setSetRecord((current) => current?.id === targetSetId ? { ...current, note: nextNote } : current);
+      setNoteDraft(nextNote ?? "");
+      setEditingNote(false);
+    } catch (error) {
+      if (__DEV__) console.error("[SetInfo] Failed saving set note:", error);
+      if (canApply()) Alert.alert("Error", "Failed to save the set note.");
+    } finally {
+      if (saveRequest === noteSaveRequestRef.current) {
+        noteSaveInFlightRef.current = false;
+        if (canApply()) setSavingNote(false);
+      }
+    }
+  }, [isValidId, noteDraft, setId, setRecord]);
 
   const formatAssetDate = useCallback((timestamp?: number) => {
     return new Date(toDisplayMillis(timestamp)).toLocaleString("en-US", {
@@ -642,6 +819,72 @@ export default function SetInfoScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content}>
+        {loadingSet ? (
+          <View style={[styles.videoCard, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
+            <View style={styles.emptyVideoState}>
+              <ActivityIndicator size="small" color={rawColors.primary} />
+              <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>Loading set...</Text>
+            </View>
+          </View>
+        ) : !setRecord ? (
+          <View style={[styles.videoCard, { backgroundColor: rawColors.surface, borderColor: rawColors.border }]}>
+            <View style={styles.emptyVideoState}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={26} color={rawColors.foregroundMuted} />
+              <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>This set is unavailable.</Text>
+            </View>
+          </View>
+        ) : (
+          <>
+        <View
+          style={[styles.videoCard, { backgroundColor: rawColors.surface, borderColor: rawColors.border, shadowColor: rawColors.shadow }]}
+        >
+          <View style={styles.videoHeader}>
+            <View style={styles.videoHeaderTitle}>
+              <MaterialCommunityIcons name="note-text-outline" size={18} color={rawColors.primary} />
+              <Text style={[styles.videoTitle, { color: rawColors.foreground }]}>Set note</Text>
+            </View>
+            {!editingNote && (
+              <Pressable onPress={beginNoteEdit} disabled={savingNote}>
+                <View style={[styles.actionPill, { backgroundColor: rawColors.surfaceSecondary }]}>
+                  <Text style={[styles.actionPillText, { color: rawColors.primary }]}>{setRecord.note ? "Edit Note" : "Add Note"}</Text>
+                </View>
+              </Pressable>
+            )}
+          </View>
+          {editingNote ? (
+            <>
+              <TextInput
+                testID="set-note-input"
+                className="border border-border rounded-lg p-3 text-base bg-surface-secondary text-foreground min-h-[80px]"
+                style={{ textAlignVertical: "top" }}
+                value={noteDraft}
+                onChangeText={setNoteDraft}
+                placeholder="Add notes about this set"
+                placeholderTextColor={rawColors.foregroundMuted}
+                multiline
+                editable={!savingNote}
+              />
+              <View className="flex-row gap-3 mt-3">
+                <Pressable className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary" onPress={cancelNoteEdit} disabled={savingNote}>
+                  <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+                </Pressable>
+                <Pressable className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary" onPress={() => void saveNote()} disabled={savingNote}>
+                  <Text className="text-base font-semibold text-primary-foreground">{savingNote ? "Saving..." : "Save Note"}</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : setRecord.note ? (
+            <>
+              <Text style={[styles.emptyVideoText, { color: rawColors.foreground }]}>{setRecord.note}</Text>
+              <Pressable className="items-center justify-center p-3.5 rounded-lg bg-surface-secondary mt-3" onPress={() => { setNoteDraft(""); setEditingNote(true); }} disabled={savingNote}>
+                <Text className="text-base font-semibold text-foreground-secondary">Clear Note</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>No note for this set.</Text>
+          )}
+        </View>
+
         <View
           style={[
             styles.infoCard,
@@ -654,7 +897,9 @@ export default function SetInfoScreen() {
           <View style={styles.infoText}>
             <Text style={[styles.title, { color: rawColors.foreground }]}>Set Details</Text>
             <Text style={[styles.subtitle, { color: rawColors.foregroundSecondary }]}>
-              Set ID {isValidId ? setId : "Unknown"}
+              {setRecord.weightKg !== null ? formatWeightFromKg(setRecord.weightKg, unitPreference) : "—"}
+              {" x "}
+              {setRecord.reps !== null ? `${setRecord.reps} reps` : "—"}
             </Text>
           </View>
         </View>
@@ -670,7 +915,7 @@ export default function SetInfoScreen() {
               <MaterialCommunityIcons name="video-outline" size={18} color={rawColors.primary} />
               <Text style={[styles.videoTitle, { color: rawColors.foreground }]}>Video</Text>
             </View>
-            {isValidId && (
+            {isValidId && setRecord && (
               <Pressable
                 onPress={handleVideoActionPress}
                 disabled={pickerLoading || savingSelection || unlinkingVideo}
@@ -680,12 +925,12 @@ export default function SetInfoScreen() {
               >
                 <View style={[styles.actionPill, { backgroundColor: rawColors.surfaceSecondary }]}>
                   <MaterialCommunityIcons
-                    name={videoUri ? "pencil-outline" : "plus"}
+                    name={videoMedia ? "pencil-outline" : "plus"}
                     size={16}
                     color={rawColors.primary}
                   />
                   <Text style={[styles.actionPillText, { color: rawColors.primary }]}>
-                    {videoUri ? "Edit" : "Add"}
+                    {videoMedia ? "Edit" : "Add"}
                   </Text>
                 </View>
               </Pressable>
@@ -729,9 +974,9 @@ export default function SetInfoScreen() {
             <View style={styles.emptyVideoState}>
               <MaterialCommunityIcons name="video-off-outline" size={26} color={rawColors.foregroundMuted} />
               <Text style={[styles.emptyVideoText, { color: rawColors.foregroundSecondary }]}>
-                No video linked to this set.
+                {videoMedia ? "The linked video is unavailable." : "No video linked to this set."}
               </Text>
-              {isValidId && (
+              {!videoMedia && isValidId && setRecord && (
                 <Pressable
                   onPress={handleVideoActionPress}
                   disabled={pickerLoading || savingSelection || unlinkingVideo}
@@ -750,6 +995,8 @@ export default function SetInfoScreen() {
             </View>
           )}
         </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
