@@ -539,6 +539,19 @@ export default function SetInfoScreen() {
             duration_ms: nextDurationMs,
             album_name: nextAlbumName,
           });
+          if (isCurrentRequest()) {
+            const repairedMedia: Media = {
+              ...media,
+              localUri: finalUri,
+              assetId: nextAssetId,
+              originalFilename: nextOriginalFilename,
+              mediaCreatedAt: nextMediaCreatedAt,
+              durationMs: nextDurationMs,
+              albumName: nextAlbumName,
+            };
+            loadedMedia = repairedMedia;
+            setVideoMedia(repairedMedia);
+          }
         } catch (updateError) {
           if (__DEV__) console.warn("[SetInfo] Failed to persist repaired media linkage:", updateError);
         }
