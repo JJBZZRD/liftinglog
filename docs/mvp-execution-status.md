@@ -35,10 +35,13 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-002A | Terra / medium | `__tests__/db/manualLoggingLifecycle.test.ts`, `__tests__/app/manual-logging-lifecycle.test.tsx`, `__tests__/helpers/manualLoggingDatabase.ts`, `docs/testing/manual-logging-characterization.md` | Reviewed characterization merged as `e7cf5e8`; one reproduced defect tracked below |
 | MVP-002A-R1 | Terra / high | Manual date/resume seam in `components/exercise/UnifiedRecordTab.tsx`, `__tests__/app/manual-logging-lifecycle.test.tsx`, `docs/testing/manual-logging-characterization.md` | Reviewed and merged as `aa6b671` |
 | MVP-003A | Sol / xhigh | `__tests__/db/exerciseNameMigrationProof.test.ts`, `__tests__/helpers/exerciseNameMigrationProof.ts`, `__tests__/fixtures/exercise-name-migration/**`, `docs/adr/exercise-name-migration-proof.md` | Corrected proof independently accepted, organiser reran 12/12 after rebase; merged `ff89170` |
-| MVP-004A | Luna / medium | `__tests__/app/set-detail-characterization.test.tsx`, `__tests__/utils/setVideoCharacterization.test.ts`, `__tests__/db/setMediaCharacterization.test.ts`, `__tests__/helpers/setDetailCharacterization.ts`, `docs/testing/set-detail-characterization.md` | Review requested stronger selection/replacement and exact DB assertions |
+| MVP-004A | Luna / medium; Terra / high review repair | `__tests__/app/set-detail-characterization.test.tsx`, `__tests__/utils/setVideoCharacterization.test.ts`, `__tests__/db/setMediaCharacterization.test.ts`, `__tests__/helpers/setDetailCharacterization.ts`, `docs/testing/set-detail-characterization.md` | Corrected real-screen tests reviewed and independently passed 12/12; merged `c162637` |
 | MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md`; bounded Jest configuration exception below | Reviewed and merged `aa762bc`; 32 suites / 401 tests pass including real-root direct URL tests |
-| MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Running in `mvp/MVP-002B-history-read-model`, base `aa6b6715ffea28ba0094ffed6ed7aa184cd6610c` |
-| MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, optional recording-route wrapper; focused capability/manual UI tests and findings | Running in `mvp/MVP-001D-entry-points`, base `aa762bc096c0979300b27ca2f80fdbfdffbe29ea` |
+| MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Independently accepted; organiser reran 76/76 after rebase, merged `01dbffd` with ground-truth update |
+| MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, focused capability/manual UI tests and findings | Reviewed; organiser targeted 29/29 pass, merged `3a3a6c3`; file ownership released |
+| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, focused identity tests | Running in `mvp/MVP-003C-exercise-identity`, base `c162637deb29e321ab8efbc5b7e069bcb7783ead` |
+| MVP-004B | Terra / high | `lib/db/media.ts`, `lib/utils/videoStorage.ts`, focused DB/storage tests | Running in `mvp/MVP-004B-media-contract`, base `c162637deb29e321ab8efbc5b7e069bcb7783ead` |
+| MVP-001C | Terra / medium | Programs tab wrapper/extracted components and focused profile UI tests | Running in `mvp/MVP-001C-programs-coming-soon`, base `01dbffd2eee94710d2ff11051bc3d741a5d66477` |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -91,6 +94,13 @@ validation, then accepted correction `5cc3f56`; the organiser inspected the chan
 rebased onto `aa762bc`, reran all 12 tests, and integrated the proof as `ff89170`.
 Historical schema coverage and production migration remain separate MVP-003B work.
 
+Integrated verification at `c162637`: both full and MVP profiles pass all 36 suites /
+425 tests; typecheck passes and lint retains zero errors / 20 baseline warnings.
+Subsequent 001D and 002B changes passed their targeted gates; another integrated
+wave check is required before accepting their complete stories. The 002B review
+also hardened pagination coverage so empty drafts sort before real entries,
+demonstrating that filtering occurs before LIMIT.
+
 The post-integration codebase-memory refresh was attempted in both fast and full
 modes, but the service still reports the original 3,026 nodes and cannot find the
 new capability symbols. Continue graph-first discovery and verify current source
@@ -115,10 +125,10 @@ preserved; a successful tool response alone is not evidence of a fresh index.
   well as `listWorkoutDays`, `searchWorkoutDays`, `getWorkoutDayDetails` and
   `getWorkoutDayPage`. Empty drafts must not consume counts or pagination slots.
   Keep existing volume/PB formulas and ID-based session relationships.
-- MVP-004A remains unaccepted: the add/cancel test reuses an unloaded callback and
-  does not prove cancellation against an existing attachment; screen replacement
-  and deliberate no-match rediscovery need stronger assertions. Its 10 tests pass,
-  but passing alone does not satisfy the review contract.
+- MVP-004A initially failed review because add/cancel reused an unloaded callback
+  and rediscovery did not deliberately return a valid empty scan. Terra's review
+  repair now executes the loaded Edit/Change action, cancellation and no-match
+  scan with explicit assertions. Those corrections are accepted in `c162637`.
 - MVP-004C must correct the picker duration boundary: installed
   `expo-image-picker/build/ImagePicker.types.d.ts` defines duration in milliseconds,
   consistent with [Expo ImagePicker documentation](https://docs.expo.dev/versions/latest/sdk/imagepicker/).
@@ -131,9 +141,23 @@ preserved; a successful tool response alone is not evidence of a fresh index.
   connection bootstrap history before `3223ce9`. The proof's exact DDL matcher
   cannot simply become the production migration. Unknown constraints/indexes must
   fail closed; supported shapes must preserve every existing value and reference.
+- Integrate MVP-003C's identity safeguards before MVP-003B exposes nonunique names:
+  current `rewriteCalendarExerciseReferences` matches exercise ID **or name**, so
+  renaming/deleting one same-named variation could rewrite another exercise's
+  retained program references. The organiser will include that exact helper in
+  003C's bounded write scope. Explicit IDs must win; ambiguous name-only references
+  must not be silently retargeted. Stored PSL/config name rewrites also need that
+  audit. This protects retained data and does not redesign the Programs experience.
 - MVP-001D owns `app/(tabs)/index.tsx` while removing the health entry and suppressing
   its snapshot query. MVP-002C's later Overview status rendering must wait for that
   ownership to be released; the history/day screens remain a separate UI scope.
+  Ownership was released after `3a3a6c3`; 002C can now consume the Overview status.
+- MVP-002B audit found a pre-existing legacy-date gap: a real-set entry with NULL
+  `performed_at` has no usable local day. Current write APIs supply a date, but
+  historical rows need explicit disposition before MVP-002 acceptance. This is an
+  open follow-up, not a waiver of the all-real-sets inclusion contract. Date-only
+  search also retains its existing partial-range count semantics; current UI uses
+  whole-day bounds. Keep both findings visible in 002R.
 
 ### Frozen MVP-001A interface
 
@@ -179,6 +203,20 @@ definitions remain unchanged. Existing search token intersection and date-range
 behavior are retained. Tests use production queries over real SQLite and cover
 empty drafts, mixed lifecycle states, multiple envelopes, filtering, pagination,
 local-day boundaries, and deletion of the last set.
+
+### Frozen MVP-003C compatibility boundary
+
+`getExerciseByName` resolves an exact name to its lowest numeric exercise ID.
+`listExercisesByNames` remains a compatibility resolver and returns one lowest-ID
+row per trimmed, distinct exact name, ordered deterministically. Catalog and MVP
+logging APIs retain all exercises and use IDs. Remove the global variation display
+name collision check while retaining existing within-parent label and family rules.
+
+Explicit IDs take precedence in calendar/config rewrites. Name fallback applies
+only to references with no ID and only when the old name was unambiguous before
+mutation. Ambiguous stored PSL names are left unchanged; a different explicit ID
+is never changed because its display name happens to match. This requires the
+bounded `rewriteCalendarExerciseReferences` scope extension recorded above.
 
 ## Retained evidence and follow-ups
 
