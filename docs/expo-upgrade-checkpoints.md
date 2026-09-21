@@ -593,7 +593,27 @@ byte-for-byte unchanged during this run.
 
 ## Resume Point
 
+### Current checkpoint, 2026-09-21
+
+**PRE-001G and PRE-001H are accepted for Android prerequisite ordering;
+PRE-001R is next and Wave 1 remains blocked until R acceptance.** The resumed
+[Android audit](android-console-audit-2026-09-20.md) records completed populated
+gallery persistence/replacement, SAF export/import, independent SQLite integrity
+and foreign-key checks, and final console classifications on `99c1033` (unchanged
+application/native inputs). The two inserted seed rows during current merge import
+remain a documented MVP-006 regression fixture, not replacement-restore approval.
+
+Typecheck, 27 suites/344 tests, baseline-only lint, dependency tree and Android
+native verifier passed again. The user authorised proceeding into plan-ordered
+implementation after the checks without another permission prompt. Run independent
+Sol/high PRE-001R on the committed H checkpoint; resolve findings, reread the plan,
+refresh codebase-memory and pin the accepted SHA before dispatching Wave 1.
+Keep iOS/camera exceptions below, phone disconnected, original dirty/untracked
+work preserved, and worker worktrees outside the app directory.
+
 ### User-requested pause, 2026-09-20
+
+Historical checkpoint; superseded by the current checkpoint above.
 
 The current detailed checkpoint is
 [PRE-001H Android audit](android-console-audit-2026-09-20.md). PRE-001G is accepted

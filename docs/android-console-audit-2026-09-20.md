@@ -1,7 +1,8 @@
-# PRE-001H Android audit: paused checkpoint, 2026-09-20
+# PRE-001H Android audit: accepted 2026-09-21
 
-Status: **in progress, not accepted**. The user requested a safe pause so the
-physical phone could be disconnected. PRE-001R and Wave 1 have not started.
+Status: **accepted for Android prerequisite ordering** after resumed verification
+on 2026-09-21. The pause record below is historical; final completion and known
+MVP-006 limitations are recorded at the end. PRE-001R and Wave 1 have not started.
 Resume from this record and the Resume Point in `expo-upgrade-checkpoints.md`;
 do not restart the SDK upgrade.
 
@@ -34,7 +35,8 @@ do not restart the SDK upgrade.
 
 ## Reviewed route matrix
 
-These are individual observed passes, not formal closure of PRE-001H.
+These are the observed passes at the 2026-09-20 pause. The final completion
+section below supersedes the outstanding populated rows.
 
 | Scenario | Observed result and evidence |
 | --- | --- |
@@ -158,3 +160,80 @@ Existing automated evidence still applies to unchanged source: 27 Jest suites /
 344 tests pass, typecheck passes, lint has 20 baseline warnings/0 errors, npm
 dependency tree and Android native verifier pass. This pause does not change the
 accepted iOS/camera deferrals or grant release approval.
+
+## Resumed verification, 2026-09-21
+
+The user authorised completing the checks and then beginning plan-ordered
+implementation without another permission prompt. Main resumed at
+`99c1033e3e1e0f9c825f790bbaf72fe1b1930b57`; the original dirty-file hashes still
+match. No previous emulator survived the host restart. A fresh read-only Pixel 9
+Pro XL instance was launched on port 5554, using the saved populated AVD and the
+verified x86_64 APK above (`adb install -r` succeeded). This run must establish a
+new disposable set through the UI rather than reuse yesterday's set ID.
+
+Resumed automated checks on unchanged application source:
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` | Pass |
+| `npm test -- --runInBand --silent` | Pass: 27 suites, 344 tests |
+| `npm run lint -- --no-cache` | Pass: 20 baseline warnings, 0 errors |
+| `npm ls --depth=0` | Pass |
+| `npm run verify:android-rest-timer-native` | Pass |
+| `git diff 81a181f HEAD -- android package.json package-lock.json app.json plugins scripts` | Empty; native build inputs unchanged |
+
+The outstanding Firebase warning was independently attributed by a read-only
+Luna review and checked by the organiser against the installed Gradle dependency
+and manifest-merger report. `expo-notifications` 57.0.20 depends on
+`firebase-messaging:25.0.1`, which includes `firebase-common:22.0.1` and its
+`FirebaseInitProvider`. That bundled provider attempts default initialization,
+but the offline/local-notification app supplies no Firebase cloud options.
+Classification: expected unused dependency-provider diagnostic, not a missing
+product configuration. Do not add cloud credentials or remove working local
+notifications to silence it. Owner: Expo notification dependency; local follow-up
+`PRE-001H-FIREBASE-PROVIDER` at a future dependency/platform review.
+
+### Final populated completion and organiser acceptance
+
+The remaining populated matrix passed on `99c1033`, whose application and native
+inputs are unchanged from the earlier clean-instance and physical runs. Evidence
+is under `.codex-artifacts/pre001h-resume-20260921/populated/`; the worker's
+`populated-audit.md` records the normal UI paths and exact commands. The organiser
+independently inspected screenshots, media sessions, SQLite archives and app logs.
+
+| Remaining check | Final evidence |
+| --- | --- |
+| Gallery persistence/replacement | Normal Record UI created disposable 1 kg x 1 rep rows. Actual set 5741 received synthetic A, played inline/fullscreen, retained A after normal Back/re-entry, then received replacement B on the same ID. Screenshots show the labelled clips; app-owned sessions report PLAYING(3). No camera or personal media used. |
+| Populated export | Original extensionless SAF file `LiftingLog-backup-20260921-190125`, 1,507,328 bytes, valid SQLite header and integrity `ok`. SHA-256 `33d5a55b2484f849266f51afbc72ac60b59a7402207055de4376ae02eb002f2c`. Export counts match the pre-import live snapshot. |
+| Populated import | Selected that exact original SAF file. UI reports 0 exercises, 2 workouts, 2 sets, 0 media links, 0 check-ins inserted and 8,076 existing records updated. Successful current merge behavior, not replacement-restore acceptance. |
+| Data checks | Paired DB/WAL/SHM archives preserved before and after import. Independent organiser read-only checks return integrity `ok` and no foreign-key violations in both. Counts: workouts 732 to 734; workout_exercises 733 to 735; sets 5,742 to 5,744; exercises 4 and media 1 unchanged. Set 5741 and its replacement media link remain intact. |
+
+The two inserted workout/set pairs reproduce the existing UID-less development
+seed candidate ambiguity already assigned to MVP-006. Pre-import workout IDs
+729/731 share timestamps; their first sets 5712/5726 have matching per-workout
+positions/timestamps and null UIDs. Import creates workouts 733/734 and sets
+5743/5744 with those same values and valid parent links. This is not count equality
+and is not claimed as new correct restore behavior. Owner: MVP-006 restore worker;
+preserve the paired archives as a regression fixture. No new platform regression
+or unresolved project-owned console issue was established.
+
+Final additional warning classification: `WindowOnBackDispatcher:
+OnBackInvokedCallback is not enabled` reflects Expo's supported default predictive
+back opt-out. Installed config plugin `PredictiveBackGesture.js` returns `false`
+unless explicitly enabled; app config omits it and generated manifest correctly
+sets `android:enableOnBackInvokedCallback="false"`. Normal Back, picker return and
+backup succeed. Owner: Expo/Android; local follow-up `PRE-001H-PREDICTIVE-BACK` at
+a future navigation/platform review. Do not enable a new UX capability to silence
+the diagnostic. The organiser independently read the plugin and checked the logs.
+
+The final app-PID transcript is `organizer-app4776-logcat.txt` in the resumed
+evidence directory. It contains the successful export/import flow and reviewed
+dependency/runtime diagnostics, with no app JS error, fatal exception, ANR or
+old picker deprecation. Existing repair link: `d8ee8cf` (supported gallery media
+type). Firebase attribution and the other signatures are recorded above.
+
+PRE-001H is accepted with existing `PRE-001G-IOS-DEFERRED` and
+`PRE-001G-CAMERA-DEFERRED` scope boundaries; these are not release approvals.
+Next: independent read-only PRE-001R on this committed evidence. Wave 1 remains
+blocked until that audit is accepted. All original dirty/untracked work remains
+preserved; only organiser documentation is included in this checkpoint.
