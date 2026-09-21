@@ -184,6 +184,14 @@ typecheck passes, and lint has zero errors / 20 existing warnings. The graph
 refresh again reports the original 3,026 nodes / 6,918 edges; current-source
 fallback remains necessary. No native/EAS build or remote CI run is implied.
 
+After MVP-005B integration, at `e725a32`, both profiles pass 55 suites / 548 tests.
+Typecheck passes and lint remains zero errors / 20 baseline warnings. Logs are
+retained locally as `.codex-artifacts/mvp-notes-db-{full,mvp}-tests.log`.
+All seven preserved-file hashes still match. MVP-005C's revised queue also needs
+a regression proving an older queued snapshot cannot overwrite a newer draft
+already saved by the first writer, plus route invalidation before deferred loading
+finishes. These are review findings, not accepted behavior.
+
 MVP-003E now reopens while both duplicate names exist, compares both IDs/UIDs and
 their history/analytics/media, and exercises set edit/delete and exercise deletion
 while names still match. The other exercise's complete API rows remain equal.
