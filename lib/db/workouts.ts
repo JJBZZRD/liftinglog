@@ -832,26 +832,32 @@ export type LastWorkoutDayResult = {
 
 /**
  * Get the most recent workout day with exercise entries that have real sets.
- * Groups by day (using performed_at), returns exercise list with best E1RM sets.
+ * Groups by the effective history date, returns exercise list with best E1RM sets.
  */
 export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> {
   if (!canQueryWorkoutExercises("getLastWorkoutDay")) {
     return null;
   }
+  const effectivePerformedAt = sql<number>`COALESCE(
+    ${workoutExercises.performedAt},
+    ${workoutExercises.completedAt},
+    ${workouts.startedAt}
+  )`;
   // Completion is status metadata; linked real sets determine history visibility.
   const recentEntry = await db
     .select({
-      performedAt: workoutExercises.performedAt,
+      performedAt: effectivePerformedAt,
     })
     .from(workoutExercises)
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
     .where(sql`EXISTS (
       SELECT 1 FROM ${sets}
       WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
     )`)
-    .orderBy(desc(workoutExercises.performedAt))
+    .orderBy(desc(effectivePerformedAt))
     .limit(1);
 
-  if (recentEntry.length === 0 || recentEntry[0].performedAt === null) {
+  if (recentEntry.length === 0) {
     return null;
   }
 
@@ -868,25 +874,26 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
       workoutExerciseId: workoutExercises.id,
       exerciseId: workoutExercises.exerciseId,
       exerciseName: exercises.name,
-      performedAt: workoutExercises.performedAt,
+      performedAt: effectivePerformedAt,
       completedAt: workoutExercises.completedAt,
     })
     .from(workoutExercises)
     .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
     .where(
       and(
         sql`EXISTS (
           SELECT 1 FROM ${sets}
           WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
         )`,
-        sql`${workoutExercises.performedAt} >= ${dayStart.getTime()}`,
-        sql`${workoutExercises.performedAt} <= ${dayEnd.getTime()}`
+        sql`${effectivePerformedAt} >= ${dayStart.getTime()}`,
+        sql`${effectivePerformedAt} <= ${dayEnd.getTime()}`
       )
     )
     .orderBy(
       sql`COALESCE(${workoutExercises.orderIndex}, 999999)`,
       exercises.name,
-      workoutExercises.performedAt,
+      effectivePerformedAt,
       workoutExercises.id
     );
 
@@ -997,6 +1004,14 @@ export type WorkoutDayDetails = {
   bestE1rmKg: number | null;
 };
 
+const historyEntryTimestampSql = "COALESCE(we.performed_at, we.completed_at, w.started_at)";
+const historyEntryDaySql =
+  `strftime('%Y-%m-%d', ${historyEntryTimestampSql}/1000, 'unixepoch', 'localtime')`;
+const correlatedHistoryEntryTimestampSql =
+  "COALESCE(we2.performed_at, we2.completed_at, w2.started_at)";
+const correlatedHistoryEntryDaySql =
+  `strftime('%Y-%m-%d', ${correlatedHistoryEntryTimestampSql}/1000, 'unixepoch', 'localtime')`;
+
 /**
  * Convert a dayKey (YYYY-MM-DD) to a local timestamp for display formatting
  */
@@ -1024,8 +1039,9 @@ export async function getQuickStats(): Promise<QuickStats> {
   }
   // Count distinct workout days containing at least one entry with real sets.
   const daysStmt = sqlite.prepareSync(`
-    SELECT COUNT(DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')) AS totalDays
+    SELECT COUNT(DISTINCT ${historyEntryDaySql}) AS totalDays
     FROM workout_exercises we
+    INNER JOIN workouts w ON w.id = we.workout_id
     WHERE EXISTS (
       SELECT 1 FROM sets visible_sets
       WHERE visible_sets.workout_exercise_id = we.id
@@ -1078,17 +1094,19 @@ export async function listWorkoutDays(params: {
 
   const stmt = sqlite.prepareSync(`
     SELECT 
-      strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
-      MIN(we.performed_at) AS displayDate,
+      ${historyEntryDaySql} AS dayKey,
+      MIN(${historyEntryTimestampSql}) AS displayDate,
       COUNT(DISTINCT we.id) AS totalExercises,
       (SELECT COUNT(*)
         FROM sets s
         INNER JOIN workout_exercises we2 ON we2.id = s.workout_exercise_id
-        WHERE strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+        INNER JOIN workouts w2 ON w2.id = we2.workout_id
+        WHERE ${correlatedHistoryEntryDaySql} = ${historyEntryDaySql}
       ) AS totalSets,
       SUM(CASE WHEN we.completed_at IS NULL THEN 1 ELSE 0 END) AS inProgressCount,
       GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
     FROM workout_exercises we
+    INNER JOIN workouts w ON w.id = we.workout_id
     WHERE EXISTS (
       SELECT 1 FROM sets visible_sets
       WHERE visible_sets.workout_exercise_id = we.id
@@ -1146,12 +1164,13 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
       we.note
     FROM workout_exercises we
     INNER JOIN exercises e ON we.exercise_id = e.id
-    WHERE strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+    INNER JOIN workouts w ON w.id = we.workout_id
+    WHERE ${historyEntryDaySql} = ?
       AND EXISTS (
         SELECT 1 FROM sets visible_sets
         WHERE visible_sets.workout_exercise_id = we.id
       )
-    ORDER BY COALESCE(we.order_index, 999999), e.name ASC, we.performed_at, we.id
+    ORDER BY COALESCE(we.order_index, 999999), e.name ASC, ${historyEntryTimestampSql}, we.id
     LIMIT 27
   `);
 
@@ -1299,7 +1318,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   }
 
   // If no query and no date filter, just return regular list
-  if (!query.trim() && !startDate && !endDate) {
+  if (!query.trim() && startDate == null && endDate == null) {
     return listWorkoutDays({ limit, offset });
   }
 
@@ -1308,12 +1327,12 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   // Build date filter clause
   let dateFilterClause = "";
   const dateParams: number[] = [];
-  if (startDate) {
-    dateFilterClause += " AND we.performed_at >= ?";
+  if (startDate != null) {
+    dateFilterClause += ` AND ${historyEntryTimestampSql} >= ?`;
     dateParams.push(startDate);
   }
-  if (endDate) {
-    dateFilterClause += " AND we.performed_at <= ?";
+  if (endDate != null) {
+    dateFilterClause += ` AND ${historyEntryTimestampSql} <= ?`;
     dateParams.push(endDate);
   }
 
@@ -1324,8 +1343,9 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   for (const token of alpha) {
     const likePattern = `%${token}%`;
     const stmt = sqlite.prepareSync(`
-      SELECT DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey
+      SELECT DISTINCT ${historyEntryDaySql} AS dayKey
       FROM workout_exercises we
+      INNER JOIN workouts w ON w.id = we.workout_id
       LEFT JOIN exercises e ON we.exercise_id = e.id
       LEFT JOIN sets s ON s.workout_exercise_id = we.id
       WHERE EXISTS (
@@ -1359,8 +1379,9 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   // Search for numeric tokens (weight or reps)
   for (const num of numeric) {
     const stmt = sqlite.prepareSync(`
-      SELECT DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey
+      SELECT DISTINCT ${historyEntryDaySql} AS dayKey
       FROM workout_exercises we
+      INNER JOIN workouts w ON w.id = we.workout_id
       INNER JOIN sets s ON s.workout_exercise_id = we.id
       WHERE 1 = 1
         ${dateFilterClause}
@@ -1392,17 +1413,19 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   if (alpha.length === 0 && numeric.length === 0) {
     const stmt = sqlite.prepareSync(`
       SELECT 
-        strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
-        MIN(we.performed_at) AS displayDate,
+        ${historyEntryDaySql} AS dayKey,
+        MIN(${historyEntryTimestampSql}) AS displayDate,
         COUNT(DISTINCT we.id) AS totalExercises,
         (SELECT COUNT(*)
           FROM sets s
           INNER JOIN workout_exercises we2 ON we2.id = s.workout_exercise_id
-          WHERE strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+          INNER JOIN workouts w2 ON w2.id = we2.workout_id
+          WHERE ${correlatedHistoryEntryDaySql} = ${historyEntryDaySql}
         ) AS totalSets,
         SUM(CASE WHEN we.completed_at IS NULL THEN 1 ELSE 0 END) AS inProgressCount,
         GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
       FROM workout_exercises we
+      INNER JOIN workouts w ON w.id = we.workout_id
       WHERE EXISTS (
           SELECT 1 FROM sets visible_sets
           WHERE visible_sets.workout_exercise_id = we.id
@@ -1454,18 +1477,20 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
   const placeholders = paginatedDayKeys.map(() => '?').join(', ');
   const stmt = sqlite.prepareSync(`
     SELECT 
-      strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
-      MIN(we.performed_at) AS displayDate,
+      ${historyEntryDaySql} AS dayKey,
+      MIN(${historyEntryTimestampSql}) AS displayDate,
       COUNT(DISTINCT we.id) AS totalExercises,
       (SELECT COUNT(*)
         FROM sets s
         INNER JOIN workout_exercises we2 ON we2.id = s.workout_exercise_id
-        WHERE strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+        INNER JOIN workouts w2 ON w2.id = we2.workout_id
+        WHERE ${correlatedHistoryEntryDaySql} = ${historyEntryDaySql}
       ) AS totalSets,
       SUM(CASE WHEN we.completed_at IS NULL THEN 1 ELSE 0 END) AS inProgressCount,
       GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
     FROM workout_exercises we
-    WHERE strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') IN (${placeholders})
+    INNER JOIN workouts w ON w.id = we.workout_id
+    WHERE ${historyEntryDaySql} IN (${placeholders})
       AND EXISTS (
         SELECT 1 FROM sets visible_sets
         WHERE visible_sets.workout_exercise_id = we.id
@@ -1555,17 +1580,18 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
       we.id AS workoutExerciseId,
       we.exercise_id AS exerciseId,
       e.name AS exerciseName,
-      we.performed_at AS performedAt,
+      ${historyEntryTimestampSql} AS performedAt,
       we.completed_at AS completedAt,
       we.note
     FROM workout_exercises we
     INNER JOIN exercises e ON we.exercise_id = e.id
-    WHERE strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+    INNER JOIN workouts w ON w.id = we.workout_id
+    WHERE ${historyEntryDaySql} = ?
       AND EXISTS (
         SELECT 1 FROM sets visible_sets
         WHERE visible_sets.workout_exercise_id = we.id
       )
-    ORDER BY COALESCE(we.order_index, 999999), e.name ASC, we.performed_at, we.id
+    ORDER BY COALESCE(we.order_index, 999999), e.name ASC, ${historyEntryTimestampSql}, we.id
     LIMIT 27
   `);
 
