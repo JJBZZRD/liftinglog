@@ -68,7 +68,8 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-005D2 | Terra / medium | Exercise HistoryTab and workout day route note display, new focused tests | Reviewed, organiser 16/16 targeted tests pass; merged `77c5f0b`; filters/grouping unchanged |
 | MVP-005R | Organiser | Read-only integration and controlled emulator notes checks | Host and emulator notes gate accepted; [evidence](testing/mvp-android-notes-review.md); replacement-restore and physical release proof remain pending |
 | MVP-004E1 | Sol / high | Gallery metadata acquisition ADR and isolated proof only | Research reviewed and merged `7ca6e9b`; content-URI hashing and latency remain native proof gates, not accepted production behavior |
-| MVP-004E2 | Sol / high | Isolated development-only diagnostic route and usage notes | Running from `7ca6e9b499f681e54c35acf383568cbf1e68d55f`; organiser alone controls emulator; diagnostic route will not merge into main |
+| MVP-004E2 | Sol / high; organiser native execution | Isolated development-only diagnostic route and usage notes | Candidate `5bbbb34` reviewed and executed; [API proof](testing/gallery-native-api-review.md) accepted for small fixtures/full and limited access; diagnostic route not merged |
+| MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Prepared against the explicit contract in the API review; no schema/dependency/native/backup ownership |
 | MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Candidate `be9a743` independently passes 11 proof tests; audit found startup/recovery contract inconsistencies, returned for correction before API acceptance |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
