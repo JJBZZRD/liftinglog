@@ -26,7 +26,8 @@ siblings of this repository, never nested under the app or its test discovery tr
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
-001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C, 003D and 002B-R2 have been deleted after
+001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C, 003D,
+002B-R2, 003E, 004D, 002D and 007B have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -53,9 +54,13 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-004C | Terra / high | `app/set/[id].tsx`, focused set-detail UI/characterization tests/helper | Corrected candidate `2366824` reviewed; organiser 31/31 targeted tests pass; merged `a1925ec` |
 | MVP-002B-R2 | Sol / high | Six broad-history read helpers in `lib/db/workouts.ts`, focused legacy-date/history tests | Independent audit accepted `bae156e`, 22/22 tests pass; merged `2c0da70` |
 | MVP-003D | Terra / high | Focused exercise identity UI tests; production correction only if necessary | No production defect found; organiser 9/9 targeted tests pass; merged `fd6ab92` |
-| MVP-004D | Terra / medium | New DB/media cleanup tests, optional findings, bounded repaired-media state synchronization in set route | Running from `a1925ecc66db4bb7d78380db20fe1b8f961936b7`; reproduced orphan-copy bug and scope extension described below |
-| MVP-003E | Terra / medium | New real-DB exercise data-isolation tests, local fixture and optional findings only | Running from `fd6ab92cf6689807894e6ec689c5fd0d95645a15` |
-| MVP-002D | Sol / high | New real-DB in-progress PB/analytics/CSV tests and optional local fixture/findings | Running from `2c0da70b36666132f9bb5c03a3d80003622b8400`; production defects return for scoped correction |
+| MVP-004D | Terra / medium | New DB/media cleanup tests, direct storage deletion tests, bounded repaired-media state synchronization in set route | Corrected state and strengthened shared/unmanaged-file proof reviewed; organiser 40/40 targeted tests pass; merged `5c96af3` |
+| MVP-003E | Terra / medium | New real-DB exercise data-isolation tests only | Strengthened same-name restart and mutation proof reviewed; organiser 21/21 targeted tests pass; merged `0287330` |
+| MVP-002D | Sol / high | New real-DB in-progress PB/analytics/CSV tests only | Organiser reviewed and independently passed 38/38 targeted tests; merged `4a561d0` |
+| MVP-007B | Luna / medium | Calculator math/catalog/UI tests and verification notes | Both-profile worker checks pass; organiser MVP 13/13 pass; merged `7ba1493`; production unchanged |
+| MVP-002E | Luna / medium | History ground truth, manual characterization notes, new history acceptance/disposition document | Running from `7ba14938fa41b30f76943e37cfb8626fae328d3f`; old untracked analysis remains read-only |
+| MVP-005A | Luna / medium | New notes audit and optional characterization tests only | Discovery running from `7ba14938fa41b30f76943e37cfb8626fae328d3f`; no production note changes |
+| MVP-006A | Sol / xhigh | Restore ADR and isolated proof/fixtures only | Running from `5c96af36a9b0da283bb012b2945f83717aea8cc4`; source read-only, production restore waits for ADR/API acceptance |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -146,6 +151,29 @@ directly where graph results are absent/stale. The existing graph artifact was
 preserved; a successful tool response alone is not evidence of a fresh index.
 
 ### Next-ticket review notes
+
+Integrated gate at `7ba1493`: full and MVP each pass 54 suites / 537 tests,
+typecheck passes, and lint has zero errors / 20 existing warnings. The graph
+refresh again reports the original 3,026 nodes / 6,918 edges; current-source
+fallback remains necessary. No native/EAS build or remote CI run is implied.
+
+MVP-003E now reopens while both duplicate names exist, compares both IDs/UIDs and
+their history/analytics/media, and exercises set edit/delete and exercise deletion
+while names still match. The other exercise's complete API rows remain equal.
+MVP-004D adds actual SQLite cascade/soft-link checks and direct managed-file
+deletion guards, including shared references and gallery/sibling paths. Its
+13-line production correction updates state only after repair persistence succeeds.
+MVP-002D proves immediate open-entry PB/analytics/CSV inclusion and recalculation,
+with existing formulas and completed-entry state retained. These accepted host
+checks do not substitute for physical Android media or populated-upgrade release
+verification; MVP-004R remains pending.
+
+The current parallel queue contains history documentation, notes discovery, and
+restore design/proof only. MVP-006A follows the plan's allowance for design work
+and the merged identity/media contracts. Do not dispatch production restore or
+its Settings integration until the ADR is reviewed and the organiser freezes its
+interface. Paired original device backups remain read-only local evidence;
+committed fixtures must be minimal deterministic reproductions, not raw user data.
 
 At `267ce85`, full and MVP each passed 48 suites / 515 tests; typecheck passed and
 lint retained zero errors / 20 existing warnings. Original preserved-file hashes
