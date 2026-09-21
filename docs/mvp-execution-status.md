@@ -1,6 +1,6 @@
 # EPIC-MVP-01 execution register
 
-Updated 2026-09-21. The product contract and delivery order are defined in
+Updated 2026-09-22. The product contract and delivery order are defined in
 [product facts](mvp-product-facts.md) and the [implementation plan](mvp-implementation-plan.md).
 
 ## Prerequisites
@@ -27,7 +27,7 @@ No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
 001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C, 003D,
-002B-R2, 003E, 004D, 002D, 007B, 002E, 005A and 005B have been deleted after
+002B-R2, 003E, 004D, 002D, 007B, 002E, 005A, 005B and 005C have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -63,8 +63,9 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-003R | Independent Sol cross-reviews and organiser | Migration/identity read-only review | Accepted migration/identity host gate with 003D/E integration; native upgrade/fresh-install release proof remains pending |
 | MVP-005A | Luna / medium | Notes source audit only | Path/scope and evidence wording corrected, reviewed and merged `06fc4cf` |
 | MVP-005B | Sol / high | `workouts.ts` workout-note updater and day-page note fields, new real-DB tests | Reviewed and independently passed 26/26 targeted tests; merged `bbd325e` |
-| MVP-005C | Terra / high | UnifiedRecordTab entry-note save/error seam and new focused UI tests | Candidate `8fe773a` returned for deferred completion/newer-draft and stale entry-creation corrections; historical editor/display owned separately |
-| MVP-005D1 | Terra / high | `app/edit-workout.tsx` canonical workout/entry note editor and new focused UI tests | Running from `bbd325ec40683be9a5ac6f3970994d2c32898518`; separate explicit note save/cancel, existing set/date edits retained |
+| MVP-005C | Terra / high | UnifiedRecordTab entry-note save/error seam and new focused UI tests | Corrected candidate `aab8c84` reviewed; organiser 19/19 targeted tests pass; merged `98ac655` |
+| MVP-005D1 | Terra / high | `app/edit-workout.tsx` canonical workout/entry note editor and new focused UI tests | Candidate `eee247b` returned for pending-save drafts, load failure, invalid identity and unsaved-note navigation corrections |
+| MVP-005D2 | Terra / medium | Exercise HistoryTab and workout day route note display, new focused tests | Running from `98ac655ecae47242f72acfe995f2a8e68c3ac2c3`; read fields frozen, filters/grouping unchanged |
 | MVP-006A | Sol / xhigh | Restore ADR and isolated proof/fixtures only | Running from `5c96af36a9b0da283bb012b2945f83717aea8cc4`; source read-only, production restore waits for ADR/API acceptance |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
@@ -208,9 +209,14 @@ the supplied payload exactly; UI callers own whitespace normalization. Independe
 checks passed 26 tests across the new real-SQLite note suite and existing history
 read/status suites. The file-backed test preserves all three note levels after
 close/reopen. Its ticket branch was retired after squash integration as `bbd325e`.
-MVP-005C remains unaccepted: review requested deferred tests for newer text typed
-while Complete awaits a save, and route changes while a new note's entry is being
-created. The original six tests do not establish those cases.
+MVP-005C passed after four review iterations. Deferred tests reproduce newer text
+typed while Complete awaits a save, stale entry creation, queued saves with no
+entry, and an old queued snapshot overwriting a newer old-context save after
+navigation. The last failing sequence was A → C → B; the accepted queue records
+saved versions per captured context and leaves C durable. Route invalidation
+precedes async hydration. Organiser execution passes 19 targeted UI/lifecycle/
+capability tests; the worker's integrated suite passes 56 suites / 560 tests.
+Native note navigation/restart acceptance remains MVP-005R.
 
 The current parallel queue contains exercise-note lifecycle corrections, the
 canonical workout/entry-note editor, and restore design/proof. History note display
