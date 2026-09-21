@@ -1,0 +1,156 @@
+import React from "react";
+import renderer, { act } from "react-test-renderer";
+
+const mockAddSet = jest.fn();
+const mockAddWorkoutExercise = jest.fn();
+const mockGetOpenWorkoutExercise = jest.fn();
+const mockListSetsForWorkoutExercise = jest.fn();
+const mockParams = { id: "1", name: "Midnight Bench" };
+type TestNode = {
+  props: Record<string, unknown>;
+  findAll: (predicate: (node: TestNode) => boolean) => TestNode[];
+};
+
+jest.mock("@expo/vector-icons", () => ({ MaterialCommunityIcons: "Icon" }));
+jest.mock("react-native", () => ({
+  Alert: { alert: jest.fn() },
+  FlatList: "FlatList",
+  Keyboard: { dismiss: jest.fn() },
+  Pressable: "Pressable",
+  ScrollView: "ScrollView",
+  Text: "Text",
+  TextInput: "TextInput",
+  View: "View",
+}));
+jest.mock("expo-router", () => {
+  const React = require("react");
+  return {
+    router: { back: jest.fn(), push: jest.fn() },
+    useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
+    useLocalSearchParams: () => mockParams,
+  };
+});
+jest.mock("react-native-reanimated", () => ({
+  __esModule: true,
+  default: { View: "AnimatedView" },
+  useAnimatedStyle: (value: unknown) => value,
+  useSharedValue: (value: unknown) => ({ value }),
+  withTiming: (value: unknown) => value,
+}));
+jest.mock("../../components/lists/SetItem", () => "SetItem");
+jest.mock("../../components/modals/BaseModal", () => "AppModal");
+jest.mock("../../components/modals/DatePickerModal", () => "DatePickerModal");
+jest.mock("../../components/modals/EditSetModal", () => "EditSetModal");
+jest.mock("../../components/TimerModal", () => "TimerModal");
+jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({ useUnitPreference: () => ({ unitPreference: "kg" }) }));
+jest.mock("../../lib/theme/ThemeContext", () => ({ useTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }) }));
+jest.mock("../../lib/db/exercises", () => ({ getLastRestSeconds: jest.fn().mockResolvedValue(null), setLastRestSeconds: jest.fn() }));
+jest.mock("../../lib/db/media", () => ({ listMediaForSet: jest.fn().mockResolvedValue([]), listMediaForSetIds: jest.fn().mockResolvedValue([]) }));
+jest.mock("../../lib/db/programCalendar", () => ({
+  deleteUserSet: jest.fn(), getCalendarSetById: jest.fn(), getCalendarSetByWorkoutSetId: jest.fn(),
+  getProgrammedExercisesForExerciseOnDate: jest.fn().mockResolvedValue([]), listCalendarSetsByWorkoutSetIds: jest.fn().mockResolvedValue([]),
+  resolveWorkoutExerciseIdForCalendarExercise: jest.fn(), syncStatusesForCalendarExercise: jest.fn(), updateSetActuals: jest.fn(),
+}));
+jest.mock("../../lib/db/workouts", () => ({
+  addSet: mockAddSet,
+  addWorkoutExercise: mockAddWorkoutExercise,
+  completeExerciseEntry: jest.fn(), deleteSet: jest.fn(), deleteSetsForWorkoutExercise: jest.fn(),
+  getOpenWorkoutExercise: mockGetOpenWorkoutExercise, getOrCreateActiveWorkout: jest.fn().mockResolvedValue(10),
+  getWorkoutExerciseById: jest.fn().mockResolvedValue({ id: 20, note: null, currentWeight: null, currentReps: null }),
+  listSetsForWorkoutExercise: mockListSetsForWorkoutExercise, updateExerciseEntryDate: jest.fn(), updateSet: jest.fn(),
+  updateWorkoutExerciseInputs: jest.fn(), updateWorkoutExerciseNote: jest.fn(),
+}));
+jest.mock("../../lib/programs/programExerciseHistory", () => ({ ensureProgramExerciseWorkoutSession: jest.fn(), persistCompletedProgramExercise: jest.fn(), persistProgramSetToWorkoutHistory: jest.fn() }));
+jest.mock("../../lib/programs/psl/pslMapper", () => ({ getIntensityDefaultValue: jest.fn(), getIntensityUnit: jest.fn() }));
+jest.mock("../../lib/programs/psl/programRuntime", () => ({ refreshUpcomingCalendarForProgram: jest.fn() }));
+jest.mock("../../lib/timerStore", () => ({ timerStore: { deleteTimer: jest.fn(), createTimer: jest.fn(), updateTimer: jest.fn(), subscribe: jest.fn(() => jest.fn()) } }));
+jest.mock("../../lib/utils/formatters", () => ({ formatRelativeDate: jest.fn(() => "Today"), formatTime: jest.fn(), parseTimerDurationSeconds: jest.fn() }));
+jest.mock("../../lib/utils/mediaCleanup", () => ({ deleteAssociatedMediaForSets: jest.fn() }));
+jest.mock("../../lib/utils/units", () => ({
+  formatEditableWeightFromKg: (value: number) => String(value), formatWeightFromKg: (value: number) => String(value),
+  getWeightUnitLabel: () => "kg", parseWeightInputToKg: (value: string) => Number(value),
+}));
+
+const UnifiedRecordTab = require("../../components/exercise/UnifiedRecordTab").default;
+
+describe("manual logging date lifecycle", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAddWorkoutExercise.mockResolvedValue(20);
+    mockAddSet.mockResolvedValue(30);
+    mockGetOpenWorkoutExercise.mockResolvedValue(null);
+    mockListSetsForWorkoutExercise.mockResolvedValue([]);
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-09-20T23:59:00"));
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  it("keeps the original selected date when adding a set after midnight", async () => {
+    let tree: ReturnType<typeof renderer.create>;
+    await act(async () => {
+      tree = renderer.create(<UnifiedRecordTab />);
+    });
+
+    jest.setSystemTime(new Date("2026-09-21T00:01:00"));
+    const inputs = tree!.root.findAllByType(require("react-native").TextInput);
+    await act(async () => {
+      inputs[0].props.onChangeText("100");
+      inputs[1].props.onChangeText("5");
+    });
+    const addSetButton = (tree!.root as unknown as { findAllByType: (type: string) => TestNode[] })
+      .findAllByType("Pressable")
+      .find((node) => node.findAll((child) => child.props.children === "Add Set").length > 0);
+    await act(async () => {
+      await (addSetButton?.props.onPress as undefined | (() => Promise<void>))?.();
+    });
+
+    expect(mockAddSet).toHaveBeenCalledWith(
+      expect.objectContaining({ performed_at: new Date("2026-09-20T12:00:00").getTime() })
+    );
+    await act(async () => {
+      tree!.unmount();
+    });
+  });
+
+  it.failing("keeps an already in-progress entry on its stored date after reopening past midnight", async () => {
+    const originalPerformedAt = new Date("2026-09-20T12:00:00").getTime();
+    mockGetOpenWorkoutExercise.mockResolvedValue({
+      id: 20,
+      note: null,
+      currentWeight: 100,
+      currentReps: 5,
+      performedAt: originalPerformedAt,
+    });
+    mockListSetsForWorkoutExercise.mockResolvedValue([
+      { id: 21, note: null, weightKg: 100, reps: 5, performedAt: originalPerformedAt },
+    ]);
+    jest.setSystemTime(new Date("2026-09-21T00:01:00"));
+
+    let tree: ReturnType<typeof renderer.create>;
+    try {
+      await act(async () => {
+        tree = renderer.create(<UnifiedRecordTab />);
+      });
+      const inputs = tree!.root.findAllByType(require("react-native").TextInput);
+      await act(async () => {
+        inputs[0].props.onChangeText("102.5");
+        inputs[1].props.onChangeText("4");
+      });
+      const addSetButton = (tree!.root as unknown as { findAllByType: (type: string) => TestNode[] })
+        .findAllByType("Pressable")
+        .find((node) => node.findAll((child) => child.props.children === "Add Set").length > 0);
+      await act(async () => {
+        await (addSetButton?.props.onPress as undefined | (() => Promise<void>))?.();
+      });
+
+      expect(mockAddSet).toHaveBeenCalledWith(
+        expect.objectContaining({ performed_at: originalPerformedAt })
+      );
+    } finally {
+      await act(async () => {
+        tree!.unmount();
+      });
+    }
+  });
+});
