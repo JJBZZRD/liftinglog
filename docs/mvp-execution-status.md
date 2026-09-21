@@ -26,7 +26,7 @@ siblings of this repository, never nested under the app or its test discovery tr
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
-001D-R1, 001C and 004B have been deleted after
+001D-R1, 001C, 004B and 001E have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -40,7 +40,7 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md`; bounded Jest configuration exception below | Reviewed and merged `aa762bc`; 32 suites / 401 tests pass including real-root direct URL tests |
 | MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Independently accepted; organiser reran 76/76 after rebase, merged `01dbffd` with ground-truth update |
 | MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, focused capability/manual UI tests and findings | Reviewed; organiser targeted 29/29 pass, merged `3a3a6c3`; file ownership released |
-| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, focused identity tests | Handoff `35e34d9` rejected by independent Sol/high audit; real active-program refresh correction in progress |
+| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, bounded runtime refresh guard, focused identity tests | Handoff `35e34d9` rejected by independent Sol/high audit; real active-program refresh correction in progress |
 | MVP-004B | Terra / high | `lib/db/media.ts`, `lib/utils/videoStorage.ts`, focused DB/storage tests | Drizzle correction reviewed; organiser 22/22 targeted pass, merged `e03e6a7` |
 | MVP-001C | Terra / medium | Programs tab wrapper/extracted components and focused profile UI tests | Reviewed unchanged full-screen extraction and real route gate; 16/16 targeted pass, merged `bad6930` |
 | MVP-001D-R1 | Luna / medium | `__tests__/setup.ts` | Reviewed shared Expo environment mock; full/MVP 38 suites / 437 tests pass, merged `215e75b` |
@@ -174,6 +174,13 @@ preserved; a successful tool response alone is not evidence of a fresh index.
   and resolving ambiguous names to another exercise. Mocked refresh/inactive
   fixtures missed this. Acceptance requires preserving explicit bindings through
   the real refresh boundary and regression coverage of active dated programs.
+  The organiser approved a narrow extension to
+  `lib/programs/psl/programRuntime.ts::refreshUpcomingCalendarForProgram` because
+  ordinary set edits also call it. Before destructive rematerialization, prove
+  that replacement occurrence/order mappings preserve every existing explicit
+  exercise ID; otherwise retain the current calendar. Variation mutations also
+  retain pre-mutation ambiguity checks. This safety guard requires a second
+  independent review, including effects on intentional program-editor changes.
 - MVP-001D owns `app/(tabs)/index.tsx` while removing the health entry and suppressing
   its snapshot query. MVP-002C's later Overview status rendering must wait for that
   ownership to be released; the history/day screens remain a separate UI scope.
@@ -184,6 +191,11 @@ preserved; a successful tool response alone is not evidence of a fresh index.
   open follow-up, not a waiver of the all-real-sets inclusion contract. Date-only
   search also retains its existing partial-range count semantics; current UI uses
   whole-day bounds. Keep both findings visible in 002R.
+- The existing `.github/workflows/quality.yml` runs one default-profile job.
+  Local full/MVP checks are passing, but a narrow follow-up must put both profiles
+  into CI before release. Remote branch-protection configuration has not been
+  verified in this execution; local reviewed integration is not evidence of
+  server-side protections or a remote CI run. No commits have been pushed.
 
 ### Frozen MVP-001A interface
 
