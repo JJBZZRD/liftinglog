@@ -153,7 +153,27 @@ describe("calculators UI", () => {
     expect(screen.getByTestId("calculator-category-weightlifting")).toBeTruthy();
     expect(screen.getByTestId("calculator-category-utility")).toBeTruthy();
     expect(screen.getByTestId("calculator-card-1rm-toolkit")).toBeTruthy();
+    expect(screen.getByTestId("calculator-card-powerlifting-total")).toBeTruthy();
     expect(screen.getByTestId("calculator-card-power-score")).toBeTruthy();
+    expect(screen.getByTestId("calculator-card-sinclair")).toBeTruthy();
+    expect(screen.getByTestId("calculator-card-plate-loader")).toBeTruthy();
+  });
+
+  it("routes every catalogued calculator card to its offline screen", () => {
+    render(<CalculatorsScreen />);
+
+    const routes = [
+      ["1rm-toolkit", "/calculators/1rm-toolkit"],
+      ["powerlifting-total", "/calculators/powerlifting-total"],
+      ["power-score", "/calculators/power-score"],
+      ["sinclair", "/calculators/sinclair"],
+      ["plate-loader", "/calculators/plate-loader"],
+    ] as const;
+
+    for (const [id, href] of routes) {
+      fireEvent.press(screen.getByTestId(`calculator-card-${id}`));
+      expect(mockPush).toHaveBeenLastCalledWith(href);
+    }
   });
 
   it("prefills the 1rm toolkit from settings defaults and recalculates locally", async () => {

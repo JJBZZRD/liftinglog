@@ -8,8 +8,27 @@ import {
 } from "../../lib/calculators/powerlifting";
 import { calculateE1rmToolkit } from "../../lib/calculators/strength";
 import { calculateSinclair } from "../../lib/calculators/weightlifting";
+import { CALCULATORS } from "../../lib/calculators/catalog";
 
 describe("calculator math", () => {
+  it("keeps all five offline calculators catalogued with reachable routes", () => {
+    expect(CALCULATORS).toHaveLength(5);
+    expect(CALCULATORS.map((calculator) => calculator.id)).toEqual([
+      "1rm-toolkit",
+      "powerlifting-total",
+      "power-score",
+      "sinclair",
+      "plate-loader",
+    ]);
+    expect(CALCULATORS.map((calculator) => calculator.href)).toEqual([
+      "/calculators/1rm-toolkit",
+      "/calculators/powerlifting-total",
+      "/calculators/power-score",
+      "/calculators/sinclair",
+      "/calculators/plate-loader",
+    ]);
+  });
+
   it("computes e1rm projections and percentage tables", () => {
     const result = calculateE1rmToolkit(100, 5, "epley");
 
@@ -68,5 +87,18 @@ describe("calculator math", () => {
   it("converts editable weight inputs cleanly across units", () => {
     expect(convertWeightInputValue("100", "kg", "lb")).toBe("220.46");
     expect(convertWeightInputValue("220.46", "lb", "kg")).toBe("100");
+  });
+
+  it("rejects zero and non-finite inputs across calculator formulas", () => {
+    expect(calculateE1rmToolkit(0, 5, "epley")).toBeNull();
+    expect(calculateE1rmToolkit(Number.NaN, 5, "epley")).toBeNull();
+    expect(calculatePowerliftingTotal(230, 0, 260)).toBeNull();
+    expect(calculateDots("male", 0, 640)).toBeNull();
+    expect(calculateGoodlift("male", 93, Number.POSITIVE_INFINITY)).toBeNull();
+    expect(calculateWilks("male", 93, 0)).toBeNull();
+    expect(calculateSinclair("male", 0, 145, 180)).toBeNull();
+    expect(calculateSinclair("male", 89, Number.NaN, 180)).toBeNull();
+    expect(calculatePlateLoadout(0, 20, "kg")).toBeNull();
+    expect(calculatePlateLoadout(180, Number.POSITIVE_INFINITY, "kg")).toBeNull();
   });
 });
