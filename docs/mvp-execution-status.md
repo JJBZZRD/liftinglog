@@ -26,7 +26,7 @@ siblings of this repository, never nested under the app or its test discovery tr
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
-001D-R1, 001C, 004B and 001E have been deleted after
+001D-R1, 001C, 004B, 001E, 000B-R1 and 002C have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -40,14 +40,16 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md`; bounded Jest configuration exception below | Reviewed and merged `aa762bc`; 32 suites / 401 tests pass including real-root direct URL tests |
 | MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Independently accepted; organiser reran 76/76 after rebase, merged `01dbffd` with ground-truth update |
 | MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, focused capability/manual UI tests and findings | Reviewed; organiser targeted 29/29 pass, merged `3a3a6c3`; file ownership released |
-| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, bounded runtime refresh guard, focused identity tests | Handoff `35e34d9` rejected by independent Sol/high audit; real active-program refresh correction in progress |
+| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, shared runtime/template unit-sync identity guard, focused identity tests | Correction `5e16826` rejected on Settings unit-sync rematerialization; bounded correction running |
 | MVP-004B | Terra / high | `lib/db/media.ts`, `lib/utils/videoStorage.ts`, focused DB/storage tests | Drizzle correction reviewed; organiser 22/22 targeted pass, merged `e03e6a7` |
 | MVP-001C | Terra / medium | Programs tab wrapper/extracted components and focused profile UI tests | Reviewed unchanged full-screen extraction and real route gate; 16/16 targeted pass, merged `bad6930` |
 | MVP-001D-R1 | Luna / medium | `__tests__/setup.ts` | Reviewed shared Expo environment mock; full/MVP 38 suites / 437 tests pass, merged `215e75b` |
 | MVP-001E | Luna / medium | `eas.json`, configuration tests and profile documentation | Reviewed and independently passed 53 tests across five configuration/route/UI suites; merged `9fb149d` |
 | MVP-001R | Organiser | Read-only profile/route review | Accepted automated capability boundary after 001B-001E; release device matrix remains 007 scope |
-| MVP-003B | Sol / xhigh | `lib/db/bootstrap.ts`, `lib/db/schema.ts`, production migration tests/fixtures and historical-shape ADR | Running in `mvp/MVP-003B-duplicate-name-migration`, base `956988647e13f6dd974fa1581a88b45e39535aeb`; cannot integrate before 003C and independent migration audit |
-| MVP-002C | Terra / high | Workout history/day screens, Overview status, focused UI tests | Running in `mvp/MVP-002C-history-status`, base `e03e6a78507df8a18d7471d24463b6abb152c902`; Overview scope extension approved after 001D |
+| MVP-003B | Sol / xhigh | `lib/db/bootstrap.ts`, `lib/db/schema.ts`, production migration tests/fixtures and historical-shape ADR | Independent audit rejected `c9726d3`: missing historical shape and swallowed exercise UID backfill failure; correction running |
+| MVP-002C | Terra / high | Workout history/day screens, Overview status, focused UI tests | Reviewed status rendering and foreground correction; 18/18 targeted tests pass, merged `90554d9` |
+| MVP-000B-R1 | Luna / medium | `.github/workflows/quality.yml`, release-profile testing notes | Reviewed both-profile matrix and clean-checkout Expo types; merged `87b0fba`; remote run/protections unverified |
+| MVP-004B-R1 | Terra / medium | `lib/db/workouts.ts` set lookup only, `__tests__/db/setLookup.test.ts` | Running in isolated branch/worktree, pinned `90554d974004df8911556e033cc9de43516f5e87`; prerequisite to 004C |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -129,6 +131,38 @@ directly where graph results are absent/stale. The existing graph artifact was
 preserved; a successful tool response alone is not evidence of a fresh index.
 
 ### Next-ticket review notes
+
+The organiser reread plan sections 2-4 and 7-10 before this continuation, reconfirmed
+`main` at `9a8ecc1`, and inspected all active worktrees before further mutations.
+Original uncommitted/untracked paths remain excluded.
+
+Integrated verification at `90554d9`: full and MVP each pass 42 suites / 456 tests;
+typecheck passes, lint has zero errors and the same 20 baseline warnings. CI now
+defines the two profile checks; no remote execution or native build is claimed.
+
+- The second identity review found Settings' included Weight Unit action calls
+  `syncBundledTemplateProgramsToUnit`, whose active-template path independently
+  deletes/recreates pristine calendar rows. The runtime guard alone is insufficient.
+  Any correction must check identity before program metadata or calendar writes,
+  preserve unsafe programs unchanged, and retain ordinary unique-name unit sync.
+  The organiser authorised a shared guard used by runtime refresh and
+  `templateUnitSync.ts`; skipped programs must not be reported as successfully
+  converted. No Settings UI or global unit-preference behavior is added to scope.
+- The migration review identified a fifth real historical input: a database from
+  `0923b8d` with `last_rest_seconds` and `is_pinned`, but no UID, jumping directly to
+  the current bootstrap. Its appended order is parent, variation, then UID. The
+  four-shape allowlist rejects this valid upgrade; it needs its own proven fixture
+  and supported fingerprint before migration acceptance.
+- Independent migration fault injection also showed `backfillUids` swallowing an
+  exercise UID update failure and allowing the name-uniqueness rebuild to proceed
+  with NULL UIDs. Exercise UID completion must be mandatory before the rebuild.
+  The correction must prove visible failure, no destructive rebuild, and safe retry
+  preserving assigned UIDs; prior compatibility ALTER/backfill work is outside the
+  rebuild transaction and must not be described as wholly rolled back.
+- MVP-004B-R1 supplies `getSetById(setId): Promise<SetRow | null>` using Drizzle.
+  Invalid/nonexistent IDs return null, real rows retain all canonical values, and
+  reads have no side effects. The set route can then display/edit notes without
+  requiring an existing attachment. No new persistence path or dependency is needed.
 
 - MVP-001B must inventory automatically discovered routes, including
   `programs/create/editor`, not only existing explicit Stack screens. Direct URL
