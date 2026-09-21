@@ -354,12 +354,19 @@ export default function OverviewScreen() {
 
                     {/* Exercise Details */}
                     <View className="flex-1">
-                      <Text
-                        className="text-[15px] font-semibold mb-0.5 text-foreground"
-                        numberOfLines={1}
-                      >
-                        {exercise.exerciseName}
-                      </Text>
+                      <View className="flex-row items-center gap-2">
+                        <Text
+                          className="flex-1 text-[15px] font-semibold mb-0.5 text-foreground"
+                          numberOfLines={1}
+                        >
+                          {exercise.exerciseName}
+                        </Text>
+                        {exercise.completedAt === null && (
+                          <View className="rounded px-2 py-1 bg-primary">
+                            <Text className="text-xs font-semibold text-primary-foreground">In Progress</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text className="text-[13px] text-foreground-secondary">
                         {exercise.bestSet
                           ? `Best set: ${formatWeightFromKg(exercise.bestSet.weightKg, unitPreference)} x ${exercise.bestSet.reps} (e1RM ${formatWeightFromKg(exercise.bestSet.e1rm, unitPreference)})`

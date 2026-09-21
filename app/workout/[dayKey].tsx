@@ -305,16 +305,23 @@ export default function WorkoutDayScreen() {
                         <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                       </View>
                       <View style={styles.exerciseTitleBlock}>
-                        <VariationExerciseLabel
-                          exercise={{
-                            name: entry.exerciseName,
-                            parentExerciseId: entry.exerciseParentExerciseId,
-                            variationLabel: entry.exerciseVariationLabel,
-                            parentName: entry.exerciseParentName,
-                          }}
-                          style={[styles.exerciseName, { color: rawColors.foreground }]}
-                          numberOfLines={1}
-                        />
+                        <View style={styles.exerciseNameRow}>
+                          <VariationExerciseLabel
+                            exercise={{
+                              name: entry.exerciseName,
+                              parentExerciseId: entry.exerciseParentExerciseId,
+                              variationLabel: entry.exerciseVariationLabel,
+                              parentName: entry.exerciseParentName,
+                            }}
+                            style={[styles.exerciseName, { color: rawColors.foreground }]}
+                            numberOfLines={1}
+                          />
+                          {entry.completedAt === null && (
+                            <View style={[styles.inProgressBadge, { backgroundColor: rawColors.primary }]}>
+                              <Text style={[styles.inProgressText, { color: rawColors.primaryForeground }]}>In Progress</Text>
+                            </View>
+                          )}
+                        </View>
                         <View style={styles.exerciseMetaRow}>
                           <MaterialCommunityIcons
                             name="clock-outline"
@@ -584,6 +591,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 4,
   },
+  exerciseNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -619,6 +631,15 @@ const styles = StyleSheet.create({
   exerciseName: {
     flex: 1,
     fontSize: 16,
+    fontWeight: "600",
+  },
+  inProgressBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  inProgressText: {
+    fontSize: 12,
     fontWeight: "600",
   },
   setsContainer: {

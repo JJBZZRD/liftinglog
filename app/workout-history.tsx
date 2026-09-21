@@ -136,6 +136,16 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
           </Text>
         </View>
         <View style={styles.cardHeaderRight}>
+          {item.inProgressCount > 0 && (
+            <View
+              style={[styles.inProgressBadge, { backgroundColor: rawColors.primary }]}
+              accessibilityLabel={`${item.inProgressCount} exercise${item.inProgressCount === 1 ? "" : "s"} in progress`}
+            >
+              <Text style={[styles.inProgressText, { color: rawColors.primaryForeground }]}>
+                {item.inProgressCount} In Progress
+              </Text>
+            </View>
+          )}
           <View style={styles.statBadge}>
             <Text style={[styles.statBadgeText, { color: rawColors.foregroundSecondary }]}>
               {item.exerciseCountLabel}
@@ -199,16 +209,23 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                       <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
                     </View>
                     <View style={styles.exerciseDetails}>
-                      <VariationExerciseLabel
-                        exercise={{
-                          name: exercise.exerciseName,
-                          parentExerciseId: exercise.exerciseParentExerciseId,
-                          variationLabel: exercise.exerciseVariationLabel,
-                          parentName: exercise.exerciseParentName,
-                        }}
-                        style={[styles.exerciseName, { color: rawColors.foreground }]}
-                        numberOfLines={1}
-                      />
+                      <View style={styles.exerciseNameRow}>
+                        <VariationExerciseLabel
+                          exercise={{
+                            name: exercise.exerciseName,
+                            parentExerciseId: exercise.exerciseParentExerciseId,
+                            variationLabel: exercise.exerciseVariationLabel,
+                            parentName: exercise.exerciseParentName,
+                          }}
+                          style={[styles.exerciseName, { color: rawColors.foreground }]}
+                          numberOfLines={1}
+                        />
+                        {exercise.completedAt === null && (
+                          <View style={[styles.inProgressBadge, { backgroundColor: rawColors.primary }]}>
+                            <Text style={[styles.inProgressText, { color: rawColors.primaryForeground }]}>In Progress</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={[styles.bestSetText, { color: rawColors.foregroundSecondary }]}>
                         {exercise.bestSet
                           ? `Best: ${formatWeightFromKg(exercise.bestSet.weightKg, unitPreference)} x ${exercise.bestSet.reps} (e1RM ${formatWeightFromKg(exercise.bestSet.e1rm, unitPreference)})`
@@ -819,6 +836,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
   },
+  inProgressBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  inProgressText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
   expandedContent: {
     marginTop: 16,
   },
@@ -869,7 +895,13 @@ const styles = StyleSheet.create({
   exerciseDetails: {
     flex: 1,
   },
+  exerciseNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   exerciseName: {
+    flex: 1,
     fontSize: 15,
     fontWeight: "600",
     marginBottom: 2,
