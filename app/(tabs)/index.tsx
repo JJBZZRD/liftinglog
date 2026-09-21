@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CalculatorsSummaryCard from "../../components/calculators/CalculatorsSummaryCard";
+import { appCapabilities } from "../../lib/config/releaseProfile";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { getTotalPBCount } from "../../lib/db/pbEvents";
 import { getLatestUserMetricsSnapshot, type UserMetricsSnapshot } from "../../lib/db/userCheckins";
@@ -19,6 +20,7 @@ export default function OverviewScreen() {
   const [userMetrics, setUserMetrics] = useState<UserMetricsSnapshot | null>(null);
   const [totalPRs, setTotalPRs] = useState(0);
   const [loading, setLoading] = useState(true);
+  const healthMetricsEnabled = appCapabilities.healthMetrics;
   const weightUnitLabel = getWeightUnitLabel(unitPreference);
   const cardShadowStyle = {
     shadowColor: rawColors.shadow,
@@ -34,18 +36,22 @@ export default function OverviewScreen() {
         getLastWorkoutDay(),
         getQuickStats(),
         getTotalPBCount(),
-        getLatestUserMetricsSnapshot(),
+        healthMetricsEnabled
+          ? getLatestUserMetricsSnapshot()
+          : Promise.resolve(null),
       ]);
       setLastWorkout(workoutResult);
       setQuickStats(statsResult);
       setTotalPRs(prCount);
-      setUserMetrics(metricsResult);
+      if (healthMetricsEnabled) {
+        setUserMetrics(metricsResult);
+      }
     } catch (error) {
       console.error("Error loading home data:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [healthMetricsEnabled]);
 
   // Refresh on screen focus
   useFocusEffect(
@@ -174,8 +180,8 @@ export default function OverviewScreen() {
 
         <CalculatorsSummaryCard onPress={handleCalculatorsPress} />
 
-        {/* User Metrics */}
-        <View className="rounded-2xl p-5 mb-4 bg-surface" style={cardShadowStyle}>
+        {healthMetricsEnabled && (
+          <View className="rounded-2xl p-5 mb-4 bg-surface" style={cardShadowStyle}>
           <Pressable className="mb-4 flex-row items-center justify-between" onPress={handleUserMetricsPress}>
             <View className="flex-1 pr-3">
               <Text className="text-lg font-semibold text-foreground">
@@ -270,7 +276,8 @@ export default function OverviewScreen() {
               </View>
             </View>
           </View>
-        </View>
+          </View>
+        )}
 
         {/* Workout History */}
         <View

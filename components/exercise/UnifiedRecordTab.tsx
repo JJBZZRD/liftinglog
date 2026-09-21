@@ -22,6 +22,7 @@ import DatePickerModal from "../modals/DatePickerModal";
 import EditSetModal from "../modals/EditSetModal";
 import TimerModal from "../TimerModal";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
+import { appCapabilities } from "../../lib/config/releaseProfile";
 import {
   getLastRestSeconds,
   setLastRestSeconds,
@@ -581,16 +582,19 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     typeof params.name === "string" ? params.name : "Exercise";
   const paramWeId =
     typeof params.weId === "string" ? parseInt(params.weId, 10) : null;
+  const programsExperienceEnabled = appCapabilities.programsExperience === "enabled";
   const paramPlannedDate =
-    typeof params.plannedDate === "string"
+    programsExperienceEnabled && typeof params.plannedDate === "string"
       ? parseInt(params.plannedDate, 10)
       : null;
   const paramProgramExerciseId =
-    typeof params.programExerciseId === "string"
+    programsExperienceEnabled && typeof params.programExerciseId === "string"
       ? parseInt(params.programExerciseId, 10)
       : null;
   const paramDateIso =
-    typeof params.dateIso === "string" ? params.dateIso : null;
+    programsExperienceEnabled && typeof params.dateIso === "string"
+      ? params.dateIso
+      : null;
 
   const initialSelectedDate = useMemo(() => {
     if (paramDateIso) {
@@ -682,8 +686,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const selectedDateIso = useMemo(() => toDateIso(selectedDate), [selectedDate]);
 
   const activeProgramEntry = useMemo(
-    () => pickProgrammedEntry(programEntries, selectedProgramExerciseId),
-    [programEntries, selectedProgramExerciseId]
+    () =>
+      programsExperienceEnabled
+        ? pickProgrammedEntry(programEntries, selectedProgramExerciseId)
+        : null,
+    [programEntries, programsExperienceEnabled, selectedProgramExerciseId]
   );
 
   const inProgramMode = activeProgramEntry !== null;
@@ -1027,6 +1034,17 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       return;
     }
 
+    if (!programsExperienceEnabled) {
+      setProgramEntries([]);
+      setSelectedProgramExerciseId(null);
+      programWeightInputsRef.current = {};
+      programRepsInputsRef.current = {};
+      setProgramWeightInputs({});
+      setProgramRepsInputs({});
+      await loadManualWorkout();
+      return;
+    }
+
     clearProgramInteractionState();
 
     const nextProgramEntries = await getProgrammedExercisesForExerciseOnDate({
@@ -1054,6 +1072,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     exerciseNameParam,
     loadManualWorkout,
     loadProgramWorkout,
+    programsExperienceEnabled,
     selectedDateIso,
   ]);
 
@@ -1828,6 +1847,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
         return;
       }
 
+      if (!programsExperienceEnabled) {
+        await updateExerciseEntryDate(workoutExerciseId, normalizedDate.getTime());
+        return;
+      }
+
       const nextProgramEntries = await getProgrammedExercisesForExerciseOnDate({
         dateIso: toDateIso(normalizedDate),
         exerciseId,
@@ -1847,6 +1871,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       flushDirtyProgramSetCommits,
       flushSessionNoteDraft,
       inProgramMode,
+      programsExperienceEnabled,
       workoutExerciseId,
     ]
   );
@@ -2124,6 +2149,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   }, [currentTimer]);
 
   const handleRecordVideoPress = useCallback(async () => {
+    if (!appCapabilities.videoRecording) {
+      return;
+    }
+
     if (!exerciseId) {
       return;
     }
@@ -2434,7 +2463,9 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     : formatTime(parseTimerDurationSeconds(timerMinutes, timerSeconds));
 
   const canOpenCamera =
-    !!exerciseId && (inProgramMode || (!!workoutId && !!workoutExerciseId));
+    appCapabilities.videoRecording &&
+    !!exerciseId &&
+    (inProgramMode || (!!workoutId && !!workoutExerciseId));
   const handleToggleManualForm = () => {
     if (!inProgramMode) {
       return;
@@ -2607,26 +2638,28 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
                   </Text>
                 </Pressable>
 
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Record video"
-                  className="w-[52px] h-[52px] rounded-xl items-center justify-center border border-border bg-surface-secondary"
-                  style={({ pressed }) => ({
-                    opacity: pressed ? 0.8 : canOpenCamera ? 1 : 0.5,
-                  })}
-                  onPress={handleRecordVideoPress}
-                  disabled={!canOpenCamera}
-                >
-                  <MaterialCommunityIcons
-                    name="video-outline"
-                    size={22}
-                    color={
-                      canOpenCamera
-                        ? rawColors.primary
-                        : rawColors.foregroundMuted
-                    }
-                  />
-                </Pressable>
+                {appCapabilities.videoRecording && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Record video"
+                    className="w-[52px] h-[52px] rounded-xl items-center justify-center border border-border bg-surface-secondary"
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.8 : canOpenCamera ? 1 : 0.5,
+                    })}
+                    onPress={handleRecordVideoPress}
+                    disabled={!canOpenCamera}
+                  >
+                    <MaterialCommunityIcons
+                      name="video-outline"
+                      size={22}
+                      color={
+                        canOpenCamera
+                          ? rawColors.primary
+                          : rawColors.foregroundMuted
+                      }
+                    />
+                  </Pressable>
+                )}
 
                 <Pressable
                   className="flex-1 flex-row items-center justify-center h-[52px] rounded-xl bg-primary"
