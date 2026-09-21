@@ -8,8 +8,10 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { UnitPreferenceProvider } from "../lib/contexts/UnitPreferenceContext";
+import { appCapabilities, releaseProfile } from "../lib/config/releaseProfile";
 import { seedTestDataExercise } from "../lib/db/seedTestData";
 import { useNotificationHandler } from "../lib/notificationHandler";
+import { isCapabilityEnabled } from "../lib/routing/capabilityAccess";
 import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
 
 function isActivityUnavailableError(error: unknown): boolean {
@@ -35,6 +37,10 @@ function RootLayoutContent() {
 
   // Seed test data in development mode
   useEffect(() => {
+    if (releaseProfile !== "full") {
+      return;
+    }
+
     seedTestDataExercise().catch(console.error);
   }, []);
 
@@ -61,54 +67,68 @@ function RootLayoutContent() {
           name="workout-history"
           options={{ presentation: "card" }}
         />
-        <Stack.Screen
-          name="user-metrics"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="user-metric/[metric]"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="performance-guide"
-          options={{ presentation: "card" }}
-        />
+        <Stack.Protected guard={isCapabilityEnabled("healthMetrics", appCapabilities)}>
+          <Stack.Screen
+            name="user-metrics"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="user-metric/[metric]"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="performance-guide"
+            options={{ presentation: "card" }}
+          />
+        </Stack.Protected>
         <Stack.Screen
           name="calculators"
           options={{ presentation: "card", headerShown: false }}
         />
-        <Stack.Screen
-          name="programs/manage"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/create/basics"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/create/schedule"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/create/exercise-picker"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/templates"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/template-import"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/template-exercise-picker"
-          options={{ presentation: "card" }}
-        />
-        <Stack.Screen
-          name="programs/exercise-log/[id]"
-          options={{ presentation: "card" }}
-        />
+        <Stack.Protected guard={isCapabilityEnabled("programsExperience", appCapabilities)}>
+          <Stack.Screen
+            name="programs/manage"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/create/basics"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/create/editor"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/create/schedule"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/create/exercise-picker"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/templates"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/template-import"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/template-exercise-picker"
+            options={{ presentation: "card" }}
+          />
+          <Stack.Screen
+            name="programs/exercise-log/[id]"
+            options={{ presentation: "card" }}
+          />
+        </Stack.Protected>
+        <Stack.Protected guard={isCapabilityEnabled("videoRecording", appCapabilities)}>
+          <Stack.Screen
+            name="exercise/record-video"
+            options={{ presentation: "card" }}
+          />
+        </Stack.Protected>
       </Stack>
     </GestureHandlerRootView>
   );

@@ -1,9 +1,13 @@
-module.exports = {
+const routerProject = require('./jest.router.config');
+
+const unitProject = {
+  displayName: 'unit',
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/__tests__/setup.ts',
+    '<rootDir>/__tests__/routing/profile-route-guards.test.tsx',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   transform: {
@@ -24,4 +28,8 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
+};
+
+module.exports = {
+  projects: [unitProject, routerProject],
 };
