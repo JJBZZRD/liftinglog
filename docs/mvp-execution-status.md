@@ -26,7 +26,7 @@ siblings of this repository, never nested under the app or its test discovery tr
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
-001D-R1, 001C, 004B, 001E, 000B-R1, 002C and 004B-R1 have been deleted after
+001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C and 003B have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -40,17 +40,18 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md`; bounded Jest configuration exception below | Reviewed and merged `aa762bc`; 32 suites / 401 tests pass including real-root direct URL tests |
 | MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Independently accepted; organiser reran 76/76 after rebase, merged `01dbffd` with ground-truth update |
 | MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, focused capability/manual UI tests and findings | Reviewed; organiser targeted 29/29 pass, merged `3a3a6c3`; file ownership released |
-| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, shared runtime/template unit-sync identity guard, focused identity tests | Corrected handoff `21e9b16` under independent read-only cross-review; worker 101/101 targeted tests pass |
+| MVP-003C | Sol / high | `lib/db/exercises.ts`, bounded calendar reference rewrite helper, shared runtime/template unit-sync identity guard, focused identity tests | Independently accepted with 150/150 relevant tests and guard-disabled regression proof; merged `bba025d` |
 | MVP-004B | Terra / high | `lib/db/media.ts`, `lib/utils/videoStorage.ts`, focused DB/storage tests | Drizzle correction reviewed; organiser 22/22 targeted pass, merged `e03e6a7` |
 | MVP-001C | Terra / medium | Programs tab wrapper/extracted components and focused profile UI tests | Reviewed unchanged full-screen extraction and real route gate; 16/16 targeted pass, merged `bad6930` |
 | MVP-001D-R1 | Luna / medium | `__tests__/setup.ts` | Reviewed shared Expo environment mock; full/MVP 38 suites / 437 tests pass, merged `215e75b` |
 | MVP-001E | Luna / medium | `eas.json`, configuration tests and profile documentation | Reviewed and independently passed 53 tests across five configuration/route/UI suites; merged `9fb149d` |
 | MVP-001R | Organiser | Read-only profile/route review | Accepted automated capability boundary after 001B-001E; release device matrix remains 007 scope |
-| MVP-003B | Sol / xhigh | `lib/db/bootstrap.ts`, `lib/db/schema.ts`, production migration tests/fixtures and historical-shape ADR | Corrected handoff `cbd46a0` under independent read-only cross-review; worker 40/40 targeted and 482/482 full tests pass |
+| MVP-003B | Sol / xhigh | `lib/db/bootstrap.ts`, `lib/db/schema.ts`, production migration tests/fixtures and historical-shape ADR | Independently accepted with 40/40 targeted tests and typecheck; merged after 003C as `d243673` |
 | MVP-002C | Terra / high | Workout history/day screens, Overview status, focused UI tests | Reviewed status rendering and foreground correction; 18/18 targeted tests pass, merged `90554d9` |
 | MVP-000B-R1 | Luna / medium | `.github/workflows/quality.yml`, release-profile testing notes | Reviewed both-profile matrix and clean-checkout Expo types; merged `87b0fba`; remote run/protections unverified |
 | MVP-004B-R1 | Terra / medium | `lib/db/workouts.ts` set lookup only, `__tests__/db/setLookup.test.ts` | Reviewed and independently passed 9/9 lookup/lifecycle tests; merged `ea56f4e`; file ownership released |
 | MVP-004C | Terra / high | `app/set/[id].tsx`, focused set-detail UI/characterization tests/helper | Handoff `f84d718` returned for repair persistence, post-commit cleanup and stale-callback corrections; unmerged |
+| MVP-002B-R2 | Sol / high | Six broad-history read helpers in `lib/db/workouts.ts`, focused legacy-date/history tests | Running in isolated branch/worktree, pinned `aef1e68d39912746fe16dea48fb2845520f7dce4` |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -61,6 +62,10 @@ The corrected 003B and 003C candidates receive separate read-only cross-reviews:
 the identity implementer audits the migration, and the migration implementer audits
 identity. Neither reviews their own implementation. The organiser also reviews
 both diffs and retains merge authority; 003C must integrate before 003B.
+The migration reviewer accepted the stateless retry/file-backed evidence while
+noting that fault cases retry on the open connection and reopen after successful
+recovery, rather than reopening immediately after each injected failure. The ADR
+does not claim otherwise.
 
 MVP-001A review corrected a test's ambient-full-profile assumption before acceptance.
 Both profile test runs pass (14 tests). The organiser reran the MVP-profile focused
@@ -145,6 +150,12 @@ Original uncommitted/untracked paths remain excluded.
 Integrated verification at `90554d9`: full and MVP each pass 42 suites / 456 tests;
 typecheck passes, lint has zero errors and the same 20 baseline warnings. CI now
 defines the two profile checks; no remote execution or native build is claimed.
+
+After identity and migration integration at `d243673`, full and MVP each pass all
+46 suites / 497 tests. Typecheck passes; lint remains zero errors / 20 baseline
+warnings. These are host checks; Android populated-upgrade/fresh-install release
+verification remains outstanding. Duplicate-exercise UI and cross-feature data
+isolation fixtures remain 003D/003E before story acceptance.
 
 - The second identity review found Settings' included Weight Unit action calls
   `syncBundledTemplateProgramsToUnit`, whose active-template path independently

@@ -94,6 +94,11 @@ program_calendar_sets
 Canonical exercise catalog.
 
 - One row per concrete exercise entry.
+- Display names are nonunique. Numeric exercise IDs identify catalog, history,
+  media and program relationships; existing UIDs survive the forward migration.
+- Name-only compatibility lookups select the lowest numeric ID for an exact name.
+  Batch lookup trims/deduplicates requested names and returns one deterministic row
+  per name; catalog APIs still return every distinct exercise row.
 - Parent exercises use `parent_exercise_id = NULL` and `variation_label = NULL`.
 - Managed variations are child `exercises` rows with `parent_exercise_id = <parent id>` and `variation_label = <label>`.
 - Variation rows keep their concrete display name in `name`, for example `Bench Press (Larson)`.
@@ -227,7 +232,7 @@ These rules are mandatory.
 20. Deleting a variation with "delete data" removes the child row's logged history through the normal history-delete path.
 21. Parent exercise deletion is blocked while child variations exist.
 22. Parent exercise renaming is blocked while child variations exist.
-23. Program references must be rewritten on variation rename/delete so stored PSL source, live `program_calendar_exercises`, and percent-intensity config do not point at stale variation names or ids.
+23. Variation rename/delete rewrites explicit program/calendar/config references by ID. Name-only fallback is allowed only when the old name was unambiguous before mutation; ambiguous PSL names remain unchanged, and a different explicit ID must never be retargeted because its name matches.
 
 ### Durability rules
 
@@ -384,8 +389,13 @@ Why:
 2. Recording sets for that variation writes the concrete child `exercise_id` into both `workout_exercises` and `sets`.
 3. Parent exercise history and analytics query the full family scope at read time; no alternate family-history table exists.
 4. Variation history and analytics query only the selected child row.
-5. On variation rename, stored PSL source, live `program_calendar_exercises`, and percent-intensity config must be rewritten to the new concrete variation name before active calendars are refreshed.
-6. On variation delete, future program references are rewritten to the parent exercise in both delete modes; the delete mode only changes what happens to already logged history rows.
+5. On variation rename, explicit calendar/config references follow the concrete ID. Stored PSL and null-ID references use the old name only when it was unambiguous before mutation.
+6. On variation delete, explicit future references and eligible unambiguous name-only references are rewritten to the parent exercise in both delete modes; the delete mode only changes what happens to already logged history rows.
+7. Runtime refresh and bundled-template unit sync must prove that each existing
+   explicit exercise binding survives replacement at the same occurrence and order
+   position. Otherwise the program's current calendar remains. Unsafe template unit
+   sync also leaves its source, units and prescriptions unchanged and omits the
+   program from returned success IDs, even if the global display unit changes.
 
 ### H. Program UI draft vs real history
 
@@ -414,13 +424,21 @@ It should not silently mark a programmed exercise complete without successful pe
 
 ### I. Startup repair
 
-`lib/db/connection.ts` contains a repair query that closes old open program-linked `workout_exercises` when they already have real sets.
+`lib/db/bootstrap.ts` contains a repair query that closes old open program-linked `workout_exercises` when they already have real sets.
 
 This exists because older behavior could create real program-linked sets under open `workout_exercises`, which made them appear as backlog instead of history.
 
 Rule:
 
 - if future migrations change program-history linkage, keep a repair/backfill story for previously-bad rows
+
+The exercise-name migration accepts five evidenced historical layouts and preserves
+column order, IDs, existing UIDs, data and dependent schema objects. Exercise UID
+backfill must complete before rebuilding the table. Unknown layouts/index drift
+fail visibly. The rebuild is transactional; earlier compatibility ALTERs and UID
+backfill are not part of that transaction. See the
+[production migration ADR](adr/exercise-name-production-migration.md) for supported
+fingerprints, preservation boundaries and failure evidence.
 
 ## 8. Downstream Consumers
 
