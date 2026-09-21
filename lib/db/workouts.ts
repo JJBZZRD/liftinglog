@@ -141,6 +141,22 @@ export async function getWorkoutById(id: number): Promise<Workout | null> {
   return rows[0] ?? null;
 }
 
+export async function updateWorkoutNote(workoutId: number, note: string | null): Promise<void> {
+  if (!Number.isSafeInteger(workoutId) || workoutId <= 0) {
+    throw new RangeError("workoutId must be a positive safe integer");
+  }
+
+  const result = await db
+    .update(workouts)
+    .set({ note })
+    .where(eq(workouts.id, workoutId))
+    .run();
+
+  if (result.changes === 0) {
+    throw new Error(`Workout ${workoutId} does not exist`);
+  }
+}
+
 export async function listWorkouts(limit = 50, offset = 0): Promise<Workout[]> {
   const rows = await db
     .select()
@@ -1535,6 +1551,8 @@ export type WorkoutDaySetEntry = {
 };
 
 export type WorkoutDayExerciseEntry = {
+  workoutId: number;
+  workoutNote: string | null;
   workoutExerciseId: number;
   exerciseId: number;
   exerciseName: string;
@@ -1577,6 +1595,8 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
   // Step 1: Query workout_exercises with real sets for the dayKey (limit 27 to detect overflow)
   const entriesStmt = sqlite.prepareSync(`
     SELECT 
+      w.id AS workoutId,
+      w.note AS workoutNote,
       we.id AS workoutExerciseId,
       we.exercise_id AS exerciseId,
       e.name AS exerciseName,
@@ -1596,6 +1616,8 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
   `);
 
   let rawEntries: Array<{
+    workoutId: number;
+    workoutNote: string | null;
     workoutExerciseId: number;
     exerciseId: number;
     exerciseName: string;
@@ -1728,6 +1750,8 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
 
     const meta = exerciseMetaById.get(entry.exerciseId);
     return {
+      workoutId: entry.workoutId,
+      workoutNote: entry.workoutNote,
       workoutExerciseId: entry.workoutExerciseId,
       exerciseId: entry.exerciseId,
       exerciseName: meta?.exerciseName ?? entry.exerciseName,
