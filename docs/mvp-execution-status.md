@@ -27,7 +27,7 @@ No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
 001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C, 003D,
-002B-R2, 003E, 004D, 002D, 007B, 002E, 005A, 005B, 005C and 005D2 have been deleted after
+002B-R2, 003E, 004D, 002D, 007B, 002E, 005A, 005B, 005C, 005D1, 005D2 and 004E1 have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -64,10 +64,23 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-005A | Luna / medium | Notes source audit only | Path/scope and evidence wording corrected, reviewed and merged `06fc4cf` |
 | MVP-005B | Sol / high | `workouts.ts` workout-note updater and day-page note fields, new real-DB tests | Reviewed and independently passed 26/26 targeted tests; merged `bbd325e` |
 | MVP-005C | Terra / high | UnifiedRecordTab entry-note save/error seam and new focused UI tests | Corrected candidate `aab8c84` reviewed; organiser 19/19 targeted tests pass; merged `98ac655` |
-| MVP-005D1 | Terra / high | `app/edit-workout.tsx` canonical workout/entry note editor and new focused UI tests | Candidate `eee247b` returned for pending-save drafts, load failure, invalid identity and unsaved-note navigation corrections |
+| MVP-005D1 | Terra / high | `app/edit-workout.tsx` canonical workout/entry note editor and new focused UI tests | Corrected candidate `962dd98` reviewed; organiser 30/30 targeted tests pass; merged `a550a8a`; native review underway |
 | MVP-005D2 | Terra / medium | Exercise HistoryTab and workout day route note display, new focused tests | Reviewed, organiser 16/16 targeted tests pass; merged `77c5f0b`; filters/grouping unchanged |
-| MVP-004E1 | Sol / high | Gallery metadata acquisition ADR and isolated proof only | Running from `e29b6a992081a5f9c05682b19c236f0374e1148f`; no production/native/device mutation |
-| MVP-006A | Sol / xhigh | Restore ADR and isolated proof/fixtures only | Running from `5c96af36a9b0da283bb012b2945f83717aea8cc4`; source read-only, production restore waits for ADR/API acceptance |
+| MVP-004E1 | Sol / high | Gallery metadata acquisition ADR and isolated proof only | Research reviewed and merged `7ca6e9b`; content-URI hashing and latency remain native proof gates, not accepted production behavior |
+| MVP-004E2 | Sol / high | Isolated development-only diagnostic route and usage notes | Running from `7ca6e9b499f681e54c35acf383568cbf1e68d55f`; organiser alone controls emulator; diagnostic route will not merge into main |
+| MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Candidate `be9a743` independently passes 11 proof tests; audit found startup/recovery contract inconsistencies, returned for correction before API acceptance |
+
+At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
+both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
+zero errors and 19 retained warnings. Logs are retained under
+`.codex-artifacts/mvp-notes-editor-{full,mvp}-tests.log`.
+
+The 006A audit requires a single post-commit manifest/outcome recovery protocol,
+an explicit SQLite handle parameter at startup, fail-closed native-token validation,
+a safe recovery action after cold-start pre-commit failure, and schema manifests
+that account for supported historical exercise column orders. These are design
+corrections, not a waiver or acceptance of production restore. The author is
+correcting the same bounded ADR/proof ticket while independent review continues.
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
