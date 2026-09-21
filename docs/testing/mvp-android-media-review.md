@@ -87,3 +87,9 @@ native patches, schema or stored fingerprints require their own reviewed scope;
 none was made in this review. The existing resolver's filename/time score and
 first-best-match behavior must not be reused as proof of unique identity for
 replacement restore.
+
+The set route also has its own `attemptVideoRediscovery` implementation, accepting
+the first filename match or a creation-time match without a filename. A corrected
+restore-only resolver would leave that later screen path able to guess again.
+The media follow-up must cover both automatic repair entry points under the same
+reviewed matching contract, including direct asset IDs reused on another device.
