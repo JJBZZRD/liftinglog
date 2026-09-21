@@ -27,7 +27,7 @@ No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
 001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C, 003D,
-002B-R2, 003E, 004D, 002D, 007B, 002E, 005A, 005B and 005C have been deleted after
+002B-R2, 003E, 004D, 002D, 007B, 002E, 005A, 005B, 005C and 005D2 have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -65,7 +65,8 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-005B | Sol / high | `workouts.ts` workout-note updater and day-page note fields, new real-DB tests | Reviewed and independently passed 26/26 targeted tests; merged `bbd325e` |
 | MVP-005C | Terra / high | UnifiedRecordTab entry-note save/error seam and new focused UI tests | Corrected candidate `aab8c84` reviewed; organiser 19/19 targeted tests pass; merged `98ac655` |
 | MVP-005D1 | Terra / high | `app/edit-workout.tsx` canonical workout/entry note editor and new focused UI tests | Candidate `eee247b` returned for pending-save drafts, load failure, invalid identity and unsaved-note navigation corrections |
-| MVP-005D2 | Terra / medium | Exercise HistoryTab and workout day route note display, new focused tests | Running from `98ac655ecae47242f72acfe995f2a8e68c3ac2c3`; read fields frozen, filters/grouping unchanged |
+| MVP-005D2 | Terra / medium | Exercise HistoryTab and workout day route note display, new focused tests | Reviewed, organiser 16/16 targeted tests pass; merged `77c5f0b`; filters/grouping unchanged |
+| MVP-004E1 | Sol / high | Gallery metadata acquisition ADR and isolated proof only | Running from `e29b6a992081a5f9c05682b19c236f0374e1148f`; no production/native/device mutation |
 | MVP-006A | Sol / xhigh | Restore ADR and isolated proof/fixtures only | Running from `5c96af36a9b0da283bb012b2945f83717aea8cc4`; source read-only, production restore waits for ADR/API acceptance |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
@@ -217,6 +218,14 @@ saved versions per captured context and leaves C durable. Route invalidation
 precedes async hydration. Organiser execution passes 19 targeted UI/lifecycle/
 capability tests; the worker's integrated suite passes 56 suites / 560 tests.
 Native note navigation/restart acceptance remains MVP-005R.
+
+MVP-005D2 adds distinct, untruncated workout/entry note displays to existing cards,
+omits whitespace-only notes and preserves SetItem notes. IDs and existing filters
+remain unchanged. Refresh/native presentation is included in the pending 005R
+matrix. At `77c5f0b`, full and MVP each pass 57 suites / 562 tests; typecheck passes.
+Logs are `.codex-artifacts/mvp-entry-history-notes-{full,mvp}-tests.log`.
+MVP-005D1's revised `41499de` still needs navigation removal/hardware Back
+protection, pending-save leave behavior and route round-trip guards before merge.
 
 The current parallel queue contains exercise-note lifecycle corrections, the
 canonical workout/entry-note editor, and restore design/proof. History note display
