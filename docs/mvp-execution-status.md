@@ -27,7 +27,7 @@ No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
 001D-R1, 001C, 004B, 001E, 000B-R1, 002C, 004B-R1, 003C, 003B, 004C, 003D,
-002B-R2, 003E, 004D, 002D and 007B have been deleted after
+002B-R2, 003E, 004D, 002D, 007B, 002E and 005A have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -58,8 +58,12 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-003E | Terra / medium | New real-DB exercise data-isolation tests only | Strengthened same-name restart and mutation proof reviewed; organiser 21/21 targeted tests pass; merged `0287330` |
 | MVP-002D | Sol / high | New real-DB in-progress PB/analytics/CSV tests only | Organiser reviewed and independently passed 38/38 targeted tests; merged `4a561d0` |
 | MVP-007B | Luna / medium | Calculator math/catalog/UI tests and verification notes | Both-profile worker checks pass; organiser MVP 13/13 pass; merged `7ba1493`; production unchanged |
-| MVP-002E | Luna / medium | History ground truth, manual characterization notes, new history acceptance/disposition document | Running from `7ba14938fa41b30f76943e37cfb8626fae328d3f`; old untracked analysis remains read-only |
-| MVP-005A | Luna / medium | New notes audit and optional characterization tests only | Discovery running from `7ba14938fa41b30f76943e37cfb8626fae328d3f`; no production note changes |
+| MVP-002E | Luna / medium | Manual characterization notes and new history acceptance/disposition document | Reviewed and merged `3b7921d`; old untracked analysis preserved |
+| MVP-002R | Organiser and independent Sol audits | Read-only SQL/lifecycle/consumer review | Accepted host implementation after 002A-E and legacy-date correction; partial-day limitation explicit; physical release matrix remains separate |
+| MVP-003R | Independent Sol cross-reviews and organiser | Migration/identity read-only review | Accepted migration/identity host gate with 003D/E integration; native upgrade/fresh-install release proof remains pending |
+| MVP-005A | Luna / medium | Notes source audit only | Path/scope and evidence wording corrected, reviewed and merged `06fc4cf` |
+| MVP-005B | Sol / high | `workouts.ts` workout-note updater and day-page note fields, new real-DB tests | Running from `06fc4cf7c363063db80a8ed985d7a2282390f96e` |
+| MVP-005C | Terra / high | UnifiedRecordTab entry-note save/error seam and new focused UI tests | Running from `06fc4cf7c363063db80a8ed985d7a2282390f96e`; historical editor/display owned separately |
 | MVP-006A | Sol / xhigh | Restore ADR and isolated proof/fixtures only | Running from `5c96af36a9b0da283bb012b2945f83717aea8cc4`; source read-only, production restore waits for ADR/API acceptance |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
@@ -151,6 +155,28 @@ directly where graph results are absent/stale. The existing graph artifact was
 preserved; a successful tool response alone is not evidence of a fresh index.
 
 ### Next-ticket review notes
+
+The organiser accepted the history documentation and notes source audit, then
+froze two separate note contracts. MVP-005B adds
+`updateWorkoutNote(workoutId, note): Promise<void>` using Drizzle, rejecting invalid
+or absent IDs, preserving payload exactly and changing only `workouts.note`.
+The day-page entry gains required `workoutId` and `workoutNote` fields from its
+existing canonical workout join; entry `note` remains distinct. This narrow read
+extension supports later history display without treating a date as identity.
+MVP-005C owns only record-screen entry-note saving: reproduce pending-write races,
+serialize/coalesce overlapping flushes, retain newer drafts and surface failures.
+The organiser selects the existing `/edit-workout` route as the sole historical
+workout/entry-note editor; a later separate display ticket will consume the frozen
+read fields in history cards without changing search/filter semantics.
+
+The [supplementary Android media review](testing/mvp-android-media-review.md)
+passes populated MVP startup, set-note save/edit/clear and initial-note cold restart,
+gallery replacement, fullscreen playback, stable media-row identity and unshared
+managed-copy cleanup. All non-media database rows match after the test note is
+cleared. It also exposes insufficient system-picker metadata (`50.mp4` differs
+from the real gallery filename with no asset ID). This remains an open
+metadata/restore design input; physical MVP-004R and release acceptance are not
+closed. The isolated MVP Metro uses port 8082; the original 8081 server is preserved.
 
 Integrated gate at `7ba1493`: full and MVP each pass 54 suites / 537 tests,
 typecheck passes, and lint has zero errors / 20 existing warnings. The graph
