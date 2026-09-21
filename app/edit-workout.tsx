@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import SetItem from "../components/lists/SetItem";
@@ -11,18 +11,27 @@ import {
   addSet,
   addWorkoutExercise,
   deleteSet,
+  getWorkoutById,
   getWorkoutExerciseById,
   listSetsForExercise,
   listSetsForWorkoutExercise,
   listWorkoutExercises,
   updateSet,
+  updateWorkoutExerciseNote,
   updateWorkoutExercisePerformedAt,
+  updateWorkoutNote,
   type SetRow,
   type WorkoutExercise,
 } from "../lib/db/workouts";
 import { useTheme } from "../lib/theme/ThemeContext";
 import { formatRelativeDate } from "../lib/utils/formatters";
 import { formatWeightFromKg, getWeightUnitLabel, parseWeightInputToKg } from "../lib/utils/units";
+import { usePreventRemove } from "expo-router/react-navigation";
+
+type LeaveIntent =
+  | { type: "close" }
+  | { type: "save-edits" }
+  | { type: "navigation"; action: unknown };
 
 function mergeDatePreserveTimeMs(timeSourceMs: number | null, dateSourceMs: number): number {
   if (timeSourceMs === null) return dateSourceMs;
@@ -37,9 +46,16 @@ function getNextSetIndex(sets: SetRow[]): number {
   return maxSetIndex + 1;
 }
 
+function parsePositiveSafeInteger(value: unknown): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export default function EditWorkoutScreen() {
   const { rawColors } = useTheme();
   const { unitPreference } = useUnitPreference();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ 
     exerciseId?: string; 
     workoutId?: string; 
@@ -48,12 +64,18 @@ export default function EditWorkoutScreen() {
   }>();
   
   // Parse params - workoutExerciseId is the direct route, exerciseId+workoutId is the legacy route
-  const workoutExerciseIdParam = typeof params.workoutExerciseId === "string" 
-    ? parseInt(params.workoutExerciseId, 10) 
-    : null;
-  const exerciseIdParam = typeof params.exerciseId === "string" ? parseInt(params.exerciseId, 10) : null;
-  const workoutIdParam = typeof params.workoutId === "string" ? parseInt(params.workoutId, 10) : null;
+  const workoutExerciseIdParam = parsePositiveSafeInteger(params.workoutExerciseId);
+  const exerciseIdParam = parsePositiveSafeInteger(params.exerciseId);
+  const workoutIdParam = parsePositiveSafeInteger(params.workoutId);
   const exerciseNameParam = typeof params.exerciseName === "string" ? params.exerciseName : "Exercise";
+  const hasDirectRouteParam = params.workoutExerciseId !== undefined;
+  const routeKey = hasDirectRouteParam
+    ? workoutExerciseIdParam !== null
+      ? `workout-exercise:${workoutExerciseIdParam}`
+      : "invalid"
+    : exerciseIdParam && workoutIdParam
+      ? `legacy:${workoutIdParam}:${exerciseIdParam}`
+      : "invalid";
 
   // State for resolved IDs (may be derived from workoutExerciseId lookup)
   const [workoutExerciseId, setWorkoutExerciseId] = useState<number | null>(workoutExerciseIdParam);
@@ -69,6 +91,19 @@ export default function EditWorkoutScreen() {
   const [selectedSet, setSelectedSet] = useState<SetRow | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ set: SetRow; displayIndex: number } | null>(null);
+  const [workoutNoteDraft, setWorkoutNoteDraft] = useState("");
+  const [savedWorkoutNote, setSavedWorkoutNote] = useState("");
+  const [exerciseNoteDraft, setExerciseNoteDraft] = useState("");
+  const [savedExerciseNote, setSavedExerciseNote] = useState("");
+  const [noteWorkoutExerciseId, setNoteWorkoutExerciseId] = useState<number | null>(null);
+  const [identityStatus, setIdentityStatus] = useState<"invalid" | "loading" | "missing" | "error" | "ready">("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [workoutNoteError, setWorkoutNoteError] = useState<string | null>(null);
+  const [exerciseNoteError, setExerciseNoteError] = useState<string | null>(null);
+  const [isSavingWorkoutNote, setIsSavingWorkoutNote] = useState(false);
+  const [isSavingExerciseNote, setIsSavingExerciseNote] = useState(false);
+  const [pendingLeaveIntent, setPendingLeaveIntent] = useState<LeaveIntent | null>(null);
+  const [approvedLeaveIntent, setApprovedLeaveIntent] = useState<LeaveIntent | null>(null);
 
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -78,6 +113,22 @@ export default function EditWorkoutScreen() {
   const initialSetsRef = useRef<SetRow[]>([]);
   const initialSelectedDateMsRef = useRef<number | null>(null);
   const nextTempIdRef = useRef(-1);
+  const loadVersionRef = useRef(0);
+  const activeNoteContextRef = useRef<number | null>(null);
+  const renderedRouteKeyRef = useRef(routeKey);
+  const savingWorkoutNoteContextRef = useRef<number | null>(null);
+  const savingExerciseNoteContextRef = useRef<number | null>(null);
+  const workoutNoteDraftVersionRef = useRef(0);
+  const exerciseNoteDraftVersionRef = useRef(0);
+
+  if (renderedRouteKeyRef.current !== routeKey) {
+    renderedRouteKeyRef.current = routeKey;
+    activeNoteContextRef.current = null;
+  }
+
+  useEffect(() => {
+    setExerciseName(exerciseNameParam);
+  }, [exerciseNameParam, routeKey]);
 
   const currentSnapshot = useMemo(() => {
     const normalizedSets = sets
@@ -117,34 +168,132 @@ export default function EditWorkoutScreen() {
   }, []);
 
   const loadWorkout = useCallback(async () => {
-    let resolvedExerciseId = exerciseIdParam;
-    let resolvedWorkoutId = workoutIdParam;
-    let currentWorkoutExercise: WorkoutExercise | null = null;
+    const loadVersion = ++loadVersionRef.current;
+    const isCurrentLoad = () => loadVersionRef.current === loadVersion;
 
-    // Route A: Direct workoutExerciseId provided (from workout day detail page)
-    if (workoutExerciseIdParam) {
-      const we = await getWorkoutExerciseById(workoutExerciseIdParam);
-      if (!we) {
-        console.error("Workout exercise not found:", workoutExerciseIdParam);
+    initialSnapshotRef.current = null;
+    initialSetsRef.current = [];
+    initialSelectedDateMsRef.current = null;
+    activeNoteContextRef.current = null;
+    setHasLoadedOnce(false);
+    setIdentityStatus(routeKey === "invalid" ? "invalid" : "loading");
+    setWorkoutExerciseId(null);
+    setExerciseId(exerciseIdParam);
+    setWorkoutId(workoutIdParam);
+    setSets([]);
+    setNoteWorkoutExerciseId(null);
+    setWorkoutNoteDraft("");
+    setSavedWorkoutNote("");
+    setExerciseNoteDraft("");
+    setSavedExerciseNote("");
+    setWorkoutNoteError(null);
+    setExerciseNoteError(null);
+    setLoadError(null);
+    setIsSavingWorkoutNote(false);
+    setIsSavingExerciseNote(false);
+
+    if (routeKey === "invalid") return;
+
+    try {
+      let resolvedExerciseId = exerciseIdParam;
+      let resolvedWorkoutId = workoutIdParam;
+      let currentWorkoutExercise: WorkoutExercise | null = null;
+
+      // Route A: Direct workoutExerciseId provided (from workout day detail page)
+      if (workoutExerciseIdParam !== null) {
+        const we = await getWorkoutExerciseById(workoutExerciseIdParam);
+        if (!isCurrentLoad()) return;
+        if (!we) {
+          console.error("Workout exercise not found:", workoutExerciseIdParam);
+          setIdentityStatus("missing");
+          return;
+        }
+
+        currentWorkoutExercise = we;
+        resolvedExerciseId = we.exerciseId;
+        resolvedWorkoutId = we.workoutId;
+        const [workout, exerciseSets] = await Promise.all([
+          getWorkoutById(we.workoutId),
+          listSetsForWorkoutExercise(we.id),
+        ]);
+        if (!isCurrentLoad()) return;
+        if (!workout) {
+          setIdentityStatus("missing");
+          return;
+        }
+
+        // A direct entry route always takes its canonical workout identity from the entry.
+        setWorkoutExerciseId(we.id);
+        setExerciseId(we.exerciseId);
+        setWorkoutId(we.workoutId);
+        setSets(exerciseSets);
+        setSetIndex(getNextSetIndex(exerciseSets));
+        setWorkoutNoteDraft(workout.note ?? "");
+        setSavedWorkoutNote(workout.note ?? "");
+        setExerciseNoteDraft(we.note ?? "");
+        setSavedExerciseNote(we.note ?? "");
+        setNoteWorkoutExerciseId(we.id);
+
+        if (we.performedAt) {
+          const dateMs = we.performedAt;
+          setSelectedDate(new Date(dateMs));
+          initialSelectedDateMsRef.current = dateMs;
+        } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
+          const dateMs = exerciseSets[0].performedAt;
+          setSelectedDate(new Date(dateMs));
+          initialSelectedDateMsRef.current = dateMs;
+        } else {
+          initialSelectedDateMsRef.current = Date.now();
+        }
+
+        initialSetsRef.current = exerciseSets;
+        activeNoteContextRef.current = loadVersion;
+        setHasLoadedOnce(true);
+        setIdentityStatus("ready");
         return;
       }
-      currentWorkoutExercise = we;
-      resolvedExerciseId = we.exerciseId;
-      resolvedWorkoutId = we.workoutId;
-      
-      // Update state with resolved IDs
-      setWorkoutExerciseId(we.id);
-      setExerciseId(we.exerciseId);
-      setWorkoutId(we.workoutId);
-      
-      // Load sets for this specific workout_exercise
-      const exerciseSets = await listSetsForWorkoutExercise(we.id);
+
+      // Route B: Legacy route with exerciseId + workoutId
+      if (resolvedExerciseId === null || resolvedWorkoutId === null) return;
+
+      const [workout, workoutExercisesList] = await Promise.all([
+        getWorkoutById(resolvedWorkoutId),
+        listWorkoutExercises(resolvedWorkoutId),
+      ]);
+      if (!isCurrentLoad()) return;
+      if (!workout) {
+        setIdentityStatus("missing");
+        return;
+      }
+
+      const existingWorkoutExercise = workoutExercisesList.find((we) => we.exerciseId === resolvedExerciseId);
+      const matchingWorkoutExercises = workoutExercisesList.filter((we) => we.exerciseId === resolvedExerciseId);
+      if (existingWorkoutExercise) {
+        setWorkoutExerciseId(existingWorkoutExercise.id);
+        currentWorkoutExercise = existingWorkoutExercise;
+      } else {
+        // Do not create any DB rows until the user presses "Save Edits".
+        setWorkoutExerciseId(null);
+      }
+
+      const exerciseSets = existingWorkoutExercise
+        ? await listSetsForWorkoutExercise(existingWorkoutExercise.id).then(async (rows) =>
+            rows.length > 0 ? rows : await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId)
+          )
+        : await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId);
+      if (!isCurrentLoad()) return;
+
       setSets(exerciseSets);
       setSetIndex(getNextSetIndex(exerciseSets));
-      
-      // Load date from workout_exercise.performed_at
-      if (we.performedAt) {
-        const dateMs = we.performedAt;
+      setWorkoutNoteDraft(workout.note ?? "");
+      setSavedWorkoutNote(workout.note ?? "");
+      const unambiguousWorkoutExercise = matchingWorkoutExercises.length === 1 ? matchingWorkoutExercises[0] : null;
+      setNoteWorkoutExerciseId(unambiguousWorkoutExercise?.id ?? null);
+      setExerciseNoteDraft(unambiguousWorkoutExercise?.note ?? "");
+      setSavedExerciseNote(unambiguousWorkoutExercise?.note ?? "");
+
+      if (currentWorkoutExercise?.performedAt) {
+        const dateMs = currentWorkoutExercise.performedAt;
         setSelectedDate(new Date(dateMs));
         initialSelectedDateMsRef.current = dateMs;
       } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
@@ -156,54 +305,97 @@ export default function EditWorkoutScreen() {
       }
 
       initialSetsRef.current = exerciseSets;
+      activeNoteContextRef.current = loadVersion;
       setHasLoadedOnce(true);
-      return;
+      setIdentityStatus("ready");
+    } catch (error) {
+      console.error("[edit-workout] Failed to load workout details:", error);
+      if (isCurrentLoad()) {
+        setIdentityStatus("error");
+        setLoadError("Could not load workout details. Please try again.");
+      }
     }
-
-    // Route B: Legacy route with exerciseId + workoutId
-    if (!resolvedExerciseId || !resolvedWorkoutId) return;
-
-    const workoutExercisesList = await listWorkoutExercises(resolvedWorkoutId);
-    const existingWorkoutExercise = workoutExercisesList.find((we) => we.exerciseId === resolvedExerciseId);
-    
-    if (existingWorkoutExercise) {
-      setWorkoutExerciseId(existingWorkoutExercise.id);
-      currentWorkoutExercise = existingWorkoutExercise;
-    } else {
-      // Do not create any DB rows until the user presses "Save Edits".
-      setWorkoutExerciseId(null);
-    }
-
-    // Prefer the newer session-scoped query when possible; fallback for legacy data.
-    const exerciseSets =
-      existingWorkoutExercise
-        ? await listSetsForWorkoutExercise(existingWorkoutExercise.id).then(async (rows) =>
-            rows.length > 0 ? rows : await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId)
-          )
-        : await listSetsForExercise(resolvedWorkoutId, resolvedExerciseId);
-    setSets(exerciseSets);
-    setSetIndex(getNextSetIndex(exerciseSets));
-    
-    // Load date from workout_exercise.performed_at, fallback to first set's date
-    if (currentWorkoutExercise?.performedAt) {
-      const dateMs = currentWorkoutExercise.performedAt;
-      setSelectedDate(new Date(dateMs));
-      initialSelectedDateMsRef.current = dateMs;
-    } else if (exerciseSets.length > 0 && exerciseSets[0].performedAt) {
-      const dateMs = exerciseSets[0].performedAt;
-      setSelectedDate(new Date(dateMs));
-      initialSelectedDateMsRef.current = dateMs;
-    } else {
-      initialSelectedDateMsRef.current = Date.now();
-    }
-
-    initialSetsRef.current = exerciseSets;
-    setHasLoadedOnce(true);
-  }, [workoutExerciseIdParam, exerciseIdParam, workoutIdParam]);
+  }, [exerciseIdParam, routeKey, workoutExerciseIdParam, workoutIdParam]);
 
   useEffect(() => {
     loadWorkout();
   }, [loadWorkout]);
+
+  const hasUnsavedWorkoutNote = identityStatus === "ready" && workoutNoteDraft !== savedWorkoutNote;
+  const hasUnsavedExerciseNote =
+    identityStatus === "ready" && noteWorkoutExerciseId !== null && exerciseNoteDraft !== savedExerciseNote;
+  const hasPendingNoteSave = isSavingWorkoutNote || isSavingExerciseNote;
+  const waitingForPendingNoteSaveBeforeLeave = pendingLeaveIntent !== null && hasPendingNoteSave;
+
+  const handleSaveWorkoutNote = useCallback(async () => {
+    const noteContext = activeNoteContextRef.current;
+    if (
+      noteContext === null ||
+      savingWorkoutNoteContextRef.current === noteContext ||
+      identityStatus !== "ready" ||
+      workoutId === null
+    ) return;
+
+    const targetWorkoutId = workoutId;
+    const draftVersionAtSave = workoutNoteDraftVersionRef.current;
+    const noteValue = workoutNoteDraft.trim() || null;
+    savingWorkoutNoteContextRef.current = noteContext;
+    setIsSavingWorkoutNote(true);
+    setWorkoutNoteError(null);
+    try {
+      await updateWorkoutNote(targetWorkoutId, noteValue);
+      if (activeNoteContextRef.current !== noteContext) return;
+      const saved = noteValue ?? "";
+      setSavedWorkoutNote(saved);
+      if (workoutNoteDraftVersionRef.current === draftVersionAtSave) {
+        setWorkoutNoteDraft(saved);
+      }
+    } catch {
+      if (activeNoteContextRef.current === noteContext) {
+        setWorkoutNoteError("Could not save workout note. Please try again.");
+      }
+    } finally {
+      if (savingWorkoutNoteContextRef.current === noteContext) {
+        savingWorkoutNoteContextRef.current = null;
+      }
+      if (activeNoteContextRef.current === noteContext) setIsSavingWorkoutNote(false);
+    }
+  }, [identityStatus, workoutId, workoutNoteDraft]);
+
+  const handleSaveExerciseNote = useCallback(async () => {
+    const noteContext = activeNoteContextRef.current;
+    if (
+      noteContext === null ||
+      savingExerciseNoteContextRef.current === noteContext ||
+      identityStatus !== "ready" ||
+      noteWorkoutExerciseId === null
+    ) return;
+
+    const targetWorkoutExerciseId = noteWorkoutExerciseId;
+    const draftVersionAtSave = exerciseNoteDraftVersionRef.current;
+    const noteValue = exerciseNoteDraft.trim() || null;
+    savingExerciseNoteContextRef.current = noteContext;
+    setIsSavingExerciseNote(true);
+    setExerciseNoteError(null);
+    try {
+      await updateWorkoutExerciseNote(targetWorkoutExerciseId, noteValue);
+      if (activeNoteContextRef.current !== noteContext) return;
+      const saved = noteValue ?? "";
+      setSavedExerciseNote(saved);
+      if (exerciseNoteDraftVersionRef.current === draftVersionAtSave) {
+        setExerciseNoteDraft(saved);
+      }
+    } catch {
+      if (activeNoteContextRef.current === noteContext) {
+        setExerciseNoteError("Could not save exercise note. Please try again.");
+      }
+    } finally {
+      if (savingExerciseNoteContextRef.current === noteContext) {
+        savingExerciseNoteContextRef.current = null;
+      }
+      if (activeNoteContextRef.current === noteContext) setIsSavingExerciseNote(false);
+    }
+  }, [exerciseNoteDraft, identityStatus, noteWorkoutExerciseId]);
 
   useEffect(() => {
     if (!hasLoadedOnce) return;
@@ -249,7 +441,7 @@ export default function EditWorkoutScreen() {
     });
   }, [workoutId, exerciseId, workoutExerciseId, weight, reps, note, setIndex, selectedDate, unitPreference]);
 
-  const closeScreen = useCallback(() => {
+  const performCloseScreen = useCallback(() => {
     // `edit-workout` is presented as a modal in `app/_layout.tsx`.
     // Using `dismiss()` ensures the screen is removed from the stack (so back won't reopen it).
     if (router.canDismiss()) {
@@ -260,10 +452,10 @@ export default function EditWorkoutScreen() {
     router.back();
   }, []);
 
-  const handleSaveEdits = useCallback(async () => {
+  const performSaveEdits = useCallback(async () => {
     try {
       if (!workoutId || !exerciseId) {
-        closeScreen();
+        performCloseScreen();
         return;
       }
 
@@ -343,7 +535,7 @@ export default function EditWorkoutScreen() {
 
       // If we came from workout day detail page (direct workoutExerciseId), just go back
       if (workoutExerciseIdParam) {
-        closeScreen();
+        performCloseScreen();
         return;
       }
 
@@ -379,8 +571,68 @@ export default function EditWorkoutScreen() {
     exerciseName,
     selectedDate,
     sets,
-    closeScreen,
+    performCloseScreen,
   ]);
+
+  const requestLeave = useCallback((intent: LeaveIntent) => {
+    if (hasPendingNoteSave || hasUnsavedWorkoutNote || hasUnsavedExerciseNote) {
+      setPendingLeaveIntent(intent);
+      return;
+    }
+    setApprovedLeaveIntent(intent);
+  }, [hasPendingNoteSave, hasUnsavedExerciseNote, hasUnsavedWorkoutNote]);
+
+  usePreventRemove(
+    hasPendingNoteSave || hasUnsavedWorkoutNote || hasUnsavedExerciseNote,
+    ({ data }) => requestLeave({ type: "navigation", action: data.action })
+  );
+
+  useEffect(() => {
+    if (!pendingLeaveIntent || hasPendingNoteSave || hasUnsavedWorkoutNote || hasUnsavedExerciseNote) return;
+    setPendingLeaveIntent(null);
+    setApprovedLeaveIntent(pendingLeaveIntent);
+  }, [hasPendingNoteSave, hasUnsavedExerciseNote, hasUnsavedWorkoutNote, pendingLeaveIntent]);
+
+  useEffect(() => {
+    if (!approvedLeaveIntent || hasPendingNoteSave || hasUnsavedWorkoutNote || hasUnsavedExerciseNote) return;
+
+    const intent = approvedLeaveIntent;
+    setApprovedLeaveIntent(null);
+    if (intent.type === "close") {
+      performCloseScreen();
+    } else if (intent.type === "save-edits") {
+      void performSaveEdits();
+    } else {
+      navigation.dispatch(intent.action as never);
+    }
+  }, [
+    approvedLeaveIntent,
+    hasPendingNoteSave,
+    hasUnsavedExerciseNote,
+    hasUnsavedWorkoutNote,
+    navigation,
+    performCloseScreen,
+    performSaveEdits,
+  ]);
+
+  const closeScreen = useCallback(() => {
+    requestLeave({ type: "close" });
+  }, [requestLeave]);
+
+  const handleSaveEdits = useCallback(() => {
+    requestLeave({ type: "save-edits" });
+  }, [requestLeave]);
+
+  const handleDiscardNotesAndContinue = useCallback(() => {
+    if (!pendingLeaveIntent || hasPendingNoteSave) return;
+
+    setWorkoutNoteDraft(savedWorkoutNote);
+    setExerciseNoteDraft(savedExerciseNote);
+    setWorkoutNoteError(null);
+    setExerciseNoteError(null);
+    setPendingLeaveIntent(null);
+    setApprovedLeaveIntent(pendingLeaveIntent);
+  }, [hasPendingNoteSave, pendingLeaveIntent, savedExerciseNote, savedWorkoutNote]);
 
   const handleEditSetPress = useCallback((set: SetRow) => {
     setSelectedSet(set);
@@ -434,7 +686,7 @@ export default function EditWorkoutScreen() {
   }, [deleteTarget, closeDeleteConfirm]);
 
   // Show error only if we don't have valid params (neither direct workoutExerciseId nor legacy exerciseId+workoutId)
-  const hasValidParams = workoutExerciseIdParam || (exerciseIdParam && workoutIdParam);
+  const hasValidParams = routeKey !== "invalid";
   if (!hasValidParams) {
     return (
       <View className="flex-1 bg-background">
@@ -499,6 +751,138 @@ export default function EditWorkoutScreen() {
             <MaterialCommunityIcons name="chevron-down" size={16} color={rawColors.foregroundSecondary} />
           </Pressable>
         </View>
+
+        {identityStatus === "loading" ? (
+          <Text className="text-sm mb-4 text-center text-foreground-secondary">Loading workout details…</Text>
+        ) : null}
+
+        {identityStatus === "missing" ? (
+          <Text className="text-sm mb-4 text-center text-destructive">This workout entry is no longer available.</Text>
+        ) : null}
+
+        {identityStatus === "error" ? (
+          <View className="items-center mb-4">
+            <Text className="text-sm mb-3 text-center text-destructive">{loadError}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading workout details"
+              className="items-center justify-center px-4 py-2.5 rounded-lg bg-surface-secondary"
+              onPress={() => { void loadWorkout(); }}
+            >
+              <Text className="text-sm font-semibold text-foreground-secondary">Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {identityStatus === "ready" ? (
+          <View
+            className="rounded-2xl p-5 mb-4 bg-surface"
+            style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          >
+            <Text className="text-lg font-semibold mb-1 text-foreground">Workout Note</Text>
+            <Text className="text-sm mb-3 text-foreground-secondary">A note for this workout session.</Text>
+            {workoutNoteError ? (
+              <Text className="text-sm mb-3 text-destructive">{workoutNoteError}</Text>
+            ) : null}
+            <TextInput
+              accessibilityLabel="Workout note"
+              className="border border-border rounded-xl p-3.5 text-base min-h-[70px] bg-surface-secondary text-foreground"
+              style={{ textAlignVertical: "top" }}
+              value={workoutNoteDraft}
+              onChangeText={(value) => {
+                workoutNoteDraftVersionRef.current += 1;
+                setWorkoutNoteDraft(value);
+                setWorkoutNoteError(null);
+              }}
+              placeholder="Add a workout note..."
+              placeholderTextColor={rawColors.foregroundMuted}
+              multiline
+            />
+            {hasUnsavedWorkoutNote ? (
+              <Text className="text-sm mt-2 text-foreground-secondary">Unsaved workout note changes</Text>
+            ) : null}
+            <View className="flex-row gap-3 mt-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel workout note"
+                className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+                disabled={isSavingWorkoutNote || !hasUnsavedWorkoutNote}
+                onPress={() => {
+                  setWorkoutNoteDraft(savedWorkoutNote);
+                  setWorkoutNoteError(null);
+                }}
+              >
+                <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save workout note"
+                className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+                disabled={isSavingWorkoutNote || !hasUnsavedWorkoutNote}
+                onPress={handleSaveWorkoutNote}
+              >
+                <Text className="text-base font-semibold text-primary-foreground">
+                  {isSavingWorkoutNote ? "Saving…" : "Save Workout Note"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {identityStatus === "ready" && noteWorkoutExerciseId !== null ? (
+          <View
+            className="rounded-2xl p-5 mb-4 bg-surface"
+            style={{ shadowColor: rawColors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          >
+            <Text className="text-lg font-semibold mb-1 text-foreground">Exercise Entry Note</Text>
+            <Text className="text-sm mb-3 text-foreground-secondary">A note for this exercise entry.</Text>
+            {exerciseNoteError ? (
+              <Text className="text-sm mb-3 text-destructive">{exerciseNoteError}</Text>
+            ) : null}
+            <TextInput
+              accessibilityLabel="Exercise entry note"
+              className="border border-border rounded-xl p-3.5 text-base min-h-[70px] bg-surface-secondary text-foreground"
+              style={{ textAlignVertical: "top" }}
+              value={exerciseNoteDraft}
+              onChangeText={(value) => {
+                exerciseNoteDraftVersionRef.current += 1;
+                setExerciseNoteDraft(value);
+                setExerciseNoteError(null);
+              }}
+              placeholder="Add an exercise entry note..."
+              placeholderTextColor={rawColors.foregroundMuted}
+              multiline
+            />
+            {hasUnsavedExerciseNote ? (
+              <Text className="text-sm mt-2 text-foreground-secondary">Unsaved exercise entry note changes</Text>
+            ) : null}
+            <View className="flex-row gap-3 mt-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel exercise entry note"
+                className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+                disabled={isSavingExerciseNote || !hasUnsavedExerciseNote}
+                onPress={() => {
+                  setExerciseNoteDraft(savedExerciseNote);
+                  setExerciseNoteError(null);
+                }}
+              >
+                <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save exercise entry note"
+                className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+                disabled={isSavingExerciseNote || !hasUnsavedExerciseNote}
+                onPress={handleSaveExerciseNote}
+              >
+                <Text className="text-base font-semibold text-primary-foreground">
+                  {isSavingExerciseNote ? "Saving…" : "Save Exercise Entry Note"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {/* Add Set Card */}
         <View
@@ -722,6 +1106,48 @@ export default function EditWorkoutScreen() {
             <Text className="text-base font-semibold text-primary-foreground">Delete</Text>
           </Pressable>
         </View>
+      </BaseModal>
+
+      <BaseModal
+        visible={pendingLeaveIntent !== null}
+        onClose={() => {
+          if (!hasPendingNoteSave) setPendingLeaveIntent(null);
+        }}
+        maxWidth={380}
+      >
+        {waitingForPendingNoteSaveBeforeLeave ? (
+          <>
+            <Text className="text-xl font-bold mb-2 text-foreground">Saving note…</Text>
+            <Text className="text-base text-foreground-secondary">
+              Please wait for the note save to finish before leaving this screen.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text className="text-xl font-bold mb-2 text-foreground">Discard unsaved note changes?</Text>
+            <Text className="text-base mb-5 text-foreground-secondary">
+              Your note draft has not been saved yet.
+            </Text>
+            <View className="flex-row gap-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Keep editing notes"
+                className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+                onPress={() => setPendingLeaveIntent(null)}
+              >
+                <Text className="text-base font-semibold text-foreground-secondary">Keep Editing</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Discard note changes"
+                className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"
+                onPress={handleDiscardNotesAndContinue}
+              >
+                <Text className="text-base font-semibold text-primary-foreground">Discard</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </BaseModal>
     </View>
   );
