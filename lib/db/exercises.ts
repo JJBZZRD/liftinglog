@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   computeEndDateIso,
   DEFAULT_ACTIVATION_WEEKS,
@@ -75,6 +75,7 @@ type RewriteProgramReferencesParams = {
   fromExerciseName: string;
   toExerciseId: number | null;
   toExerciseName: string;
+  allowNameFallback: boolean;
 };
 
 function assertNonEmptyName(name: string): string {
@@ -184,8 +185,18 @@ function rewritePercentIntensityConfigJson(
   let changed = false;
   const nextEntries = entries.map((entry) => {
     let nextEntry = entry;
+    const sourceMatchesById =
+      params.fromExerciseId !== null &&
+      entry.sourceExerciseId === params.fromExerciseId;
+    const sourceMatchesByNameFallback =
+      params.allowNameFallback &&
+      entry.sourceExerciseId === null &&
+      entry.sourceExerciseName === params.fromExerciseName;
 
-    if (entry.exerciseName === params.fromExerciseName) {
+    if (
+      params.allowNameFallback &&
+      entry.exerciseName === params.fromExerciseName
+    ) {
       nextEntry = {
         ...nextEntry,
         exerciseName: params.toExerciseName,
@@ -194,22 +205,13 @@ function rewritePercentIntensityConfigJson(
       changed = true;
     }
 
-    if (entry.sourceExerciseName === params.fromExerciseName) {
+    if (sourceMatchesById || sourceMatchesByNameFallback) {
       nextEntry = {
         ...nextEntry,
         sourceExerciseName: params.toExerciseName,
-      };
-      changed = true;
-    }
-
-    if (
-      params.fromExerciseId !== null &&
-      entry.sourceExerciseId === params.fromExerciseId &&
-      entry.sourceExerciseId !== params.toExerciseId
-    ) {
-      nextEntry = {
-        ...nextEntry,
-        sourceExerciseId: params.toExerciseId,
+        ...(sourceMatchesById
+          ? { sourceExerciseId: params.toExerciseId }
+          : {}),
       };
       changed = true;
     }
@@ -239,6 +241,19 @@ async function refreshUpcomingCalendar(programIds: number[]): Promise<void> {
   await refreshUpcomingCalendarForPrograms(programIds);
 }
 
+async function canRefreshExerciseReferenceChanges(params: {
+  allowNameFallback: boolean;
+  expectedExerciseId: number | null;
+  exerciseName: string;
+}): Promise<boolean> {
+  if (!params.allowNameFallback) {
+    return false;
+  }
+
+  const resolved = await getExerciseByName(params.exerciseName);
+  return (resolved?.id ?? null) === params.expectedExerciseId;
+}
+
 async function rewriteStoredProgramReferences(
   params: RewriteProgramReferencesParams
 ): Promise<number[]> {
@@ -250,11 +265,13 @@ async function rewriteStoredProgramReferences(
   const affectedActiveProgramIds: number[] = [];
 
   for (const program of programs) {
-    const nextSource = rewriteExerciseReferencesInPslSource(
-      program.pslSource,
-      params.fromExerciseName,
-      params.toExerciseName
-    );
+    const nextSource = params.allowNameFallback
+      ? rewriteExerciseReferencesInPslSource(
+          program.pslSource,
+          params.fromExerciseName,
+          params.toExerciseName
+        )
+      : program.pslSource;
     const nextPercentIntensityConfigJson = rewritePercentIntensityConfigJson(
       program.percentIntensityConfigJson,
       params
@@ -302,7 +319,7 @@ async function rewriteStoredProgramReferences(
   return [...new Set(affectedActiveProgramIds)];
 }
 
-async function deleteExerciseHistoryAndRow(exerciseId: number): Promise<void> {
+async function deleteExerciseHistoryAndRow(exerciseId: number): Promise<number[]> {
   const linkedSetRows = await db
     .select({ id: sets.id })
     .from(sets)
@@ -326,7 +343,7 @@ async function deleteExerciseHistoryAndRow(exerciseId: number): Promise<void> {
   await db.delete(pbEvents).where(eq(pbEvents.exerciseId, exerciseId)).run();
   await db.delete(exerciseFormulaOverrides).where(eq(exerciseFormulaOverrides.exerciseId, exerciseId)).run();
   await db.delete(exercises).where(eq(exercises.id, exerciseId)).run();
-  await refreshUpcomingCalendar(affectedProgramIds);
+  return affectedProgramIds;
 }
 
 async function getSiblingVariations(parentExerciseId: number): Promise<Exercise[]> {
@@ -335,6 +352,16 @@ async function getSiblingVariations(parentExerciseId: number): Promise<Exercise[
     .from(exercises)
     .where(eq(exercises.parentExerciseId, parentExerciseId))
     .orderBy(asc(exercises.variationLabel), asc(exercises.name));
+}
+
+async function canUseExerciseNameFallback(exercise: Pick<Exercise, "id" | "name">): Promise<boolean> {
+  const matches = await db
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(eq(exercises.name, exercise.name))
+    .orderBy(asc(exercises.id))
+    .limit(2);
+  return matches.length === 1 && matches[0].id === exercise.id;
 }
 
 async function resolveParentExercise(exercise: Exercise): Promise<Exercise> {
@@ -391,12 +418,6 @@ async function assertVariationLabelAvailable(
   excludeExerciseId?: number
 ): Promise<void> {
   const normalizedLabel = normalizeVariationLabel(variationLabel);
-  const nextName = buildVariationExerciseName(parentExercise.name, normalizedLabel);
-
-  const existingName = await getExerciseByName(nextName);
-  if (existingName && existingName.id !== excludeExerciseId) {
-    throw new Error("An exercise with this variation name already exists.");
-  }
 
   const siblings = await getSiblingVariations(parentExercise.id);
   const duplicateSibling = siblings.find(
@@ -502,7 +523,12 @@ export async function getExerciseWithParentById(id: number): Promise<ExerciseWit
 }
 
 export async function getExerciseByName(name: string): Promise<Exercise | null> {
-  const rows = await db.select().from(exercises).where(eq(exercises.name, name));
+  const rows = await db
+    .select()
+    .from(exercises)
+    .where(eq(exercises.name, name))
+    .orderBy(asc(exercises.id))
+    .limit(1);
   return rows[0] ?? null;
 }
 
@@ -521,11 +547,22 @@ export async function listExercisesByNames(names: string[]): Promise<Exercise[]>
     return [];
   }
 
-  return db
+  const rows = await db
     .select()
     .from(exercises)
     .where(inArray(exercises.name, normalizedNames))
-    .orderBy(exercises.name);
+    .orderBy(asc(exercises.name), asc(exercises.id));
+
+  // Compatibility callers resolve a display name to one catalog row. Keep
+  // that fallback aligned with getExerciseByName without treating names as
+  // catalog identity.
+  const firstByName = new Map<string, Exercise>();
+  for (const exercise of rows) {
+    if (!firstByName.has(exercise.name)) {
+      firstByName.set(exercise.name, exercise);
+    }
+  }
+  return [...firstByName.values()];
 }
 
 export async function listExerciseVariations(parentExerciseId: number): Promise<Exercise[]> {
@@ -664,6 +701,7 @@ export async function renameExerciseVariation(
   if (nextName === variation.name && normalizedLabel === variation.variationLabel) {
     return;
   }
+  const allowNameFallback = await canUseExerciseNameFallback(variation);
 
   await db
     .update(exercises)
@@ -679,18 +717,28 @@ export async function renameExerciseVariation(
     fromExerciseName: variation.name,
     toExerciseId: variation.id,
     toExerciseName: nextName,
+    allowNameFallback,
   });
   const affectedCalendarProgramIds = await rewriteCalendarExerciseReferences({
     fromExerciseId: variation.id,
     fromExerciseName: variation.name,
     toExerciseId: variation.id,
     toExerciseName: nextName,
+    allowNameFallback,
   });
 
-  await refreshUpcomingCalendar([
-    ...affectedActiveProgramIds,
-    ...affectedCalendarProgramIds,
-  ]);
+  if (
+    await canRefreshExerciseReferenceChanges({
+      allowNameFallback,
+      expectedExerciseId: variation.id,
+      exerciseName: nextName,
+    })
+  ) {
+    await refreshUpcomingCalendar([
+      ...affectedActiveProgramIds,
+      ...affectedCalendarProgramIds,
+    ]);
+  }
 }
 
 export async function deleteExerciseVariation(
@@ -703,16 +751,19 @@ export async function deleteExerciseVariation(
   }
 
   const parentExercise = await resolveParentExercise(variation);
+  const allowNameFallback = await canUseExerciseNameFallback(variation);
   const rewriteParams: RewriteProgramReferencesParams = {
     fromExerciseId: variation.id,
     fromExerciseName: variation.name,
     toExerciseId: parentExercise.id,
     toExerciseName: parentExercise.name,
+    allowNameFallback,
   };
 
   const affectedActiveProgramIds = await rewriteStoredProgramReferences(rewriteParams);
   const affectedCalendarProgramIds = await rewriteCalendarExerciseReferences(rewriteParams);
 
+  let affectedHistoryProgramIds: number[] = [];
   if (mode === "keep_data") {
     await db
       .update(workoutExercises)
@@ -731,13 +782,22 @@ export async function deleteExerciseVariation(
     await db.delete(exercises).where(eq(exercises.id, variation.id)).run();
     await rebuildPBEventsForExercise(parentExercise.id);
   } else {
-    await deleteExerciseHistoryAndRow(variation.id);
+    affectedHistoryProgramIds = await deleteExerciseHistoryAndRow(variation.id);
   }
 
-  return refreshUpcomingCalendar([
-    ...affectedActiveProgramIds,
-    ...affectedCalendarProgramIds,
-  ]);
+  if (
+    await canRefreshExerciseReferenceChanges({
+      allowNameFallback,
+      expectedExerciseId: parentExercise.id,
+      exerciseName: parentExercise.name,
+    })
+  ) {
+    await refreshUpcomingCalendar([
+      ...affectedActiveProgramIds,
+      ...affectedCalendarProgramIds,
+      ...affectedHistoryProgramIds,
+    ]);
+  }
 }
 
 export async function deleteExercise(id: number): Promise<void> {
@@ -756,7 +816,17 @@ export async function deleteExercise(id: number): Promise<void> {
     throw new Error("Delete or migrate the exercise variations before deleting the parent exercise.");
   }
 
-  await deleteExerciseHistoryAndRow(id);
+  const allowNameFallback = await canUseExerciseNameFallback(exercise);
+  const affectedProgramIds = await deleteExerciseHistoryAndRow(id);
+  if (
+    await canRefreshExerciseReferenceChanges({
+      allowNameFallback,
+      expectedExerciseId: null,
+      exerciseName: exercise.name,
+    })
+  ) {
+    await refreshUpcomingCalendar(affectedProgramIds);
+  }
 }
 
 async function lastPerformedAtForExerciseIds(exerciseIds: number[]): Promise<number | null> {

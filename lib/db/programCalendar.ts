@@ -884,23 +884,27 @@ export async function rewriteCalendarExerciseReferences(params: {
   fromExerciseName: string;
   toExerciseId: number | null;
   toExerciseName: string;
+  allowNameFallback?: boolean;
 }): Promise<number[]> {
   const normalizedFromName = params.fromExerciseName.trim();
-  if (!normalizedFromName) {
-    return [];
-  }
-
   const matchByExerciseId =
     params.fromExerciseId !== null
       ? eq(programCalendarExercises.exerciseId, params.fromExerciseId)
       : null;
-  const matchByExerciseName = eq(
-    programCalendarExercises.exerciseName,
-    normalizedFromName
-  );
-  const whereClause = matchByExerciseId
-    ? or(matchByExerciseId, matchByExerciseName)
-    : matchByExerciseName;
+  const matchByExerciseName =
+    params.allowNameFallback && normalizedFromName
+      ? and(
+          isNull(programCalendarExercises.exerciseId),
+          eq(programCalendarExercises.exerciseName, normalizedFromName)
+        )
+      : null;
+  const whereClause =
+    matchByExerciseId && matchByExerciseName
+      ? or(matchByExerciseId, matchByExerciseName)
+      : matchByExerciseId ?? matchByExerciseName;
+  if (!whereClause) {
+    return [];
+  }
 
   const matchedRows = await db
     .select({
@@ -918,14 +922,8 @@ export async function rewriteCalendarExerciseReferences(params: {
   }
 
   for (const row of matchedRows) {
-    const nextExerciseId =
-      row.exerciseId === params.fromExerciseId || row.exerciseName === normalizedFromName
-        ? params.toExerciseId
-        : row.exerciseId;
-    const nextExerciseName =
-      row.exerciseName === normalizedFromName || row.exerciseId === params.fromExerciseId
-        ? params.toExerciseName
-        : row.exerciseName;
+    const nextExerciseId = params.toExerciseId;
+    const nextExerciseName = params.toExerciseName;
 
     if (
       nextExerciseId === row.exerciseId &&

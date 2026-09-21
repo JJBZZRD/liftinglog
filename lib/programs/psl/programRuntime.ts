@@ -5,7 +5,11 @@ import {
   insertCalendarEntries,
 } from "../../db/programCalendar";
 import { getPslProgramById, type PslProgramRow } from "../../db/pslPrograms";
-import { getDateIsoToday, compilePslSource, extractCalendarEntries } from "./pslService";
+import {
+  getDateIsoToday,
+  compilePslSource,
+  extractCalendarEntries,
+} from "./pslService";
 import {
   parseStoredPercentIntensityConfig,
   resolvePercentIntensityMaterialized,
@@ -14,6 +18,10 @@ import {
   buildSessionCompletionFromSnapshot,
   isPristineProgramCalendarEntry,
 } from "./programRuntimeHelpers";
+import {
+  preservesExplicitExerciseIdentity,
+  toCalendarOccurrenceKey,
+} from "./calendarIdentity";
 
 type CalendarOverride = {
   start_date: string;
@@ -45,14 +53,6 @@ export async function buildProgramCompletions(
   return snapshot
     .map((entry) => buildSessionCompletionFromSnapshot(entry, fallbackUnit))
     .filter((entry): entry is SessionCompletion => entry !== null);
-}
-
-function toOccurrenceKey(entry: {
-  pslSessionId: string;
-  dateIso: string;
-  sequence: number;
-}): string {
-  return `${entry.pslSessionId}__${entry.dateIso}__${entry.sequence}`;
 }
 
 export async function refreshUpcomingCalendarForProgram(
@@ -99,16 +99,12 @@ export async function refreshUpcomingCalendarForProgram(
     snapshot
       .filter((entry) => !replaceableEntries.some((candidate) => candidate.calendar.id === entry.calendar.id))
       .map((entry) =>
-        toOccurrenceKey({
+        toCalendarOccurrenceKey({
           pslSessionId: entry.calendar.pslSessionId,
           dateIso: entry.calendar.dateIso,
           sequence: entry.calendar.sequence,
         })
       )
-  );
-
-  await deleteCalendarEntriesByIds(
-    replaceableEntries.map((entry) => entry.calendar.id)
   );
 
   const resolvedMaterialized = resolvePercentIntensityMaterialized(
@@ -125,12 +121,23 @@ export async function refreshUpcomingCalendarForProgram(
     (entry) =>
       entry.dateIso >= todayIso &&
       !preservedKeys.has(
-        toOccurrenceKey({
+        toCalendarOccurrenceKey({
           pslSessionId: entry.pslSessionId,
           dateIso: entry.dateIso,
           sequence: entry.sequence,
         })
       )
+  );
+
+  // A refresh replaces whole pristine occurrences. If any persisted explicit
+  // exercise binding would disappear or resolve to another ID, keep the
+  // existing rows rather than silently reassigning their identity.
+  if (!(await preservesExplicitExerciseIdentity(replaceableEntries, nextEntries))) {
+    return;
+  }
+
+  await deleteCalendarEntriesByIds(
+    replaceableEntries.map((entry) => entry.calendar.id)
   );
 
   if (nextEntries.length > 0) {

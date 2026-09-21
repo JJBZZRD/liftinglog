@@ -29,6 +29,10 @@ import {
   isPristineProgramCalendarEntry,
 } from "./programRuntimeHelpers";
 import {
+  preservesExplicitExerciseIdentity,
+  toCalendarOccurrenceKey,
+} from "./calendarIdentity";
+import {
   compilePslSource,
   extractCalendarEntries,
   getDateIsoToday,
@@ -149,14 +153,6 @@ function convertPrescribedIntensityJson(
   }
 }
 
-function toOccurrenceKey(entry: {
-  pslSessionId: string;
-  dateIso: string;
-  sequence: number;
-}): string {
-  return `${entry.pslSessionId}__${entry.dateIso}__${entry.sequence}`;
-}
-
 function getCalendarOverride(
   program: Pick<PslProgramRow, "startDate" | "endDate">
 ): { start_date: string; end_date?: string } | null {
@@ -217,7 +213,7 @@ async function syncActiveBundledTemplateProgram(
   nextSource: string,
   targetUnit: LoadUnit,
   previousUnit: LoadUnit | null
-): Promise<void> {
+): Promise<boolean> {
   const snapshot = await getProgramCalendarSnapshot(program.id);
   const calendarOverride = getCalendarOverride(program);
   const completions = buildProgramSnapshotCompletions(
@@ -252,6 +248,48 @@ async function syncActiveBundledTemplateProgram(
     throw new Error(errorMessage || "Program calendar could not be refreshed.");
   }
 
+  let nextEntries = null;
+  if (compileResult?.materialized && replaceableEntries.length > 0) {
+    const preservedKeys = new Set(
+      preservedEntries.map((entry) =>
+        toCalendarOccurrenceKey({
+          pslSessionId: entry.calendar.pslSessionId,
+          dateIso: entry.calendar.dateIso,
+          sequence: entry.calendar.sequence,
+        })
+      )
+    );
+    const resolvedMaterialized = resolvePercentIntensityMaterialized(
+      compileResult.materialized,
+      {
+        fallbackUnit: targetUnit,
+        configEntries: parseStoredPercentIntensityConfig(
+          program.percentIntensityConfigJson
+        ),
+      }
+    );
+    nextEntries = extractCalendarEntries(resolvedMaterialized).filter(
+      (entry) =>
+        entry.dateIso >= todayIso &&
+        !preservedKeys.has(
+          toCalendarOccurrenceKey({
+            pslSessionId: entry.pslSessionId,
+            dateIso: entry.dateIso,
+            sequence: entry.sequence,
+          })
+        )
+    );
+
+    if (
+      !(await preservesExplicitExerciseIdentity(
+        replaceableEntries,
+        nextEntries
+      ))
+    ) {
+      return false;
+    }
+  }
+
   await updatePreservedCalendarEntriesToUnit(preservedEntries, targetUnit);
 
   await updatePslProgram(program.id, {
@@ -260,49 +298,19 @@ async function syncActiveBundledTemplateProgram(
     compiledHash: compileResult?.compiled?.source_hash ?? null,
   });
 
-  if (!compileResult?.materialized || replaceableEntries.length === 0) {
-    return;
+  if (nextEntries === null) {
+    return true;
   }
-
-  const preservedKeys = new Set(
-    preservedEntries.map((entry) =>
-      toOccurrenceKey({
-        pslSessionId: entry.calendar.pslSessionId,
-        dateIso: entry.calendar.dateIso,
-        sequence: entry.calendar.sequence,
-      })
-    )
-  );
 
   await deleteCalendarEntriesByIds(
     replaceableEntries.map((entry) => entry.calendar.id)
   );
 
-  const resolvedMaterialized = resolvePercentIntensityMaterialized(
-    compileResult.materialized,
-    {
-      fallbackUnit: targetUnit,
-      configEntries: parseStoredPercentIntensityConfig(
-        program.percentIntensityConfigJson
-      ),
-    }
-  );
-
-  const nextEntries = extractCalendarEntries(resolvedMaterialized).filter(
-    (entry) =>
-      entry.dateIso >= todayIso &&
-      !preservedKeys.has(
-        toOccurrenceKey({
-          pslSessionId: entry.pslSessionId,
-          dateIso: entry.dateIso,
-          sequence: entry.sequence,
-        })
-      )
-  );
-
   if (nextEntries.length > 0) {
     await insertCalendarEntries(program.id, nextEntries);
   }
+
+  return true;
 }
 
 async function syncInactiveBundledTemplateProgram(
@@ -343,12 +351,15 @@ export async function syncBundledTemplateProgramsToUnit(
       }
 
       if (program.isActive) {
-        await syncActiveBundledTemplateProgram(
+        const didSync = await syncActiveBundledTemplateProgram(
           program,
           rebuilt.nextSource,
           nextUnit,
           rebuilt.currentUnit
         );
+        if (!didSync) {
+          continue;
+        }
       } else {
         await syncInactiveBundledTemplateProgram(
           program,
