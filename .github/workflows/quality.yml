@@ -6,7 +6,14 @@ on:
 
 jobs:
   quality:
+    name: Quality (${{ matrix.profile }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [full, mvp]
+    env:
+      EXPO_PUBLIC_RELEASE_PROFILE: ${{ matrix.profile }}
 
     steps:
       - name: Check out repository
@@ -23,6 +30,9 @@ jobs:
 
       - name: Run lint
         run: npm run lint
+
+      - name: Generate Expo ambient types
+        run: printf '%s\n' '/// <reference types="expo/types" />' > expo-env.d.ts
 
       - name: Run typecheck
         run: npm run typecheck

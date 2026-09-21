@@ -31,3 +31,20 @@ and [public environment variable bundling](https://docs.expo.dev/guides/environm
 
 The repository's `.env.local` remains the local source for the ignored
 localhost hostname and is not modified by the release-profile setup.
+
+## CI coverage
+
+The `Quality` workflow runs the same checkout, Node 22 setup, dependency
+install, lint, Expo ambient type generation, typecheck, and serial Jest
+commands once for each profile: `full` and `mvp`. Each matrix check is named
+with its profile so branch protection can require both results explicitly.
+
+The ambient type step writes Expo's standard one-line `expo-env.d.ts` because
+that file is intentionally ignored locally while `tsconfig.json` includes it.
+This keeps a clean checkout's CSS module typecheck equivalent to a local Expo
+checkout.
+
+This verifies that both profile environments pass the repository's static and
+test checks from a clean CI install. It does not build an iOS or Android
+binary, validate EAS profile configuration, or replace device-level smoke
+testing of the bundled capability surface.
