@@ -26,7 +26,7 @@ siblings of this repository, never nested under the app or its test discovery tr
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
 Merged ticket branches 001A, 002A, 002A-R1, 001B, 003A, 001D, 002B, 004A,
-001D-R1, 001C, 004B, 001E, 000B-R1 and 002C have been deleted after
+001D-R1, 001C, 004B, 001E, 000B-R1, 002C and 004B-R1 have been deleted after
 integration. Their clean worktrees remain detached at reviewed commits to retain
 local evidence; no worktree files or shared dependency junctions were deleted.
 
@@ -49,7 +49,8 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-003B | Sol / xhigh | `lib/db/bootstrap.ts`, `lib/db/schema.ts`, production migration tests/fixtures and historical-shape ADR | Independent audit rejected `c9726d3`: missing historical shape and swallowed exercise UID backfill failure; correction running |
 | MVP-002C | Terra / high | Workout history/day screens, Overview status, focused UI tests | Reviewed status rendering and foreground correction; 18/18 targeted tests pass, merged `90554d9` |
 | MVP-000B-R1 | Luna / medium | `.github/workflows/quality.yml`, release-profile testing notes | Reviewed both-profile matrix and clean-checkout Expo types; merged `87b0fba`; remote run/protections unverified |
-| MVP-004B-R1 | Terra / medium | `lib/db/workouts.ts` set lookup only, `__tests__/db/setLookup.test.ts` | Running in isolated branch/worktree, pinned `90554d974004df8911556e033cc9de43516f5e87`; prerequisite to 004C |
+| MVP-004B-R1 | Terra / medium | `lib/db/workouts.ts` set lookup only, `__tests__/db/setLookup.test.ts` | Reviewed and independently passed 9/9 lookup/lifecycle tests; merged `ea56f4e`; file ownership released |
+| MVP-004C | Terra / high | `app/set/[id].tsx`, focused set-detail UI/characterization tests/helper | Running in isolated branch/worktree, pinned `ea56f4ebff8e26e20b93aeb7e2469f1685b703b2` |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -225,6 +226,15 @@ defines the two profile checks; no remote execution or native build is claimed.
   open follow-up, not a waiver of the all-real-sets inclusion contract. Date-only
   search also retains its existing partial-range count semantics; current UI uses
   whole-day bounds. Keep both findings visible in 002R.
+  The organiser freezes MVP-002B-R2's effective read timestamp as
+  `COALESCE(workout_exercises.performed_at, workout_exercises.completed_at, workouts.started_at)`,
+  matching existing exercise-history sorting/display. Apply it consistently to all
+  six broad helpers, including search subqueries, grouping, pagination and returned
+  dates. Preserve zero timestamps and never write a fabricated date or completion.
+  `getWorkoutExercisesForDate` and `resetWorkoutForDate` have no callers in the
+  current app/components/lib source; their write semantics are outside this read
+  correction. Ownership waits for the small 004B-R1 lookup ticket to release
+  `workouts.ts`.
 - The existing `.github/workflows/quality.yml` runs one default-profile job.
   Local full/MVP checks are passing, but a narrow follow-up must put both profiles
   into CI before release. Remote branch-protection configuration has not been
