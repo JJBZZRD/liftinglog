@@ -312,7 +312,7 @@ It is built from:
 
 - `workout_exercises` with at least one linked real set
 - linked `sets`
-- timestamps on `workout_exercises.performed_at`
+- an effective entry timestamp: `COALESCE(workout_exercises.performed_at, workout_exercises.completed_at, workouts.started_at)`
 
 Current rule:
 
@@ -320,7 +320,8 @@ Current rule:
 - List, search, day details, day page, Overview's last day, and quick-stat day count use this inclusion rule before pagination. Set counts include zero-load set rows; existing volume and E1RM formulas are unchanged.
 - Entry read models return `completedAt: number | null`; day summaries return `inProgressCount`. UI labels consume those fields in MVP-002C.
 - Local calendar days group entries; they do not identify a workout. Multiple workout IDs and repeated entries for one exercise remain distinct within a day.
-- Existing limitations remain for malformed/legacy null `performed_at` values and partial-day timestamp filters. Normal write helpers supply an entry timestamp and the current UI uses whole-day bounds; these limitations require explicit follow-up before claiming support for arbitrary legacy dates or partial-day ranges.
+- Legacy entries with null `performed_at` use completion time, then their canonical workout start time, consistently for grouping, filtering, ordering, pagination, and returned dates. Explicit zero timestamps remain valid. Reads never backfill or fabricate timestamps.
+- Date-only search retains its existing partial-day summary-count semantics. The current UI uses whole-day bounds; this is not support for arbitrary partial-day ranges.
 
 ### D. Exercise history
 
@@ -533,7 +534,7 @@ If you are changing persistence or adding new features, follow these rules.
 
 Use these when reasoning about bugs.
 
-- If data should appear in workout history and does not, first check for a real `workout_exercise`, real linked rows in `sets`, and a usable `performed_at` date. Completion is status, not the visibility gate.
+- If data should appear in workout history and does not, first check for a real `workout_exercise`, real linked rows in `sets`, and its canonical workout parent. Broad history uses the effective entry timestamp described in section 7C. Completion is status, not the visibility gate.
 - If data should appear in exercise history and does not, first check whether real `sets` exist and whether they point to the expected `workout_exercise_id`.
 - If a program exercise looks complete in the program UI but not in history, check whether the program side was updated without creating/updating the real `sets` row.
 - If `RecordTab` shows unexpected backlog, check for open `workout_exercises` with program-linked sets.
