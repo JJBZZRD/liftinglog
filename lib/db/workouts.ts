@@ -457,6 +457,18 @@ export async function listSetsForWorkout(workoutId: number): Promise<SetRow[]> {
   return rows;
 }
 
+/** Return one canonical set-history row by its primary key. */
+export async function getSetById(setId: number): Promise<SetRow | null> {
+  if (!Number.isSafeInteger(setId) || setId <= 0) return null;
+
+  const rows = await db
+    .select()
+    .from(sets)
+    .where(eq(sets.id, setId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listSetsForExercise(workoutId: number, exerciseId: number): Promise<SetRow[]> {
   const rows = await db
     .select()
