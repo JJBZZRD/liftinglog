@@ -122,6 +122,10 @@ function getHistoryEntryTimestamp(entry: WorkoutHistoryEntry): number {
   return entry.workoutExercise?.performedAt ?? entry.workoutExercise?.completedAt ?? entry.workout.startedAt;
 }
 
+function hasDisplayableNote(note: string | null | undefined): note is string {
+  return typeof note === "string" && note.trim().length > 0;
+}
+
 function timestampToDayKey(timestamp: number): string {
   const date = new Date(timestamp);
   const year = date.getFullYear();
@@ -1044,6 +1048,23 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
                   <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel} vol</Text>
                 </View>
               </View>
+
+              {(hasDisplayableNote(item.workout.note) || hasDisplayableNote(item.workoutExercise?.note)) && (
+                <View className="mb-3 gap-2">
+                  {hasDisplayableNote(item.workout.note) && (
+                    <View className="rounded-lg p-3 bg-surface-secondary">
+                      <Text className="text-xs font-semibold text-foreground-secondary">Workout Note</Text>
+                      <Text className="mt-1 text-sm text-foreground">{item.workout.note}</Text>
+                    </View>
+                  )}
+                  {hasDisplayableNote(item.workoutExercise?.note) && (
+                    <View className="rounded-lg p-3 bg-surface-secondary">
+                      <Text className="text-xs font-semibold text-foreground-secondary">Exercise Note</Text>
+                      <Text className="mt-1 text-sm text-foreground">{item.workoutExercise.note}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               <View style={styles.setsContainer}>
                 {item.sets.map((set: SetWithPB, index) => (

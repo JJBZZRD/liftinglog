@@ -33,6 +33,9 @@ import {
 // Helper to get alphabet letter (A-Z)
 const getAlphabetLetter = (index: number) => String.fromCharCode(65 + index);
 
+const hasDisplayableNote = (note: string | null | undefined): note is string =>
+  typeof note === "string" && note.trim().length > 0;
+
 export default function WorkoutDayScreen() {
   const { rawColors } = useTheme();
   const { unitPreference } = useUnitPreference();
@@ -373,6 +376,23 @@ export default function WorkoutDayScreen() {
                     <Text style={[styles.statLabel, { color: rawColors.foregroundSecondary }]}>{weightUnitLabel} vol</Text>
                   </View>
                 </View>
+
+                {(hasDisplayableNote(entry.workoutNote) || hasDisplayableNote(entry.note)) && (
+                  <View className="mb-3 gap-2">
+                    {hasDisplayableNote(entry.workoutNote) && (
+                      <View className="rounded-lg p-3 bg-surface-secondary">
+                        <Text className="text-xs font-semibold text-foreground-secondary">Workout Note</Text>
+                        <Text className="mt-1 text-sm text-foreground">{entry.workoutNote}</Text>
+                      </View>
+                    )}
+                    {hasDisplayableNote(entry.note) && (
+                      <View className="rounded-lg p-3 bg-surface-secondary">
+                        <Text className="text-xs font-semibold text-foreground-secondary">Exercise Note</Text>
+                        <Text className="mt-1 text-sm text-foreground">{entry.note}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {/* Sets List */}
                 <View style={styles.setsContainer}>
