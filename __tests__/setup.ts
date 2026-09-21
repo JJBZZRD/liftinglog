@@ -1,6 +1,10 @@
 // Jest setup file for WorkoutLog tests
 // Minimal setup for pure unit tests
 
+// Expo's Babel transform rewrites process.env access to this virtual module.
+// Keep the real environment visible so release-profile behavior stays covered.
+jest.mock('expo/virtual/env', () => ({ env: process.env }));
+
 // Mock console.warn to suppress Expo warnings in tests
 const originalWarn = console.warn;
 console.warn = (...args: any[]) => {
