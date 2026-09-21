@@ -1,6 +1,6 @@
 # ADR: Exercise-name uniqueness migration proof
 
-- Status: Proof complete for review; production migration not authorized
+- Status: MVP-003A proof accepted by organiser and independent specialist; production migration remains separate MVP-003B work
 - Date: 2026-09-21
 - Fixture/schema source: pinned base `5892c323797a85d86a60ae09c9058b37f0808ab5`; relevant bootstrap and schema definitions verified unchanged through `aa6b6715ffea28ba0094ffed6ed7aa184cd6610c`
 - Final proof execution base: `932139855c0a6d17b703313130311153ce1bc420`

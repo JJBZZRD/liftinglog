@@ -25,16 +25,20 @@ receive no inherited conversation, only their section 4.3 packet. Worktrees are
 siblings of this repository, never nested under the app or its test discovery tree.
 No worker merges or expands its scope. The organiser independently reviews every
 diff and owns integration. Existing dirty/untracked work is excluded throughout.
+Merged ticket branches 001A, 002A, 002A-R1, 001B and 003A have been deleted after
+integration. Their clean worktrees remain detached at reviewed commits to retain
+local evidence; no worktree files or shared dependency junctions were deleted.
 
 | Ticket | Worker | Exclusive write scope | State |
 | --- | --- | --- | --- |
 | MVP-001A | Terra / medium | `lib/config/releaseProfile.ts`, `__tests__/config/releaseProfile.test.ts` | Reviewed and merged as `b7d1a51` |
 | MVP-002A | Terra / medium | `__tests__/db/manualLoggingLifecycle.test.ts`, `__tests__/app/manual-logging-lifecycle.test.tsx`, `__tests__/helpers/manualLoggingDatabase.ts`, `docs/testing/manual-logging-characterization.md` | Reviewed characterization merged as `e7cf5e8`; one reproduced defect tracked below |
 | MVP-002A-R1 | Terra / high | Manual date/resume seam in `components/exercise/UnifiedRecordTab.tsx`, `__tests__/app/manual-logging-lifecycle.test.tsx`, `docs/testing/manual-logging-characterization.md` | Reviewed and merged as `aa6b671` |
-| MVP-003A | Sol / xhigh | `__tests__/db/exerciseNameMigrationProof.test.ts`, `__tests__/helpers/exerciseNameMigrationProof.ts`, `__tests__/fixtures/exercise-name-migration/**`, `docs/adr/exercise-name-migration-proof.md` | Organiser tests pass 10/10 at `8216bb5`; independent Sol/high database review in progress |
+| MVP-003A | Sol / xhigh | `__tests__/db/exerciseNameMigrationProof.test.ts`, `__tests__/helpers/exerciseNameMigrationProof.ts`, `__tests__/fixtures/exercise-name-migration/**`, `docs/adr/exercise-name-migration-proof.md` | Corrected proof independently accepted, organiser reran 12/12 after rebase; merged `ff89170` |
 | MVP-004A | Luna / medium | `__tests__/app/set-detail-characterization.test.tsx`, `__tests__/utils/setVideoCharacterization.test.ts`, `__tests__/db/setMediaCharacterization.test.ts`, `__tests__/helpers/setDetailCharacterization.ts`, `docs/testing/set-detail-characterization.md` | Review requested stronger selection/replacement and exact DB assertions |
-| MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md` | Running in `mvp/MVP-001B-route-guards`, base `aa6b6715ffea28ba0094ffed6ed7aa184cd6610c` |
+| MVP-001B | Terra / high | `app/_layout.tsx`, `lib/routing/capabilityAccess.ts`, `components/routing/CapabilityGuard.tsx`, focused routing tests/helper and `docs/testing/profile-route-guards.md`; bounded Jest configuration exception below | Reviewed and merged `aa762bc`; 32 suites / 401 tests pass including real-root direct URL tests |
 | MVP-002B | Sol / high | `lib/db/workouts.ts`, `__tests__/db/historyReadModel.test.ts`, optional isolated history DB adapter | Running in `mvp/MVP-002B-history-read-model`, base `aa6b6715ffea28ba0094ffed6ed7aa184cd6610c` |
+| MVP-001D | Terra / high | `app/(tabs)/index.tsx`, `components/exercise/UnifiedRecordTab.tsx`, optional recording-route wrapper; focused capability/manual UI tests and findings | Running in `mvp/MVP-001D-entry-points`, base `aa762bc096c0979300b27ca2f80fdbfdffbe29ea` |
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
@@ -68,8 +72,30 @@ worker typecheck/lint pass with baseline warnings only. No persistence path or
 program-mode behavior changed. The component lock is released for later capability
 work, subject to sequential integration.
 
-Integrated verification at `aa6b671`: MVP-profile full Jest passes 30 suites / 368
-tests; typecheck passes; lint has zero errors and the same 20 baseline warnings.
+Integrated verification at `aa6b671` (and documentation-only `9321398`): both full
+and MVP profiles pass the full Jest suite, 30 suites / 368 tests each; typecheck
+passes; lint has zero errors and the same 20 baseline warnings.
+
+The organiser authorised MVP-001B to change `jest.config.js` and add
+`jest.router.config.js` / `__tests__/helpers/profileRouteSetup.ts` as needed for an
+automatically executed real Expo Router project. Existing unit-test behavior and
+discovery must remain intact; no dependency/lockfile changes, opt-in skips, or
+duplicate test execution. This is a test-harness scope adjustment, not a waived
+route acceptance criterion.
+
+MVP-001B now runs 22 navigation tests against the actual root layout, with dummy
+leaf screens only. All 13 deferred URLs reject MVP access without mounting their
+screen; core routes remain accessible. The integrated routing configuration and
+typecheck pass. MVP-003A's specialist initially rejected incomplete unique-index
+validation, then accepted correction `5cc3f56`; the organiser inspected the change,
+rebased onto `aa762bc`, reran all 12 tests, and integrated the proof as `ff89170`.
+Historical schema coverage and production migration remain separate MVP-003B work.
+
+The post-integration codebase-memory refresh was attempted in both fast and full
+modes, but the service still reports the original 3,026 nodes and cannot find the
+new capability symbols. Continue graph-first discovery and verify current source
+directly where graph results are absent/stale. The existing graph artifact was
+preserved; a successful tool response alone is not evidence of a fresh index.
 
 ### Next-ticket review notes
 
@@ -99,6 +125,15 @@ tests; typecheck passes; lint has zero errors and the same 20 baseline warnings.
   The current set route multiplies it by 1000. MediaLibrary legacy duration is a
   separate seconds-based boundary; do not globally remove conversions. The
   characterization must record this existing defect without endorsing the value.
+- Before MVP-003B production migration, prove historical column layouts as well as
+  the current bootstrap layout. Repository history includes a pre-variation shape
+  at `39cc234` (parent/variation columns later appended by ALTER), and pre-UID
+  connection bootstrap history before `3223ce9`. The proof's exact DDL matcher
+  cannot simply become the production migration. Unknown constraints/indexes must
+  fail closed; supported shapes must preserve every existing value and reference.
+- MVP-001D owns `app/(tabs)/index.tsx` while removing the health entry and suppressing
+  its snapshot query. MVP-002C's later Overview status rendering must wait for that
+  ownership to be released; the history/day screens remain a separate UI scope.
 
 ### Frozen MVP-001A interface
 
@@ -155,6 +190,13 @@ MVP-006 must use the preserved paired backup/live states for UID-less seed merge
 ambiguity. The current merge's successful SQLite integrity checks do not establish
 replacement semantics. The final resumed import added two seeded workout/set pairs;
 this is explicitly recorded, not reported as an identical round-trip.
+
+Read-only export review also found that `checkpointDatabaseForBackup` executes
+`PRAGMA wal_checkpoint(TRUNCATE)` without inspecting its busy/result row before
+copying the database file. MVP-006A must consider a busy/WAL export fixture and a
+consistent SQLite snapshot API; the installed Expo SQLite types expose
+`backupDatabaseAsync` / `backupDatabaseSync`. This is a design input, not a completed
+export correction or a claim that the inspected successful Android export was bad.
 
 The phone is not required for these implementation tickets. Later physical gallery
 and release verification will require a device and may require USB reauthorization.
