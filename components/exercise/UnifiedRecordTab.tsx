@@ -665,6 +665,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const sessionNoteRef = useRef("");
   const sessionNoteDirtyRef = useRef(false);
   const sessionNoteContextRef = useRef<number | null>(null);
+  const hydratedManualEntryDateRef = useRef<number | null>(null);
   const flushSessionNoteDraftRef = useRef<
     () => Promise<{ workoutId: number | null; workoutExerciseId: number | null }>
   >(async () => ({ workoutId: null, workoutExerciseId: null }));
@@ -852,6 +853,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       nextWorkoutExerciseId = paramWeId;
       nextWorkoutExercise = await getWorkoutExerciseById(paramWeId);
       setWorkoutExerciseId(nextWorkoutExerciseId);
+      hydratedManualEntryDateRef.current = nextWorkoutExerciseId;
     } else {
       const openWorkoutExercise = await getOpenWorkoutExercise(
         activeWorkoutId,
@@ -862,6 +864,13 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
         nextWorkoutExerciseId = openWorkoutExercise.id;
         nextWorkoutExercise = openWorkoutExercise;
         setWorkoutExerciseId(nextWorkoutExerciseId);
+        if (
+          hydratedManualEntryDateRef.current !== nextWorkoutExerciseId &&
+          typeof openWorkoutExercise.performedAt === "number"
+        ) {
+          hydratedManualEntryDateRef.current = nextWorkoutExerciseId;
+          setSelectedDate(normalizeDate(new Date(openWorkoutExercise.performedAt)));
+        }
         if (openWorkoutExercise.currentWeight !== null) {
           setWeightState(
             formatEditableWeightFromKg(
@@ -881,6 +890,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
         });
         nextWorkoutExercise = await getWorkoutExerciseById(nextWorkoutExerciseId);
         setWorkoutExerciseId(nextWorkoutExerciseId);
+        hydratedManualEntryDateRef.current = nextWorkoutExerciseId;
         setWeightState("");
         setRepsState("");
       }

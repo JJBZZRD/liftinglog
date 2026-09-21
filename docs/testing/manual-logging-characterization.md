@@ -28,12 +28,11 @@ database boundaries are mocked because Jest runs without an Expo device runtime.
 With the system clock moved across midnight, the handler still passes the
 component's original selected date to `addSet()` when the screen remains mounted.
 
-The same test file has an explicit expected-failure characterization for a
-different restart path: an existing open entry with confirmed sets from the prior
-day is returned by the database, then `UnifiedRecordTab` is mounted after
-midnight. Its next set is currently assigned the new day's selected date instead
-of the stored entry date. The test is intentionally failing because this violates
-MVP product facts section 4; no production fix is included in MVP-002A.
+When an existing open entry with confirmed sets from the prior day is returned
+after midnight, `UnifiedRecordTab` restores the entry's stored date before the
+next set is added. The same regression coverage verifies that a subsequent
+explicit date-picker selection remains selected through the focus reload and is
+used for the next set.
 
 ## Known characterization limits
 

@@ -5,6 +5,7 @@ const mockAddSet = jest.fn();
 const mockAddWorkoutExercise = jest.fn();
 const mockGetOpenWorkoutExercise = jest.fn();
 const mockListSetsForWorkoutExercise = jest.fn();
+const mockUpdateExerciseEntryDate = jest.fn();
 const mockParams = { id: "1", name: "Midnight Bench" };
 type TestNode = {
   props: Record<string, unknown>;
@@ -57,7 +58,7 @@ jest.mock("../../lib/db/workouts", () => ({
   completeExerciseEntry: jest.fn(), deleteSet: jest.fn(), deleteSetsForWorkoutExercise: jest.fn(),
   getOpenWorkoutExercise: mockGetOpenWorkoutExercise, getOrCreateActiveWorkout: jest.fn().mockResolvedValue(10),
   getWorkoutExerciseById: jest.fn().mockResolvedValue({ id: 20, note: null, currentWeight: null, currentReps: null }),
-  listSetsForWorkoutExercise: mockListSetsForWorkoutExercise, updateExerciseEntryDate: jest.fn(), updateSet: jest.fn(),
+  listSetsForWorkoutExercise: mockListSetsForWorkoutExercise, updateExerciseEntryDate: mockUpdateExerciseEntryDate, updateSet: jest.fn(),
   updateWorkoutExerciseInputs: jest.fn(), updateWorkoutExerciseNote: jest.fn(),
 }));
 jest.mock("../../lib/programs/programExerciseHistory", () => ({ ensureProgramExerciseWorkoutSession: jest.fn(), persistCompletedProgramExercise: jest.fn(), persistProgramSetToWorkoutHistory: jest.fn() }));
@@ -113,7 +114,7 @@ describe("manual logging date lifecycle", () => {
     });
   });
 
-  it.failing("keeps an already in-progress entry on its stored date after reopening past midnight", async () => {
+  it("keeps an already in-progress entry on its stored date after reopening past midnight", async () => {
     const originalPerformedAt = new Date("2026-09-20T12:00:00").getTime();
     mockGetOpenWorkoutExercise.mockResolvedValue({
       id: 20,
@@ -146,6 +147,56 @@ describe("manual logging date lifecycle", () => {
 
       expect(mockAddSet).toHaveBeenCalledWith(
         expect.objectContaining({ performed_at: originalPerformedAt })
+      );
+    } finally {
+      await act(async () => {
+        tree!.unmount();
+      });
+    }
+  });
+
+  it("keeps an explicit date picker selection after resuming an entry", async () => {
+    const originalPerformedAt = new Date("2026-09-20T12:00:00").getTime();
+    const selectedPerformedAt = new Date("2026-09-19T12:00:00").getTime();
+    mockGetOpenWorkoutExercise.mockResolvedValue({
+      id: 20,
+      note: null,
+      currentWeight: 100,
+      currentReps: 5,
+      performedAt: originalPerformedAt,
+    });
+    mockListSetsForWorkoutExercise.mockResolvedValue([
+      { id: 21, note: null, weightKg: 100, reps: 5, performedAt: originalPerformedAt },
+    ]);
+    jest.setSystemTime(new Date("2026-09-21T00:01:00"));
+
+    let tree: ReturnType<typeof renderer.create>;
+    try {
+      await act(async () => {
+        tree = renderer.create(<UnifiedRecordTab />);
+      });
+
+      const datePicker = tree!.root.findByType("DatePickerModal");
+      await act(async () => {
+        await datePicker.props.onChange(new Date("2026-09-19T08:30:00"));
+      });
+
+      expect(mockUpdateExerciseEntryDate).toHaveBeenCalledWith(20, selectedPerformedAt);
+
+      const inputs = tree!.root.findAllByType(require("react-native").TextInput);
+      await act(async () => {
+        inputs[0].props.onChangeText("102.5");
+        inputs[1].props.onChangeText("4");
+      });
+      const addSetButton = (tree!.root as unknown as { findAllByType: (type: string) => TestNode[] })
+        .findAllByType("Pressable")
+        .find((node) => node.findAll((child) => child.props.children === "Add Set").length > 0);
+      await act(async () => {
+        await (addSetButton?.props.onPress as undefined | (() => Promise<void>))?.();
+      });
+
+      expect(mockAddSet).toHaveBeenCalledWith(
+        expect.objectContaining({ performed_at: selectedPerformedAt })
       );
     } finally {
       await act(async () => {
