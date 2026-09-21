@@ -212,7 +212,7 @@ These rules are mandatory.
 
 ### UI/history rules
 
-11. Broad workout history is based on completed `workout_exercises`, not on `program_calendar` statuses.
+11. Broad workout history includes `workout_exercises` with at least one linked real `sets` row, regardless of completion; `program_calendar` statuses do not determine inclusion.
 12. Exercise history is built from `workout_exercises` plus real `sets`, not from `program_calendar_sets`.
 13. Parent exercise history and analytics are read-time family rollups across the parent exercise plus all of its variation children.
 14. Variation exercise history and analytics are concrete-only and must not silently roll back up to the parent row when a variation screen is selected.
@@ -280,8 +280,9 @@ This is the normal non-program logging flow.
 
 Important consequence:
 
-- open `workout_exercises` are backlog/in-progress state
-- completed `workout_exercises` are history state
+- open `workout_exercises` with real sets are in-progress history
+- completed `workout_exercises` with real sets are completed history
+- empty entries are drafts and stay out of broad history, regardless of completion
 
 ### B. Manual set edit/delete
 
@@ -304,13 +305,17 @@ The broad workout history page does not read program tables.
 
 It is built from:
 
-- completed `workout_exercises`
+- `workout_exercises` with at least one linked real set
 - linked `sets`
 - timestamps on `workout_exercises.performed_at`
 
 Current rule:
 
-- if `workout_exercises.completed_at` is null, the session is treated as in progress and is excluded from the main workout-history day listing
+- Null `workout_exercises.completed_at` means In Progress; it does not exclude an entry with real sets.
+- List, search, day details, day page, Overview's last day, and quick-stat day count use this inclusion rule before pagination. Set counts include zero-load set rows; existing volume and E1RM formulas are unchanged.
+- Entry read models return `completedAt: number | null`; day summaries return `inProgressCount`. UI labels consume those fields in MVP-002C.
+- Local calendar days group entries; they do not identify a workout. Multiple workout IDs and repeated entries for one exercise remain distinct within a day.
+- Existing limitations remain for malformed/legacy null `performed_at` values and partial-day timestamp filters. Normal write helpers supply an entry timestamp and the current UI uses whole-day bounds; these limitations require explicit follow-up before claiming support for arbitrary legacy dates or partial-day ranges.
 
 ### D. Exercise history
 
@@ -510,7 +515,7 @@ If you are changing persistence or adding new features, follow these rules.
 
 Use these when reasoning about bugs.
 
-- If data should appear in workout history and does not, first check whether there is a real `workout_exercise` with `completed_at` set and real linked rows in `sets`.
+- If data should appear in workout history and does not, first check for a real `workout_exercise`, real linked rows in `sets`, and a usable `performed_at` date. Completion is status, not the visibility gate.
 - If data should appear in exercise history and does not, first check whether real `sets` exist and whether they point to the expected `workout_exercise_id`.
 - If a program exercise looks complete in the program UI but not in history, check whether the program side was updated without creating/updating the real `sets` row.
 - If `RecordTab` shows unexpected backlog, check for open `workout_exercises` with program-linked sets.

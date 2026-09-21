@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { computeE1rm } from "../pb";
 import { db, sqlite } from "./connection";
 import { getExerciseScopeIdsForView } from "./exercises";
@@ -804,6 +804,7 @@ export type LastWorkoutDayExercise = {
   exerciseParentName: string | null;
   isVariation: boolean;
   workoutExerciseId: number;
+  completedAt: number | null;
   bestSet: {
     weightKg: number;
     reps: number;
@@ -818,20 +819,23 @@ export type LastWorkoutDayResult = {
 };
 
 /**
- * Get the most recent workout day with completed exercise entries.
+ * Get the most recent workout day with exercise entries that have real sets.
  * Groups by day (using performed_at), returns exercise list with best E1RM sets.
  */
 export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> {
   if (!canQueryWorkoutExercises("getLastWorkoutDay")) {
     return null;
   }
-  // Find the most recent day with completed exercise entries
+  // Completion is status metadata; linked real sets determine history visibility.
   const recentEntry = await db
     .select({
       performedAt: workoutExercises.performedAt,
     })
     .from(workoutExercises)
-    .where(isNotNull(workoutExercises.completedAt))
+    .where(sql`EXISTS (
+      SELECT 1 FROM ${sets}
+      WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
+    )`)
     .orderBy(desc(workoutExercises.performedAt))
     .limit(1);
 
@@ -846,19 +850,23 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
   const dayEnd = new Date(mostRecentDate);
   dayEnd.setHours(23, 59, 59, 999);
 
-  // Get all completed exercise entries for that day
-  const completedEntries = await db
+  // Get every entry with real sets for that day, including in-progress entries.
+  const historyEntries = await db
     .select({
       workoutExerciseId: workoutExercises.id,
       exerciseId: workoutExercises.exerciseId,
       exerciseName: exercises.name,
       performedAt: workoutExercises.performedAt,
+      completedAt: workoutExercises.completedAt,
     })
     .from(workoutExercises)
     .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
     .where(
       and(
-        isNotNull(workoutExercises.completedAt),
+        sql`EXISTS (
+          SELECT 1 FROM ${sets}
+          WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
+        )`,
         sql`${workoutExercises.performedAt} >= ${dayStart.getTime()}`,
         sql`${workoutExercises.performedAt} <= ${dayEnd.getTime()}`
       )
@@ -870,13 +878,13 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
       workoutExercises.id
     );
 
-  if (completedEntries.length === 0) {
+  if (historyEntries.length === 0) {
     return null;
   }
 
   // Check if there are more than 26 exercises
-  const hasMore = completedEntries.length > 26;
-  const entriesToProcess = completedEntries.slice(0, 26);
+  const hasMore = historyEntries.length > 26;
+  const entriesToProcess = historyEntries.slice(0, 26);
 
   // Get global E1RM formula
   const formula = getGlobalFormula();
@@ -928,6 +936,7 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
       exerciseParentName: meta?.exerciseParentName ?? null,
       isVariation: meta?.isVariation ?? false,
       workoutExerciseId: entry.workoutExerciseId,
+      completedAt: entry.completedAt,
       bestSet,
     });
   }
@@ -949,8 +958,9 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
 export type WorkoutDaySummary = {
   dayKey: string;               // stable identifier, e.g. "2025-01-13"
   displayDate: number;          // timestamp for JS date formatting
-  totalExercises: number;       // count of completed exercise entries
+  totalExercises: number;       // count of exercise entries with real sets
   totalSets: number;            // total sets across entries
+  inProgressCount: number;      // included entries whose completion timestamp is null
   notesPreview: string | null;  // merged preview if notes exist
 };
 
@@ -962,6 +972,7 @@ export type WorkoutDayExerciseDetail = {
   exerciseParentExerciseId: number | null;
   exerciseParentName: string | null;
   isVariation: boolean;
+  completedAt: number | null;
   note: string | null;
   bestSet: { weightKg: number; reps: number; e1rm: number } | null;
 };
@@ -999,11 +1010,14 @@ export async function getQuickStats(): Promise<QuickStats> {
   if (!canQueryWorkoutExercises("getQuickStats")) {
     return { totalWorkoutDays: 0, totalVolumeKg: 0 };
   }
-  // Count distinct workout days (days with completed exercises)
+  // Count distinct workout days containing at least one entry with real sets.
   const daysStmt = sqlite.prepareSync(`
     SELECT COUNT(DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')) AS totalDays
     FROM workout_exercises we
-    WHERE we.completed_at IS NOT NULL
+    WHERE EXISTS (
+      SELECT 1 FROM sets visible_sets
+      WHERE visible_sets.workout_exercise_id = we.id
+    )
   `);
 
   let totalWorkoutDays = 0;
@@ -1039,7 +1053,7 @@ export async function getQuickStats(): Promise<QuickStats> {
 
 /**
  * List workout days with pagination.
- * Groups completed exercise entries by local calendar day using SQLite strftime.
+ * Groups exercise entries with real sets by local calendar day using SQLite strftime.
  */
 export async function listWorkoutDays(params: {
   limit: number;
@@ -1055,14 +1069,18 @@ export async function listWorkoutDays(params: {
       strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
       MIN(we.performed_at) AS displayDate,
       COUNT(DISTINCT we.id) AS totalExercises,
-      (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id IN (
-        SELECT we2.id FROM workout_exercises we2 
-        WHERE we2.completed_at IS NOT NULL 
-          AND strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
-      )) AS totalSets,
+      (SELECT COUNT(*)
+        FROM sets s
+        INNER JOIN workout_exercises we2 ON we2.id = s.workout_exercise_id
+        WHERE strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+      ) AS totalSets,
+      SUM(CASE WHEN we.completed_at IS NULL THEN 1 ELSE 0 END) AS inProgressCount,
       GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
     FROM workout_exercises we
-    WHERE we.completed_at IS NOT NULL
+    WHERE EXISTS (
+      SELECT 1 FROM sets visible_sets
+      WHERE visible_sets.workout_exercise_id = we.id
+    )
     GROUP BY dayKey
     ORDER BY dayKey DESC
     LIMIT ? OFFSET ?
@@ -1075,6 +1093,7 @@ export async function listWorkoutDays(params: {
       displayDate: number;
       totalExercises: number;
       totalSets: number;
+      inProgressCount: number;
       notesPreview: string | null;
     }>;
 
@@ -1083,6 +1102,7 @@ export async function listWorkoutDays(params: {
       displayDate: row.displayDate,
       totalExercises: row.totalExercises,
       totalSets: row.totalSets,
+      inProgressCount: row.inProgressCount,
       notesPreview: row.notesPreview,
     }));
   } finally {
@@ -1104,17 +1124,21 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
       bestE1rmKg: null,
     };
   }
-  // Get all completed exercise entries for this dayKey (limit 27 to detect hasMore)
+  // Get all exercise entries with real sets for this dayKey (limit 27 to detect hasMore)
   const stmt = sqlite.prepareSync(`
     SELECT 
       we.id AS workoutExerciseId,
       we.exercise_id AS exerciseId,
       e.name AS exerciseName,
+      we.completed_at AS completedAt,
       we.note
     FROM workout_exercises we
     INNER JOIN exercises e ON we.exercise_id = e.id
-    WHERE we.completed_at IS NOT NULL
-      AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+    WHERE strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+      AND EXISTS (
+        SELECT 1 FROM sets visible_sets
+        WHERE visible_sets.workout_exercise_id = we.id
+      )
     ORDER BY COALESCE(we.order_index, 999999), e.name ASC, we.performed_at, we.id
     LIMIT 27
   `);
@@ -1123,6 +1147,7 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
     workoutExerciseId: number;
     exerciseId: number;
     exerciseName: string;
+    completedAt: number | null;
     note: string | null;
   }>;
 
@@ -1191,6 +1216,7 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
       exerciseParentExerciseId: meta?.exerciseParentExerciseId ?? null,
       exerciseParentName: meta?.exerciseParentName ?? null,
       isVariation: meta?.isVariation ?? false,
+      completedAt: entry.completedAt,
       note: entry.note,
       bestSet,
     });
@@ -1290,7 +1316,10 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       FROM workout_exercises we
       LEFT JOIN exercises e ON we.exercise_id = e.id
       LEFT JOIN sets s ON s.workout_exercise_id = we.id
-      WHERE we.completed_at IS NOT NULL
+      WHERE EXISTS (
+          SELECT 1 FROM sets visible_sets
+          WHERE visible_sets.workout_exercise_id = we.id
+        )
         ${dateFilterClause}
         AND (
           e.name LIKE ?
@@ -1321,7 +1350,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       SELECT DISTINCT strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey
       FROM workout_exercises we
       INNER JOIN sets s ON s.workout_exercise_id = we.id
-      WHERE we.completed_at IS NOT NULL
+      WHERE 1 = 1
         ${dateFilterClause}
         AND (s.reps = ? OR (s.weight_kg >= ? AND s.weight_kg <= ?))
     `);
@@ -1354,14 +1383,18 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
         strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
         MIN(we.performed_at) AS displayDate,
         COUNT(DISTINCT we.id) AS totalExercises,
-        (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id IN (
-          SELECT we2.id FROM workout_exercises we2 
-          WHERE we2.completed_at IS NOT NULL 
-            AND strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
-        )) AS totalSets,
+        (SELECT COUNT(*)
+          FROM sets s
+          INNER JOIN workout_exercises we2 ON we2.id = s.workout_exercise_id
+          WHERE strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+        ) AS totalSets,
+        SUM(CASE WHEN we.completed_at IS NULL THEN 1 ELSE 0 END) AS inProgressCount,
         GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
       FROM workout_exercises we
-      WHERE we.completed_at IS NOT NULL
+      WHERE EXISTS (
+          SELECT 1 FROM sets visible_sets
+          WHERE visible_sets.workout_exercise_id = we.id
+        )
         ${dateFilterClause}
       GROUP BY dayKey
       ORDER BY dayKey DESC
@@ -1375,6 +1408,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
         displayDate: number;
         totalExercises: number;
         totalSets: number;
+        inProgressCount: number;
         notesPreview: string | null;
       }>;
 
@@ -1383,6 +1417,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
         displayDate: row.displayDate,
         totalExercises: row.totalExercises,
         totalSets: row.totalSets,
+        inProgressCount: row.inProgressCount,
         notesPreview: row.notesPreview,
       }));
     } finally {
@@ -1410,15 +1445,19 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') AS dayKey,
       MIN(we.performed_at) AS displayDate,
       COUNT(DISTINCT we.id) AS totalExercises,
-      (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id IN (
-        SELECT we2.id FROM workout_exercises we2 
-        WHERE we2.completed_at IS NOT NULL 
-          AND strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
-      )) AS totalSets,
+      (SELECT COUNT(*)
+        FROM sets s
+        INNER JOIN workout_exercises we2 ON we2.id = s.workout_exercise_id
+        WHERE strftime('%Y-%m-%d', we2.performed_at/1000, 'unixepoch', 'localtime') = strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime')
+      ) AS totalSets,
+      SUM(CASE WHEN we.completed_at IS NULL THEN 1 ELSE 0 END) AS inProgressCount,
       GROUP_CONCAT(DISTINCT SUBSTR(we.note, 1, 50)) AS notesPreview
     FROM workout_exercises we
-    WHERE we.completed_at IS NOT NULL
-      AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') IN (${placeholders})
+    WHERE strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') IN (${placeholders})
+      AND EXISTS (
+        SELECT 1 FROM sets visible_sets
+        WHERE visible_sets.workout_exercise_id = we.id
+      )
     GROUP BY dayKey
     ORDER BY dayKey DESC
   `);
@@ -1430,6 +1469,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       displayDate: number;
       totalExercises: number;
       totalSets: number;
+      inProgressCount: number;
       notesPreview: string | null;
     }>;
 
@@ -1438,6 +1478,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       displayDate: row.displayDate,
       totalExercises: row.totalExercises,
       totalSets: row.totalSets,
+      inProgressCount: row.inProgressCount,
       notesPreview: row.notesPreview,
     }));
   } finally {
@@ -1465,6 +1506,7 @@ export type WorkoutDayExerciseEntry = {
   exerciseParentName: string | null;
   isVariation: boolean;
   performedAt: number;
+  completedAt: number | null;
   note: string | null;
   sets: WorkoutDaySetEntry[];
   totalSets: number;
@@ -1495,18 +1537,22 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
   if (!canQueryWorkoutExercises("getWorkoutDayPage")) {
     return null;
   }
-  // Step 1: Query completed workout_exercises for the dayKey (limit 27 to detect overflow)
+  // Step 1: Query workout_exercises with real sets for the dayKey (limit 27 to detect overflow)
   const entriesStmt = sqlite.prepareSync(`
     SELECT 
       we.id AS workoutExerciseId,
       we.exercise_id AS exerciseId,
       e.name AS exerciseName,
       we.performed_at AS performedAt,
+      we.completed_at AS completedAt,
       we.note
     FROM workout_exercises we
     INNER JOIN exercises e ON we.exercise_id = e.id
-    WHERE we.completed_at IS NOT NULL
-      AND strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+    WHERE strftime('%Y-%m-%d', we.performed_at/1000, 'unixepoch', 'localtime') = ?
+      AND EXISTS (
+        SELECT 1 FROM sets visible_sets
+        WHERE visible_sets.workout_exercise_id = we.id
+      )
     ORDER BY COALESCE(we.order_index, 999999), e.name ASC, we.performed_at, we.id
     LIMIT 27
   `);
@@ -1516,6 +1562,7 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
     exerciseId: number;
     exerciseName: string;
     performedAt: number;
+    completedAt: number | null;
     note: string | null;
   }>;
 
@@ -1594,7 +1641,7 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
   const entries: WorkoutDayExerciseEntry[] = entriesToProcess.map((entry) => {
     const entrySets = setsByExercise.get(entry.workoutExerciseId) ?? [];
 
-    let totalSets = 0;
+    const totalSets = entrySets.length;
     let totalReps = 0;
     let totalVolumeKg = 0;
     let bestSet: WorkoutDayExerciseEntry["bestSet"] = null;
@@ -1602,7 +1649,6 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
 
     for (const set of entrySets) {
       if (set.weightKg !== null && set.reps !== null && set.reps > 0 && set.weightKg > 0) {
-        totalSets++;
         totalReps += set.reps;
         totalVolumeKg += set.weightKg * set.reps;
 
@@ -1652,6 +1698,7 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
       exerciseParentName: meta?.exerciseParentName ?? null,
       isVariation: meta?.isVariation ?? false,
       performedAt: entry.performedAt,
+      completedAt: entry.completedAt,
       note: entry.note,
       sets: setsForDisplay,
       totalSets,
