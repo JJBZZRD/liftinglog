@@ -41,10 +41,11 @@ transitions. Those need an Expo/device integration environment. The file-backed
 SQLite test covers connection shutdown/reopen through the same production
 connection/bootstrap boundary used by the app.
 
-## Existing defect outside MVP-002A
+## Broad history disposition
 
-`getExerciseHistory()` already includes an in-progress entry when it has a real
-linked set. Broad workout-day history still filters for completed exercise entries
-(`workout_exercises.completed_at IS NOT NULL`), which conflicts with MVP product
-facts section 5.1. That query change belongs to MVP-002B and is intentionally not
-implemented or hidden by these tests.
+The broad workout-history read model now follows the same real-history rule as
+exercise history: an entry is included when it has at least one linked real row in
+`sets`. `workout_exercises.completed_at` controls the displayed lifecycle status,
+not inclusion. Empty drafts remain excluded. See
+[`in-progress-history-acceptance.md`](./in-progress-history-acceptance.md) for the
+source and regression-test trace.
