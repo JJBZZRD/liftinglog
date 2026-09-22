@@ -61,6 +61,16 @@ Its prior task is closed and its new three-file scope is isolated in
 checkpoint above. Database lifecycle ownership and its independent Sol audit
 remain unchanged; the organiser will independently review the Settings result.
 
+D3's exact stacked candidate `7c8438e65db379bc9bfba5890066eeab617ddf01`
+has now passed organiser source review and independent targeted verification:
+22 tests in each profile, TypeScript, scoped uncached ESLint and diff checks.
+The repaired tests exercise real confirmation/cancellation and synchronous
+export/restore exclusion in both directions. It is held for B6 acceptance;
+only its own three-file changes will be transplanted and checked on accepted main.
+B6's initial specialist findings and bounded cancellation UI limitation are
+recorded in the lifecycle review. Those findings are awaiting final corrected-SHA
+review, not being treated as accepted on the basis of local worker reports.
+
 Independent Sol/high audit accepted the corrected engine candidate `ef0bc3c`.
 The organiser reviewed the final nine-file diff, passed **79 suites / 945 tests
 in each profile**, TypeScript and uncached lint (zero errors / 19 existing

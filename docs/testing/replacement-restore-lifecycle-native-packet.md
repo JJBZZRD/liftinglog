@@ -27,6 +27,11 @@ The baseline has one empty workout and zero rows in the other 14 tables. The APK
 hash remains `eb65e5d9cc3fa3a3605cc0e9294d6c366bf60822efafc38415bacdff4a97d9d8`.
 This is preparation evidence only: no integrated restore has run yet.
 
+The five picker inputs have also been copied to the synthetic AVD's previously
+absent `/sdcard/Download/WorkoutLog-MVP006-inputs-v1` directory. Every copied file
+matches its host SHA-256. This preparation did not launch the app or change its
+private database/control state.
+
 ## Objective and isolation
 
 Prove that the actual app lifecycle performs replacement before ordinary providers

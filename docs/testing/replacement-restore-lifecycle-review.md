@@ -1,8 +1,29 @@
 # MVP-006B6 lifecycle preparation review
 
-Independent Sol/high read-only source review of `70bedfa`, followed by organiser
-challenge of ordinary notification behavior and post-acknowledgement restart
-cases. No lifecycle implementation has been dispatched or accepted.
+Initial independent Sol/high read-only source review of `70bedfa`, followed by
+organiser challenge of ordinary notification behavior and post-acknowledgement
+restart cases. The preparation below led to the frozen implementation packet.
+
+## First production checkpoint review
+
+The lifecycle worker is now implementing B6. Independent Sol/high review of exact
+checkpoint `1d82389801b16ae04ae631f2343602bab91c0c0d` found two P2 guard defects:
+successfully parsed encoded timer markers could bypass classification, and blank
+timer IDs/zero end times were accepted despite native producer invariants. Root
+also found that a retained notification promise captured its navigation epoch at
+resolution rather than request time, allowing an old response after a safe failed
+schedule without provider unmount. These require corrections and dedicated tests
+before acceptance; worker reports of local fixes do not close exact-SHA review.
+
+A bounded cancellation UI limitation is retained under the current shared
+contract. `restart_required` with unchanged data represents both an original
+scheduled process and a same-process verified rollback. It has no discriminator
+for cancellation eligibility. The gate can therefore offer cancellation after a
+verified rollback, but the engine safely rejects it and normal use remains
+blocked; full close/reopen is the valid recovery path. This is not a data-loss
+bypass, and this ticket does not broaden engine results or parse manifests in the
+lifecycle to infer permission. A future UI improvement needs an explicit reviewed
+engine capability rather than weaker cancellation validation.
 
 ## Integration order and bounded ownership
 
