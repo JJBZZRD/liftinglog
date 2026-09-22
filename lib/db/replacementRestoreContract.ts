@@ -220,6 +220,30 @@ export type RestoreStartupBlock =
   | RestoreCommittedPendingOutcome
   | RestoreCommittedPendingCleanup;
 
+/**
+ * Published by the database lifecycle owner when startup cannot safely
+ * continue outside the replacement-restore engine. The producer must select
+ * `liveDatabaseChanged` from its observed outcome and publish no actions.
+ */
+export type DatabaseLifecycleFailure = {
+  readonly status: "lifecycle_failed";
+  readonly stage:
+    | "open"
+    | "pragmas"
+    | "startup_engine"
+    | "bootstrap"
+    | "bindings"
+    | "timer_cleanup"
+    | "notification_cleanup"
+    | "native_retirement"
+    | "control_presence";
+  readonly restoreId?: string;
+  readonly liveDatabaseChanged: boolean | "unknown";
+  readonly recovery: "close_and_reopen" | "manual_recovery";
+};
+
+export type DatabaseStartupBlock = RestoreStartupBlock | DatabaseLifecycleFailure;
+
 export type ResumeCommittedStartupFinalizationOptions = {
   readonly restoreId: string;
 };
@@ -262,7 +286,7 @@ export type DatabaseStartupSnapshot =
       readonly phase: "blocked";
       readonly connectionInitialized: boolean;
       readonly canMountApp: false;
-      readonly blocker: RestoreStartupBlock;
+      readonly blocker: DatabaseStartupBlock;
       readonly allowedActions: readonly DatabaseStartupActionKind[];
     }
   | {

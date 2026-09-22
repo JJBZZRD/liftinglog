@@ -32,7 +32,7 @@ type DatabaseStartupSnapshot =
       phase: "blocked";
       connectionInitialized: boolean;
       canMountApp: false;
-      blocker: RestoreStartupBlock;
+      blocker: DatabaseStartupBlock;
       allowedActions: readonly DatabaseStartupActionKind[];
     }
   | {
@@ -81,6 +81,12 @@ listeners synchronously. Scheduling must publish blocked state upon durable
 publication, before its wrapper promise resolves, including uncertain publication
 which cannot safely establish absence. No progress callback runs inside the SQL
 transaction.
+
+When the lifecycle itself fails, it publishes a `lifecycle_failed` blocker with
+`allowedActions: []` and rejects every startup action while that snapshot is
+current. Its `liveDatabaseChanged` value must reflect observed state rather than
+the failure stage: bootstrap can follow partial migration, while a known committed
+restore remains committed if a later bootstrap step fails.
 
 ## Transitions
 

@@ -4,6 +4,7 @@ import { BackHandler, Pressable, ScrollView, Text, View } from "react-native";
 import type {
   DatabaseStartupAction,
   DatabaseStartupActionKind,
+  DatabaseStartupBlock,
   DatabaseStartupSnapshot,
   RestoreStartupBlock,
 } from "../lib/db/replacementRestoreContract";
@@ -39,6 +40,9 @@ function restoreIdFor(snapshot: DatabaseStartupSnapshot): string | undefined {
 function snapshotKey(snapshot: DatabaseStartupSnapshot): string {
   if (snapshot.phase === "blocked") {
     const { blocker } = snapshot;
+    if (blocker.status === "lifecycle_failed") {
+      return `blocked:${blocker.status}:${blocker.stage}:${blocker.restoreId ?? "none"}:${blocker.liveDatabaseChanged}:${blocker.recovery}:${snapshot.connectionInitialized}`;
+    }
     if (blocker.status === "failed") {
       return `blocked:${blocker.status}:${blocker.restoreId ?? "none"}:${blocker.error.liveDatabaseChanged}:${blocker.error.transactionState}:${blocker.error.recovery}:${blocker.error.recoveryToken ?? "none"}`;
     }
@@ -62,6 +66,12 @@ function outcomeCopy(blocker: RestoreStartupBlock): string {
   }
 
   return "Restore data was committed. The app remains blocked while completion records are finalised.";
+}
+
+function lifecycleOutcomeCopy(blocker: Extract<DatabaseStartupBlock, { status: "lifecycle_failed" }>): string {
+  if (blocker.liveDatabaseChanged === false) return "Your current app data was not changed.";
+  if (blocker.liveDatabaseChanged === true) return "App data changed before startup could finish. The app remains blocked until startup recovery finishes.";
+  return "The data outcome could not be confirmed. Do not use the app until recovery is complete.";
 }
 
 function isAllowed(
@@ -226,17 +236,31 @@ export default function ReplacementRestoreGate({ snapshot, performAction, childr
       );
     }
 
-    content = (
-      <>
-        <Text className="text-xl font-bold mb-3 text-foreground">
-          {blocker.status === "restart_required" ? "Restore needs a full close and reopen" : blocker.status === "failed" ? "Restore needs recovery" : "Restore completion is pending"}
-        </Text>
-        {blocker.status === "restart_required" ? <Text className="text-base mb-3 text-foreground-secondary">Close the app completely, then reopen it before using it again.</Text> : null}
-        <Text className="text-base mb-4 text-foreground-secondary">{outcomeCopy(blocker)}</Text>
-        {blocker.status === "failed" && blocker.error.liveDatabaseChanged === "unknown" ? <Text className="text-base mb-4 text-destructive">Manual recovery is required. Do not use the app until the data outcome is confirmed.</Text> : null}
-        {actions.length > 0 ? <View className="flex-row gap-3">{actions}</View> : null}
-      </>
-    );
+    if (blocker.status === "lifecycle_failed") {
+      content = (
+        <>
+          <Text className="text-xl font-bold mb-3 text-foreground">The app could not start safely</Text>
+          <Text className="text-base mb-3 text-foreground-secondary">{lifecycleOutcomeCopy(blocker)}</Text>
+          <Text className="text-base mb-4 text-foreground-secondary">
+            {blocker.recovery === "close_and_reopen"
+              ? "Close the app completely, then reopen it before using it again."
+              : "Manual recovery is required before using the app again."}
+          </Text>
+        </>
+      );
+    } else {
+      content = (
+        <>
+          <Text className="text-xl font-bold mb-3 text-foreground">
+            {blocker.status === "restart_required" ? "Restore needs a full close and reopen" : blocker.status === "failed" ? "Restore needs recovery" : "Restore completion is pending"}
+          </Text>
+          {blocker.status === "restart_required" ? <Text className="text-base mb-3 text-foreground-secondary">Close the app completely, then reopen it before using it again.</Text> : null}
+          <Text className="text-base mb-4 text-foreground-secondary">{outcomeCopy(blocker)}</Text>
+          {blocker.status === "failed" && blocker.error.liveDatabaseChanged === "unknown" ? <Text className="text-base mb-4 text-destructive">Manual recovery is required. Do not use the app until the data outcome is confirmed.</Text> : null}
+          {actions.length > 0 ? <View className="flex-row gap-3">{actions}</View> : null}
+        </>
+      );
+    }
   } else if (snapshot.phase === "postcommit") {
     const progress = snapshot.progress;
     content = (

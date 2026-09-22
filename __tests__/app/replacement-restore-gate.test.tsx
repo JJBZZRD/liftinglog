@@ -82,6 +82,31 @@ const blockedCommitted = {
   allowedActions: ["retry_control_finalization"] as any,
   blocker: { status: "committed_pending_cleanup" as const, restoreId: "restore-1", liveDatabaseChanged: true as const, normalUseBlocked: true as const, retryable: true as const, warning: { stage: "pending_manifest_cleanup" as const, code: "cleanup" } },
 };
+const lifecycleFailure = (
+  liveDatabaseChanged: boolean | "unknown",
+  recovery: "close_and_reopen" | "manual_recovery",
+  connectionInitialized: boolean,
+  restoreId?: string
+) => ({
+  phase: "blocked" as const,
+  connectionInitialized,
+  canMountApp: false as const,
+  allowedActions: [
+    "cancel_and_reload",
+    "discard_and_reload",
+    "retry_control_finalization",
+    "complete_media",
+    "skip_media",
+    "acknowledge_completion",
+  ] as any,
+  blocker: {
+    status: "lifecycle_failed" as const,
+    stage: "bootstrap" as const,
+    restoreId,
+    liveDatabaseChanged,
+    recovery,
+  },
+});
 
 describe("ReplacementRestoreGate", () => {
   let performAction: jest.Mock;
@@ -138,6 +163,40 @@ describe("ReplacementRestoreGate", () => {
     expect(hasText(tree, "could not be confirmed")).toBe(true);
     expect(hasText(tree, "Manual recovery is required")).toBe(true);
     await act(async () => { tree.unmount(); });
+  });
+
+  it("blocks every lifecycle failure combination without mounting children or exposing actions", async () => {
+    let tree!: RenderedTree;
+    for (const liveDatabaseChanged of [false, true, "unknown"] as const) {
+      for (const recovery of ["close_and_reopen", "manual_recovery"] as const) {
+        for (const connectionInitialized of [false, true]) {
+          for (const restoreId of [undefined, "restore-1"] as const) {
+            await act(async () => {
+              tree = render(lifecycleFailure(liveDatabaseChanged, recovery, connectionInitialized, restoreId));
+            });
+            expect(mounts).toBe(0);
+            expect(hasText(tree, "The app could not start safely")).toBe(true);
+            expect(hasText(tree, "bootstrap")).toBe(false);
+            expect(button(tree, "Cancel scheduled restore")).toBeUndefined();
+            expect(button(tree, "Discard failed restore safely")).toBeUndefined();
+            expect(button(tree, "Retry restore completion")).toBeUndefined();
+            expect(tree.root.findAll((node: TestNode) => node.type === "Pressable")).toHaveLength(0);
+            expect(performAction).not.toHaveBeenCalled();
+            expect(mockBackHandler.addEventListener).toHaveBeenLastCalledWith("hardwareBackPress", expect.any(Function));
+            if (liveDatabaseChanged === false) expect(hasText(tree, "current app data was not changed")).toBe(true);
+            if (liveDatabaseChanged === true) {
+              expect(hasText(tree, "App data changed before startup could finish")).toBe(true);
+              expect(hasText(tree, "not confirmed")).toBe(false);
+              expect(hasText(tree, "could not be confirmed")).toBe(false);
+            }
+            if (liveDatabaseChanged === "unknown") expect(hasText(tree, "could not be confirmed")).toBe(true);
+            if (recovery === "close_and_reopen") expect(hasText(tree, "Close the app completely")).toBe(true);
+            if (recovery === "manual_recovery") expect(hasText(tree, "Manual recovery is required")).toBe(true);
+            await act(async () => { tree.unmount(); });
+          }
+        }
+      }
+    }
   });
 
   it("only exposes compatible allowed blocked actions with trusted payloads", async () => {
