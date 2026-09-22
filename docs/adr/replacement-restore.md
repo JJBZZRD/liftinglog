@@ -85,7 +85,7 @@ Preparation must not touch the live database.
 
 Candidate migration is allowed to assign UIDs to legacy null-UID rows using the existing supported migration. It must preserve every row ID and every existing non-null UID. It does not deduplicate or field-match rows.
 
-The host proof uses Node's `node:crypto` SHA-256 and does not establish a native digest implementation. At design acceptance the installed app had no `expo-crypto`, `@noble/hashes`, or existing SHA-256 helper, and the public FileSystem digest was MD5. The organiser has assigned MVP-006B4 to integrate and verify the maintained `@noble/hashes` 2.4.0 incremental SHA-256 implementation with bounded Expo read-only file handles. Its code and native runtime evidence still require review; selection alone does not accept the production hash gate. The existing Metro `node:crypto` shim is non-cryptographic and must not implement candidate identity. MD5 is not acceptable for candidate identity.
+The host proof uses Node's `node:crypto` SHA-256 and does not establish a native digest implementation. At design acceptance the installed app had no `expo-crypto`, `@noble/hashes`, or existing SHA-256 helper, and the public FileSystem digest was MD5. MVP-006B4 integrated the independently reviewed `@noble/hashes` 2.4.0 incremental SHA-256 implementation with bounded Expo read-only file handles as `ab99216`. Native runtime evidence is still pending; code acceptance alone does not accept the production hash gate. The existing Metro `node:crypto` shim is non-cryptographic and must not implement candidate identity. MD5 is not acceptable for candidate identity.
 
 ## Scheduling and startup commit protocol
 
@@ -124,9 +124,13 @@ Insert order:
 
 SQLite transaction recovery is the crash boundary. Before `BEGIN`, startup atomically advances `scheduled` or `rolled_back_unchanged` to `attempting` with a known-unchanged baseline and binds that attempt to the current native process token. A crash or JS reload after that durable marker is conservative: the prior attempt is unknown even if it stopped before `BEGIN`, and the same native process cannot retry. A later process retry from prior `attempting` records its own token and an unknown baseline. Successful rollback may record `rolled_back_unchanged` only when this exact in-memory attempt began from a proven-unchanged baseline, while retaining that attempt token so a same-process reload remains gated. If a retry began from an unknown baseline, its successful rollback restores that unknown pre-BEGIN database, so durable state remains `attempting`/unknown and no unchanged recovery token is minted. Failure to persist rollback state is also unknown. On every later verified native process, any valid pending manifest re-applies the sealed candidate regardless of an outcome record. After manifest retirement, a matching pending outcome means only that postcommit reconciliation is incomplete. Startup never treats an outcome as proof that row replacement may be skipped.
 
-## Proposed public API
+## Public API and organiser contract revision
 
-The organiser must freeze this API, or an explicitly documented revision, before production work starts.
+The organiser freezes the following revision for production ticket preparation on
+2026-09-22, after the independent startup-contract review. The lifecycle facade
+and worker ownership are specified in
+[the startup integration contract](../testing/replacement-restore-startup-contract.md).
+This is a shared interface decision, not production implementation acceptance.
 
 ```ts
 import type { SQLiteDatabase } from "expo-sqlite";
@@ -208,7 +212,11 @@ function cancelScheduledReplacementRestore(restoreId: string): Promise<void>;
 function discardSafelyFailedScheduledRestore(options: {
   restoreId: string;
   recoveryToken: string;
-}): Promise<{ status: "discarded"; liveDatabaseChanged: false }>;
+}): Promise<{
+  status: "discarded";
+  liveDatabaseChanged: false;
+  reinitializeRequired: true;
+}>;
 
 // Internal synchronous startup seam, called only by connection.ts.
 function applyScheduledReplacementRestoreAtStartup(options: {
@@ -220,13 +228,29 @@ function applyScheduledReplacementRestoreAtStartup(options: {
   | RestoreCommittedPendingCleanup
   | RestorePendingColdStart
   | RestoreStartupFailure
-  | null;
+  | RestoreNoPending
+  | RestorePostCommitPending;
+
+type RestoreNoPending = {
+  status: "no_pending";
+  pendingPresence: "absent";
+};
 
 type RestorePendingColdStart = {
   status: "restart_required";
   restoreId: string;
-  liveDatabaseChanged: false;
+  liveDatabaseChanged: boolean | "unknown";
   restartRequired: true;
+};
+
+// Pending is physically absent; never repeat row replacement on this result.
+type RestorePostCommitPending = {
+  status: "postcommit_pending";
+  restoreId: string;
+  liveDatabaseChanged: true;
+  rowsByTable: Record<AppTable, number>;
+  pbEventsRebuilt: number;
+  requiresExplicitMediaScan: true;
 };
 
 type RestoreCommitResult = {
@@ -262,10 +286,21 @@ type RestoreCommittedPendingOutcome = {
 
 type RestoreStartupFailure = {
   status: "failed";
+  restoreId?: string; // omitted when the physical record has no trusted ID
   error: ReplacementRestoreError;
 };
 
+// Same-process controls-only retry for the engine's known committed attempt.
+// Never opens a transaction, replays replacement, or infers commit from an outcome.
+function resumeCommittedStartupFinalization(options: {
+  restoreId: string;
+}):
+  | RestoreCommitResult
+  | RestoreCommittedPendingOutcome
+  | RestoreCommittedPendingCleanup;
+
 function completeReplacementRestorePostCommit(options: {
+  sqlite: SQLiteDatabase; // the same long-lived live handle
   restoreId: string;
   signal?: AbortSignal;
   onProgress?: (progress: RestoreProgress) => void;
@@ -296,7 +331,18 @@ type ReplacementRestoreResult = {
 };
 ```
 
-Progress events are ordered phases. They are not a guessed percentage. `completed` and `total` are emitted only for real bounded work such as validation or media rows. The schedule call ends at `restart_required`; startup table replacement is synchronous and exposes no callback. After the restored tree mounts, the gate calls `completeReplacementRestorePostCommit()` and may report reconciliation progress. Exceptions thrown by `onProgress` are ignored and logged; a UI callback cannot change restore correctness.
+Progress events are ordered phases. They are not a guessed percentage. `completed` and `total` are emitted only for real bounded work such as validation or media rows. The schedule call ends at `restart_required`; startup table replacement is synchronous and exposes no callback. After manifest retirement and permitted bootstrap/binding construction, the outer gate calls `completeReplacementRestorePostCommit()` while normal providers/routes remain unmounted, and may report reconciliation progress. Exceptions thrown by `onProgress` are ignored and logged; a UI callback cannot change restore correctness.
+
+`no_pending` requires positive physical absence; unavailable or unreadable storage
+must not produce it. With absent pending but an incomplete valid outcome, return
+`postcommit_pending` instead and offer an explicit fresh scan of current media.
+Any pending record takes precedence over every outcome. A same-process restart
+result reports unchanged only for durable `scheduled` or proven
+`rolled_back_unchanged`; prior `attempting` reports unknown unless independently
+proven committed. The generic restart result must never invent unchanged status.
+The controls-only finalization retry is bound to the engine's retained in-memory
+committed attempt and rejects stale/mismatched requests. Losing that memory forces
+the normal later-process pending-reapplication protocol.
 
 Picker dismissal and an aborted preparation resolve to `RestoreCancelled`. For scheduling, abort before manifest rename returns `RestoreCancelled`; abort after rename returns `RestoreScheduled`. `cancelScheduledReplacementRestore()` may claim unchanged only while the durable state is the original `scheduled` state in the scheduling process. After a verified rollback from a proven-unchanged baseline, a recovery token may authorize safe discard/reprepare. Once state is `attempting`, ordinary cancellation is unavailable even if the current failure occurred before `BEGIN`, because a prior attempt may have committed. A successful rollback during a retry from unknown state does not restore this privilege. Once startup enters `BEGIN IMMEDIATE`, there is no cancellation or callback; it runs through commit or rollback. After commit or an unknown commit/rollback state, cancellation and any result claiming unchanged are forbidden. During post-commit media reconciliation, an abort may stop further gallery scans; remaining rows are reported unresolved and the committed database remains successful.
 
