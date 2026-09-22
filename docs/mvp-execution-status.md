@@ -5,7 +5,7 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 ## Current checkpoint
 
-Integrated production code is `508c103` (the latest change is type-only). MVP capability restrictions, history,
+Integrated production code is `c785c9b`. MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
 Replacement restore remains the active implementation story: native controls,
 timer retirement, schema validation, sealed export and native file hashing are
@@ -17,15 +17,16 @@ in an isolated Sol/xhigh worktree pinned to `70bedfa`. The disjoint standalone
 gate view was independently checked by the organiser and integrated as `cf6280f`
 after corrections to uncertain-outcome copy and recovery guards (9 focused tests
 in each profile). Workers receive no inherited conversation context and may not
-merge. A read-only Sol/high audit is preparing the later connection/initial-URL
-lifecycle boundary. No engine or startup integration
+merge. A read-only Sol/high audit accepted the later connection/initial-URL
+lifecycle boundary and identified the native generation prerequisite below. No engine or startup integration
 is yet accepted. Diagnostic branches remain outside shipping code. Physical-device
 checks are still required before release; iOS remains explicitly deferred.
 
 The lifecycle review found a durable old-notification-link/reused-ID gap that
 cannot be solved by process-local quarantine or blocking every timer tap.
-MVP-006B2E now owns a separate native correction from `133f1d5` in parallel with
-the engine. [Lifecycle review](testing/replacement-restore-lifecycle-review.md)
+MVP-006B2E's separate native correction was independently accepted at `227a6d9`
+and integrated as `c785c9b`; its [Android native prerequisite](testing/android-rest-timer-generation-runtime.md)
+also passed. [Lifecycle review](testing/replacement-restore-lifecycle-review.md)
 records the pending actual-router/device proof. The existing accepted alarm and
 display retirement evidence is not a claim of completed navigation integration.
 
@@ -42,6 +43,22 @@ Integrated TypeScript and uncached lint pass with zero errors / 19 existing
 warnings. Logs: `.codex-artifacts/mvp006d2-integrated-{full,mvp}.log` and the
 matching typecheck/lint logs. The later type-only scan/skip contract `508c103`
 also passes integrated typecheck; it changes no runtime behavior.
+
+After native generation integration, both profiles pass **76 suites / 871 tests**
+at `c785c9b`; integrated TypeScript and uncached lint pass (zero errors, 19 existing
+warnings). Logs:
+`.codex-artifacts/mvp006b2e-integrated-{full,mvp}.log` and
+`mvp006b2e-typecheck.log` / `mvp006b2e-lint.log`. Independent B2E audit also passes 40 focused Jest and
+21 freshly executed JVM tests with no findings. The organiser-built debug APK
+passed assembly; the separate native runtime evidence is linked above.
+
+The generation diagnostic also reproduced a pre-existing missing-exercise route
+defect: a real notification tap mounts manual logging before catalog existence is
+checked, then rejects a `workout_exercises` insert. Read-only source review found
+that this can first create an empty workout when none is active. MVP-002F is a
+bounded corrective follow-up from `c785c9b`, owned by a separate Terra/high worker;
+it must validate route IDs/existence before initialization and preserve valid
+logging behavior. It does not change the restore engine or native-intent policy.
 
 The immediate-abort diagnostic worker mistakenly attempted a stash and switched
 the shared checkout. The stash failed and created no stash. The organiser stopped
@@ -125,7 +142,9 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B2C | Sol / high; independent Sol / high audit | Native timer registry/retirement, existing adapter, manager/module/receivers and template parity, focused tests | Corrected `5575299` independently accepted and integrated `177e504`; 16 Jest and 12 JVM tests pass; [emulator retirement prerequisite accepted](testing/android-rest-timer-runtime.md); root navigation/reused-ID integration remains pending |
 | MVP-006B2R | Sol / xhigh; independent Sol / high audit | Native control-store recovery verification and narrow tests | Independently accepted `9b30ffb`, integrated `02f45f3`; corrected actual Android read/retry, failed-new cleanup and post-publication ACK fault pass; B2/B2R emulator prerequisite accepted |
 | MVP-006B2D | Terra / high; independent Sol / high audit | TimerStore lazy readiness/quiescence, notification continuation cleanup, narrow root activation, focused tests | Corrected `e88aefb` independently accepted and merged `9401261`; separate native completion ownership survives failed ordinary/strict cleanup retries; 25 focused tests pass in each profile |
-| MVP-006B2E | Sol / high; independent audit before integration | Native durable navigation generation, manager/adapter and focused tests | In implementation from `133f1d5`; [contract](testing/rest-timer-navigation-generation-contract.md); prevents stale ACTION_VIEW reuse after restore/restart; no router hookup |
+| MVP-006B2E | Sol / high; independent Sol / high audit | Native durable navigation generation, manager/adapter and focused tests | Independently accepted `227a6d9`, exact-tree integrated `c785c9b`; 40 focused Jest / 21 JVM pass; [Android native prerequisite accepted](testing/android-rest-timer-generation-runtime.md); no router hookup |
+| MVP-006B2EP | Terra / medium; organiser review/runtime | Non-shipping generation diagnostic route and notes only | Corrected probe `089b9b4` reviewed after rebase onto accepted main; typecheck/lint pass; retained diagnostic branch, never shipping integration |
+| MVP-002F | Terra / high; organiser review before integration | Exercise route/manual initialization guards, pure ID parser and focused UI tests | In implementation from `c785c9b` after reproduced nonexistent-ID FK failure; DB helpers/schema, timers and restore lifecycle excluded |
 | MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Corrected `043347c` independently accepted and merged `f435567`; organiser 143/143 targeted tests pass; exact historical provenance and migration/future-source closure verified |
 | MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 | MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Corrected `7cc330e` executed on fresh synthetic AVD; all eight async/sync digests match and abort works; maximum-size latency requires 006B4R; diagnostic remains non-shipping |
