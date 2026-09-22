@@ -8,6 +8,8 @@ import type { TimerNotificationData } from "./restTimerNotificationTypes";
 export function useNotificationHandler() {
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const lastNotificationResponse = useRef<{ key: string; handledAt: number } | null>(null);
+  const navigationGeneration = useRef(0);
+  const pendingNavigationTimeouts = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const pathname = usePathname();
 
   const shouldIgnoreResponse = (key: string) => {
@@ -20,11 +22,21 @@ export function useNotificationHandler() {
     return false;
   };
 
-  const handleNotificationNavigation = (data?: TimerNotificationData) => {
+  const scheduleNavigation = (generation: number, callback: () => void, delay: number) => {
+    const timeoutId = setTimeout(() => {
+      pendingNavigationTimeouts.current.delete(timeoutId);
+      if (navigationGeneration.current !== generation) return;
+      callback();
+    }, delay);
+    pendingNavigationTimeouts.current.add(timeoutId);
+  };
+
+  const handleNotificationNavigation = (data: TimerNotificationData | undefined, generation: number) => {
     if (!data?.exerciseId) return;
 
-    setTimeout(() => {
+    scheduleNavigation(generation, () => {
       const openExercise = () => {
+        if (navigationGeneration.current !== generation) return;
         router.push({
           pathname: "/exercise/[id]",
           params: {
@@ -37,8 +49,9 @@ export function useNotificationHandler() {
       };
 
       if (pathname !== "/(tabs)/exercises") {
+        if (navigationGeneration.current !== generation) return;
         router.replace("/(tabs)/exercises");
-        setTimeout(openExercise, 100);
+        scheduleNavigation(generation, openExercise, 100);
         return;
       }
 
@@ -47,8 +60,11 @@ export function useNotificationHandler() {
   };
 
   useEffect(() => {
+    const generation = ++navigationGeneration.current;
+    const timeouts = pendingNavigationTimeouts.current;
     // Handle notification taps when app is in foreground or background
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      if (navigationGeneration.current !== generation) return;
       const data = response.notification.request.content.data as TimerNotificationData;
 
       // Prevent rapid duplicate handling across listener + cold-start response
@@ -57,11 +73,12 @@ export function useNotificationHandler() {
       if (shouldIgnoreResponse(responseKey)) return;
 
       console.log("ðŸ“± Notification tapped:", data);
-      handleNotificationNavigation(data);
+      handleNotificationNavigation(data, generation);
     });
 
     // Check if app was opened from a notification (cold start)
     Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (navigationGeneration.current !== generation) return;
       if (!response) return;
 
       const data = response.notification.request.content.data as TimerNotificationData;
@@ -73,15 +90,26 @@ export function useNotificationHandler() {
 
       console.log("ðŸ“± App opened from notification:", data);
 
-      setTimeout(() => {
-        handleNotificationNavigation(data);
+      scheduleNavigation(generation, () => {
+        handleNotificationNavigation(data, generation);
       }, 400); // Longer delay for cold start
+    }).catch((error) => {
+      if (navigationGeneration.current === generation) {
+        console.log("Unable to read notification response:", error);
+      }
     });
 
     return () => {
+      navigationGeneration.current += 1;
       if (responseListener.current) {
         responseListener.current.remove();
+        responseListener.current = null;
       }
+      timeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+      timeouts.clear();
     };
+    // pathname is intentionally captured at ready-subtree mount; a response
+    // cannot navigate once this effect's generation is invalidated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

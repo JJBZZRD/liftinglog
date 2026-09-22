@@ -13,6 +13,7 @@ import { seedTestDataExercise } from "../lib/db/seedTestData";
 import { useNotificationHandler } from "../lib/notificationHandler";
 import { isCapabilityEnabled } from "../lib/routing/capabilityAccess";
 import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
+import { timerStore } from "../lib/timerStore";
 
 function isActivityUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -23,6 +24,11 @@ function RootLayoutContent() {
   // Set up notification tap handling for deep linking
   useNotificationHandler();
   const { isDark } = useTheme();
+
+  // This subtree only mounts once startup has permitted the app to run.
+  useEffect(() => {
+    timerStore.activateWhenAppReady();
+  }, []);
 
   // Lock app to portrait orientation on mount
   useEffect(() => {
