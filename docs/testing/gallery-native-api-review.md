@@ -55,6 +55,40 @@ ambiguity handling. Those remain implementation and device-review gates.
 
 ## Organiser contract for the production follow-up
 
+### Supplemental large-file probe (MVP-004E2P)
+
+On 2026-09-22 the organiser independently reviewed diagnostic commit
+`e0ce3a0890583923b7a9789ac67722f8730eaf7f` and ran its read-only measurement on
+the same Android emulator. The disposable `MVP004E2P_64MiB.mp4` was a valid copy
+of fixture A padded with an ISO Base Media `free` box to exactly 67,108,864 bytes.
+Android indexed it as a two-second, 320 by 180 video. This measures file-reading
+cost; it is not a representative 64 MiB encoded clip or a physical-device benchmark.
+
+All eight sequential content-URI MD5 reads returned the expected digest
+`56ff13426497d19bca2406dd36b8f447` and exact reported size, with no errors.
+Individual reads took 179–214 ms; the complete loop took 1,577 ms. The maximum
+gap between 250 ms JavaScript heartbeat ticks was 267 ms. The inspection had
+already read the file, so these are repeated warm-cache measurements.
+
+Evidence is retained under `.codex-artifacts/mvp-gallery-performance-20260922/`:
+`probe-records.json`, `probe-log.txt`, UI XML, gallery metadata, database archive,
+and `database-comparison.json`. A stale cross-worktree Metro transform initially
+prevented the diagnostic screen loading; clearing Metro's cache resolved it before
+measurement. No production source was changed for that issue.
+
+After measurement the organiser deleted only the verified disposable MediaStore
+row and file, restored the original limited-access permission grants, stopped the
+app and diagnostic Metro, and removed its temporary ADB reverse mapping. Original
+A/B gallery bytes and metadata are unchanged; exact rows in all 15 app tables match
+the pre-notes baseline, with integrity and foreign-key checks passing.
+
+This supports the provisional 64 MiB/eight-candidate limits for implementation
+review. It does not establish worst-case latency, provider size accuracy, physical
+device behavior, or production matching correctness. The diagnostic route remains
+outside `main`.
+
+### Production contract
+
 MVP-004E3 may implement acquisition and unify both automatic repair paths without
 schema, dependency, native, or backup-module changes. Preserve the existing
 `resolveVideoLibraryReference` return type so backup remains a later owner.
@@ -66,6 +100,10 @@ schema, dependency, native, or backup-module changes. Preserve the existing
 - Start conservatively at a **64 MiB selected-copy ceiling**, eight sequential
   candidate hashes and 1,500 enumerated videos. Larger selections remain playable
   with unresolved metadata. These limits require performance review before release.
+- Inspect a candidate's reported size before hashing; an unavailable, nonpositive
+  or over-limit size leaves resolution incomplete. Size is a budget guard, never
+  identity evidence. The legacy content provider size API may underreport, so this
+  is not a proven hard bound on bytes read from every provider.
 - Never persist picker cache filenames as canonical gallery filenames. Creation
   time zero and missing/nonfinite values are unavailable matching evidence.
 - The existing permission gate remains; enrichment and automatic repair do not

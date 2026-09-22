@@ -69,8 +69,9 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-005R | Organiser | Read-only integration and controlled emulator notes checks | Host and emulator notes gate accepted; [evidence](testing/mvp-android-notes-review.md); replacement-restore and physical release proof remain pending |
 | MVP-004E1 | Sol / high | Gallery metadata acquisition ADR and isolated proof only | Research reviewed and merged `7ca6e9b`; content-URI hashing and latency remain native proof gates, not accepted production behavior |
 | MVP-004E2 | Sol / high; organiser native execution | Isolated development-only diagnostic route and usage notes | Candidate `5bbbb34` reviewed and executed; [API proof](testing/gallery-native-api-review.md) accepted for small fixtures/full and limited access; diagnostic route not merged |
-| MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Prepared against the explicit contract in the API review; no schema/dependency/native/backup ownership |
-| MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Candidate `be9a743` independently passes 11 proof tests; audit found startup/recovery contract inconsistencies, returned for correction before API acceptance |
+| MVP-004E2P | Luna / medium; organiser native execution | Separate non-shipping diagnostic extension | Reviewed `e0ce3a0`; emulator eight 64 MiB reads pass in 1,577 ms, max heartbeat gap 267 ms; fixture removed and all 15 tables unchanged; physical performance remains pending |
+| MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Running from `3c5d3492426d5380d5b021da869f05e959b0e7e1` against the explicit API-review contract; no schema/dependency/native/backup ownership |
+| MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Corrected `c847902` independently passes 15/15 proof tests; second audit found latest-attempt process-token retry gap, returned for correction before API acceptance |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -81,8 +82,13 @@ The 006A audit requires a single post-commit manifest/outcome recovery protocol,
 an explicit SQLite handle parameter at startup, fail-closed native-token validation,
 a safe recovery action after cold-start pre-commit failure, and schema manifests
 that account for supported historical exercise column orders. These are design
-corrections, not a waiver or acceptance of production restore. The author is
-correcting the same bounded ADR/proof ticket while independent review continues.
+corrections, not a waiver or acceptance of production restore. Candidate `c847902`
+addresses those initial findings. The second audit additionally requires persisting
+the native token for every attempt: a JS reload in the latest attempting process
+must remain gated, and only a different verified process may retry. Final restore
+integration also depends on 004E3 removing permissive ordinary set-load repair, so
+an unresolved restored video cannot bypass the conservative resolver after the
+restore gate opens. The author is correcting the same bounded ADR/proof ticket.
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
