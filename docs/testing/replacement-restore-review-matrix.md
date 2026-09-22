@@ -54,6 +54,7 @@ Native tests use disposable backup/live pairs and preserved pre-run app state.
 | --- | --- |
 | Prepare current, supported old, and extensionless databases | Private migration/sealing; exact original IDs and existing UIDs; no live writes; strict source and current manifests |
 | Invalid, unknown, corrupt, missing or changed candidate | Typed failure before live mutation; no silent empty database creation |
+| Missing native bridge or process identity | Restore unavailable; unavailable storage is not proof of absent pending state; normal startup only when no pending restore can be established safely |
 | Cancel before/after atomic scheduling publication | Before: unchanged cancellation; after: restart required while pending state exists |
 | Schedule A; reload A | Root gate only; no replacement and no ordinary provider, notification or timer effects |
 | Cold process B applies scheduled A | Existing live handle; synchronous transaction before ordinary bootstrap/providers; all 15 table policies honored |
