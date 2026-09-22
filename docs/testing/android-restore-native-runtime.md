@@ -1,8 +1,9 @@
 # Android restore native runtime checkpoint
 
-Organiser execution, 2026-09-22. **Native control-store acceptance remains
-blocked by the recovery defect below.** Successful individual checks do not
-override that finding. iOS remains deferred.
+Organiser execution, 2026-09-22. **The Android emulator control-store gate is
+accepted after the independently reviewed correction and targeted rerun below.**
+The original failure is retained as evidence. Physical release checks and iOS
+acceptance are not implied; iOS remains deferred.
 
 ## Isolated environment
 
@@ -57,8 +58,38 @@ return unreadable if the authoritative backup remains. The parallel B2C timer
 registry uses the same platform pattern and must also fail closed before using
 timer identities. Its binary has not been tested by this control-store probe.
 
-MVP-006B2R owns the control-store correction. B2C has a separate review repair.
-Both require independent review and corrected runtime failure/retry evidence.
+MVP-006B2R owns the control-store correction. B2C has a separate review repair
+and separate timer runtime acceptance.
+
+## Corrected runtime, 10:48-10:54 BST
+
+Independent specialist review accepted `9b30ffb`; its unchanged four-file diff
+was rebased as `1d75b90` and integrated as `02f45f3`. The isolated worktree built
+successfully (615 tasks, 3m 53s). APK SHA-256:
+`47A923E5B70C54B0657F107FBF6592DFE902102BD0D6378FB6A134167CFFAC3C`.
+It also contains reviewed B2C registry code, but these control-store checks do
+not establish timer behavior. The same reviewed diagnostic `3f6acf1` was used.
+
+On the same fresh synthetic AVD, PID 9975:
+
+- Both base NEW / backup OLD records with parent mode 500 returned
+  `unreadable / io_error`; both backups remained. Restoring mode 700 and retrying
+  returned exact OLD records and consumed both backups.
+- Both base OLD / orphan `.new` records with parent mode 500 returned
+  `unreadable / io_error`. Restoring mode 700 returned OLD and removed `.new`.
+- JDB stopped the actual production pending write at line 163, after publication
+  and immediately before verified readback. Introducing backup OLD plus parent
+  mode 500 then continuing caused the facade to throw a publication failure;
+  it did not acknowledge success. Restoring permissions and reading recovered OLD.
+- Parent mode 500 caused both native deletes to throw while retaining both base
+  files. After restoring mode 700, ordinary writes of NEW succeeded for both
+  records, followed by successful native deletion of both.
+
+The prior process-token and six kill-point observations remain evidence for the
+unchanged publication/process-identity paths. This rerun targets the changed
+readback/recovery checks; it does not claim to repeat every prior case. Combined
+source, JVM and actual Android evidence now closes B2/B2R's emulator prerequisite.
+Log: `.codex-artifacts/restore-synthetic-avd-20260922/corrected-control-recovery.log`.
 
 ## Cleanup and next run
 
