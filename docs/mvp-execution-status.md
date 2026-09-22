@@ -74,10 +74,13 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Third review accepts `100a812`; organiser independently passes 15/15; clean rebase integrated `f045adb`; design accepted, production obligations remain |
 | MVP-006B1 | Sol / high; independent Sol / high audit | Pure PB derivation, existing PB rebuild seam, focused parity tests | Independently accepted `f990f11`; clean rebase `9c0da86`; organiser 6/6 targeted tests pass; merged `288001e` without metric or persistence changes |
 | MVP-006B2 | Sol / xhigh; independent Sol / high audit | Android process token and atomic control store, isolated plugin/templates/facades/tests | Corrected `2e56151` independently accepted and merged `f6b045b`; organiser 23/23 tests pass; actual Kotlin parser suite 4/4 passes; corrected APK builds but is not installed; runtime proof pending |
-| MVP-006B2P | Terra / medium; organiser review | Separate non-shipping native-control diagnostic route and usage notes | In implementation; no device execution authorized by this ticket |
-| MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | First audit rejects `de660900` for historical fixture provenance and source/current migration closure; correction underway; prior 62/62 tests and retained Android catalog comparison do not waive these findings |
+| MVP-006B2P | Terra / medium; organiser review | Separate non-shipping native-control diagnostic route and usage notes | Corrected `3f6acf1` reviewed; organiser typecheck/scoped lint pass; runtime unrun |
+| MVP-006B2C | Sol / high | Native timer registry/retirement, existing adapter, manager/module/receivers and template parity, focused tests | In implementation from `2f4acfc`; independent audit and native recovery proof required |
+| MVP-006B2D | Terra / high | TimerStore lazy readiness/quiescence, notification continuation cleanup, narrow root activation, focused tests | In implementation from `2f4acfc`; no native/DB/engine ownership |
+| MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Corrected `043347c` independently accepted and merged `f435567`; organiser 143/143 targeted tests pass; exact historical provenance and migration/future-source closure verified |
 | MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 | MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Corrected `7cc330e` reviewed; organiser typecheck/scoped lint pass; synthetic cache fixtures prepared, but diagnostic has not run |
+| MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Mechanical API declarations in implementation from `2f4acfc`; no engine behavior or successful placeholders |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -172,7 +175,27 @@ new restore sources, and permitted missing old tables recreated by bootstrap but
 then rejected by the current catalog. The worker must correct provenance and prove
 source-to-bootstrap-to-current-to-source closure, including the permitted optional
 table cases, before another independent review. These are supported-backup
-compatibility failures; no live database was written.
+compatibility failures; no live database was written. Corrected `043347c` passed
+the second independent audit: DDL extracted directly from `e9ee8ed7` passes source,
+real bootstrap, current and future-source validation. All eight evidenced optional
+settings/PR/media combinations pass, while other catalog shapes remain fixed.
+The organiser integrated it as `f435567`.
+
+At `f435567`, both profiles pass **66 suites / 763 tests**. Typecheck passes and
+uncached lint has zero errors and the 19 retained warnings. Logs are retained at
+`.codex-artifacts/mvp-restore-prerequisites-integrated-{full,mvp}.log`.
+
+An independent startup/import review prompted the
+[frozen startup contract](testing/replacement-restore-startup-contract.md), committed
+as `2f4acfc`. It makes physical absence, uncertain live state, outcome-only recovery,
+controls-only finalization and safe post-discard initialization explicit. It also
+found import-time timer effects and native alarms which can outlive a process and
+refer to reused exercise IDs after restore. The organiser split bounded native
+retirement (006B2C) from JS lifecycle/navigation cleanup (006B2D), with exact shared
+interfaces and disjoint scopes. A third mechanical worker prepares the shared
+types (006B5C). All three have separate branches/worktrees, no inherited context,
+and must return for review rather than merge. Engine/gate/Settings implementation
+remains subsequent; physical and emulator restore acceptance is not claimed.
 
 The 006B4 handoff's unresolved-PSL lint error was not reproduced without cache.
 The organiser verified both installed PSL entry files and resolution, then ran

@@ -11,8 +11,9 @@ separate from emulator evidence.
 | --- | --- | --- |
 | 006B1 PB derivation | Exact canonical validity, ordering, progression and UID ownership; real DB parity | Independently accepted and integrated as `288001e` |
 | 006B2 native controls | Valid process token; RN 0.86 synchronous bridge compatibility; atomic fixed-name records; ambiguous reads fail closed; verified deletion; plugin/template parity | Strict-parser correction independently accepted and integrated `f6b045b`; 23 Jest and 4 actual Kotlin parser tests pass; Android runtime proof pending |
-| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | First candidate rejected for incorrect historical provenance and incomplete source/current migration closure; correction pending |
+| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | Corrected `043347c` independently accepted and integrated `f435567`; organiser 143 targeted tests pass; native parity remains pending |
 | 006B4 SHA-256 | Real maintained digest library; read-only bounded chunks; limits/abort/close failures; Metro resolution; native digest and latency comparison | Code independently accepted and integrated as `ab99216`; 24 targeted tests pass; native proof pending |
+| 006B2C/D timer retirement | Inert imports, drained JS/native continuations, persisted native identities, rejected legacy deliveries, bulk alarm/display cleanup, safe queued navigation | Bounded parallel implementation under the [startup contract](replacement-restore-startup-contract.md); independent review and runtime proof pending |
 
 Native control review must distinguish successful publication from a failed write
 whose outcome is uncertain. A read error must never be converted to absent pending
