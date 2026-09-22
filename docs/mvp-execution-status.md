@@ -5,13 +5,33 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 ## Current checkpoint
 
-Integrated production code is `2c45567`. MVP capability restrictions, history,
+Integrated production code is `800b280`. MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
 Replacement restore remains the active implementation story: native controls,
 timer retirement, schema validation, sealed export and native file hashing are
 accepted prerequisites. The replacement engine is accepted on the host and the
 synthetic Android engine gate; postcommit media is accepted on the host.
-Startup integration, Settings hookup and the final release matrix remain outstanding.
+Startup integration and Settings hookup are now host-accepted and integrated.
+The connected Android replacement flow and final release matrix remain outstanding.
+
+B6 candidate `b93f8345ec912a4b82ef969a653b342ac6e56f54` received independent
+source and test-delta acceptance, then exact-tree squash integration as `81e0d79`.
+Both profiles pass **85 suites / 1015 tests**, with recorded exit zero; root ran
+full and the worker ran MVP. TypeScript and uncached lint pass (zero errors /
+19 existing warnings). Logs are `.codex-artifacts/mvp006b6-b93f834-{full,mvp}.log`.
+The approved test-fixture scope amendment preserves connection PRAGMAs and every
+existing assertion. The encoded-marker, blank/zero field and delayed-response
+findings are closed. The rollback-state cancel-button limitation remains bounded
+by the engine's safe rejection, as documented in the lifecycle review.
+
+D3's own two commits were transplanted onto accepted B6 main. The organiser
+verified the exact patch was unchanged, reran 22 focused tests per profile,
+TypeScript and scoped uncached lint, then exact-tree squash integrated candidate
+`020079575ae7f7968b29364ec6b8992ac37cb468` as `800b280`. Settings now exposes
+replacement restore through the real lifecycle wrapper; legacy merge import is
+not reachable there. The combined native gate and final profile run are next.
+The [007 evidence map](testing/mvp-final-regression-evidence.md) identifies existing
+consumer and route coverage without duplicating accepted tests. iOS stays deferred.
 
 The corrected media candidate `bc97c20` received independent Sol/high acceptance
 with no open findings and was exact-tree squash integrated as `2c45567`. The
@@ -25,15 +45,14 @@ Node-global errors; it is not the prescribed project gate. The two media audit
 findings (callback cancellation and full metadata drift verification) are fixed.
 Android gallery/process-death/playback evidence remains a release obligation.
 
-MVP-006B6 is now the next executable implementation ticket. Its frozen
-[packet](testing/replacement-restore-lifecycle-packet.md) consumes the accepted
+B6's earlier dispatch used its frozen
+[packet](testing/replacement-restore-lifecycle-packet.md), which consumes the accepted
 engine, media service, timer generation and lifecycle-failure contract. One
-Sol/xhigh worker owns branch `mvp/MVP-006B6-startup-lifecycle`, worktree
+Sol/xhigh worker owned branch `mvp/MVP-006B6-startup-lifecycle`, worktree
 `WorkoutLog-MVP006B6`, pinned to `3e813416bc7ddd2db7a780dba48058af8dc51d84`.
-The organiser owns review, the later independent audit and Android integration
-proof. Settings D3 integration follows the accepted lifecycle facade; now that
-its real source checkpoint exists under review, D3 implementation may use one
-short-lived stacked branch under plan section 3.1, without a stub. A read-only
+The organiser owns review, independent audit and Android integration proof.
+D3 used one short-lived stacked branch under plan section 3.1 against the real
+facade while B6 was under review. Its accepted transplant is recorded above. A read-only
 Luna evidence inventory confirms that 006E host
 requirements are substantially covered; [remaining evidence](testing/replacement-restore-evidence-inventory.md)
 and the [native lifecycle packet](testing/replacement-restore-lifecycle-native-packet.md)
@@ -42,34 +61,34 @@ still match after media integration. Graph refresh was requested in moderate mod
 the tool still returned the older 3026-node/6918-edge graph, so exact source reads
 remain necessary after incomplete graph discovery.
 
-B6 production checkpoint `1d82389801b16ae04ae631f2343602bab91c0c0d` is under
+B6 production checkpoint `1d82389801b16ae04ae631f2343602bab91c0c0d` underwent
 independent read-only Sol/high source review in `WorkoutLog-MVP006B6R`, while the
-worker continues the dedicated lifecycle/root/Router tests. It is not integrated
-or accepted yet. Early organiser review corrected ordinary-link classification,
+worker continued the dedicated lifecycle/root/Router tests. Its corrected successor
+is accepted above. Early organiser review corrected ordinary-link classification,
 scheduling ownership and error/availability handling, and identified a delayed
 notification-response epoch correction still pending in that checkpoint.
 The organiser prepared validated synthetic picker fixtures and preserved the
 stopped synthetic AVD baseline; prefer the actual B6/D3 Settings flow for runtime
 verification before commissioning any additional diagnostic-only route.
-The D3 stacked worker owns Settings and its focused tests only. The organiser
-will transplant its own commits onto accepted B6 main before final review and
-integration; no old parent stack is carried into the next wave.
+The D3 stacked worker owned Settings and its focused tests only. The organiser
+transplanted its own commits onto accepted B6 main before final review and
+integration; no old parent stack was carried into the next wave.
 The session reached its agent-thread creation limit, so the completed
 Luna/medium evidence-inventory worker was reassigned to this mechanical hookup.
-Its prior task is closed and its new three-file scope is isolated in
+Its prior task was closed and its new three-file scope was isolated in
 `WorkoutLog-MVP006D3`, branch `mvp/MVP-006D3-settings-hookup`, from the exact B6
 checkpoint above. Database lifecycle ownership and its independent Sol audit
-remain unchanged; the organiser will independently review the Settings result.
+remained unchanged. Both merged feature branches are now deleted; their worktrees
+remain detached at the reviewed commits to preserve evidence.
 
 D3's exact stacked candidate `7c8438e65db379bc9bfba5890066eeab617ddf01`
-has now passed organiser source review and independent targeted verification:
+passed organiser source review and independent targeted verification:
 22 tests in each profile, TypeScript, scoped uncached ESLint and diff checks.
 The repaired tests exercise real confirmation/cancellation and synchronous
-export/restore exclusion in both directions. It is held for B6 acceptance;
-only its own three-file changes will be transplanted and checked on accepted main.
-B6's initial specialist findings and bounded cancellation UI limitation are
-recorded in the lifecycle review. Those findings are awaiting final corrected-SHA
-review, not being treated as accepted on the basis of local worker reports.
+export/restore exclusion in both directions. Its own three-file change was then
+transplanted and accepted on B6 main as recorded above. B6's initial specialist
+findings and bounded cancellation UI limitation are recorded in the lifecycle
+review; corrected-SHA review closes the source findings.
 
 Independent Sol/high audit accepted the corrected engine candidate `ef0bc3c`.
 The organiser reviewed the final nine-file diff, passed **79 suites / 945 tests
@@ -84,7 +103,8 @@ after corrections to uncertain-outcome copy and recovery guards (9 focused tests
 in each profile). Workers receive no inherited conversation context and may not
 merge. A read-only Sol/high audit accepted the later connection/initial-URL
 lifecycle boundary and identified the native generation prerequisite below.
-Engine acceptance covers host behavior; startup integration remains pending.
+Engine acceptance initially covered host behavior; the later B6 startup integration
+is accepted above, with combined native replacement evidence still pending.
 Diagnostic branches remain outside shipping code. Physical-device
 checks are still required before release; iOS remains explicitly deferred.
 
@@ -93,7 +113,7 @@ cannot be solved by process-local quarantine or blocking every timer tap.
 MVP-006B2E's separate native correction was independently accepted at `227a6d9`
 and integrated as `c785c9b`; its [Android native prerequisite](testing/android-rest-timer-generation-runtime.md)
 also passed. [Lifecycle review](testing/replacement-restore-lifecycle-review.md)
-records the pending actual-router/device proof. The existing accepted alarm and
+records actual-router host proof and the pending device proof. The existing accepted alarm and
 display retirement evidence is not a claim of completed navigation integration.
 
 At `81b1b76`, organiser-integrated verification passes **74 suites / 838 tests in

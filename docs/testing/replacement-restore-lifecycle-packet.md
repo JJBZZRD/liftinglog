@@ -211,3 +211,36 @@ notification-clear APIs; introduce no new library or custom native bridge.
 Worker handoff includes exact SHA, files, behavior, exact commands/results,
 assumptions and remaining native proof. No merge/push or scope expansion. The
 organiser supplies the minimal final packet and pins the accepted media/native base.
+
+## Organiser test-harness scope amendment, 2026-09-22
+
+Independent specialist source review accepts `6ba76a572002019fceb17c9bdd8456555383b7c5`.
+Its seven targeted suites pass 86 tests in each profile. The first full-profile
+run passes 73/85 suites and 953/1015 tests: twelve existing DB suites depend on
+the old connection-import bootstrap side effect. This is not permission to
+restore that production side effect or weaken existing assertions.
+
+The same B6 worker may add an explicit bootstrap/Drizzle/publish test helper in
+`__tests__/helpers/manualLoggingDatabase.ts` and invoke it in exactly these suites:
+
+- `__tests__/db/exerciseIdentity.test.ts`
+- `__tests__/db/exerciseDataIsolation.test.ts`
+- `__tests__/db/historyLegacyDates.test.ts`
+- `__tests__/db/historyReadModel.test.ts`
+- `__tests__/db/inProgressConsumers.test.ts`
+- `__tests__/db/manualLoggingLifecycle.test.ts`
+- `__tests__/db/pbDerivation.test.ts`
+- `__tests__/db/setLookup.test.ts`
+- `__tests__/db/setMediaCleanup.test.ts`
+- `__tests__/db/setVideoContract.test.ts`
+- `__tests__/db/workoutNotes.test.ts`
+- `__tests__/lib/templateUnitIdentity.test.ts`
+
+Initialize explicitly after fixture/schema construction in each current Jest
+module registry, before query use, including close/reopen resets. Do not add
+factory side effects or erase the identity fixture's deliberate legacy shape.
+Keep real SQLite, production bootstrap and Drizzle queries; retain every existing
+assertion. No production/config changes are authorised by this amendment.
+Commit the repair separately, rerun affected suites and both complete profiles,
+and submit the exact delta for review before integration. The original failed
+full run was terminal-only; final complete runs must retain their logs.

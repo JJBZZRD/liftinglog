@@ -32,6 +32,18 @@ absent `/sdcard/Download/WorkoutLog-MVP006-inputs-v1` directory. Every copied fi
 matches its host SHA-256. This preparation did not launch the app or change its
 private database/control state.
 
+Ordinary startup smoke on reviewed source
+`6ba76a572002019fceb17c9bdd8456555383b7c5` now passes on this AVD with the
+same recorded APK and MVP Metro bundle (3009 modules). The app renders Overview;
+Programs occupies its existing third tab and shows Coming Soon. A warm allowed
+`liftinglog://settings` link navigates successfully. Warm camera, health-metrics
+and program-management links remain on Settings without exposing deferred UI.
+After force-stop, `integrated-state-b6-startup/rows.json` matches all 15 baseline
+table snapshots exactly; controls remain absent, integrity is `ok`, and there are
+zero FK violations. Evidence includes `b6-reviewed-startup-metro.log` and the three
+`b6-denied-*.xml` snapshots. App and Metro are stopped. This establishes ordinary
+startup/profile smoke only, not replacement, reused-ID timer, or cold-link acceptance.
+
 ## Objective and isolation
 
 Prove that the actual app lifecycle performs replacement before ordinary providers

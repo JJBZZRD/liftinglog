@@ -15,6 +15,15 @@ resolution rather than request time, allowing an old response after a safe faile
 schedule without provider unmount. These require corrections and dedicated tests
 before acceptance; worker reports of local fixes do not close exact-SHA review.
 
+Final independent source review at `6ba76a572002019fceb17c9bdd8456555383b7c5`
+closed all three findings. The subsequent legacy-fixture repair and PRAGMA parity
+correction received bounded independent acceptance at
+`b93f8345ec912a4b82ef969a653b342ac6e56f54`. Both complete profiles pass 85 suites /
+1015 tests with exit zero, TypeScript and project lint pass, and the organiser
+integrated the exact reviewed tree as `81e0d79`. Ordinary synthetic Android startup
+and warm profile restrictions pass; the connected replacement/reused-ID/process
+gate remains a separate native obligation.
+
 A bounded cancellation UI limitation is retained under the current shared
 contract. `restart_required` with unchanged data represents both an original
 scheduled process and a same-process verified rollback. It has no discriminator
