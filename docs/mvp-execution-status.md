@@ -40,6 +40,16 @@ still match after media integration. Graph refresh was requested in moderate mod
 the tool still returned the older 3026-node/6918-edge graph, so exact source reads
 remain necessary after incomplete graph discovery.
 
+B6 production checkpoint `1d82389801b16ae04ae631f2343602bab91c0c0d` is under
+independent read-only Sol/high source review in `WorkoutLog-MVP006B6R`, while the
+worker continues the dedicated lifecycle/root/Router tests. It is not integrated
+or accepted yet. Early organiser review corrected ordinary-link classification,
+scheduling ownership and error/availability handling, and identified a delayed
+notification-response epoch correction still pending in that checkpoint.
+The organiser prepared validated synthetic picker fixtures and preserved the
+stopped synthetic AVD baseline; prefer the actual B6/D3 Settings flow for runtime
+verification before commissioning any additional diagnostic-only route.
+
 Independent Sol/high audit accepted the corrected engine candidate `ef0bc3c`.
 The organiser reviewed the final nine-file diff, passed **79 suites / 945 tests
 in each profile**, TypeScript and uncached lint (zero errors / 19 existing

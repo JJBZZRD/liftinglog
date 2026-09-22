@@ -1,9 +1,31 @@
 # MVP-006B6P integrated Android lifecycle diagnostic
 
-Organiser preparation, 2026-09-22. Dispatch only after the B6 production candidate
-has passed source review. Pin that exact candidate and its accepted media service;
-do not introduce a stub facade or duplicate startup implementation. This is a
-separate non-shipping branch, never a production route or release feature.
+Organiser preparation, 2026-09-22. Prefer the actual Settings flow after B6 host
+acceptance and D3 integration. Dispatch this optional diagnostic only if a
+specific observation cannot be obtained through that flow, after the B6 production
+candidate has passed source review. Pin that exact candidate and its accepted
+media service; do not introduce a stub facade or duplicate startup implementation.
+Any diagnostic remains a separate non-shipping branch, never a release feature.
+
+Host-generated picker inputs are already prepared under
+`.codex-artifacts/restore-synthetic-avd-20260922/lifecycle-picker-inputs-v1/`.
+They reuse the accepted bootstrap, test adapter, candidate data and historical DDL;
+the production manifest validator accepts each valid source. `OWNER.json` records
+digests/counts, and per-database expectations record exact synthetic rows and
+canonical PB events. Inputs cover populated current, empty current, empty supported
+historical, extensionless current and invalid text. No app/device state was read
+or changed during generation. These inputs permit public picker verification
+without first implementing a diagnostic route. B6 host acceptance can release the
+facade to D3 while their combined native integration gate remains open.
+
+The stopped synthetic app's preflight is recorded under
+`.codex-artifacts/restore-synthetic-avd-20260922/integrated-preflight-v1/`.
+Three exact DB/WAL/SHM copies match independent device SHA-256 values; untouched
+raw copies are separate from the host inspection copy. All 15 table snapshots,
+integrity `ok`, zero FK violations and empty control-directory state are recorded.
+The baseline has one empty workout and zero rows in the other 14 tables. The APK
+hash remains `eb65e5d9cc3fa3a3605cc0e9294d6c366bf60822efafc38415bacdff4a97d9d8`.
+This is preparation evidence only: no integrated restore has run yet.
 
 ## Objective and isolation
 
