@@ -3,8 +3,22 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 
 const mockActivateWhenAppReady = jest.fn();
+const readyStartupSnapshot = {
+  phase: "ready" as const,
+  connectionInitialized: true as const,
+  canMountApp: true as const,
+};
 
 jest.mock("../../lib/db/connection", () => ({}));
+jest.mock("../../lib/db/replacementRestoreLifecycle", () => ({
+  getDatabaseStartupSnapshot: () => readyStartupSnapshot,
+  subscribeDatabaseStartup: () => () => undefined,
+  performDatabaseStartupAction: jest.fn(),
+}));
+jest.mock("../../components/ReplacementRestoreGate", () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 jest.mock("../../app/global.css", () => ({}));
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({
   UnitPreferenceProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,

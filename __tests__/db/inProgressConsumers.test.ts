@@ -1,4 +1,7 @@
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 
 const mockDatabase = createManualLoggingDatabase();
 const mockCsvWrites: string[] = [];
@@ -35,6 +38,8 @@ jest.mock("expo-file-system", () => ({
 
 jest.mock("expo-file-system/legacy", () => ({}));
 jest.mock("react-native", () => ({ Platform: { OS: "ios" } }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const workouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 const pbEvents = require("../../lib/db/pbEvents") as typeof import("../../lib/db/pbEvents");

@@ -13,12 +13,28 @@ It complements [database-ground-truth.md](./database-ground-truth.md):
 
 Keep this file thin.
 
-- Open the SQLite database.
-- Apply connection-level PRAGMAs.
-- Call DB initialization/bootstrap.
-- Export `sqlite` and `db`.
+- Export typed live `sqlite` and `db` bindings for ordinary query modules.
+- Publish both bindings together only after the startup lifecycle has a real,
+  bootstrapped handle and a constructed Drizzle client.
+- Do not open the database, run PRAGMAs, bootstrap, or query during import.
 
 Do not put normal app queries, CRUD functions, or reporting queries here.
+
+### `lib/db/replacementRestoreLifecycle.ts`
+
+This module owns database startup and is imported before providers and routing.
+
+- Open the single live SQLite handle and apply connection PRAGMAs inside the
+  caught lifecycle boundary.
+- Apply any scheduled replacement restore before bootstrap or ordinary queries.
+- Bootstrap and construct Drizzle privately, then atomically publish both
+  connection bindings before reporting startup ready.
+- Keep providers and query consumers behind the replacement-restore gate for
+  blocked, post-commit, restored-awaiting-acknowledgement, and lifecycle-failure
+  states.
+
+Ordinary access modules continue to import the live bindings from
+`connection.ts`; they must not start or retry the lifecycle themselves.
 
 ### `lib/db/bootstrap.ts`
 

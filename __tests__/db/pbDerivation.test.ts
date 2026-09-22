@@ -1,4 +1,7 @@
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 import {
   derivePBEventsForExercise,
   type DerivedPBEvent,
@@ -10,6 +13,8 @@ const mockDatabase = createManualLoggingDatabase();
 jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const pbEvents = require("../../lib/db/pbEvents") as typeof import("../../lib/db/pbEvents");
 

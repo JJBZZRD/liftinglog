@@ -1,7 +1,10 @@
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 
 let mockActiveDatabase: ReturnType<typeof createManualLoggingDatabase> | null = null;
 
@@ -22,6 +25,8 @@ type ProductionApis = {
 };
 
 function loadProductionApis(): ProductionApis {
+  if (!mockActiveDatabase) throw new Error("Test database has not been opened.");
+  initializeTestDatabaseBindings(mockActiveDatabase);
   return {
     exercises: require("../../lib/db/exercises") as typeof import("../../lib/db/exercises"),
     workouts: require("../../lib/db/workouts") as typeof import("../../lib/db/workouts"),

@@ -8,6 +8,7 @@ const unitProject = {
     '<rootDir>/node_modules/',
     '<rootDir>/__tests__/setup.ts',
     '<rootDir>/__tests__/routing/profile-route-guards.test.tsx',
+    '<rootDir>/__tests__/routing/replacement-restore-native-intent.test.tsx',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   transform: {

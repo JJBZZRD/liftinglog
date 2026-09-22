@@ -6,6 +6,7 @@ import {
   mockLockAsync,
   mockSeedTestDataExercise,
   mockUseNotificationHandler,
+  mockReadyStartupSnapshot,
 } from "../helpers/profileRouteSetup";
 import {
   createProfileRouteHarness,
@@ -16,6 +17,13 @@ import {
 
 const persistentReact = require("react");
 const persistentExpoRouter = require("expo-router");
+
+jest.mock("../../lib/db/connection", () => ({}));
+jest.mock("../../lib/db/replacementRestoreLifecycle", () => ({
+  getDatabaseStartupSnapshot: () => mockReadyStartupSnapshot,
+  subscribeDatabaseStartup: () => () => undefined,
+  performDatabaseStartupAction: jest.fn(),
+}));
 
 function loadRootLayout(profile: "full" | "mvp"): ComponentType {
   const originalProfile = process.env.EXPO_PUBLIC_RELEASE_PROFILE;

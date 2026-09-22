@@ -1,4 +1,7 @@
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -9,6 +12,8 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
   addDatabaseChangeListener: () => ({ remove: jest.fn() }),
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const workouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 
@@ -129,6 +134,7 @@ describe("manual logging lifecycle", () => {
         openDatabaseSync: () => firstDatabase.expoDatabase,
         addDatabaseChangeListener: () => ({ remove: jest.fn() }),
       }));
+      initializeTestDatabaseBindings(firstDatabase);
       const firstWorkouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
       const firstExerciseId = firstDatabase.insertExercise("Restart Squat");
       const secondExerciseId = firstDatabase.insertExercise("Restart Pull-up");
@@ -145,6 +151,7 @@ describe("manual logging lifecycle", () => {
         openDatabaseSync: () => restartedDatabase!.expoDatabase,
         addDatabaseChangeListener: () => ({ remove: jest.fn() }),
       }));
+      initializeTestDatabaseBindings(restartedDatabase);
       const restartedWorkouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 
       expect(await restartedWorkouts.getOrCreateActiveWorkout()).toBe(workoutId);

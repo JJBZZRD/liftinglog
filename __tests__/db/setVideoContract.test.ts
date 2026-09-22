@@ -1,4 +1,5 @@
 import { createSetVideoDatabase } from "../helpers/setVideoDatabase";
+import { initializeTestDatabaseBindings } from "../helpers/manualLoggingDatabase";
 
 const mockDatabase = createSetVideoDatabase();
 
@@ -6,6 +7,8 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
   addDatabaseChangeListener: () => ({ remove: jest.fn() }),
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const media = require("../../lib/db/media") as typeof import("../../lib/db/media");
 

@@ -7,7 +7,10 @@ module.exports = {
     ...(jestExpo.setupFilesAfterEnv ?? []),
     '<rootDir>/__tests__/helpers/profileRouteSetup.ts',
   ],
-  testMatch: ['<rootDir>/__tests__/routing/profile-route-guards.test.tsx'],
+  testMatch: [
+    '<rootDir>/__tests__/routing/profile-route-guards.test.tsx',
+    '<rootDir>/__tests__/routing/replacement-restore-native-intent.test.tsx',
+  ],
   moduleNameMapper: {
     ...(jestExpo.moduleNameMapper ?? {}),
     '^@/(.*)$': '<rootDir>/$1',

@@ -1,4 +1,7 @@
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 
 const originalTimezone = process.env.TZ;
 process.env.TZ = "Europe/London";
@@ -9,6 +12,8 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
   addDatabaseChangeListener: () => ({ remove: jest.fn() }),
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const workouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 

@@ -1,12 +1,18 @@
-import "../lib/db/connection"; // Initialize database
+import {
+  getDatabaseStartupSnapshot,
+  performDatabaseStartupAction,
+  subscribeDatabaseStartup,
+} from "../lib/db/replacementRestoreLifecycle";
+
 import "./global.css";
 
 import { Stack } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import ReplacementRestoreGate from "../components/ReplacementRestoreGate";
 import { UnitPreferenceProvider } from "../lib/contexts/UnitPreferenceContext";
 import { appCapabilities, releaseProfile } from "../lib/config/releaseProfile";
 import { seedTestDataExercise } from "../lib/db/seedTestData";
@@ -141,11 +147,22 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
+  const startup = useSyncExternalStore(
+    subscribeDatabaseStartup,
+    getDatabaseStartupSnapshot,
+    getDatabaseStartupSnapshot
+  );
+
   return (
-    <ThemeProvider>
-      <UnitPreferenceProvider>
-        <RootLayoutContent />
-      </UnitPreferenceProvider>
-    </ThemeProvider>
+    <ReplacementRestoreGate
+      snapshot={startup}
+      performAction={performDatabaseStartupAction}
+    >
+      <ThemeProvider>
+        <UnitPreferenceProvider>
+          <RootLayoutContent />
+        </UnitPreferenceProvider>
+      </ThemeProvider>
+    </ReplacementRestoreGate>
   );
 }

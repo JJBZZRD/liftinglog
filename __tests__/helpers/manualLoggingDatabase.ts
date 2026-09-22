@@ -17,6 +17,34 @@ function paramsFrom(values: unknown): unknown[] {
 }
 
 /**
+ * Explicitly installs a real SQLite/Drizzle pair for legacy integration suites.
+ * Call this only after the suite has installed its SQLite mock and prepared any
+ * deliberate pre-migration schema shape.
+ */
+export function initializeTestDatabaseBindings(database: { expoDatabase: unknown }): void {
+  // Keep these requires inside the call so a suite that resets Jest modules
+  // publishes into its current isolated registry.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { initializeDatabase } = require("../../lib/db/bootstrap") as typeof import("../../lib/db/bootstrap");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { drizzle } = require("drizzle-orm/expo-sqlite") as typeof import("drizzle-orm/expo-sqlite");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { publishDatabaseBindings } = require("../../lib/db/connection") as typeof import("../../lib/db/connection");
+
+  const sqlite = database.expoDatabase as {
+    execSync: (sql: string) => void;
+  };
+  sqlite.execSync("PRAGMA foreign_keys = ON;");
+  sqlite.execSync("PRAGMA journal_mode = WAL;");
+  sqlite.execSync("PRAGMA synchronous = NORMAL;");
+  initializeDatabase(database.expoDatabase as never);
+  publishDatabaseBindings(
+    database.expoDatabase as never,
+    drizzle(database.expoDatabase as never)
+  );
+}
+
+/**
  * Minimal Expo SQLite synchronous boundary backed by Node's built-in SQLite.
  * Production Drizzle queries execute unchanged against this adapter.
  */

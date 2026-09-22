@@ -1,4 +1,5 @@
 import { createExerciseIdentityDatabase } from "../helpers/exerciseIdentityDatabase";
+import { initializeTestDatabaseBindings } from "../helpers/manualLoggingDatabase";
 
 const mockDatabase = createExerciseIdentityDatabase();
 
@@ -6,6 +7,8 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
   addDatabaseChangeListener: () => ({ remove: jest.fn() }),
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const exerciseApi = require("../../lib/db/exercises") as typeof import("../../lib/db/exercises");
 const programRuntime = require("../../lib/programs/psl/programRuntime") as typeof import("../../lib/programs/psl/programRuntime");

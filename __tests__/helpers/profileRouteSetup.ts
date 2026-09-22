@@ -3,8 +3,18 @@ import React from 'react';
 export const mockSeedTestDataExercise = jest.fn(async () => undefined);
 export const mockUseNotificationHandler = jest.fn();
 export const mockLockAsync = jest.fn(() => Promise.resolve());
+export const mockActivateWhenAppReady = jest.fn();
+const mockReadyStartupSnapshot = {
+  phase: 'ready' as const,
+  connectionInitialized: true as const,
+  canMountApp: true as const,
+};
 
-jest.mock('../../lib/db/connection', () => ({}));
+jest.mock('../../lib/timerStore', () => ({
+  timerStore: { activateWhenAppReady: mockActivateWhenAppReady },
+}));
+
+export { mockReadyStartupSnapshot };
 jest.mock('../../app/global.css', () => ({}));
 jest.mock('../../lib/db/seedTestData', () => ({
   seedTestDataExercise: mockSeedTestDataExercise,

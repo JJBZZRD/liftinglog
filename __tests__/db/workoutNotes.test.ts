@@ -1,7 +1,10 @@
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 
 const originalTimezone = process.env.TZ;
 process.env.TZ = "Europe/London";
@@ -12,6 +15,8 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
   addDatabaseChangeListener: () => ({ remove: jest.fn() }),
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const workouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 
@@ -254,6 +259,7 @@ describe("canonical workout note persistence", () => {
         openDatabaseSync: () => firstDatabase.expoDatabase,
         addDatabaseChangeListener: () => ({ remove: jest.fn() }),
       }));
+      initializeTestDatabaseBindings(firstDatabase);
       const firstWorkouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
       const exerciseId = firstDatabase.insertExercise("Reopened Notes Deadlift");
       const workoutId = await firstWorkouts.createWorkout({
@@ -286,6 +292,7 @@ describe("canonical workout note persistence", () => {
         openDatabaseSync: () => reopenedDatabase!.expoDatabase,
         addDatabaseChangeListener: () => ({ remove: jest.fn() }),
       }));
+      initializeTestDatabaseBindings(reopenedDatabase);
       const reopenedWorkouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 
       expect((await reopenedWorkouts.getWorkoutById(workoutId))?.note).toBe(

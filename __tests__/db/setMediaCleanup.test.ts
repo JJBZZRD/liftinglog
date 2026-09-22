@@ -1,4 +1,7 @@
-import { createManualLoggingDatabase } from "../helpers/manualLoggingDatabase";
+import {
+  createManualLoggingDatabase,
+  initializeTestDatabaseBindings,
+} from "../helpers/manualLoggingDatabase";
 
 const mockDatabase = createManualLoggingDatabase();
 
@@ -6,6 +9,8 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseSync: () => mockDatabase.expoDatabase,
   addDatabaseChangeListener: () => ({ remove: jest.fn() }),
 }));
+
+initializeTestDatabaseBindings(mockDatabase);
 
 const workouts = require("../../lib/db/workouts") as typeof import("../../lib/db/workouts");
 const media = require("../../lib/db/media") as typeof import("../../lib/db/media");
