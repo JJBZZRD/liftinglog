@@ -65,7 +65,10 @@ The seven-method production engine is host-accepted as `fdd4313`; see its
 [exact-SHA audit and test evidence](replacement-restore-engine-acceptance.md).
 The [passed-handle Android engine gate](replacement-restore-engine-android.md) is
 also accepted, and postcommit media is host-accepted as `2c45567`. Lifecycle and
-Settings integration remain pending. Rows below remain obligations for final
+Settings are integrated and independently accepted; the actual synthetic Android
+populated/empty flow, cancellation, postcommit process death and warm timer links
+pass as recorded in the [integrated evidence](replacement-restore-integrated-android.md).
+Rows below remain obligations for final
 integrated/native acceptance, not claims that the underlying engine and media
 services are unimplemented. Host tests use the actual production service with
 controlled adapters; native tests use disposable backup/live pairs and preserved

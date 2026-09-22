@@ -5,6 +5,15 @@ Read-only organiser/Luna inventory at `be53dad94d693fb502678282ccc350e2e821e3d4`
 not claim completion of MVP-007 or replace the Android release matrix. iOS is
 explicitly deferred by the user.
 
+The final integrated host run at `ab281ef1646a1cedcbc23b7b01ee346042f29560`
+now passes **86 suites / 1020 tests per profile**, TypeScript and prescribed
+uncached lint (zero errors / 19 baseline warnings). A read-only Luna worker used
+the clean detached integration worktree; the organiser inspected the results.
+Logs are `.codex-artifacts/mvp007-integrated-{full,mvp,typecheck,lint}.log`.
+This accepts the host portions of 007A/007C and retains the already accepted 007B
+calculator evidence. Native 007D and release acceptance remain open; see the
+[integrated Android checkpoint](replacement-restore-integrated-android.md).
+
 | Requirement | Existing tests | Remaining integration evidence |
 | --- | --- | --- |
 | In-progress history, analytics, PB and CSV agree through create/edit/delete/completion | `__tests__/db/inProgressConsumers.test.ts`, `pbDerivation.test.ts` | Run on the final integrated source; no duplicate consumer implementation needed |

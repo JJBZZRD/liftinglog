@@ -12,7 +12,15 @@ timer retirement, schema validation, sealed export and native file hashing are
 accepted prerequisites. The replacement engine is accepted on the host and the
 synthetic Android engine gate; postcommit media is accepted on the host.
 Startup integration and Settings hookup are now host-accepted and integrated.
-The connected Android replacement flow and final release matrix remain outstanding.
+The connected Android populated/empty replacement flow now passes on the isolated
+synthetic AVD; the final release matrix remains outstanding. See the
+[integrated Android evidence](testing/replacement-restore-integrated-android.md).
+Both profiles pass the combined **86 suites / 1020 tests**, TypeScript and uncached
+lint (zero errors / 19 baseline warnings). Independent scoped integration review
+at `ab281ef` accepts the Settings/dialog/lifecycle/root wiring with no findings.
+Remaining work is native gallery scan/playback and permission proof, exact crash
+windows, release-binary cold links, physical Android performance/media acceptance
+and final documentation. These are acceptance obligations, not known code blockers.
 
 B6 candidate `b93f8345ec912a4b82ef969a653b342ac6e56f54` received independent
 source and test-delta acceptance, then exact-tree squash integration as `81e0d79`.
@@ -29,7 +37,8 @@ verified the exact patch was unchanged, reran 22 focused tests per profile,
 TypeScript and scoped uncached lint, then exact-tree squash integrated candidate
 `020079575ae7f7968b29364ec6b8992ac37cb468` as `800b280`. Settings now exposes
 replacement restore through the real lifecycle wrapper; legacy merge import is
-not reachable there. The combined native gate and final profile run are next.
+not reachable there. The combined profile run and ordinary populated/empty Android
+replacement gates have since passed as recorded above.
 The [007 evidence map](testing/mvp-final-regression-evidence.md) identifies existing
 consumer and route coverage without duplicating accepted tests. iOS stays deferred.
 

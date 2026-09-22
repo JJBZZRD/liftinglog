@@ -1,5 +1,11 @@
 # MVP-006B6P integrated Android lifecycle diagnostic
 
+Execution update: the actual Settings flow was sufficient for the integrated
+populated/empty, cancellation, process-death and warm timer-link scenarios.
+See [recorded production-flow evidence](replacement-restore-integrated-android.md).
+The optional diagnostic below was not needed for those checks; its original
+preparation notes are retained as history.
+
 Organiser preparation, 2026-09-22. Prefer the actual Settings flow after B6 host
 acceptance and D3 integration. Dispatch this optional diagnostic only if a
 specific observation cannot be obtained through that flow, after the B6 production
