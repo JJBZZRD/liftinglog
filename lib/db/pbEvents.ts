@@ -2,6 +2,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "./connection";
 import { pbEvents, sets, type PBEventRow } from "./schema";
 import { newUid } from "../utils/uid";
+import { derivePBEventsForExercise } from "./pbDerivation";
 
 export type PBEvent = PBEventRow;
 
@@ -24,24 +25,6 @@ function normalizeExerciseIds(exerciseIdOrIds: number | number[]): number[] {
       )
     ),
   ];
-}
-
-function isValidSetForPB(set: {
-  weightKg: number | null;
-  reps: number | null;
-  performedAt: number | null;
-}): set is {
-  weightKg: number;
-  reps: number;
-  performedAt: number;
-} {
-  return (
-    set.weightKg !== null &&
-    set.reps !== null &&
-    set.performedAt !== null &&
-    set.weightKg > 0 &&
-    set.reps > 0
-  );
 }
 
 /**
@@ -86,25 +69,10 @@ export async function rebuildPBEventsForExercise(exerciseId: number): Promise<vo
     .where(eq(sets.exerciseId, exerciseId))
     .orderBy(sets.performedAt, sets.id);
 
-  const bestByReps = new Map<number, number>();
-  const nextEvents: typeof pbEvents.$inferInsert[] = [];
-
-  for (const set of allSets) {
-    if (!isValidSetForPB(set)) continue;
-
-    const bestSoFar = bestByReps.get(set.reps);
-    if (bestSoFar === undefined || set.weightKg > bestSoFar) {
-      bestByReps.set(set.reps, set.weightKg);
-      nextEvents.push({
-        uid: newUid(),
-        setId: set.id,
-        exerciseId,
-        type: `${set.reps}rm`,
-        metricValue: set.weightKg,
-        occurredAt: set.performedAt,
-      });
-    }
-  }
+  const nextEvents: typeof pbEvents.$inferInsert[] = derivePBEventsForExercise(
+    exerciseId,
+    allSets
+  ).map((event) => ({ ...event, uid: newUid() }));
 
   // Keep the legacy pr_events table as derived data from sets.
   await db.delete(pbEvents).where(eq(pbEvents.exerciseId, exerciseId)).run();
