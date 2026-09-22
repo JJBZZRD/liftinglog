@@ -93,6 +93,14 @@ transaction.
   without further DB or control-state mutation.
 - Absent pending with incomplete outcome: no replacement; bootstrap/binding,
   postcommit, and user-explicit fresh scan or skip. Never replay stored media IDs.
+- For postcommit media finalization, `complete_media` invokes
+  `completeReplacementRestorePostCommit` with `mode: "scan"`, while
+  `skip_media` uses `mode: "skip"`. Both modes operate on a fresh read of the
+  current rows after physical pending absence is proven, account for every row,
+  and produce an actual result with durable outcome finalization. Skip mode does
+  not prompt for permission or invoke the gallery resolver; every row is
+  accounted for as unresolved or skipped, and the result never claims that
+  committed training was cancelled.
 - Pending ambiguity, token failure, uncertain transaction, or committed control
   persistence failure: blocked with only the actions proven safe by that result.
 - Safe scheduled cancellation or failed-startup discard: retire pending, then a

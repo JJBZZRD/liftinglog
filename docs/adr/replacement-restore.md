@@ -302,6 +302,7 @@ function resumeCommittedStartupFinalization(options: {
 function completeReplacementRestorePostCommit(options: {
   sqlite: SQLiteDatabase; // the same long-lived live handle
   restoreId: string;
+  mode: "scan" | "skip";
   signal?: AbortSignal;
   onProgress?: (progress: RestoreProgress) => void;
 }): Promise<ReplacementRestoreResult>;

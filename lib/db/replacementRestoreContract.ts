@@ -251,6 +251,7 @@ export type ReplacementRestoreResult = {
 export type CompleteReplacementRestorePostCommitOptions = {
   readonly sqlite: SQLiteDatabase;
   readonly restoreId: string;
+  readonly mode: "scan" | "skip";
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: RestoreProgress) => void;
 };
