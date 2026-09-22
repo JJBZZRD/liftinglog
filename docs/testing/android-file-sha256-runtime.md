@@ -1,9 +1,54 @@
 # Android file SHA-256 runtime checkpoint
 
-Organiser execution, 2026-09-22. Digest correctness is demonstrated on the debug
-emulator; **the maximum-size startup latency is not accepted for production**.
-MVP-006B4R must address this before the restore engine relies on the 256 MiB
-ceiling. This does not restart the Expo upgrade.
+Organiser execution, 2026-09-22. **The corrected Android native digest prerequisite
+is accepted** at `81b1b76`. The initial JS performance failure and its correction
+are recorded separately below. Physical-device timing remains a release gate.
+
+## Corrected native run
+
+Independent review accepted `4aef58d`; the exact candidate tree was integrated as
+`81b1b76`. The Android debug APK built successfully in 50 seconds (579 tasks),
+SHA-256 `C11336629526D7F300BEAB9E576699BE672DE4225D64FC8DE7B23418D07DEE9B`.
+It was installed only on `WorkoutLogRestoreSynthetic`. Reviewed, non-shipping
+probe `701782e` ran against this code on Metro localhost:8084, PID 12817,
+2026-09-22 11:33-11:34 BST. The fixture owner marker, logical sizes and all four
+independent Android `sha256sum` values were reconfirmed before running.
+
+| Logical bytes | Async elapsed | Async maximum 50 ms heartbeat gap | Sync elapsed | Digest |
+| ---: | ---: | ---: | ---: | --- |
+| 0 | 36 ms | 58 ms | 3 ms | Expected empty SHA-256 |
+| 3 (`abc`) | 81 ms | 83 ms | 2 ms | Expected `abc` SHA-256 |
+| 131109 | 83 ms | 83 ms | 1 ms | Matches independent oracle |
+| 268435456 | 582 ms | 109 ms | 182 ms | Matches independent oracle |
+
+All eight digests and byte counts match. The maximum synchronous heartbeat gap
+was 183 ms. A 100 ms abort timer rejected in 113 ms, heartbeat gap 64 ms; immediate
+abort in the same JS turn after invoking the helper rejected in 4 ms, heartbeat
+gap 57 ms. Both returned `AbortError`, no byte count and no digest. Native
+submission and cancellation now use the same asynchronous RN FIFO queue; hashing
+runs on a separate bounded executor. This repairs the independently discovered
+case where synchronous cancellation could overtake asynchronous admission.
+Host resource-closure tests complement the actual bridge ordering observations.
+
+The frozen budgets pass: each maximum digest below 5 seconds, cancellation below
+1 second and async heartbeat below 250 ms. No Gradle or Jest runs were active
+during timing. This remains a warm sparse-file debug-AVD measurement, not a
+cold-storage or physical-device guarantee. The Java `MessageDigest` implementation
+reads bounded 64 KiB chunks; non-Android retains the reviewed JS implementation.
+
+Baseline PSS/RSS/swap PSS were 621310/689704/4613 KiB. Nine native samples around
+the matrix runs ranged from 564810 to 601357 KiB PSS and 15512 to 244549 KiB swap
+PSS. Sampling gaps and emulator paging prevent a peak-memory claim. No process
+exhaustion occurred. Raw results and memory samples are retained as
+`hash-native-results.log`, `hash-native-memory-baseline.txt` and
+`hash-native-memory-samples.txt` under the synthetic-AVD artifact directory.
+The diagnostic app and its Metro server were stopped after the run; fixtures and
+the isolated diagnostic branch remain available. No diagnostic route ships.
+
+## Initial JS run (superseded performance decision)
+
+Digest correctness passed, but the original maximum-size latency failed. That
+failure prompted MVP-006B4R; it did not restart the Expo upgrade.
 
 ## Environment and inputs
 

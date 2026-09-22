@@ -3,6 +3,34 @@
 Updated 2026-09-22. The product contract and delivery order are defined in
 [product facts](mvp-product-facts.md) and the [implementation plan](mvp-implementation-plan.md).
 
+## Current checkpoint
+
+Integrated production code is `81b1b76`. MVP capability restrictions, history,
+exercise identity, notes and gallery attachment work are integrated and reviewed.
+Replacement restore remains the active implementation story: native controls,
+timer retirement, schema validation, sealed export and native file hashing are
+accepted prerequisites; the replacement engine, startup gate, Settings hookup,
+postcommit media integration and final release matrix remain outstanding.
+
+The organiser is preparing the engine's narrow packet against the frozen shared
+contract, with a separate read-only boundary review. No engine code is yet
+accepted. Diagnostic branches remain outside shipping code. Physical-device
+checks are still required before release; iOS remains explicitly deferred.
+
+At `81b1b76`, organiser-integrated verification passes **74 suites / 838 tests in
+each profile**, TypeScript, and uncached lint (zero errors, 19 existing warnings).
+Logs: `.codex-artifacts/mvp006b4r-integrated-{full,mvp}.log`,
+`mvp006b4r-typecheck.log` and `mvp006b4r-lint.log`. Six untouched original-file
+hashes still match the preservation baseline. MainApplication's previously
+reviewed native integration remains separately accounted for.
+
+The immediate-abort diagnostic worker mistakenly attempted a stash and switched
+the shared checkout. The stash failed and created no stash. The organiser stopped
+the worker, isolated only its two diagnostic files in a sibling worktree, restored
+main to its original commit, and verified all six untouched preservation hashes.
+No original dirty files were absorbed. Future worker setup must use an explicit
+absolute workdir; organiser-created worktrees avoid recurrence.
+
 ## Prerequisites
 
 - PRE-001A through PRE-001F: completed in the documented SDK checkpoints.
@@ -81,7 +109,8 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Corrected `043347c` independently accepted and merged `f435567`; organiser 143/143 targeted tests pass; exact historical provenance and migration/future-source closure verified |
 | MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 | MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Corrected `7cc330e` executed on fresh synthetic AVD; all eight async/sync digests match and abort works; maximum-size latency requires 006B4R; diagnostic remains non-shipping |
-| MVP-006B4R | Sol / high | Bounded native streaming SHA-256 performance follow-up | In implementation from `367dae0`; maximum JS async/sync require 148/142 seconds, so production maximum latency is not accepted; [runtime evidence](testing/android-file-sha256-runtime.md); [interface frozen](testing/android-file-sha256-contract.md) |
+| MVP-006B4R | Sol / high; independent Sol / high audit | Bounded native streaming SHA-256 performance follow-up | Corrected `4aef58d` independently accepted and integrated `81b1b76`; native maximum async/sync 582/182 ms; delayed/immediate cancellation 113/4 ms; emulator prerequisite accepted; [runtime evidence](testing/android-file-sha256-runtime.md) |
+| MVP-006B4RP | Luna / medium; organiser setup recovery/review | Isolated immediate-abort diagnostic extension | Reviewed probe `701782e` executed on fresh synthetic AVD; diagnostic remains outside main |
 | MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Corrected `9c3c2f2` reviewed and integrated as `72d5fd4`; organiser typecheck/scoped lint pass; no engine implementation |
 | MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
 | MVP-006A2 | Sol / high; independent Sol / high audit | Export-only backup helpers, isolated snapshot helper and focused tests | Corrected `b0390e9` independently accepted and integrated `b145a81`; primary error retained through close failure; [actual native busy-WAL snapshot accepted](testing/android-backup-snapshot-runtime.md); SAF release proof pending |

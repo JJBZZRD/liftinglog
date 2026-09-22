@@ -26,8 +26,12 @@ generated Kotlin parity. Native surface:
 
 - `sha256FileSync(uri, maxBytes)` returns a validated result/error envelope.
 - `sha256FileAsync(uri, maxBytes, requestId)` returns a promise for a result.
-- `cancelSha256File(requestId)` signals cancellation without waiting behind the
-  file hashing work. A small dedicated executor performs asynchronous reads.
+- `cancelSha256File(requestId)` returns a promise and signals cancellation on the
+  same FIFO native-method queue as submission, without waiting behind the file
+  hashing work. A small dedicated executor performs asynchronous reads. The JS
+  facade observes and validates the cancellation acknowledgement and waits for
+  native resource settlement before exposing abort. A blocking synchronous
+  cancellation method is forbidden because it can overtake job admission.
 
 The JS facade validates all success acknowledgements. Native code independently
 validates URI and numeric inputs. Preserve the public file-URI, regular-file,
