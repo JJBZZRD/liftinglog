@@ -10,6 +10,7 @@ import { newUid } from "../utils/uid";
 import type {
   AppTable,
   ReplacementRestoreErrorCode,
+  ReplacementRestoreResult,
   ReplacementRestoreService,
   RestoreCommitResult,
   RestoreCommittedPendingCleanup,
@@ -35,10 +36,16 @@ import {
   serializeCommittedRestoreOutcome,
   serializePendingRestoreRecord,
   type AttemptedPendingRestoreRecord,
+  type CompleteCommittedRestoreOutcomeRecord,
   type CommittedRestoreOutcomeRecord,
   type PendingRestoreRecord,
+  type PendingCommittedRestoreOutcomeRecord,
   type ScheduledPendingRestoreRecord,
 } from "./replacementRestoreRecords";
+import type {
+  ReplacementRestoreMediaCompletion,
+  ReplacementRestoreMediaOptions,
+} from "./replacementRestoreMedia";
 import {
   ReplacementCandidateDetachFailure,
   ReplacementTransactionFailure,
@@ -59,6 +66,7 @@ export type ReplacementRestoreEngine = Pick<
   | "discardSafelyFailedScheduledRestore"
   | "applyScheduledReplacementRestoreAtStartup"
   | "resumeCommittedStartupFinalization"
+  | "completeReplacementRestorePostCommit"
 >;
 
 export interface ReplacementRestoreRuntimeDependencies {
@@ -82,6 +90,9 @@ export interface ReplacementRestoreRuntimeDependencies {
     candidateExists: () => boolean;
     expectedRowsByTable: Record<AppTable, number>;
   }): ValidatedReplacementSession;
+  reconcileMedia(
+    options: ReplacementRestoreMediaOptions
+  ): Promise<ReplacementRestoreMediaCompletion>;
   createOpaqueId(kind: "attempt" | "preparation" | "recovery" | "restore"): string;
 }
 
@@ -100,7 +111,7 @@ type CommittedContext = {
   readonly restoreId: string;
   readonly candidatePath: string;
   readonly expectedPending: AttemptedPendingRestoreRecord;
-  readonly outcome: CommittedRestoreOutcomeRecord;
+  readonly outcome: PendingCommittedRestoreOutcomeRecord;
   readonly rowsByTable: Record<AppTable, number>;
   readonly pbEventsRebuilt: number;
   readonly untrustedPreCommitMediaUris: readonly string[];
@@ -109,6 +120,19 @@ type CommittedContext = {
     stage: "detach_candidate" | "staging_cleanup";
     code: string;
   }[];
+};
+
+type PostCommitMediaContext = {
+  readonly restoreId: string;
+  readonly untrustedPreCommitMediaUris: readonly string[];
+  readonly warnings: ReplacementRestoreResult["warnings"];
+};
+
+type CompletionFinalizationContext = {
+  readonly restoreId: string;
+  readonly expectedPendingOutcome: PendingCommittedRestoreOutcomeRecord;
+  readonly completeOutcome: CompleteCommittedRestoreOutcomeRecord;
+  readonly result: ReplacementRestoreResult;
 };
 
 function errorCode(error: unknown): string {
@@ -200,21 +224,54 @@ export function createReplacementRestoreRuntime(
   let committed: CommittedContext | undefined;
   // Retained only in this process for the later media owner. It is never
   // serialized and never authorizes candidate replay after process death.
-  let postCommitMediaContext:
-    | {
-        readonly restoreId: string;
-        readonly untrustedPreCommitMediaUris: readonly string[];
-      }
-    | undefined;
+  let postCommitMediaContext: PostCommitMediaContext | undefined;
+  let completionFinalization: CompletionFinalizationContext | undefined;
+  let asyncOperationOwnsCommittedData = false;
 
   const busyError = () =>
     makeError("restore_busy", "Another replacement restore operation is active.", {
-      stage: "selecting",
-      liveDatabaseChanged: false,
-      transactionState: "not_started",
-      recovery: "discard_and_reprepare",
+      stage: asyncOperationOwnsCommittedData ? "reconciling_media" : "selecting",
+      liveDatabaseChanged: asyncOperationOwnsCommittedData ? "unknown" : false,
+      transactionState: asyncOperationOwnsCommittedData ? "unknown" : "not_started",
+      recovery: asyncOperationOwnsCommittedData
+        ? "retry_committed_cleanup"
+        : "discard_and_reprepare",
       retryable: true,
     });
+
+  const committedCompletionError = (
+    errorMessage: string,
+    retryable = true
+  ) =>
+    makeError("outcome_ambiguous", errorMessage, {
+      stage: "reconciling_media",
+      liveDatabaseChanged: true,
+      transactionState: "committed",
+      recovery: retryable ? "retry_committed_cleanup" : "manual_recovery",
+      retryable,
+    });
+
+  function boundedCompletionWarnings(
+    ...sources: readonly (readonly ReplacementRestoreResult["warnings"][number][])[]
+  ): ReplacementRestoreResult["warnings"] {
+    const flattened = sources.flat();
+    const bounded = flattened.slice(0, 64).map((warning) => ({
+      stage: warning.stage,
+      code:
+        warning.code.length > 0 &&
+        warning.code.length <= 128 &&
+        !/[\u0000-\u001f\u007f]/.test(warning.code)
+          ? warning.code
+          : "media_diagnostic_code_invalid",
+    }));
+    if (flattened.length > 64) {
+      bounded[63] = {
+        stage: "media_reconciliation",
+        code: "media_diagnostics_truncated",
+      };
+    }
+    return bounded;
+  }
 
   const readPending = () =>
     readPendingRestoreRecord(deps.readControlRecord, deps.stagingRootUri);
@@ -281,6 +338,58 @@ export function createReplacementRestoreRuntime(
       );
     } catch {
       return false;
+    }
+  }
+
+  function retireOutcomeAndVerify(expected: CommittedRestoreOutcomeRecord): boolean {
+    let before;
+    try {
+      before = readOutcome();
+    } catch {
+      return false;
+    }
+    if (before.status === "absent") return true;
+    if (!sameCommittedRestoreOutcome(before.record, expected)) return false;
+    try {
+      deps.deleteControlRecord("outcome");
+    } catch {
+      // Physical absence below is authoritative for scheduling safety.
+    }
+    try {
+      return readOutcome().status === "absent";
+    } catch {
+      return false;
+    }
+  }
+
+  function retireCompleteOutcomeBeforeScheduling(): void {
+    const outcome = readOutcome();
+    if (outcome.status === "absent") return;
+    if (outcome.record.postCommitStatus !== "complete") {
+      throw makeError(
+        "restore_busy",
+        "A previous committed restore still requires media completion.",
+        {
+          stage: "scheduling",
+          liveDatabaseChanged: true,
+          transactionState: "committed",
+          recovery: "retry_committed_cleanup",
+          retryable: true,
+        }
+      );
+    }
+    if (!retireOutcomeAndVerify(outcome.record)) {
+      throw makeError(
+        "outcome_ambiguous",
+        "A completed restore outcome could not be retired before scheduling.",
+        {
+          stage: "scheduling",
+          liveDatabaseChanged: true,
+          transactionState: "committed",
+          recovery: "retry_committed_cleanup",
+          retryable: true,
+        }
+      );
     }
   }
 
@@ -439,8 +548,8 @@ export function createReplacementRestoreRuntime(
     postCommitMediaContext = {
       restoreId: context.restoreId,
       untrustedPreCommitMediaUris: context.untrustedPreCommitMediaUris,
+      warnings: [...context.warnings],
     };
-    void postCommitMediaContext;
     committed = undefined;
     scheduledInThisProcess = undefined;
     return {
@@ -542,9 +651,10 @@ export function createReplacementRestoreRuntime(
           cleanupCandidate(context.candidate.candidatePath);
           return { status: "cancelled", liveDatabaseChanged: false };
         }
-        if (readPending().status !== "absent" || readOutcome().status !== "absent") {
+        if (readPending().status !== "absent") {
           throw busyError();
         }
+        retireCompleteOutcomeBeforeScheduling();
         const record: ScheduledPendingRestoreRecord = {
           version: REPLACEMENT_RESTORE_RECORD_VERSION,
           restoreId: deps.createOpaqueId("restore"),
@@ -725,6 +835,17 @@ export function createReplacementRestoreRuntime(
     },
 
     applyScheduledReplacementRestoreAtStartup(options): RestoreStartupResult {
+      if (asyncOperation) {
+        return startupFailure(
+          makeError("restore_busy", "Another replacement restore operation is active.", {
+            stage: "checking_pending_restore",
+            liveDatabaseChanged: "unknown",
+            transactionState: "unknown",
+            recovery: "manual_recovery",
+            retryable: true,
+          })
+        );
+      }
       // A safe-discard authorization describes one observed failure state. Any
       // later startup apply supersedes that observation, even before it reads
       // or attempts the physical pending record.
@@ -743,6 +864,12 @@ export function createReplacementRestoreRuntime(
         try {
           const outcome = readOutcome();
           if (outcome.status === "absent") {
+            return { status: "no_pending", pendingPresence: "absent" };
+          }
+          if (outcome.record.postCommitStatus === "complete") {
+            // Completion is already durable. Outcome retirement is harmless
+            // cleanup and cannot block normal use.
+            retireOutcomeAndVerify(outcome.record);
             return { status: "no_pending", pendingPresence: "absent" };
           }
           return {
@@ -957,7 +1084,7 @@ export function createReplacementRestoreRuntime(
         candidateMayBeAttached = true;
         warnings.push({ stage: "detach_candidate", code: errorCode(error) });
       }
-      const outcome: CommittedRestoreOutcomeRecord = {
+      const outcome: PendingCommittedRestoreOutcomeRecord = {
         version: REPLACEMENT_RESTORE_RECORD_VERSION,
         restoreId: record.restoreId,
         candidateSha256: record.candidateSha256,
@@ -982,6 +1109,7 @@ export function createReplacementRestoreRuntime(
     },
 
     resumeCommittedStartupFinalization(options) {
+      if (asyncOperation) throw busyError();
       const context = committed;
       if (!context || context.restoreId !== options.restoreId) {
         throw makeError(
@@ -997,6 +1125,146 @@ export function createReplacementRestoreRuntime(
         );
       }
       return finalizeCommitted(context);
+    },
+
+    async completeReplacementRestorePostCommit(options) {
+      if (asyncOperation) throw busyError();
+      asyncOperation = true;
+      asyncOperationOwnsCommittedData = true;
+      let matchingOutcomeEstablished = false;
+      try {
+        const pending = readPending();
+        if (pending.status !== "absent") {
+          throw makeError(
+            "outcome_ambiguous",
+            "Post-commit completion requires proven pending-manifest absence.",
+            {
+              stage: "reconciling_media",
+              liveDatabaseChanged: "unknown",
+              transactionState: "unknown",
+              recovery: "retry_cold_start",
+              retryable: true,
+            }
+          );
+        }
+
+        const outcome = readOutcome();
+        if (
+          outcome.status !== "present" ||
+          outcome.record.restoreId !== options.restoreId
+        ) {
+          throw makeError(
+            "outcome_ambiguous",
+            "Post-commit outcome is absent or does not match this restore.",
+            {
+              stage: "reconciling_media",
+              liveDatabaseChanged: "unknown",
+              transactionState: "unknown",
+              recovery: "manual_recovery",
+              retryable: false,
+            }
+          );
+        }
+        matchingOutcomeEstablished = true;
+
+        if (outcome.record.postCommitStatus === "complete") {
+          retireOutcomeAndVerify(outcome.record);
+          postCommitMediaContext = undefined;
+          completionFinalization = undefined;
+          emitProgress(options.onProgress, {
+            phase: "complete",
+            cancellable: false,
+          });
+          return outcome.record.result;
+        }
+
+        let finalization = completionFinalization;
+        if (finalization) {
+          if (
+            finalization.restoreId !== options.restoreId ||
+            !sameCommittedRestoreOutcome(
+              finalization.expectedPendingOutcome,
+              outcome.record
+            )
+          ) {
+            throw committedCompletionError(
+              "Retained completion state does not match the current outcome.",
+              false
+            );
+          }
+        } else {
+          const localContext =
+            postCommitMediaContext?.restoreId === options.restoreId
+              ? postCommitMediaContext
+              : undefined;
+          const completion = await deps.reconcileMedia({
+            sqlite: options.sqlite,
+            mode: options.mode,
+            signal: options.signal,
+            onProgress: options.onProgress,
+            untrustedPreCommitMediaUris:
+              localContext?.untrustedPreCommitMediaUris ?? [],
+          });
+          const result: ReplacementRestoreResult = {
+            status: "restored",
+            restoreId: options.restoreId,
+            liveDatabaseChanged: true,
+            rowsByTable: outcome.record.rowsByTable,
+            pbEventsRebuilt: outcome.record.pbEventsRebuilt,
+            media: completion.media,
+            cleanup: completion.cleanup,
+            warnings: boundedCompletionWarnings(
+              localContext?.warnings ?? [],
+              completion.warnings
+            ),
+          };
+          const completeOutcome: CompleteCommittedRestoreOutcomeRecord = {
+            version: outcome.record.version,
+            restoreId: outcome.record.restoreId,
+            candidateSha256: outcome.record.candidateSha256,
+            schemaManifestId: outcome.record.schemaManifestId,
+            rowsByTable: outcome.record.rowsByTable,
+            pbEventsRebuilt: outcome.record.pbEventsRebuilt,
+            postCommitStatus: "complete",
+            result,
+          };
+          finalization = {
+            restoreId: options.restoreId,
+            expectedPendingOutcome: outcome.record,
+            completeOutcome,
+            result,
+          };
+          completionFinalization = finalization;
+        }
+
+        if (!publishOutcomeAndVerify(finalization.completeOutcome)) {
+          throw committedCompletionError(
+            "Completed restore outcome could not be durably verified."
+          );
+        }
+
+        const result = finalization.result;
+        // Deletion is best-effort after the exact complete record was read back.
+        retireOutcomeAndVerify(finalization.completeOutcome);
+        postCommitMediaContext = undefined;
+        completionFinalization = undefined;
+        emitProgress(options.onProgress, {
+          phase: "complete",
+          cancellable: false,
+        });
+        return result;
+      } catch (error) {
+        if (error instanceof ReplacementRestoreError) throw error;
+        if (matchingOutcomeEstablished) {
+          throw committedCompletionError(
+            message(error, "Post-commit media completion failed.")
+          );
+        }
+        throw recordFailure(error, "reconciling_media");
+      } finally {
+        asyncOperationOwnsCommittedData = false;
+        asyncOperation = false;
+      }
     },
   };
 }

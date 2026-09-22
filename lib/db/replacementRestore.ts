@@ -6,11 +6,13 @@ import {
 } from "../native/restoreControlStore";
 import type {
   DiscardSafelyFailedScheduledRestoreOptions,
+  CompleteReplacementRestorePostCommitOptions,
   RestorePrepareOptions,
   RestoreScheduleOptions,
   RestoreStartupOptions,
   ResumeCommittedStartupFinalizationOptions,
 } from "./replacementRestoreContract";
+import { reconcileReplacementRestoreMedia } from "./replacementRestoreMedia";
 import {
   discardReplacementRestoreCandidate,
   getReplacementRestoreStagingRootUri,
@@ -40,6 +42,7 @@ function getRuntime(): ReplacementRestoreEngine {
     writeControlRecord: writeRestoreControlRecord,
     deleteControlRecord: deleteRestoreControlRecord,
     openValidatedSession: openValidatedReplacementSession,
+    reconcileMedia: reconcileReplacementRestoreMedia,
   });
   return runtime;
 }
@@ -76,4 +79,10 @@ export function resumeCommittedStartupFinalization(
   options: ResumeCommittedStartupFinalizationOptions
 ) {
   return getRuntime().resumeCommittedStartupFinalization(options);
+}
+
+export function completeReplacementRestorePostCommit(
+  options: CompleteReplacementRestorePostCommitOptions
+) {
+  return getRuntime().completeReplacementRestorePostCommit(options);
 }

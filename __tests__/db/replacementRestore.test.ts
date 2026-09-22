@@ -1093,4 +1093,116 @@ describe("replacement restore production engine", () => {
       "contradicts rowsByTable"
     );
   });
+
+  test("a complete leftover outcome permits startup even when cleanup still fails", async () => {
+    fixture = createEngineFixture();
+    const { scheduled } = await prepareAndSchedule(fixture);
+    setFixtureProcess(fixture, PROCESS_B);
+    const committed = fixture.runtime.applyScheduledReplacementRestoreAtStartup({
+      sqlite: fixture.live as never,
+      nativeProcessToken: PROCESS_B,
+    });
+    expect(committed.status).toBe("committed");
+    if (fixture.controls.outcome.status !== "present") throw new Error("missing outcome");
+    const pendingOutcome = parseCommittedRestoreOutcome(fixture.controls.outcome.json);
+    if (pendingOutcome.postCommitStatus !== "pending") throw new Error("unexpected complete outcome");
+    fixture.controls.outcome = {
+      status: "present",
+      json: JSON.stringify({
+        ...pendingOutcome,
+        postCommitStatus: "complete",
+        result: {
+          status: "restored",
+          restoreId: scheduled.restoreId,
+          liveDatabaseChanged: true,
+          rowsByTable: pendingOutcome.rowsByTable,
+          pbEventsRebuilt: pendingOutcome.pbEventsRebuilt,
+          media: {
+            total: pendingOutcome.rowsByTable.media,
+            resolved: 0,
+            unresolved: pendingOutcome.rowsByTable.media,
+            skippedPermission: 0,
+            errors: [],
+          },
+          cleanup: {
+            deletedManagedFiles: 0,
+            skippedUntrustedPaths: 0,
+            errors: 0,
+          },
+          warnings: [],
+        },
+      }),
+    };
+    fixture.controls.deleteFault = (name) => {
+      if (name === "outcome") throw new Error("cleanup failed");
+    };
+
+    expect(
+      fixture.runtime.applyScheduledReplacementRestoreAtStartup({
+        sqlite: fixture.live as never,
+        nativeProcessToken: PROCESS_B,
+      })
+    ).toEqual({ status: "no_pending", pendingPresence: "absent" });
+    expect(beginCount(fixture)).toBe(1);
+    expect(fixture.controls.outcome.status).toBe("present");
+  });
+
+  test("scheduling retires an old complete outcome and blocks when absence is unproven", async () => {
+    const makeComplete = (
+      prepared: Extract<Awaited<ReturnType<EngineFixture["runtime"]["prepareReplacementRestore"]>>, { status: "ready" }>
+    ) => ({
+      version: 1,
+      restoreId: "restore-v1:previous-complete-00000001",
+      candidateSha256: prepared.candidateSha256,
+      schemaManifestId: RESTORE_SCHEMA_MANIFEST_ID,
+      rowsByTable: prepared.rowsByTable,
+      pbEventsRebuilt: prepared.rowsByTable.pr_events,
+      postCommitStatus: "complete",
+      result: {
+        status: "restored",
+        restoreId: "restore-v1:previous-complete-00000001",
+        liveDatabaseChanged: true,
+        rowsByTable: prepared.rowsByTable,
+        pbEventsRebuilt: prepared.rowsByTable.pr_events,
+        media: {
+          total: prepared.mediaRows,
+          resolved: 0,
+          unresolved: prepared.mediaRows,
+          skippedPermission: 0,
+          errors: [],
+        },
+        cleanup: { deletedManagedFiles: 0, skippedUntrustedPaths: 0, errors: 0 },
+        warnings: [],
+      },
+    });
+
+    fixture = createEngineFixture();
+    const prepared = await fixture.runtime.prepareReplacementRestore({});
+    if (prepared.status !== "ready") throw new Error("fixture preparation cancelled");
+    fixture.controls.outcome = { status: "present", json: JSON.stringify(makeComplete(prepared)) };
+    await expect(
+      fixture.runtime.scheduleReplacementRestore({ token: prepared.token })
+    ).resolves.toMatchObject({ status: "restart_required" });
+    expect(fixture.controls.outcome).toEqual({ status: "absent" });
+
+    fixture.close();
+    fixture = createEngineFixture();
+    const blockedPreparation = await fixture.runtime.prepareReplacementRestore({});
+    if (blockedPreparation.status !== "ready") throw new Error("fixture preparation cancelled");
+    fixture.controls.outcome = {
+      status: "present",
+      json: JSON.stringify(makeComplete(blockedPreparation)),
+    };
+    fixture.controls.deleteFault = (name) => {
+      if (name === "outcome") throw new Error("cleanup failed");
+    };
+    await expect(
+      fixture.runtime.scheduleReplacementRestore({ token: blockedPreparation.token })
+    ).rejects.toMatchObject({
+      code: "outcome_ambiguous",
+      liveDatabaseChanged: true,
+      transactionState: "committed",
+    });
+    expect(fixture.controls.pending).toEqual({ status: "absent" });
+  });
 });

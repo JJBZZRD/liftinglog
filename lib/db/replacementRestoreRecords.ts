@@ -7,6 +7,7 @@ import {
 import type {
   AppTable,
   ReplacementRestoreErrorCode,
+  ReplacementRestoreResult,
 } from "./replacementRestoreContract";
 import {
   RESTORE_APP_TABLES,
@@ -53,15 +54,27 @@ export type PendingRestoreRecord =
   | ScheduledPendingRestoreRecord
   | AttemptedPendingRestoreRecord;
 
-export type CommittedRestoreOutcomeRecord = {
+type CommittedRestoreOutcomeBase = {
   readonly version: 1;
   readonly restoreId: string;
   readonly candidateSha256: string;
   readonly schemaManifestId: typeof RESTORE_SCHEMA_MANIFEST_ID;
   readonly rowsByTable: Record<AppTable, number>;
   readonly pbEventsRebuilt: number;
+};
+
+export type PendingCommittedRestoreOutcomeRecord = CommittedRestoreOutcomeBase & {
   readonly postCommitStatus: "pending";
 };
+
+export type CompleteCommittedRestoreOutcomeRecord = CommittedRestoreOutcomeBase & {
+  readonly postCommitStatus: "complete";
+  readonly result: ReplacementRestoreResult;
+};
+
+export type CommittedRestoreOutcomeRecord =
+  | PendingCommittedRestoreOutcomeRecord
+  | CompleteCommittedRestoreOutcomeRecord;
 
 export class RestoreRecordValidationError extends Error {
   constructor(
@@ -245,6 +258,272 @@ function requireRowsByTable(
       requireCount(value[table], `${label}.${table}`, restoreId),
     ])
   ) as Record<AppTable, number>;
+}
+
+const MAX_OUTCOME_DIAGNOSTICS = 64;
+const MAX_OUTCOME_CODE_LENGTH = 128;
+
+function requireCode(
+  value: unknown,
+  label: string,
+  restoreId: string
+): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAX_OUTCOME_CODE_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      `${label} has an invalid diagnostic code.`,
+      restoreId
+    );
+  }
+  return value;
+}
+
+function sameRowsByTable(
+  left: Record<AppTable, number>,
+  right: Record<AppTable, number>
+): boolean {
+  return RESTORE_APP_TABLES.every((table) => left[table] === right[table]);
+}
+
+function requireCompleteResult(
+  value: unknown,
+  restoreId: string,
+  outcomeRows: Record<AppTable, number>,
+  outcomePbEventsRebuilt: number
+): ReplacementRestoreResult {
+  if (!isPlainRecord(value)) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore result must be an object.",
+      restoreId
+    );
+  }
+  exactKeys(
+    value,
+    [
+      "status",
+      "restoreId",
+      "liveDatabaseChanged",
+      "rowsByTable",
+      "pbEventsRebuilt",
+      "media",
+      "cleanup",
+      "warnings",
+    ],
+    "Committed restore result",
+    restoreId
+  );
+  if (
+    value.status !== "restored" ||
+    value.restoreId !== restoreId ||
+    value.liveDatabaseChanged !== true
+  ) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore result literals do not match the outcome.",
+      restoreId
+    );
+  }
+
+  const rowsByTable = requireRowsByTable(
+    value.rowsByTable,
+    "Committed restore result rowsByTable",
+    restoreId
+  );
+  const pbEventsRebuilt = requireCount(
+    value.pbEventsRebuilt,
+    "Committed restore result pbEventsRebuilt",
+    restoreId
+  );
+  if (
+    pbEventsRebuilt !== rowsByTable.pr_events ||
+    pbEventsRebuilt !== outcomePbEventsRebuilt ||
+    !sameRowsByTable(rowsByTable, outcomeRows)
+  ) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore result counts contradict the outcome.",
+      restoreId
+    );
+  }
+
+  if (!isPlainRecord(value.media)) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore media result must be an object.",
+      restoreId
+    );
+  }
+  exactKeys(
+    value.media,
+    ["total", "resolved", "unresolved", "skippedPermission", "errors"],
+    "Committed restore media result",
+    restoreId
+  );
+  const total = requireCount(value.media.total, "Committed restore media total", restoreId);
+  const resolved = requireCount(
+    value.media.resolved,
+    "Committed restore media resolved",
+    restoreId
+  );
+  const unresolved = requireCount(
+    value.media.unresolved,
+    "Committed restore media unresolved",
+    restoreId
+  );
+  const skippedPermission = requireCount(
+    value.media.skippedPermission,
+    "Committed restore media permission skips",
+    restoreId
+  );
+  if (resolved + unresolved !== total || skippedPermission > unresolved) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore media counts are inconsistent.",
+      restoreId
+    );
+  }
+  if (
+    !Array.isArray(value.media.errors) ||
+    value.media.errors.length > MAX_OUTCOME_DIAGNOSTICS
+  ) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore media diagnostics are not bounded.",
+      restoreId
+    );
+  }
+  const errors = value.media.errors.map((entry, index) => {
+    if (!isPlainRecord(entry)) {
+      throw new RestoreRecordValidationError(
+        "outcome_ambiguous",
+        `Committed restore media diagnostic ${index} is invalid.`,
+        restoreId
+      );
+    }
+    exactKeys(
+      entry,
+      ["mediaId", "code"],
+      `Committed restore media diagnostic ${index}`,
+      restoreId
+    );
+    if (
+      entry.mediaId !== null &&
+      (!Number.isSafeInteger(entry.mediaId) || (entry.mediaId as number) <= 0)
+    ) {
+      throw new RestoreRecordValidationError(
+        "outcome_ambiguous",
+        `Committed restore media diagnostic ${index} has an invalid media ID.`,
+        restoreId
+      );
+    }
+    return {
+      mediaId: entry.mediaId as number | null,
+      code: requireCode(
+        entry.code,
+        `Committed restore media diagnostic ${index}`,
+        restoreId
+      ),
+    };
+  });
+
+  if (!isPlainRecord(value.cleanup)) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore cleanup result must be an object.",
+      restoreId
+    );
+  }
+  exactKeys(
+    value.cleanup,
+    ["deletedManagedFiles", "skippedUntrustedPaths", "errors"],
+    "Committed restore cleanup result",
+    restoreId
+  );
+  const deletedManagedFiles = requireCount(
+    value.cleanup.deletedManagedFiles,
+    "Committed restore deleted file count",
+    restoreId
+  );
+  const skippedUntrustedPaths = requireCount(
+    value.cleanup.skippedUntrustedPaths,
+    "Committed restore skipped path count",
+    restoreId
+  );
+  const cleanupErrors = requireCount(
+    value.cleanup.errors,
+    "Committed restore cleanup error count",
+    restoreId
+  );
+  if (deletedManagedFiles !== 0) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore cleanup counts are inconsistent.",
+      restoreId
+    );
+  }
+
+  if (!Array.isArray(value.warnings) || value.warnings.length > MAX_OUTCOME_DIAGNOSTICS) {
+    throw new RestoreRecordValidationError(
+      "outcome_ambiguous",
+      "Committed restore warnings are not bounded.",
+      restoreId
+    );
+  }
+  const warnings: ReplacementRestoreResult["warnings"] = value.warnings.map((warning, index) => {
+    if (!isPlainRecord(warning)) {
+      throw new RestoreRecordValidationError(
+        "outcome_ambiguous",
+        `Committed restore warning ${index} is invalid.`,
+        restoreId
+      );
+    }
+    exactKeys(
+      warning,
+      ["stage", "code"],
+      `Committed restore warning ${index}`,
+      restoreId
+    );
+    if (
+      warning.stage !== "detach_candidate" &&
+      warning.stage !== "staging_cleanup" &&
+      warning.stage !== "media_reconciliation"
+    ) {
+      throw new RestoreRecordValidationError(
+        "outcome_ambiguous",
+        `Committed restore warning ${index} has an invalid stage.`,
+        restoreId
+      );
+    }
+    return {
+      stage: warning.stage,
+      code: requireCode(
+        warning.code,
+        `Committed restore warning ${index}`,
+        restoreId
+      ),
+    };
+  });
+
+  return {
+    status: "restored",
+    restoreId,
+    liveDatabaseChanged: true,
+    rowsByTable,
+    pbEventsRebuilt,
+    media: { total, resolved, unresolved, skippedPermission, errors },
+    cleanup: {
+      deletedManagedFiles,
+      skippedUntrustedPaths,
+      errors: cleanupErrors,
+    },
+    warnings,
+  };
 }
 
 function requireProcessToken(
@@ -479,29 +758,40 @@ export function parseCommittedRestoreOutcome(
 ): CommittedRestoreOutcomeRecord {
   const record = parseJsonObject(json, "Committed restore outcome");
   const restoreId = requireRestoreId(record.restoreId, "Committed restore outcome");
-  exactKeys(
-    record,
-    [
-      "version",
-      "restoreId",
-      "candidateSha256",
-      "schemaManifestId",
-      "rowsByTable",
-      "pbEventsRebuilt",
-      "postCommitStatus",
-    ],
-    "Committed restore outcome",
-    restoreId
-  );
-  requireVersion(record.version, "Committed restore outcome", restoreId);
-  requireSchemaId(record.schemaManifestId, "Committed restore outcome", restoreId);
-  if (record.postCommitStatus !== "pending") {
+  if (record.postCommitStatus !== "pending" && record.postCommitStatus !== "complete") {
     throw new RestoreRecordValidationError(
       "outcome_ambiguous",
       "Committed restore outcome has an unsupported status.",
       restoreId
     );
   }
+  exactKeys(
+    record,
+    record.postCommitStatus === "complete"
+      ? [
+          "version",
+          "restoreId",
+          "candidateSha256",
+          "schemaManifestId",
+          "rowsByTable",
+          "pbEventsRebuilt",
+          "postCommitStatus",
+          "result",
+        ]
+      : [
+          "version",
+          "restoreId",
+          "candidateSha256",
+          "schemaManifestId",
+          "rowsByTable",
+          "pbEventsRebuilt",
+          "postCommitStatus",
+        ],
+    "Committed restore outcome",
+    restoreId
+  );
+  requireVersion(record.version, "Committed restore outcome", restoreId);
+  requireSchemaId(record.schemaManifestId, "Committed restore outcome", restoreId);
   const rowsByTable = requireRowsByTable(
     record.rowsByTable,
     "Committed restore outcome rowsByTable",
@@ -519,8 +809,8 @@ export function parseCommittedRestoreOutcome(
       restoreId
     );
   }
-  return {
-    version: 1,
+  const base = {
+    version: 1 as const,
     restoreId,
     candidateSha256: requireSha256(
       record.candidateSha256,
@@ -530,7 +820,19 @@ export function parseCommittedRestoreOutcome(
     schemaManifestId: RESTORE_SCHEMA_MANIFEST_ID as typeof RESTORE_SCHEMA_MANIFEST_ID,
     rowsByTable,
     pbEventsRebuilt,
-    postCommitStatus: "pending",
+  };
+  if (record.postCommitStatus === "pending") {
+    return { ...base, postCommitStatus: "pending" };
+  }
+  return {
+    ...base,
+    postCommitStatus: "complete",
+    result: requireCompleteResult(
+      record.result,
+      restoreId,
+      rowsByTable,
+      pbEventsRebuilt
+    ),
   };
 }
 

@@ -193,6 +193,9 @@ export type EngineFixture = {
   readonly attemptToken: NativeProcessToken;
   readonly retryToken: NativeProcessToken;
   readonly discardedPaths: string[];
+  recreateRuntime(
+    reconcileMedia?: ReplacementRestoreRuntimeParameters["reconcileMedia"]
+  ): ReplacementRestoreEngine;
   close(): void;
 };
 
@@ -226,6 +229,7 @@ export function createEngineFixture(options: {
   currentToken?: NativeProcessToken;
   prepareCandidate?: ReplacementRestoreRuntimeParameters["prepareCandidate"];
   hashCandidate?: ReplacementRestoreRuntimeParameters["hashCandidate"];
+  reconcileMedia?: ReplacementRestoreRuntimeParameters["reconcileMedia"];
 } = {}): EngineFixture {
   const pair = createReplacementFixturePair();
   const candidateDatabase = new DatabaseSync(pair.candidatePath);
@@ -250,36 +254,45 @@ export function createEngineFixture(options: {
   const discardedPaths: string[] = [];
   let currentToken = options.currentToken ?? PROCESS_A;
   let sequence = 0;
-  const runtime = createReplacementRestoreRuntime({
-    stagingRootUri: rootUri,
-    prepareCandidate:
-      options.prepareCandidate ??
-      (async () => ({
-        sourceDisplayName: "fixture.db",
-        candidatePath: candidateUri,
-        candidateSha256: streamingHash(candidatePath),
-        ...candidateSummary(candidatePath),
-      })),
-    discardCandidate(path) {
-      discardedPaths.push(path);
-      const directory = dirname(pathFromUri(path));
-      if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
-    },
-    candidateExists: (path) => existsSync(pathFromUri(path)),
-    hashCandidate:
-      options.hashCandidate ??
-      (async (path) => streamingHash(pathFromUri(path))),
-    hashCandidateSync: (path) => streamingHash(pathFromUri(path)),
-    getNativeProcessToken: () => currentToken,
-    readControlRecord: controls.read,
-    writeControlRecord: controls.write,
-    deleteControlRecord: controls.delete,
-    openValidatedSession: openValidatedReplacementSession,
-    createOpaqueId(kind) {
-      sequence += 1;
-      return `${kind}-v1:fixture-${String(sequence).padStart(8, "0")}`;
-    },
-  });
+  const createRuntime = (
+    reconcileMedia = options.reconcileMedia
+  ): ReplacementRestoreEngine =>
+    createReplacementRestoreRuntime({
+      stagingRootUri: rootUri,
+      prepareCandidate:
+        options.prepareCandidate ??
+        (async () => ({
+          sourceDisplayName: "fixture.db",
+          candidatePath: candidateUri,
+          candidateSha256: streamingHash(candidatePath),
+          ...candidateSummary(candidatePath),
+        })),
+      discardCandidate(path) {
+        discardedPaths.push(path);
+        const directory = dirname(pathFromUri(path));
+        if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
+      },
+      candidateExists: (path) => existsSync(pathFromUri(path)),
+      hashCandidate:
+        options.hashCandidate ??
+        (async (path) => streamingHash(pathFromUri(path))),
+      hashCandidateSync: (path) => streamingHash(pathFromUri(path)),
+      getNativeProcessToken: () => currentToken,
+      readControlRecord: controls.read,
+      writeControlRecord: controls.write,
+      deleteControlRecord: controls.delete,
+      openValidatedSession: openValidatedReplacementSession,
+      reconcileMedia:
+        reconcileMedia ??
+        (async () => {
+          throw new Error("Media reconciliation is not configured for this engine fixture.");
+        }),
+      createOpaqueId(kind) {
+        sequence += 1;
+        return `${kind}-v1:fixture-${String(sequence).padStart(8, "0")}`;
+      },
+    });
+  const runtime = createRuntime();
   const fixture = {
     pair,
     rootPath,
@@ -293,6 +306,7 @@ export function createEngineFixture(options: {
     attemptToken: PROCESS_B,
     retryToken: PROCESS_C,
     discardedPaths,
+    recreateRuntime: createRuntime,
     close() {
       live.close();
       closeReplacementFixturePair(pair);
