@@ -57,12 +57,19 @@ ticket does not measure device-specific storage behavior or prove a parent-direc
 Reads use `Os.lstat()` so `ENOENT` is the only evidence of absence. Access errors, symlinks, a
 non-directory `restore-control` path, non-regular associated files, a committed file that disappears
 before open, invalid UTF-8, invalid JSON, and oversized content return `unreadable`, never `absent`.
+After `AtomicFile.openRead()` returns, the store rechecks the associated paths before consuming the
+opened stream. The base must be a regular file and both `.bak` and `.new` must be absent. If recovery
+or staging cleanup did not complete, the stream is closed and the read returns `unreadable`. This
+check is necessary because both current and legacy platform implementations log or ignore failed
+recovery file operations instead of reporting them to the `openRead()` caller.
 
 `AtomicFile` recovery is interpreted as follows:
 
-- base file plus orphan `.new`: the base is the last published record; `openRead()` follows the
-  library recovery behavior and ignores/removes the unpublished staging file;
-- legacy `.bak`: it is a committed candidate and `openRead()` lets `AtomicFile` recover it;
+- base file plus orphan `.new`: the base is the last published record only after `openRead()` removes
+  the unpublished staging file; a remaining `.new` makes the read `unreadable`;
+- legacy `.bak`: it is the authoritative committed candidate and `openRead()` must finish recovering
+  it before any base bytes are accepted; a remaining `.bak` makes the read `unreadable`, so a later
+  retry can recover the backup after the filesystem problem is corrected;
 - lone regular `.new` with no base or `.bak`: the first write never reached `finishWrite()`, so no
   record was published and the result is `absent`; a later write overwrites that staging path and an
   explicit delete removes it;
@@ -95,7 +102,8 @@ npm.cmd run lint
   __tests__/config/restoreNativePlugin.test.ts --max-warnings=0
 Set-Location android
 .\gradlew.bat :app:testDebugUnitTest --tests `
-  com.anonymous.LiftingLog.restore.RestoreJsonEnvelopeTest
+  com.anonymous.LiftingLog.restore.RestoreJsonEnvelopeTest --tests `
+  com.anonymous.LiftingLog.restore.RestoreAtomicFilePostconditionsTest
 .\gradlew.bat :app:compileDebugKotlin
 .\gradlew.bat :app:dependencyInsight --dependency com.google.code.gson:gson `
   --configuration debugRuntimeClasspath
@@ -105,9 +113,12 @@ Set-Location android
 
 The Android JVM suite executes the production strict JSON-envelope helper and covers known lenient
 syntax, invalid escapes, case-variant literals, malformed numbers, trailing input, non-object roots,
-raw string controls, an out-of-string byte-order mark, and valid nested and Unicode objects. The Jest
-tests use native-module mocks; they prove facade validation and plugin synchronization. Neither suite
-proves Android process lifetime, filesystem recovery, or device durability.
+raw string controls, an out-of-string byte-order mark, and valid nested and Unicode objects. It also
+executes the production atomic-read postcondition helper, including failed backup recovery, stream
+closure, successful retry ordering, and failed `.new` cleanup. The Jest tests use native-module mocks;
+they prove facade validation and plugin synchronization. The JVM suite exercises the postcondition
+policy with controlled state transitions; Android runtime recovery and device durability still require
+the coordinated runtime proof.
 
 ## Coordinated Android runtime proof
 
@@ -159,6 +170,8 @@ is captured, Android runtime behavior remains an acceptance gate rather than a c
 
 - [React Native Android native modules](https://reactnative.dev/docs/legacy/native-modules-android)
 - [Android `AtomicFile`](https://developer.android.com/reference/android/util/AtomicFile)
+- [Current AOSP `AtomicFile` source](https://android.googlesource.com/platform/frameworks/base/+/HEAD/core/java/android/util/AtomicFile.java)
+- [Legacy AOSP `AtomicFile` source](https://android.googlesource.com/platform/frameworks/base/+/befe778/core/java/android/util/AtomicFile.java)
 - [Gson strictness troubleshooting](https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json-not-rejected)
 - Installed RN 0.86 synchronous-method validation:
   `node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/internal/turbomodule/core/TurboModuleInteropUtils.kt`

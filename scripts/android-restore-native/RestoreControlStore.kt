@@ -6,6 +6,7 @@ import android.system.Os
 import android.system.OsConstants
 import android.util.AtomicFile
 import java.io.ByteArrayOutputStream
+import java.io.Closeable
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -18,6 +19,61 @@ sealed class RestoreControlReadResult {
   data object Absent : RestoreControlReadResult()
   data class Present(val json: String) : RestoreControlReadResult()
   data class Unreadable(val code: String) : RestoreControlReadResult()
+}
+
+internal data class RestoreAtomicFileSnapshot(
+  val basePresent: Boolean,
+  val newPresent: Boolean,
+  val legacyBackupPresent: Boolean,
+)
+
+internal enum class RestoreAtomicReadState {
+  ABSENT,
+  UNPUBLISHED_NEW_ONLY,
+  COMMITTED_CANDIDATE,
+}
+
+internal object RestoreAtomicFilePostconditions {
+  fun classifyBeforeOpen(snapshot: RestoreAtomicFileSnapshot): RestoreAtomicReadState {
+    if (snapshot.basePresent || snapshot.legacyBackupPresent) {
+      return RestoreAtomicReadState.COMMITTED_CANDIDATE
+    }
+    return if (snapshot.newPresent) {
+      RestoreAtomicReadState.UNPUBLISHED_NEW_ONLY
+    } else {
+      RestoreAtomicReadState.ABSENT
+    }
+  }
+
+  fun <T : Closeable> openVerified(
+    openRead: () -> T,
+    inspectAfterOpen: () -> RestoreAtomicFileSnapshot,
+  ): T {
+    val stream = openRead()
+    try {
+      requireRecoveredReadState(inspectAfterOpen())
+      return stream
+    } catch (error: Throwable) {
+      try {
+        stream.close()
+      } catch (closeError: Throwable) {
+        error.addSuppressed(closeError)
+      }
+      throw error
+    }
+  }
+
+  private fun requireRecoveredReadState(snapshot: RestoreAtomicFileSnapshot) {
+    if (!snapshot.basePresent) {
+      throw IOException("Atomic restore control read did not leave a base file")
+    }
+    if (snapshot.legacyBackupPresent) {
+      throw IOException("Atomic restore control read did not recover the legacy backup")
+    }
+    if (snapshot.newPresent) {
+      throw IOException("Atomic restore control read did not remove unpublished staging state")
+    }
+  }
 }
 
 object RestoreControlStore {
@@ -43,7 +99,7 @@ object RestoreControlStore {
         }
         ReadState.COMMITTED_CANDIDATE -> Unit
       }
-      val bytes = readBounded(atomicFile)
+      val bytes = readBounded(atomicFile, baseFile)
       val json = decodeUtf8(bytes)
       RestoreJsonEnvelope.requireObject(json)
       RestoreControlReadResult.Present(json)
@@ -105,7 +161,7 @@ object RestoreControlStore {
     }
 
     val published = try {
-      readBounded(atomicFile)
+      readBounded(atomicFile, baseFile)
     } catch (error: Exception) {
       throw IOException("Published restore control record could not be verified", error)
     }
@@ -158,22 +214,27 @@ object RestoreControlStore {
       return ReadState.ABSENT
     }
 
+    return when (RestoreAtomicFilePostconditions.classifyBeforeOpen(inspectAssociatedFiles(baseFile))) {
+      RestoreAtomicReadState.ABSENT -> ReadState.ABSENT
+      RestoreAtomicReadState.UNPUBLISHED_NEW_ONLY -> ReadState.UNPUBLISHED_NEW_ONLY
+      RestoreAtomicReadState.COMMITTED_CANDIDATE -> ReadState.COMMITTED_CANDIDATE
+    }
+  }
+
+  private fun inspectAssociatedFiles(baseFile: File): RestoreAtomicFileSnapshot {
     val baseMode = lstatModeOrNull(baseFile)
-    val backupMode = lstatModeOrNull(legacyBackupFile(baseFile))
     val newMode = lstatModeOrNull(File("${baseFile.path}.new"))
-    for (mode in listOfNotNull(baseMode, backupMode, newMode)) {
+    val backupMode = lstatModeOrNull(legacyBackupFile(baseFile))
+    for (mode in listOfNotNull(baseMode, newMode, backupMode)) {
       if (!OsConstants.S_ISREG(mode)) {
         throw IOException("Restore control associated path is not a regular file")
       }
     }
-    if (baseMode != null || backupMode != null) {
-      return ReadState.COMMITTED_CANDIDATE
-    }
-    return if (newMode != null) {
-      ReadState.UNPUBLISHED_NEW_ONLY
-    } else {
-      ReadState.ABSENT
-    }
+    return RestoreAtomicFileSnapshot(
+      basePresent = baseMode != null,
+      newPresent = newMode != null,
+      legacyBackupPresent = backupMode != null,
+    )
   }
 
   private fun requireControlDirectory(baseFile: File): Boolean {
@@ -242,8 +303,16 @@ object RestoreControlStore {
     }
   }
 
-  private fun readBounded(atomicFile: AtomicFile): ByteArray {
-    atomicFile.openRead().use { input ->
+  private fun readBounded(atomicFile: AtomicFile, baseFile: File): ByteArray {
+    RestoreAtomicFilePostconditions.openVerified(
+      openRead = { atomicFile.openRead() },
+      inspectAfterOpen = {
+        if (!requireControlDirectory(baseFile)) {
+          throw IOException("Restore control directory disappeared during atomic read")
+        }
+        inspectAssociatedFiles(baseFile)
+      },
+    ).use { input ->
       val output = ByteArrayOutputStream()
       val buffer = ByteArray(READ_BUFFER_BYTES)
       var total = 0
