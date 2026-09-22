@@ -31,6 +31,7 @@ function read(root: string, filename: string): string {
 describe("Android rest-timer retirement integration", () => {
   it("keeps the registry helper in canonical/generated parity", () => {
     expect(KOTLIN_TEMPLATES).toContain("RestTimerRegistry.kt");
+    expect(KOTLIN_TEMPLATES).toContain("RestTimerNavigationGeneration.kt");
     for (const filename of KOTLIN_TEMPLATES) {
       expect(read(generatedRoot, filename)).toBe(read(templateRoot, filename));
     }
@@ -99,6 +100,42 @@ describe("Android rest-timer retirement integration", () => {
     const manager = read(templateRoot, "RestTimerNotificationManager.kt");
     expect(manager).toContain("synchronized(operationLock)");
     expect(manager).toContain("notificationManager.cancelAll()");
+    const showCountdown = manager.indexOf("fun showCountdown(");
+    const countdownGenerationRead = manager.indexOf(
+      "val navigationGeneration = navigationGeneration(appContext).read()",
+      showCountdown
+    );
+    const countdownRegistration = manager.indexOf(
+      "registry(appContext).register(timerState)",
+      showCountdown
+    );
+    expect(countdownGenerationRead).toBeGreaterThan(showCountdown);
+    expect(countdownRegistration).toBeGreaterThan(countdownGenerationRead);
+
+    const completionDelivery = manager.indexOf("fun handleCompletionDelivery(");
+    const completionGenerationRead = manager.indexOf(
+      "val navigationGeneration = navigationGeneration(appContext).read()",
+      completionDelivery
+    );
+    const completionRemoval = manager.indexOf(
+      "registry(appContext).removeExact(timerId, exerciseId, endAtMillis)",
+      completionDelivery
+    );
+    expect(completionGenerationRead).toBeGreaterThan(completionDelivery);
+    expect(completionRemoval).toBeGreaterThan(completionGenerationRead);
+
+    const generation = read(templateRoot, "RestTimerNavigationGeneration.kt");
+    const rotate = generation.indexOf("generation.rotate()");
+    const retire = generation.indexOf("return registry.retire(", rotate);
+    expect(rotate).toBeGreaterThanOrEqual(0);
+    expect(retire).toBeGreaterThan(rotate);
+    expect(generation).toContain('const val GENERATION_PREFIX = "timer-nav-v1:"');
+    expect(generation).toContain("reader.strictness = Strictness.STRICT");
+    expect(generation).toContain("val published = read()");
+    expect(generation).not.toContain("persistence.remove()");
+
+    expect(registry).toContain('REGISTERED_TIMERS("registered-timers.json")');
+    expect(registry).toContain('NAVIGATION_GENERATION("navigation-generation.json")');
   });
 
   it("exposes the frozen native method and passes the full verifier", async () => {
@@ -107,6 +144,13 @@ describe("Android rest-timer retirement integration", () => {
     expect(module).toContain('"ERR_REST_TIMER_RETIRE_RESTORE"');
     expect(module).toContain('putString("status", "retired")');
     expect(module).toContain('putBoolean("displayedNotificationsCleared", true)');
+    expect(module).toContain("@ReactMethod(isBlockingSynchronousMethod = true)");
+    expect(module).toContain("fun getRestTimerNavigationGeneration()");
+
+    const manager = read(templateRoot, "RestTimerNotificationManager.kt");
+    expect(manager).toContain(
+      'appendQueryParameter("navigationGeneration", navigationGeneration)'
+    );
 
     await expect(verifyAndroidRestTimerNative(projectRoot)).resolves.toEqual({
       packageName: "com.anonymous.LiftingLog",

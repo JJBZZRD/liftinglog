@@ -7,6 +7,7 @@ const KOTLIN_TEMPLATES = [
   "RestTimerNotificationsModule.kt",
   "RestTimerNotificationManager.kt",
   "RestTimerRegistry.kt",
+  "RestTimerNavigationGeneration.kt",
   "RestTimerCompletionReceiver.kt",
   "RestTimerCountdownDismissedReceiver.kt",
   "RestTimerNotificationsPackage.kt",

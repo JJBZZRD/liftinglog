@@ -179,6 +179,11 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     moduleSource.includes("fun retireRestTimerArtifactsForReplacementRestore(promise: Promise)"),
     "Native rest-timer retirement method is missing"
   );
+  assert(
+    moduleSource.includes("@ReactMethod(isBlockingSynchronousMethod = true)") &&
+      moduleSource.includes("fun getRestTimerNavigationGeneration()"),
+    "Native rest-timer navigation generation synchronous method is missing"
+  );
   const adapterSource = readRequiredFile(
     path.join(paths.projectRoot, "lib", "native", "restTimerNotifications.ts")
   ).toString("utf8");
@@ -238,6 +243,16 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     managerSource.includes("notificationManager.cancelAll()"),
     "Rest-timer retirement must clear every displayed app notification"
   );
+  const rotationIndex = managerSource.indexOf("RestTimerNavigationRetirementCoordinator(");
+  const retirementIndex = managerSource.indexOf(").retire(", rotationIndex);
+  assert(
+    rotationIndex >= 0 && retirementIndex > rotationIndex,
+    "Rest-timer navigation generation must coordinate retirement under the manager lock"
+  );
+  assert(
+    managerSource.includes('appendQueryParameter("navigationGeneration", navigationGeneration)'),
+    "Rest-timer ACTION_VIEW links must carry the durable navigation generation"
+  );
 
   const registrySource = readRequiredFile(
     path.join(paths.templateDir, "RestTimerRegistry.kt")
@@ -264,6 +279,11 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     !registrySource.includes("getSharedPreferences"),
     "Rest-timer registry must not use SharedPreferences as its durable boundary"
   );
+  assert(
+    registrySource.includes('REGISTERED_TIMERS("registered-timers.json")') &&
+      registrySource.includes('NAVIGATION_GENERATION("navigation-generation.json")'),
+    "Rest-timer persistence must restrict writes to the two compiled record names"
+  );
   const openReadIndex = registrySource.indexOf("atomicFile.openRead().use");
   const postOpenRecoveryIndex = registrySource.indexOf(
     "requireRecoveredReadState()",
@@ -283,6 +303,24 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     postReadRecoveryIndex > byteReadIndex,
     "Rest-timer registry must reverify AtomicFile recovery before accepting bytes"
   );
+
+  const generationSource = readRequiredFile(
+    path.join(paths.templateDir, "RestTimerNavigationGeneration.kt")
+  ).toString("utf8");
+  const generationInvariants = [
+    'const val GENERATION_PREFIX = "timer-nav-v1:"',
+    "reader.strictness = Strictness.STRICT",
+    "RestTimerNavigationGenerationCorruptException",
+    "persistence.replace(encode(generation))",
+    "val published = read()",
+    "generation.rotate()",
+  ];
+  for (const invariant of generationInvariants) {
+    assert(
+      generationSource.includes(invariant),
+      `Missing rest-timer navigation generation invariant: ${invariant}`
+    );
+  }
 
   const receiverInvariants = [
     ["RestTimerCompletionReceiver.kt", "handleCompletionDelivery"],

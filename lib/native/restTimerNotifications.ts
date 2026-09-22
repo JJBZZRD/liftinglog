@@ -18,6 +18,7 @@ type NativeRestTimerNotificationsModule = {
   canScheduleExactAlarms(): Promise<boolean>;
   openExactAlarmSettings(): Promise<boolean>;
   retireRestTimerArtifactsForReplacementRestore?(): Promise<unknown>;
+  getRestTimerNavigationGeneration?(): unknown;
 };
 
 type CountdownPayload = {
@@ -31,6 +32,15 @@ const nativeModule = NativeModules.RestTimerNotifications as NativeRestTimerNoti
 
 export const ERR_REST_TIMER_RETIRE_UNAVAILABLE = "ERR_REST_TIMER_RETIRE_UNAVAILABLE";
 export const ERR_REST_TIMER_RETIRE_RESTORE = "ERR_REST_TIMER_RETIRE_RESTORE";
+export const ERR_REST_TIMER_NAVIGATION_GENERATION_READ_FAILED =
+  "ERR_REST_TIMER_NAVIGATION_GENERATION_READ_FAILED";
+export const ERR_REST_TIMER_NAVIGATION_GENERATION_INVALID_ACKNOWLEDGEMENT =
+  "ERR_REST_TIMER_NAVIGATION_GENERATION_INVALID_ACKNOWLEDGEMENT";
+
+export type RestTimerNavigationGeneration =
+  | { status: "available"; generation: string | null }
+  | { status: "unreadable"; code: string }
+  | { status: "unavailable" };
 
 export type RestoreTimerRetirement = {
   status: "retired";
@@ -72,8 +82,86 @@ function isRestoreTimerRetirement(value: unknown): value is RestoreTimerRetireme
   );
 }
 
+const REST_TIMER_NAVIGATION_GENERATION_PATTERN =
+  /^timer-nav-v1:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function hasExactKeys(value: object, expectedKeys: string[]): boolean {
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpectedKeys = [...expectedKeys].sort();
+  return (
+    actualKeys.length === sortedExpectedKeys.length &&
+    actualKeys.every((key, index) => key === sortedExpectedKeys[index])
+  );
+}
+
+function parseRestTimerNavigationGeneration(
+  value: unknown
+): RestTimerNavigationGeneration | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (candidate.status === "available") {
+    if (!hasExactKeys(candidate, ["status", "generation"])) {
+      return null;
+    }
+    if (
+      candidate.generation !== null &&
+      (typeof candidate.generation !== "string" ||
+        !REST_TIMER_NAVIGATION_GENERATION_PATTERN.test(candidate.generation))
+    ) {
+      return null;
+    }
+    return {
+      status: "available",
+      generation: candidate.generation as string | null,
+    };
+  }
+  if (candidate.status === "unreadable") {
+    if (
+      !hasExactKeys(candidate, ["status", "code"]) ||
+      typeof candidate.code !== "string" ||
+      candidate.code.trim().length === 0
+    ) {
+      return null;
+    }
+    return { status: "unreadable", code: candidate.code };
+  }
+  if (candidate.status === "unavailable" && hasExactKeys(candidate, ["status"])) {
+    return { status: "unavailable" };
+  }
+  return null;
+}
+
 export function supportsNativeCountdownNotifications(): boolean {
   return Platform.OS === "android" && Boolean(nativeModule);
+}
+
+export function getRestTimerNavigationGeneration(): RestTimerNavigationGeneration {
+  if (
+    Platform.OS !== "android" ||
+    !nativeModule ||
+    typeof nativeModule.getRestTimerNavigationGeneration !== "function"
+  ) {
+    return { status: "unavailable" };
+  }
+
+  let acknowledgement: unknown;
+  try {
+    acknowledgement = nativeModule.getRestTimerNavigationGeneration();
+  } catch {
+    return {
+      status: "unreadable",
+      code: ERR_REST_TIMER_NAVIGATION_GENERATION_READ_FAILED,
+    };
+  }
+
+  return (
+    parseRestTimerNavigationGeneration(acknowledgement) ?? {
+      status: "unreadable",
+      code: ERR_REST_TIMER_NAVIGATION_GENERATION_INVALID_ACKNOWLEDGEMENT,
+    }
+  );
 }
 
 export async function showCountdownNotification(payload: CountdownPayload): Promise<boolean> {

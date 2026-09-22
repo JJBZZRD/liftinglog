@@ -10,6 +10,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.UiThreadUtil
+import com.facebook.react.bridge.WritableMap
 
 class RestTimerNotificationsModule(
   reactContext: ReactApplicationContext
@@ -175,7 +176,31 @@ class RestTimerNotificationsModule(
     }
   }
 
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  fun getRestTimerNavigationGeneration(): WritableMap {
+    return try {
+      val generation = RestTimerNotificationManager.getRestTimerNavigationGeneration(
+        reactApplicationContext
+      )
+      Arguments.createMap().apply {
+        putString("status", "available")
+        if (generation == null) {
+          putNull("generation")
+        } else {
+          putString("generation", generation)
+        }
+      }
+    } catch (_: Exception) {
+      Arguments.createMap().apply {
+        putString("status", "unreadable")
+        putString("code", ERR_NAVIGATION_GENERATION_UNREADABLE)
+      }
+    }
+  }
+
   companion object {
     const val NAME = "RestTimerNotifications"
+    const val ERR_NAVIGATION_GENERATION_UNREADABLE =
+      "ERR_REST_TIMER_NAVIGATION_GENERATION_UNREADABLE"
   }
 }

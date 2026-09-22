@@ -101,10 +101,15 @@ object RestTimerRegistryFileCodec {
   }
 }
 
-class AtomicFileRestTimerRegistryPersistence(context: Context) : RestTimerRegistryPersistence {
+class AtomicFileRestTimerRegistryPersistence private constructor(
+  context: Context,
+  fileName: RestTimerRegistryFileName
+) : RestTimerRegistryPersistence {
+  constructor(context: Context) : this(context, RestTimerRegistryFileName.REGISTERED_TIMERS)
+
   private val baseFile = File(
     File(context.applicationContext.filesDir, DIRECTORY_NAME),
-    REGISTRY_FILENAME
+    fileName.value
   )
 
   override fun read(): RestTimerRegistryValue {
@@ -335,9 +340,19 @@ class AtomicFileRestTimerRegistryPersistence(context: Context) : RestTimerRegist
   companion object {
     const val MAX_REGISTRY_BYTES = RestTimerRegistryFileCodec.MAX_REGISTRY_BYTES
     private const val DIRECTORY_NAME = "rest-timer-registry"
-    private const val REGISTRY_FILENAME = "registered-timers.json"
     private const val READ_BUFFER_BYTES = 8 * 1024
+
+    internal fun navigationGeneration(context: Context): RestTimerRegistryPersistence =
+      AtomicFileRestTimerRegistryPersistence(
+        context,
+        RestTimerRegistryFileName.NAVIGATION_GENERATION
+      )
   }
+}
+
+private enum class RestTimerRegistryFileName(val value: String) {
+  REGISTERED_TIMERS("registered-timers.json"),
+  NAVIGATION_GENERATION("navigation-generation.json"),
 }
 
 data class RestTimerRetirementResult(
