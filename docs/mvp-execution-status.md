@@ -13,10 +13,12 @@ accepted prerequisites; the replacement engine, startup gate, Settings hookup,
 postcommit media integration and final release matrix remain outstanding.
 
 The engine packet passed independent boundary review and implementation is active
-in an isolated Sol/xhigh worktree pinned to `70bedfa`. A Terra/high worker owns
-the disjoint standalone gate view from `bc5be6d`. Neither receives inherited
-conversation context or may merge. A read-only Sol/high audit is preparing the
-later connection/initial-URL lifecycle boundary. No engine or startup integration
+in an isolated Sol/xhigh worktree pinned to `70bedfa`. The disjoint standalone
+gate view was independently checked by the organiser and integrated as `cf6280f`
+after corrections to uncertain-outcome copy and recovery guards (9 focused tests
+in each profile). Workers receive no inherited conversation context and may not
+merge. A read-only Sol/high audit is preparing the later connection/initial-URL
+lifecycle boundary. No engine or startup integration
 is yet accepted. Diagnostic branches remain outside shipping code. Physical-device
 checks are still required before release; iOS remains explicitly deferred.
 
@@ -116,7 +118,7 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B4RP | Luna / medium; organiser setup recovery/review | Isolated immediate-abort diagnostic extension | Reviewed probe `701782e` executed on fresh synthetic AVD; diagnostic remains outside main |
 | MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Corrected `9c3c2f2` reviewed and integrated as `72d5fd4`; organiser typecheck/scoped lint pass; no engine implementation |
 | MVP-006B5 | Sol / xhigh; independent audit before integration | Seven-method engine subset, four bounded connection-free helpers, production-service DB tests and notes | In implementation from `70bedfa`; [packet](testing/replacement-restore-engine-packet.md); media completion and lifecycle excluded |
-| MVP-006D2 | Terra / high | Standalone provider-independent gate component and focused tests/notes | In implementation from `bc5be6d`; [view contract](testing/replacement-restore-gate-view-contract.md); root hookup excluded |
+| MVP-006D2 | Terra / high; organiser independent review | Standalone provider-independent gate component and focused tests/notes | Corrected `2647ed2` reviewed; organiser 9/9 in each profile; integrated `cf6280f`; root hookup excluded |
 | MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
 | MVP-006A2 | Sol / high; independent Sol / high audit | Export-only backup helpers, isolated snapshot helper and focused tests | Corrected `b0390e9` independently accepted and integrated `b145a81`; primary error retained through close failure; [actual native busy-WAL snapshot accepted](testing/android-backup-snapshot-runtime.md); SAF release proof pending |
 | MVP-006B2CP | Terra / medium; organiser review/runtime | Non-shipping timer probe only | Corrected `3205588` reviewed and executed; no production source changes; retained diagnostic branch |
