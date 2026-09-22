@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "LiftingLog",
+    "name": "WorkoutLog MVP Check",
     "slug": "LiftingLog",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -28,7 +28,7 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-      "package": "com.anonymous.LiftingLog"
+      "package": "com.anonymous.LiftingLog.mvpacceptance"
     },
     "web": {
       "bundler": "metro",
