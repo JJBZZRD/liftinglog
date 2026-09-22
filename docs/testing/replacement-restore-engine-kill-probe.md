@@ -6,15 +6,19 @@ custom `restore-kill-entry.tsx` entry registers the diagnostic directly and does
 not import or mount Expo Router, the normal database lifecycle, providers,
 notifications, or timer state.
 
-The diagnostic runs only when all three conditions are true:
+The diagnostic runs only when all four conditions are true:
 
 - `__DEV__`
 - Android
+- `expo-application.applicationId` is exactly
+  `com.anonymous.LiftingLog.restorekillprobe`
 - `EXPO_PUBLIC_RESTORE_KILL_PROBE=1`
 
 Otherwise it renders a disabled shell. Import, registration, render, and mount do
 not create a file, open SQLite, publish a control, or invoke the restore engine.
-Every action and every wrapped mutation checks the gate again.
+Every action and every wrapped mutation checks the gate again. A normal
+development client and an environment where the application ID is unavailable
+remain mutation-free disabled shells even when the public flag is set.
 
 ## APK and data isolation
 
@@ -24,6 +28,10 @@ keeps its base application ID and adds the debug-only suffix
 `.restorekillprobe`. Do not run prebuild: regenerating native configuration risks
 applying the package identity twice. This gives the fixed native pending/outcome
 records their own APK sandbox.
+
+The custom entry imports the application's global CSS before registering the
+probe, and `tailwind.config.js` includes the diagnostic source directory. No
+Router entry or normal application root is loaded.
 
 The only probe-created database files are:
 
@@ -69,10 +77,45 @@ and force-stops the diagnostic APK during that hold. Tokens are used only for
 equality classification and must never appear in screenshots, logs, or handoff
 notes.
 
-If the hold expires, the wrapper marks its control reads unavailable and throws.
-The engine therefore cannot continue after an after-write timeout by rereading a
-successful physical write. A reached receipt cannot be overwritten or rearmed;
-the same native process cannot treat it as a completed force-stop.
+If the hold expires, the shared wrapper guard fails closed and throws. It blocks
+every later control write or deletion, candidate discard, and media reconcile
+mutation from that runtime while still allowing the transaction layer to issue
+its safety rollback. Control reads become unavailable. The engine therefore
+cannot continue after an after-write timeout by rereading a successful physical
+write or publishing a rolled-back marker after a `precommit` timeout. A reached
+receipt cannot be overwritten or rearmed; the same native process cannot treat
+it as a completed force-stop.
+
+## Executable device preflight
+
+The organiser sets the exact ADB serial and runs these assertions before the
+first launch. They refuse the ordinary application package, a different launcher
+component, or a sandbox that cannot be entered under the diagnostic identity.
+
+```powershell
+$serial = '<reviewed-emulator-serial>'
+$probePackage = 'com.anonymous.LiftingLog.restorekillprobe'
+$probeComponent = "$probePackage/com.anonymous.LiftingLog.MainActivity"
+
+$installed = (& adb -s $serial shell pm list packages $probePackage).Trim()
+if ($LASTEXITCODE -ne 0 -or $installed -ne "package:$probePackage") {
+  throw "Diagnostic package assertion failed: $installed"
+}
+
+$resolved = (& adb -s $serial shell cmd package resolve-activity --brief `
+  -a android.intent.action.MAIN `
+  -c android.intent.category.LAUNCHER `
+  $probePackage | Select-Object -Last 1).Trim()
+if ($LASTEXITCODE -ne 0 -or $resolved -ne $probeComponent) {
+  throw "Diagnostic component assertion failed: $resolved"
+}
+
+$sandbox = (& adb -s $serial shell run-as $probePackage pwd).Trim()
+$expectedSandbox = "/data/user/0/$probePackage"
+if ($LASTEXITCODE -ne 0 -or $sandbox -ne $expectedSandbox) {
+  throw "Diagnostic run-as assertion failed: $sandbox"
+}
+```
 
 ## Per-run button sequence
 
@@ -147,13 +190,13 @@ behavior and does not change any production restore, lifecycle, native module,
 plugin, or Router source.
 
 Before device use, require TypeScript, the focused import/config test, scoped
-uncached ESLint, `git diff --check`, exact seven-file scope, and byte parity for
+uncached ESLint, `git diff --check`, exact eight-file scope, and byte parity for
 production dependencies:
 
 ```powershell
 npm.cmd run typecheck
 $env:EXPO_PUBLIC_RELEASE_PROFILE='mvp'; npm.cmd test -- --runInBand --selectProjects unit --runTestsByPath __tests__/diagnostics/restoreKillEntry.test.ts
-npm.cmd run lint -- --no-cache diagnostics/RestoreEngineKillProbe.tsx restore-kill-entry.tsx __tests__/diagnostics/restoreKillEntry.test.ts
+npm.cmd run lint -- --no-cache diagnostics/RestoreEngineKillProbe.tsx restore-kill-entry.tsx __tests__/diagnostics/restoreKillEntry.test.ts tailwind.config.js
 git diff --check
 git diff --exit-code be386fba3a7cddd3426f7539ab7b999d603e2566 -- app lib/db lib/native plugins scripts/android-restore-native
 ```

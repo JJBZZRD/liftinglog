@@ -19,11 +19,19 @@ describe("non-shipping replacement restore kill entry", () => {
   it("imports the real entry, component, and engine graph without Router or mutation", () => {
     const registerRootComponent = jest.fn();
     const mutationCalls: string[] = [];
+    let mockApplicationId: string | null =
+      "com.anonymous.LiftingLog.restorekillprobe";
 
     process.env.EXPO_PUBLIC_RESTORE_KILL_PROBE = "1";
     (global as typeof globalThis & { __DEV__?: boolean }).__DEV__ = true;
 
     jest.doMock("expo", () => ({ registerRootComponent }));
+    jest.doMock("expo-application", () => ({
+      get applicationId() {
+        return mockApplicationId;
+      },
+    }));
+    jest.doMock("../../app/global.css", () => ({}));
     jest.doMock("react-native", () => ({
       NativeModules: {},
       Platform: { OS: "android" },
@@ -87,6 +95,7 @@ describe("non-shipping replacement restore kill entry", () => {
 
     const forbiddenModules = [
       "expo-router",
+      "expo-router/entry",
       "../../lib/db/replacementRestoreLifecycle",
       "../../lib/db/connection",
       "../../lib/notificationHandler",
@@ -114,10 +123,46 @@ describe("non-shipping replacement restore kill entry", () => {
     TestRenderer.act(() => {
       renderer = TestRenderer.create(React.createElement(component!.default));
     });
-    process.env.EXPO_PUBLIC_RESTORE_KILL_PROBE = "0";
+    mockApplicationId = "com.anonymous.LiftingLog";
     TestRenderer.act(() => {
       renderer!.update(React.createElement(component!.default));
     });
+    expect(JSON.stringify(renderer!.toJSON())).toContain(
+      "Restore kill diagnostic disabled"
+    );
+    mockApplicationId = null;
+    TestRenderer.act(() => {
+      renderer!.update(React.createElement(component!.default));
+    });
+    expect(JSON.stringify(renderer!.toJSON())).toContain(
+      "Restore kill diagnostic disabled"
+    );
+
+    const identityGuard = component!.createRestoreKillMutationGuard();
+    const identityMutations: string[] = [];
+    expect(() => identityGuard.run(() => identityMutations.push("normal-app"))).toThrow(
+      "requires a development Android build"
+    );
+    mockApplicationId = null;
+    expect(() => identityGuard.run(() => identityMutations.push("null-app"))).toThrow(
+      "requires a development Android build"
+    );
+    expect(identityMutations).toEqual([]);
+
+    mockApplicationId = "com.anonymous.LiftingLog.restorekillprobe";
+    const controlWrites: string[] = [];
+    const mutationGuard = component!.createRestoreKillMutationGuard();
+    mutationGuard.run(() => controlWrites.push("pending:attempting"));
+    expect(() =>
+      mutationGuard.failAfterCheckpointTimeout("precommit")
+    ).toThrow("runtime is fail-closed");
+    expect(() =>
+      mutationGuard.run(() => controlWrites.push("pending:rolled_back_unchanged"))
+    ).toThrow(
+      "further mutations are blocked"
+    );
+    expect(controlWrites).toEqual(["pending:attempting"]);
+
     TestRenderer.act(() => renderer!.unmount());
 
     expect(entry!).toEqual({});
@@ -132,6 +177,9 @@ describe("non-shipping replacement restore kill entry", () => {
       "postdelete",
     ]);
     expect(component!.RESTORE_KILL_HOLD_MILLIS).toBe(60_000);
+    expect(component!.RESTORE_KILL_PROBE_APPLICATION_ID).toBe(
+      "com.anonymous.LiftingLog.restorekillprobe"
+    );
     expect(mutationCalls).toEqual([]);
   });
 
@@ -146,6 +194,14 @@ describe("non-shipping replacement restore kill entry", () => {
       path.join(process.cwd(), "android", "app", "build.gradle"),
       "utf8"
     );
+    const entrySource = fs.readFileSync(
+      path.join(process.cwd(), "restore-kill-entry.tsx"),
+      "utf8"
+    );
+    const tailwind = fs.readFileSync(
+      path.join(process.cwd(), "tailwind.config.js"),
+      "utf8"
+    );
 
     expect(packageJson.main).toBe("./restore-kill-entry.tsx");
     expect(appJson.expo?.android?.package).toBe(
@@ -155,5 +211,7 @@ describe("non-shipping replacement restore kill entry", () => {
     expect(gradle).toMatch(
       /debug\s*\{\s*signingConfig signingConfigs\.debug\s*applicationIdSuffix '\.restorekillprobe'/
     );
+    expect(entrySource).toMatch(/^import "\.\/app\/global\.css";/);
+    expect(tailwind).toContain('"./diagnostics/**/*.{js,jsx,ts,tsx}"');
   });
 });

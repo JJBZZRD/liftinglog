@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
+import { applicationId } from "expo-application";
 import { useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 
@@ -53,6 +54,8 @@ import { newUid } from "../lib/utils/uid";
 
 export const RESTORE_KILL_PROBE_DIRECTORY = "restore-engine-kill-probe-v1";
 export const RESTORE_KILL_HOLD_MILLIS = 60_000;
+export const RESTORE_KILL_PROBE_APPLICATION_ID =
+  "com.anonymous.LiftingLog.restorekillprobe";
 
 const SOURCE_NAME = "source-populated.db";
 const LIVE_NAME = "live-scratch.db";
@@ -114,6 +117,7 @@ function probeEnabled(): boolean {
   return (
     __DEV__ &&
     Platform.OS === "android" &&
+    applicationId === RESTORE_KILL_PROBE_APPLICATION_ID &&
     process.env.EXPO_PUBLIC_RESTORE_KILL_PROBE === "1"
   );
 }
@@ -121,7 +125,7 @@ function probeEnabled(): boolean {
 function requireProbeEnabled(): void {
   if (!probeEnabled()) {
     throw new Error(
-      "Restore kill diagnostic requires a development Android build and EXPO_PUBLIC_RESTORE_KILL_PROBE=1."
+      `Restore kill diagnostic requires a development Android build with application ID ${RESTORE_KILL_PROBE_APPLICATION_ID} and EXPO_PUBLIC_RESTORE_KILL_PROBE=1.`
     );
   }
 }
@@ -574,14 +578,35 @@ function armCheckpoint(point: RestoreKillPoint): void {
   });
 }
 
+export type RestoreKillMutationGuard = {
+  readonly run: <T>(mutation: () => T) => T;
+  readonly isFailClosed: () => boolean;
+  readonly failAfterCheckpointTimeout: (point: RestoreKillPoint) => never;
+};
+
+export function createRestoreKillMutationGuard(): RestoreKillMutationGuard {
+  let failClosed = false;
+  return {
+    run<T>(mutation: () => T): T {
+      requireProbeEnabled();
+      if (failClosed) {
+        throw new Error("Restore kill checkpoint timed out; further mutations are blocked.");
+      }
+      return mutation();
+    },
+    isFailClosed: () => failClosed,
+    failAfterCheckpointTimeout(point): never {
+      failClosed = true;
+      throw new Error(`Kill checkpoint ${point} timed out; runtime is fail-closed.`);
+    },
+  };
+}
+
 function createCheckpointController(
   ownership: OwnershipReceipt,
-  point: RestoreKillPoint | undefined
-): {
-  readonly checkpoint: (candidate: RestoreKillPoint) => void;
-  readonly failClosed: { current: boolean };
-} {
-  const failClosed = { current: false };
+  point: RestoreKillPoint | undefined,
+  mutationGuard: RestoreKillMutationGuard
+): (candidate: RestoreKillPoint) => void {
   let consumed = false;
   const checkpoint = (candidate: RestoreKillPoint) => {
     if (candidate !== point || consumed) return;
@@ -607,10 +632,9 @@ function createCheckpointController(
     while (Date.now() < deadline) {
       // The organiser verifies the reached receipt and force-stops the separate APK.
     }
-    failClosed.current = true;
-    throw new Error(`Kill checkpoint ${candidate} timed out; runtime is fail-closed.`);
+    mutationGuard.failAfterCheckpointTimeout(candidate);
   };
-  return { checkpoint, failClosed };
+  return checkpoint;
 }
 
 function proxyCommitBoundary(
@@ -645,41 +669,46 @@ function createDiagnosticRuntime(options: {
 }): DiagnosticRuntime {
   requireProbeEnabled();
   const transactionCalls = { current: 0 };
-  const { checkpoint, failClosed } = createCheckpointController(options.ownership, options.point);
+  const mutationGuard = createRestoreKillMutationGuard();
+  const checkpoint = createCheckpointController(
+    options.ownership,
+    options.point,
+    mutationGuard
+  );
   const engine = createReplacementRestoreRuntime({
     stagingRootUri: getReplacementRestoreStagingRootUri(),
     prepareCandidate(prepareOptions) {
-      requireProbeEnabled();
-      return prepareReplacementCandidate(prepareOptions);
+      return mutationGuard.run(() => prepareReplacementCandidate(prepareOptions));
     },
     discardCandidate(candidatePath) {
-      requireProbeEnabled();
-      discardReplacementRestoreCandidate(candidatePath);
+      mutationGuard.run(() => discardReplacementRestoreCandidate(candidatePath));
     },
     candidateExists: replacementRestoreCandidateExists,
     hashCandidate: hashReplacementRestoreCandidate,
     hashCandidateSync: hashReplacementRestoreCandidateSync,
     getNativeProcessToken,
     readControlRecord(name) {
-      return failClosed.current ? { status: "unavailable" } : readRestoreControlRecord(name);
+      return mutationGuard.isFailClosed()
+        ? { status: "unavailable" }
+        : readRestoreControlRecord(name);
     },
     writeControlRecord(name: RestoreControlRecordName, json: string) {
       requireProbeEnabled();
       if (name === "pending") {
         const record = parsePendingRestoreRecord(json, getReplacementRestoreStagingRootUri());
         if (record.state === "attempting") checkpoint("before_attempt");
-        writeRestoreControlRecord(name, json);
+        mutationGuard.run(() => writeRestoreControlRecord(name, json));
         if (record.state === "attempting") checkpoint("after_attempt");
         return;
       }
       checkpoint("postcommit");
-      writeRestoreControlRecord(name, json);
+      mutationGuard.run(() => writeRestoreControlRecord(name, json));
       checkpoint("postoutcome");
     },
     deleteControlRecord(name: RestoreControlRecordName) {
       requireProbeEnabled();
       if (name === "pending") checkpoint("postoutcome");
-      deleteRestoreControlRecord(name);
+      mutationGuard.run(() => deleteRestoreControlRecord(name));
       if (name === "pending") checkpoint("postdelete");
     },
     openValidatedSession(sessionOptions): ValidatedReplacementSession {
@@ -701,8 +730,7 @@ function createDiagnosticRuntime(options: {
       };
     },
     reconcileMedia(mediaOptions) {
-      requireProbeEnabled();
-      return reconcileReplacementRestoreMedia(mediaOptions);
+      return mutationGuard.run(() => reconcileReplacementRestoreMedia(mediaOptions));
     },
   });
   return { engine, transactionCalls };
@@ -763,7 +791,7 @@ function DisabledShell() {
   return (
     <View className="flex-1 items-center justify-center bg-background p-6">
       <Text className="text-center text-base text-foreground-secondary">
-        Restore kill diagnostic disabled. It requires a development Android build and the explicit probe flag.
+        Restore kill diagnostic disabled. It requires the dedicated development Android application ID and the explicit probe flag.
       </Text>
     </View>
   );
