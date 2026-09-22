@@ -28,9 +28,17 @@ Android gallery/process-death/playback evidence remains a release obligation.
 MVP-006B6 is now the next executable implementation ticket. Its frozen
 [packet](testing/replacement-restore-lifecycle-packet.md) consumes the accepted
 engine, media service, timer generation and lifecycle-failure contract. One
-Sol/xhigh worker owns the isolated lifecycle branch; the organiser owns review,
-the later independent audit and Android integration proof. Settings D3 follows
-the accepted lifecycle facade, without a parallel stub implementation.
+Sol/xhigh worker owns branch `mvp/MVP-006B6-startup-lifecycle`, worktree
+`WorkoutLog-MVP006B6`, pinned to `3e813416bc7ddd2db7a780dba48058af8dc51d84`.
+The organiser owns review, the later independent audit and Android integration
+proof. Settings D3 follows the accepted lifecycle facade, without a parallel stub
+implementation. A read-only Luna evidence inventory confirms that 006E host
+requirements are substantially covered; [remaining evidence](testing/replacement-restore-evidence-inventory.md)
+and the [native lifecycle packet](testing/replacement-restore-lifecycle-native-packet.md)
+avoid duplicating the accepted engine and media work. Six original-file hashes
+still match after media integration. Graph refresh was requested in moderate mode;
+the tool still returned the older 3026-node/6918-edge graph, so exact source reads
+remain necessary after incomplete graph discovery.
 
 Independent Sol/high audit accepted the corrected engine candidate `ef0bc3c`.
 The organiser reviewed the final nine-file diff, passed **79 suites / 945 tests
@@ -186,7 +194,7 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006C | Sol / xhigh; independent Sol/high audit | Engine outcome consumers and new connection-free media coordinator/tests only | Corrected `bc97c20` independently accepted and exact-tree integrated `2c45567`; organiser full/MVP 81 suites / 962 tests pass, project lint zero errors / 19 existing warnings. Explicit scan/skip, strict complete outcomes and conservative no-delete cleanup; native media release proof remains |
 | MVP-006B5P | Terra / high; organiser source/device review | Non-shipping diagnostic route and usage notes only | Corrected `875d599` reviewed and [Android engine gate accepted](testing/replacement-restore-engine-android.md): populated/empty replacement, A/reload blocking, unknown-commit cold recovery, controls-only retries and missing/changed adapter faults pass. Diagnostic remains unmerged; no original app DB or phone access |
 | MVP-006B6A | Terra / medium; organiser review | Shared lifecycle blocker, standalone gate, focused tests and startup contract | Independently reviewed packet; corrected `c0e6d48` reviewed and exact-tree integrated `b13ce1f`. Gate passes 10 tests per profile; root MVP candidate/full integrated checks and integrated typecheck pass. No lifecycle implementation or engine signature change |
-| MVP-006B6 | Sol / xhigh implementation; Sol / high packet audit | Connection, lifecycle, root and timer navigation boundary with exact tests | [Frozen packet](testing/replacement-restore-lifecycle-packet.md) ready for isolated implementation after all prerequisites accepted; atomic bindings, startup URL waiting, timer recovery, reload ownership and delivery-time Expo response validation required; source/native acceptance pending |
+| MVP-006B6 | Sol / xhigh implementation; Sol / high packet audit | Connection, lifecycle, root and timer navigation boundary with exact tests | Dispatched from `3e81341` in isolated worktree; [frozen packet](testing/replacement-restore-lifecycle-packet.md) requires atomic bindings, startup URL waiting, timer recovery, reload ownership and delivery-time Expo response validation; source/native acceptance pending |
 | MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
 | MVP-006A2 | Sol / high; independent Sol / high audit | Export-only backup helpers, isolated snapshot helper and focused tests | Corrected `b0390e9` independently accepted and integrated `b145a81`; primary error retained through close failure; [actual native busy-WAL snapshot accepted](testing/android-backup-snapshot-runtime.md); SAF release proof pending |
 | MVP-006B2CP | Terra / medium; organiser review/runtime | Non-shipping timer probe only | Corrected `3205588` reviewed and executed; no production source changes; retained diagnostic branch |

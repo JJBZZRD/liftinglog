@@ -11,7 +11,7 @@ separate from emulator evidence.
 | --- | --- | --- |
 | 006B1 PB derivation | Exact canonical validity, ordering, progression and UID ownership; real DB parity | Independently accepted and integrated as `288001e` |
 | 006B2 native controls | Valid process token; RN 0.86 synchronous bridge compatibility; atomic fixed-name records; ambiguous reads fail closed; verified deletion; plugin/template parity | Corrected `02f45f3` independently reviewed and actual Android failure/retry/write-ACK rerun accepted; [runtime evidence](android-restore-native-runtime.md); physical release checks remain separate |
-| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | Corrected `043347c` independently accepted and integrated `f435567`; organiser 143 targeted tests pass; native parity remains pending |
+| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | Corrected `043347c` independently accepted and integrated `f435567`; organiser 143 targeted tests pass; retained populated Android catalog accepted on host, fresh-native current schema exercised; historical Expo preparation parity remains pending |
 | 006B4 SHA-256 | Real maintained digest library; read-only bounded chunks; limits/abort/close failures; Metro resolution; native digest and latency comparison | Corrected `81b1b76` independently accepted; all eight native digests match, maximum async/sync 582/182 ms, delayed/immediate abort 113/4 ms; emulator prerequisite accepted, physical timing pending; [evidence](android-file-sha256-runtime.md) |
 | 006B2C/D timer retirement | Inert imports, drained JS/native continuations, persisted native identities, rejected legacy deliveries, bulk alarm/display cleanup, safe queued navigation | JS lifecycle integrated `9401261`; corrected registry integrated `177e504`; [native retirement prerequisite accepted](android-rest-timer-runtime.md); initial-URL/reused-ID integration remains pending |
 | 006B2E timer navigation generation | Durable generation, exact native acknowledgement, versioned ACTION_VIEW, rotation before retirement, process recreation and checked recovery | Independently accepted and integrated `c785c9b`; [Android native prerequisite accepted](android-rest-timer-generation-runtime.md); actual router comparison and reused-ID containment remain B6 integration obligations |
@@ -63,10 +63,14 @@ setup, so it cannot establish cold-cache or physical-storage worst-case performa
 
 The seven-method production engine is host-accepted as `fdd4313`; see its
 [exact-SHA audit and test evidence](replacement-restore-engine-acceptance.md).
-Rows below remain obligations for integrated/native acceptance, not claims that
-all engine behavior is still unimplemented. Media and lifecycle integration are
-still pending. Host tests use the actual production service with controlled
-adapters; native tests use disposable backup/live pairs and preserved pre-run state.
+The [passed-handle Android engine gate](replacement-restore-engine-android.md) is
+also accepted, and postcommit media is host-accepted as `2c45567`. Lifecycle and
+Settings integration remain pending. Rows below remain obligations for final
+integrated/native acceptance, not claims that the underlying engine and media
+services are unimplemented. Host tests use the actual production service with
+controlled adapters; native tests use disposable backup/live pairs and preserved
+pre-run state. The [006E evidence inventory](replacement-restore-evidence-inventory.md)
+maps existing host coverage so later tickets do not duplicate it.
 
 | Scenario | Required result |
 | --- | --- |
