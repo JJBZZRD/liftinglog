@@ -5,6 +5,12 @@ This is a prerequisite for lifecycle integration, not for the connection-free
 replacement engine. The existing timer retirement prerequisite remains accepted
 for alarms/notifications; it did not prove initial-URL or reused-ID containment.
 
+Independent read-only contract review accepted `133f1d5`: all ACTION_VIEW builds
+share the retirement lock; successful retirement clears the registry so later
+old receivers cannot mint new-generation links. Lifecycle draining prevents later
+old JS calls. Therefore no persisted per-timer generation or registry format
+expansion is required. Implementation and native execution remain separate gates.
+
 ## Concrete defect
 
 Native countdown/completion taps are plain Android ACTION_VIEW URLs. They are not

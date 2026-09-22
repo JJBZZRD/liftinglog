@@ -5,7 +5,7 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 ## Current checkpoint
 
-Integrated production code is `81b1b76`. MVP capability restrictions, history,
+Integrated production code is `cf6280f`. MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
 Replacement restore remains the active implementation story: native controls,
 timer retirement, schema validation, sealed export and native file hashing are
