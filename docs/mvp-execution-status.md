@@ -70,13 +70,22 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-004E1 | Sol / high | Gallery metadata acquisition ADR and isolated proof only | Research reviewed and merged `7ca6e9b`; content-URI hashing and latency remain native proof gates, not accepted production behavior |
 | MVP-004E2 | Sol / high; organiser native execution | Isolated development-only diagnostic route and usage notes | Candidate `5bbbb34` reviewed and executed; [API proof](testing/gallery-native-api-review.md) accepted for small fixtures/full and limited access; diagnostic route not merged |
 | MVP-004E2P | Luna / medium; organiser native execution | Separate non-shipping diagnostic extension | Reviewed `e0ce3a0`; emulator eight 64 MiB reads pass in 1,577 ms, max heartbeat gap 267 ms; fixture removed and all 15 tables unchanged; physical performance remains pending |
-| MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Running from `3c5d3492426d5380d5b021da869f05e959b0e7e1` against the explicit API-review contract; no schema/dependency/native/backup ownership |
-| MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Corrected `c847902` independently passes 15/15 proof tests; second audit found latest-attempt process-token retry gap, returned for correction before API acceptance |
+| MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Corrected `f4ab9cb` reviewed; organiser 57/57 targeted checks pass; both profiles 59 suites / 594 tests pass; merged `e8caf44`; [emulator integration accepted](testing/mvp-gallery-resolution-review.md), including ambiguity rejection and unique repair |
+| MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Third review accepts `100a812`; organiser independently passes 15/15; clean rebase integrated `f045adb`; design accepted, production obligations remain |
+| MVP-006B1 | Sol / high | Pure PB derivation, existing PB rebuild seam, focused parity tests | Running from `f045adbd6bb4da46047b39660b8b399e19ac78e1`; no metric or persistence semantics changes |
+| MVP-006B2 | Sol / xhigh | Android process token and atomic control store, isolated plugin/templates/facades/tests | Running from the same pinned SHA; no restore engine or UI; native runtime proof required |
+| MVP-006B3 | Sol / xhigh | Read-only historical/current schema manifests and disposable validation fixtures | Running from the same pinned SHA; no migrations or live data writes; independent audit required |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
 zero errors and 19 retained warnings. Logs are retained under
 `.codex-artifacts/mvp-notes-editor-{full,mvp}-tests.log`.
+
+After gallery and restore-proof integration at `f045adb`, the organiser reran the
+complete suite independently: **60 suites / 609 tests pass in each profile**.
+Logs: `.codex-artifacts/mvp-gallery-restore-design-integrated-{full,mvp}.log`.
+The two older cleanup test mocks exposed by the initial full-suite run were
+corrected within 004E3 before merge; production assertions were retained.
 
 The 006A audit requires a single post-commit manifest/outcome recovery protocol,
 an explicit SQLite handle parameter at startup, fail-closed native-token validation,
@@ -88,7 +97,18 @@ the native token for every attempt: a JS reload in the latest attempting process
 must remain gated, and only a different verified process may retry. Final restore
 integration also depends on 004E3 removing permissive ordinary set-load repair, so
 an unresolved restored video cannot bypass the conservative resolver after the
-restore gate opens. The author is correcting the same bounded ADR/proof ticket.
+restore gate opens. The third independent audit accepts all corrections in
+`100a812`; the organiser accepted the design and host proof, then merged after a
+clean rebase. Atomic synchronous control-state storage, canonical PB parity,
+schema catalogs, SHA-256, and native lifecycle tests remain production prerequisites.
+
+The organiser split the first production prerequisites into 006B1 (PB derivation),
+006B2 (native identity/control storage), and 006B3 (schema validation). Each has a
+fresh no-context worker and its own sibling branch/worktree with exclusive paths.
+Maintained streaming SHA-256 follows as a separate dependency owner; core engine,
+root gate, Settings UI, and final replacement/media tests follow the frozen ADR.
+The existing file-system overwrite path deletes its destination before moving,
+so it is not accepted as atomic synchronous restore-control persistence.
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
