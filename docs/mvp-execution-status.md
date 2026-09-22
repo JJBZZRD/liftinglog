@@ -35,13 +35,22 @@ TypeScript and lint with the nineteen baseline warnings. MVP-006K's corrected
 non-shipping diagnostic `1345128` is independently accepted and executed in its
 separate Android package; production lifecycle/engine source is unchanged.
 The normal app's DB/WAL/SHM hashes remain unchanged after every crash run.
-Both apps and Metro are stopped. No physical phone was present in the ADB inventory.
+Both emulator apps and Metro are stopped.
 A separately packaged physical-test APK is now built and emulator-smoke-checked
 from `3cb74cb` (ARM64/x86_64, release mode, embedded MVP, local debug certificate).
 It is named WorkoutLog MVP Check and is also stopped. See the
 [physical acceptance resume point](testing/mvp-physical-android-resume.md).
-The user requested remote backups; the push remains pending exact-destination
-confirmation required by automatic approval review. No remote backup is claimed.
+The user-authorized physical session ran 21:45:18-22:13:36 UTC, within the
+30-minute window. Physical MVP UI restrictions, manual logging, gallery attachment/
+unlink/viewing and SAF backup/reopen pass. Automatic media rediscovery remains
+unaccepted: picker metadata was absent and owned external synthetic videos later
+disappeared while testing. Independent investigation is pending; large-video
+performance also remains open. The test app is stopped with gallery permission
+disabled and the user can unplug. See the physical resume point for exact evidence.
+The user explicitly authorized GitHub pushes. Atomic backup of integration
+`f70abcf`, diagnostic `1345128` and physical validation `3cb74cb` succeeded to the
+three review branches in `JJBZZRD/liftinglog`. Remote CI/protections are still
+unverified; no release branch/tag/publication has been made.
 Read-only 007E preparation
 has identified the stale legacy-merge documentation for the later final doc ticket.
 
