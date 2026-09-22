@@ -5,7 +5,7 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 ## Current checkpoint
 
-Integrated production code is `800b280`. MVP capability restrictions, history,
+Integrated production code is `031392e`. MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
 Replacement restore remains the active implementation story: native controls,
 timer retirement, schema validation, sealed export and native file hashing are
@@ -19,10 +19,11 @@ Both profiles pass the combined **86 suites / 1020 tests**, TypeScript and uncac
 lint (zero errors / 19 baseline warnings). Independent scoped integration review
 at `ab281ef` accepts the Settings/dialog/lifecycle/root wiring with no findings.
 Integrated emulator gallery denial, limited selection, full-access scan,
-duplicate-match rejection and playback now pass. A native screenshot exposed
-right-edge overflow in the restore gate: MVP-006D2R owns a one-file layout fix and
-must pass native visual review. No new restore/data defect was found. Remaining
-release work is that UI correction, exact crash windows, release-binary cold links,
+duplicate-match rejection and playback now pass. MVP-006D2R's one-line viewport
+fix is accepted and integrated as `031392e`: native scheduled/postcommit/completion
+screens fit, both-profile focused tests pass (10 each), and organiser TypeScript
+and native exact-data checks pass. No restore/data defect was found. Remaining
+release work is exact crash windows, release-binary cold links,
 physical Android performance/media acceptance and final documentation. MVP-006K
 owns a non-shipping crash diagnostic with a separate Android package and custom
 entry; production lifecycle/engine source is unchanged. Read-only 007E preparation

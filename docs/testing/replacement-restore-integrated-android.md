@@ -78,7 +78,7 @@ lifecycle/root and accepted engine/media boundaries. Combined host checks pass
 lint (zero errors, 19 baseline warnings).
 
 The integrated explicit gallery checks below have also passed. Still required:
-the gate-width correction, remaining exact native crash windows, release-binary
+the remaining exact native crash windows, release-binary
 cold-link and route/back checks, and physical Android media/performance acceptance.
 SAF filename/save/reopen
 is observed, but provider-returned MIME is not yet independently observed: both
@@ -131,7 +131,17 @@ overflow of the restore gate card, explanatory text and Scan button on the 720 p
 emulator. This is a concrete presentation defect; the accessible controls worked
 and no data or scheduling failure occurred. MVP-006D2R owns a one-file layout-only
 correction to `components/ReplacementRestoreGate.tsx`, branched from `be386fb`.
-Actual native visual acceptance is required before that correction is integrated.
+The worker constrained the ScrollView viewport in one line, preserving the action
+contract. After a clean rebase, candidate `4977c0b` passed organiser native visual
+review of scheduled, postcommit and completed states; full text and both actions
+fit and wrap correctly (`gate-width-postcommit-ready.png`). Existing gate tests
+pass 10/10 in each profile. Expo startup generated the ignored ambient type file,
+after which the prescribed TypeScript check and an independent MVP test rerun
+passed. An earlier worker typecheck without that generated file had only the
+known CSS ambient-type error; no production workaround was added. Exact post-flow
+data checks also pass (`integrated-state-gate-width-complete/`). The organiser
+verified exact tree equality and squash-integrated this correction as `031392e`;
+the branch is retired and the reviewed worktree remains detached.
 
 MVP-006K is a separate non-shipping crash-window diagnostic, also pinned to
 `be386fb`. Independent review rejected reuse of the old Router probe: the current
