@@ -78,8 +78,8 @@ lifecycle/root and accepted engine/media boundaries. Combined host checks pass
 lint (zero errors, 19 baseline warnings).
 
 The integrated explicit gallery checks below have also passed. Still required:
-the remaining exact native crash windows, release-binary
-cold-link and route/back checks, and physical Android media/performance acceptance.
+the remaining exact native crash windows and physical Android media/performance
+acceptance. Release-mode cold/warm route evidence is recorded below.
 SAF filename/save/reopen
 is observed, but provider-returned MIME is not yet independently observed: both
 shell and app-UID CLI metadata queries were rejected by Android permissions.
@@ -143,14 +143,59 @@ data checks also pass (`integrated-state-gate-width-complete/`). The organiser
 verified exact tree equality and squash-integrated this correction as `031392e`;
 the branch is retired and the reviewed worktree remains detached.
 
-MVP-006K is a separate non-shipping crash-window diagnostic, also pinned to
-`be386fb`. Independent review rejected reuse of the old Router probe: the current
+MVP-006K is a separate non-shipping crash-window diagnostic, originally pinned to
+`be386fb` and now rebased on `19e70fb`. Independent review rejected reuse of the old Router probe: the current
 production root would consume its scratch pending controls before routing.
 The accepted diagnostic design instead uses a custom `registerRootComponent`
 entry and a separate Android application ID/sandbox, with all production app,
-engine and native-service files unchanged. Its seven-file scope includes the
+engine and native-service files unchanged. Its scope includes the
 custom entry, diagnostic component, package/build metadata, import-isolation test
 and diagnostic instructions. It must never merge or run prebuild. The organiser
 will verify source-map import isolation and the exact APK package before device
 execution. Exact attempt/commit/outcome/pending-deletion kill points remain open;
 the earlier adapter-injected engine failures are not being repeated.
+Independent review of diagnostic `56ea917` requires native package-identity
+guarding, blocking wrapped mutations after a checkpoint timeout, and stylesheet
+initialization before device use. The worker owns these corrections, including
+the authorized Tailwind diagnostic-content addition. These are diagnostic
+findings; no production restore change is being proposed.
+
+## Release-mode Android routes (2026-09-22)
+
+An x86_64 release-mode APK built successfully from reviewed `4977c0b`, whose
+production tree equals integrated `031392e`. It uses the existing Android Debug
+certificate for local validation, is not debuggable, and launched with Metro
+stopped. This is not a store-signed or physical-phone artifact. APK SHA-256 is
+`F79692BED7F5C38E165D3A61FC97349E9BFD291338EC503255BA31D47EED51F8`.
+The offline build initially lacked the declared Android lint Gradle dependency;
+the normal Gradle retry passed in 4m 7s without source changes.
+
+Evidence is `.codex-artifacts/release-validation-20260922/`: `OWNER.json`,
+the APK, forty route observations in `route-results.jsonl`, individual fresh UI
+XML captures, and `gallery-actions.xml`.
+
+- All thirteen deferred program, health and camera routes return safe Overview
+  on cold start and warm delivery. The thirteen warm denials used one native PID.
+- Stale timer links targeting a reused exercise ID and an encoded notification
+  marker missing its generation return Overview on cold start. A valid current
+  generation opens Bench Press. These are actual Android ACTION_VIEW deliveries,
+  not taps on newly posted notifications.
+- Settings, Programs Coming Soon, calculators, set details and all five individual
+  calculators open correctly. The gallery menu exposes Change Video and Unlink
+  Video, with no recording action.
+- Hardware Back after the valid cold timer link exits to Android's launcher;
+  it does not reveal a deferred app screen. It is not evidence of returning to
+  Overview within the app.
+
+The exact saved pre-install debug APK was then reinstalled without clearing data,
+and the app remains stopped. A read-only capture in
+`restore-synthetic-avd-20260922/integrated-state-release-links-complete/` proves
+integrity OK, zero foreign-key violations and absent restore controls. Comparing
+all fifteen tables with the accepted gate-width baseline found only the ordinary
+empty workout/entry created by the valid exercise-link positive control; all
+existing rows and the other thirteen tables are unchanged.
+
+Final host checks on documentation checkpoint `19e70fb` pass 86 suites / 1020 tests
+in each profile, TypeScript and prescribed uncached lint (zero errors, nineteen
+baseline warnings). Logs are `.codex-artifacts/mvp007-final-{full,mvp,typecheck,lint}.log`.
+Exact native crash windows and physical Android acceptance remain open.

@@ -23,8 +23,13 @@ duplicate-match rejection and playback now pass. MVP-006D2R's one-line viewport
 fix is accepted and integrated as `031392e`: native scheduled/postcommit/completion
 screens fit, both-profile focused tests pass (10 each), and organiser TypeScript
 and native exact-data checks pass. No restore/data defect was found. Remaining
-release work is exact crash windows, release-binary cold links,
-physical Android performance/media acceptance and final documentation. MVP-006K
+release work is exact crash windows, physical Android performance/media acceptance
+and final documentation. Release-mode emulator checks now pass forty route
+observations, including cold/warm deferred-route denial, cold stale/current timer
+links, all five calculators and the gallery-only video menu. The non-debuggable
+APK works with Metro stopped; it is locally debug-signed, not a store artifact.
+Final host checks at `19e70fb` again pass 86 suites / 1020 tests in each profile,
+TypeScript and lint with the nineteen baseline warnings. MVP-006K
 owns a non-shipping crash diagnostic with a separate Android package and custom
 entry; production lifecycle/engine source is unchanged. Read-only 007E preparation
 has identified the stale legacy-merge documentation for the later final doc ticket.
