@@ -72,9 +72,10 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-004E2P | Luna / medium; organiser native execution | Separate non-shipping diagnostic extension | Reviewed `e0ce3a0`; emulator eight 64 MiB reads pass in 1,577 ms, max heartbeat gap 267 ms; fixture removed and all 15 tables unchanged; physical performance remains pending |
 | MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Corrected `f4ab9cb` reviewed; organiser 57/57 targeted checks pass; both profiles 59 suites / 594 tests pass; merged `e8caf44`; [emulator integration accepted](testing/mvp-gallery-resolution-review.md), including ambiguity rejection and unique repair |
 | MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Third review accepts `100a812`; organiser independently passes 15/15; clean rebase integrated `f045adb`; design accepted, production obligations remain |
-| MVP-006B1 | Sol / high | Pure PB derivation, existing PB rebuild seam, focused parity tests | Running from `f045adbd6bb4da46047b39660b8b399e19ac78e1`; no metric or persistence semantics changes |
-| MVP-006B2 | Sol / xhigh | Android process token and atomic control store, isolated plugin/templates/facades/tests | Running from the same pinned SHA; no restore engine or UI; native runtime proof required |
-| MVP-006B3 | Sol / xhigh | Read-only historical/current schema manifests and disposable validation fixtures | Running from the same pinned SHA; no migrations or live data writes; independent audit required |
+| MVP-006B1 | Sol / high; independent Sol / high audit | Pure PB derivation, existing PB rebuild seam, focused parity tests | Independently accepted `f990f11`; clean rebase `9c0da86`; organiser 6/6 targeted tests pass; merged `288001e` without metric or persistence changes |
+| MVP-006B2 | Sol / xhigh | Android process token and atomic control store, isolated plugin/templates/facades/tests | Running from `f045adbd6bb4da46047b39660b8b399e19ac78e1`; no restore engine or UI; native runtime proof required |
+| MVP-006B3 | Sol / xhigh | Read-only historical/current schema manifests and disposable validation fixtures | Running from `f045adbd6bb4da46047b39660b8b399e19ac78e1`; no migrations or live data writes; independent audit required |
+| MVP-006B4 | Sol / high | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Running from `288001e39be5901337c9d65a29bb86cb298dedfa`; isolated dependencies; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -105,10 +106,22 @@ schema catalogs, SHA-256, and native lifecycle tests remain production prerequis
 The organiser split the first production prerequisites into 006B1 (PB derivation),
 006B2 (native identity/control storage), and 006B3 (schema validation). Each has a
 fresh no-context worker and its own sibling branch/worktree with exclusive paths.
-Maintained streaming SHA-256 follows as a separate dependency owner; core engine,
+Maintained streaming SHA-256 (006B4) now runs as a separate dependency owner; core engine,
 root gate, Settings UI, and final replacement/media tests follow the frozen ADR.
 The existing file-system overwrite path deletes its destination before moving,
 so it is not accepted as atomic synchronous restore-control persistence.
+
+006B1 exposes one pure ordered-set PB derivation for the ordinary rebuild and the
+future synchronous restore path. Its independent review found no changes to
+validity rules, strict per-rep progression, timestamp handling, SQL ordering, or
+UID ownership. The focused production parity tests pass; the 609-test integrated
+baseline above predates this extraction and is not represented as a later rerun.
+
+006B4 selects the maintained `@noble/hashes` 2.4.0 incremental SHA-256 implementation
+with an exact pin and explicit Expo `FileMode.ReadOnly` handles. The existing
+`node:crypto` Metro shim implements a deterministic non-cryptographic hash and is
+not suitable for restore identity. This ticket has its own dependency installation
+and does not mutate the shared root `node_modules` used by other workers.
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair

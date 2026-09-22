@@ -85,7 +85,7 @@ Preparation must not touch the live database.
 
 Candidate migration is allowed to assign UIDs to legacy null-UID rows using the existing supported migration. It must preserve every row ID and every existing non-null UID. It does not deduplicate or field-match rows.
 
-The host proof uses Node's `node:crypto` SHA-256 and does not establish a native digest implementation. The installed app has no `expo-crypto`, `@noble/hashes`, or existing SHA-256 helper, and the public FileSystem digest is MD5. Production therefore needs separate authorization to select a reviewed maintained library or native API, preferably streaming with bounded memory. MD5 is not acceptable for candidate identity.
+The host proof uses Node's `node:crypto` SHA-256 and does not establish a native digest implementation. At design acceptance the installed app had no `expo-crypto`, `@noble/hashes`, or existing SHA-256 helper, and the public FileSystem digest was MD5. The organiser has assigned MVP-006B4 to integrate and verify the maintained `@noble/hashes` 2.4.0 incremental SHA-256 implementation with bounded Expo read-only file handles. Its code and native runtime evidence still require review; selection alone does not accept the production hash gate. The existing Metro `node:crypto` shim is non-cryptographic and must not implement candidate identity. MD5 is not acceptable for candidate identity.
 
 ## Scheduling and startup commit protocol
 
