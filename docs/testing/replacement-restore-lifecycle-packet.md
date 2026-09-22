@@ -9,8 +9,10 @@ Independent Sol/high packet review found required corrections before dispatch:
 a typed lifecycle failure state and gate treatment, atomic binding publication,
 initial-intent startup waiting, malformed timer URL classification, timer
 reactivation after safe schedule failure, retained Expo response ownership and
-reload-only retries. The infrastructure contract and Expo fallback delivery
-boundary are still being frozen; this is not an implementation-ready packet.
+reload-only retries. The follow-up review accepted the separate
+[B6A contract](replacement-restore-lifecycle-failure-packet.md) and the delivery
+policy below. Implementation still waits for these prerequisites and the final
+SHA/file/test packet; it has not been dispatched.
 
 ## Objective and scope
 
@@ -51,7 +53,10 @@ Use graph discovery first and verify current exact source when graph is stale.
    then publish both live bindings synchronously before publishing readiness.
    No partial export publication or second handle on retries. Infrastructure
    failures use the separately reviewed lifecycle blocker, not a fabricated
-   restore-engine failure or an unsupported engine error code.
+   restore-engine failure or an unsupported engine error code. Such blockers
+   publish no allowed actions and reject every startup action. Stage alone never
+   determines data-change state: partial bootstrap is unknown, while a known
+   prior restore commit stays changed even if bootstrap subsequently fails.
 2. Root and `+native-intent` share one lifecycle singleton, including when route
    modules are evaluated first. Repeated imports/getters must not repeat startup
    replacement. Stable external-store snapshots change identity only on a real
@@ -141,8 +146,21 @@ behavior and the existing deferred-feature capability guards. No MainActivity ed
 Before pending publication, quarantine must invalidate queued Expo continuations
 and clear the retained Expo response after timer retirement. Failure to clear
 prevents scheduling or uses the proven-absence safe failure path. The durable
-identity policy for Android Expo fallback notifications is not yet frozen; simple
-clearing is not assumed to prove that a later old response cannot arrive.
+identity policy for Android Expo responses is checked again at delivery, including
+every delayed continuation: available null generation permits the existing legacy
+payload; available non-null generation rejects generation-less Expo responses;
+unreadable or unavailable generation fails closed. Non-Android retains its
+ordinary Expo response behavior because replacement restore is unsupported.
+
+This deliberately does not exempt missing-bridge Android builds from the timer
+identity check. Those builds cannot prove a retained response's relationship to
+restored IDs. Normal module-present Android countdown/completion taps use native
+ACTION_VIEW with generation. Exact source confirms the Expo fallback occurs only
+when the native module is absent; a native-call rejection is caught without
+fallback. Therefore no valid current module-present Android tap is lost. Any
+future module-present Expo fallback must capture and validate durable generation
+in its payload before becoming navigable after rotation; no payload or timerStore
+expansion is needed in this ticket.
 
 ## Required proof before acceptance
 

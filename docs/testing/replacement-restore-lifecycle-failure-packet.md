@@ -61,9 +61,15 @@ bootstrap fails. Do not infer outcome from stage names inside the gate.
   recovery guidance without implying reset/delete or a safe cancellation.
 - Show no action buttons for this blocker, even if a malformed caller supplies
   restore actions in `allowedActions`. No synthetic retry, cancel or discard.
-- Include stage, change state and recovery in the snapshot key so an error from
+- Include stage, `restoreId ?? "none"`, change state, recovery and
+  `connectionInitialized` in the snapshot key so an error from
   an older action cannot be shown for a distinct lifecycle failure. Preserve all
   accepted restore-specific actions, scan/skip, acknowledgements and concurrency.
+
+The future lifecycle producer must publish `allowedActions: []` for this blocker
+and reject every startup action while it is current. Rendering no buttons is a
+second defense, not action authorization. Independent Sol/high review accepted
+this narrow contract with these snapshot-key and producer constraints.
 
 ## Required checks and handoff
 
