@@ -1,16 +1,19 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Sharing from "expo-sharing";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
     ExportCancelledError as BackupCancelledError,
     FileSystemUnavailableError as BackupFsError,
     exportDatabaseBackup,
-    importDatabaseBackup,
-    InvalidBackupError,
-    type MergeResult,
 } from "../../lib/db/backup";
+import ReplacementRestoreDialog from "../../components/settings/ReplacementRestoreDialog";
+import { discardPreparedRestore, prepareReplacementRestore } from "../../lib/db/replacementRestore";
+import {
+  getReplacementRestoreAvailability,
+  scheduleReplacementRestoreAndBlock,
+} from "../../lib/db/replacementRestoreLifecycle";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { getGlobalFormula, setGlobalFormula, type E1RMFormulaId, type UnitPreference } from "../../lib/db/index";
 import { getColorTheme, getThemePreference, type ThemePreference } from "../../lib/db/settings";
@@ -30,7 +33,8 @@ export default function SettingsScreen() {
   const [selectedColorTheme, setSelectedColorTheme] = useState<ColorThemeId>("default");
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
-  const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const [showReplacementRestore, setShowReplacementRestore] = useState(false);
+  const operationOwnerRef = useRef<"csv" | "backup" | "restore" | null>(null);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
   const [showFormulaPicker, setShowFormulaPicker] = useState(false);
@@ -72,9 +76,10 @@ export default function SettingsScreen() {
   }
 
   async function onExportCsv() {
-    if (isExporting) {
+    if (isExporting || showReplacementRestore || operationOwnerRef.current) {
       return;
     }
+    operationOwnerRef.current = "csv";
     setIsExporting(true);
     console.log("[exportCsv] Export requested from Settings.");
     try {
@@ -123,12 +128,14 @@ export default function SettingsScreen() {
         Alert.alert("Export failed", "Unable to export CSV. Please try again.");
       }
     } finally {
+      if (operationOwnerRef.current === "csv") operationOwnerRef.current = null;
       setIsExporting(false);
     }
   }
 
   async function onExportBackup() {
-    if (isExportingBackup) return;
+    if (isExportingBackup || showReplacementRestore || operationOwnerRef.current) return;
+    operationOwnerRef.current = "backup";
     setIsExportingBackup(true);
     console.log("[backup] Export backup requested from Settings.");
     try {
@@ -176,65 +183,19 @@ export default function SettingsScreen() {
         Alert.alert("Backup failed", "Unable to create backup. Please try again.");
       }
     } finally {
+      if (operationOwnerRef.current === "backup") operationOwnerRef.current = null;
       setIsExportingBackup(false);
     }
   }
 
-  async function onImportBackup() {
-    if (isImportingBackup) return;
-    setIsImportingBackup(true);
-    console.log("[backup] Import backup requested from Settings.");
-    try {
-      const result: MergeResult = await importDatabaseBackup();
-
-      const totalInserted =
-        result.userCheckins.inserted +
-        result.exercises.inserted +
-        result.workouts.inserted +
-        result.workoutExercises.inserted +
-        result.sets.inserted +
-        result.pbEvents.inserted +
-        result.media.inserted;
-      const totalUpdated =
-        result.userCheckins.updated +
-        result.exercises.updated +
-        result.workouts.updated +
-        result.workoutExercises.updated +
-        result.sets.updated +
-        result.media.updated;
-
-      let message = `Imported: ${result.exercises.inserted} exercises, ${result.workouts.inserted} workouts, ${result.sets.inserted} sets, ${result.media.inserted} media links, ${result.userCheckins.inserted} check-ins.`;
-      if (totalInserted === 0 && totalUpdated === 0 && result.media.relinked === 0) {
-        message = "No new data was imported. Your existing data has been preserved.";
-      }
-      if (totalUpdated > 0) {
-        message += ` Updated ${totalUpdated} existing records.`;
-      }
-      if (result.media.relinked > 0) {
-        message += ` Repaired ${result.media.relinked} video links.`;
-      }
-      message += " Your existing data has been preserved.";
-
-      Alert.alert("Import complete", message, [{ text: "OK" }]);
-    } catch (error) {
-      console.warn("[backup] Import failed", error);
-      if (error instanceof BackupCancelledError) {
-        return;
-      }
-      if (error instanceof InvalidBackupError) {
-        Alert.alert("Invalid backup", "The selected file is not a valid SQLite database backup.");
-      } else if (error instanceof BackupFsError) {
-        Alert.alert(
-          "Import unavailable",
-          "Database import requires a development build or production APK."
-        );
-      } else {
-        Alert.alert("Import failed", "Unable to restore backup. Please try again.");
-      }
-    } finally {
-      setIsImportingBackup(false);
-    }
+  function onImportBackup() {
+    if (showReplacementRestore || operationOwnerRef.current) return;
+    if (!getReplacementRestoreAvailability().available) return;
+    operationOwnerRef.current = "restore";
+    setShowReplacementRestore(true);
   }
+
+  const restoreAvailability = getReplacementRestoreAvailability();
 
   const themeOptions = useMemo(
     () => [
@@ -389,8 +350,8 @@ export default function SettingsScreen() {
           {/* Export Backup */}
           <Pressable
             onPress={onExportBackup}
-            disabled={isExportingBackup}
-            className={`border border-border rounded-xl py-3 px-3.5 ${isExportingBackup ? "opacity-70" : ""}`}
+            disabled={isExportingBackup || showReplacementRestore}
+            className={`border border-border rounded-xl py-3 px-3.5 ${isExportingBackup || showReplacementRestore ? "opacity-70" : ""}`}
             style={({ pressed }) => ({ 
               backgroundColor: pressed && !isExportingBackup ? rawColors.pressed : rawColors.surfaceSecondary 
             })}
@@ -413,31 +374,27 @@ export default function SettingsScreen() {
           {/* Import Backup */}
           <Pressable
             onPress={onImportBackup}
-            disabled={isImportingBackup}
-            className={`border border-border rounded-xl py-3 px-3.5 mt-3 ${isImportingBackup ? "opacity-70" : ""}`}
+            disabled={showReplacementRestore || !restoreAvailability.available || Boolean(operationOwnerRef.current && operationOwnerRef.current !== "restore")}
+            className={`border border-border rounded-xl py-3 px-3.5 mt-3 ${showReplacementRestore || !restoreAvailability.available ? "opacity-70" : ""}`}
             style={({ pressed }) => ({ 
-              backgroundColor: pressed && !isImportingBackup ? rawColors.pressed : rawColors.surfaceSecondary 
+              backgroundColor: pressed && !showReplacementRestore ? rawColors.pressed : rawColors.surfaceSecondary
             })}
           >
             <View className="flex-row items-center justify-between">
               <View className="flex-1 mr-3">
-                <Text className="text-base font-semibold text-foreground">Import backup (.db)</Text>
+                <Text className="text-base font-semibold text-foreground">Replace app data from backup (.db)</Text>
                 <Text className="text-xs mt-1 leading-4 text-foreground-muted">
-                  Restore your data from a previous backup.
+                  Replace the current app data with a previous backup.
                 </Text>
               </View>
-              {isImportingBackup ? (
-                <ActivityIndicator size="small" color={rawColors.primary} />
-              ) : (
-                <Text className="text-sm font-semibold text-primary">Import</Text>
-              )}
+              <Text className="text-sm font-semibold text-primary">Replace</Text>
             </View>
           </Pressable>
 
           {/* Export CSV */}
           <Pressable
             onPress={onExportCsv}
-            disabled={isExporting}
+            disabled={isExporting || showReplacementRestore}
             className={`border border-border rounded-xl py-3 px-3.5 mt-3 ${isExporting ? "opacity-70" : ""}`}
             style={({ pressed }) => ({ 
               backgroundColor: pressed && !isExporting ? rawColors.pressed : rawColors.surfaceSecondary 
@@ -459,6 +416,16 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <ReplacementRestoreDialog
+        visible={showReplacementRestore}
+        onDismiss={() => {
+          operationOwnerRef.current = null;
+          setShowReplacementRestore(false);
+        }}
+        service={{ prepareReplacementRestore, discardPreparedRestore }}
+        lifecycle={{ scheduleReplacementRestoreAndBlock, getReplacementRestoreAvailability }}
+      />
 
       {/* Theme Picker Modal */}
       <Modal visible={showThemePicker} transparent animationType="fade" onRequestClose={() => setShowThemePicker(false)}>
