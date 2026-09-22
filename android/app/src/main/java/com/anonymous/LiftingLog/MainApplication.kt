@@ -12,6 +12,8 @@ import com.facebook.react.common.ReleaseLevel
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 
 import com.anonymous.LiftingLog.notifications.RestTimerNotificationsPackage
+import com.anonymous.LiftingLog.restore.AppProcessIdentity
+import com.anonymous.LiftingLog.restore.RestoreNativePackage
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 
@@ -22,6 +24,7 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
+          add(RestoreNativePackage())
           add(RestTimerNotificationsPackage())
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
@@ -31,6 +34,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    AppProcessIdentity.initialize()
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
