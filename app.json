@@ -28,7 +28,7 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-      "package": "com.anonymous.LiftingLog"
+      "package": "com.anonymous.LiftingLog.restorekillprobe"
     },
     "web": {
       "bundler": "metro",
