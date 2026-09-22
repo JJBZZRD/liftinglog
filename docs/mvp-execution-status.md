@@ -73,9 +73,9 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Corrected `f4ab9cb` reviewed; organiser 57/57 targeted checks pass; both profiles 59 suites / 594 tests pass; merged `e8caf44`; [emulator integration accepted](testing/mvp-gallery-resolution-review.md), including ambiguity rejection and unique repair |
 | MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Third review accepts `100a812`; organiser independently passes 15/15; clean rebase integrated `f045adb`; design accepted, production obligations remain |
 | MVP-006B1 | Sol / high; independent Sol / high audit | Pure PB derivation, existing PB rebuild seam, focused parity tests | Independently accepted `f990f11`; clean rebase `9c0da86`; organiser 6/6 targeted tests pass; merged `288001e` without metric or persistence changes |
-| MVP-006B2 | Sol / xhigh | Android process token and atomic control store, isolated plugin/templates/facades/tests | Running from `f045adbd6bb4da46047b39660b8b399e19ac78e1`; no restore engine or UI; native runtime proof required |
-| MVP-006B3 | Sol / xhigh | Read-only historical/current schema manifests and disposable validation fixtures | Running from `f045adbd6bb4da46047b39660b8b399e19ac78e1`; no migrations or live data writes; independent audit required |
-| MVP-006B4 | Sol / high | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Running from `288001e39be5901337c9d65a29bb86cb298dedfa`; isolated dependencies; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
+| MVP-006B2 | Sol / xhigh; independent Sol / high audit | Android process token and atomic control store, isolated plugin/templates/facades/tests | First audit rejects `e849c06` for lenient native JSON parsing; correction underway. Organiser 21/21 tests and both native verifiers pass; APK builds but is not installed; runtime proof pending |
+| MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Candidate `de660900` under independent audit; organiser 62/62 targeted tests pass; retained populated Android snapshot passes source/current catalog checks; no live writes |
+| MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Candidate `1b20d42` under independent audit; organiser 24/24 tests and uncached lint pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -129,6 +129,18 @@ The organiser's [restore review matrix](testing/replacement-restore-review-matri
 records the remaining native prerequisite, process-recovery, exact-replacement,
 media and export checks. Unrun scenarios are explicitly pending; diagnostic
 branches must remain separate from shipping code.
+
+The first 006B2 independent audit found that Android `JSONTokener` accepts malformed
+JSON syntax. The native prerequisite must reject that input on read and write;
+the candidate remains unmerged pending correction and another review. Its passing
+Jest facade tests, Kotlin compilation and emulator APK build do not close that
+finding. The APK was not installed. Build evidence is retained under
+`.codex-artifacts/mvp-restore-native-review-20260922/`.
+
+The 006B4 handoff's unresolved-PSL lint error was not reproduced without cache.
+The organiser verified both installed PSL entry files and resolution, then ran
+`npm.cmd run lint -- --no-cache` in the isolated candidate worktree: zero errors,
+19 retained warnings. No production workaround or dependency rewrite was needed.
 
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
