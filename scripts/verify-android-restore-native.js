@@ -216,10 +216,55 @@ function verifyNativeInvariants(paths) {
     "Restore control-store native module name has drifted"
   );
 
+  const fileSha256Source = readRequiredFile(
+    path.join(paths.templateDir, "FileSha256.kt")
+  );
+  for (const snippet of [
+    'MessageDigest.getInstance("SHA-256")',
+    "const val BUFFER_BYTES = 64 * 1024",
+    "const val DEFAULT_MAX_BYTES = 256L * 1024L * 1024L",
+    "FileInputStream(file)",
+    "Os.fstat(stream.fd)",
+    "Os.stat(file.path)",
+    "descriptorStat.st_size != expectedBytes",
+    "pathStat.st_size != expectedBytes",
+    "primaryFailure.addSuppressed(closeError)",
+    "checkCancelled(isCancelled)",
+  ]) {
+    assert(fileSha256Source.includes(snippet), `Missing file SHA-256 invariant: ${snippet}`);
+  }
+
+  const fileSha256ModuleSource = readRequiredFile(
+    path.join(paths.templateDir, "FileSha256Module.kt")
+  );
+  for (const snippet of [
+    "class FileSha256Module(",
+    "const val MAX_RUNNING_JOBS = 2",
+    "const val MAX_QUEUED_JOBS = 2",
+    "ArrayBlockingQueue(MAX_QUEUED_JOBS)",
+    "fun cancelSha256File(requestId: String, promise: Promise)",
+    "promise.resolve(jobs.cancel(requestId))",
+    "jobs.invalidate()",
+    '@ReactMethod(isBlockingSynchronousMethod = true)',
+    'const val NAME = "FileSha256"',
+  ]) {
+    assert(
+      fileSha256ModuleSource.includes(snippet),
+      `Missing file SHA-256 module invariant: ${snippet}`
+    );
+  }
+  assert(
+    !fileSha256ModuleSource.includes(
+      "@ReactMethod(isBlockingSynchronousMethod = true)\n  fun cancelSha256File"
+    ),
+    "File SHA-256 cancellation must share the queued asynchronous native-method order"
+  );
+
   const packageSource = readRequiredFile(path.join(paths.templateDir, "RestoreNativePackage.kt"));
   for (const snippet of [
     "class RestoreNativePackage : BaseReactPackage()",
     "AppProcessIdentityModule.NAME -> AppProcessIdentityModule(reactContext)",
+    "FileSha256Module.NAME -> FileSha256Module(reactContext)",
     "RestoreControlStoreModule.NAME -> RestoreControlStoreModule(reactContext)",
     "override fun getReactModuleInfoProvider(): ReactModuleInfoProvider",
   ]) {
@@ -232,6 +277,9 @@ function verifyNativeInvariants(paths) {
   const storeAdapter = readRequiredFile(
     path.join(paths.projectRoot, "lib", "native", "restoreControlStore.ts")
   );
+  const fileSha256Adapter = readRequiredFile(
+    path.join(paths.projectRoot, "lib", "native", "fileSha256.ts")
+  );
   assert(
     identityAdapter.includes("NativeModules.AppProcessIdentity"),
     "Process identity TypeScript adapter module name has drifted"
@@ -239,6 +287,10 @@ function verifyNativeInvariants(paths) {
   assert(
     storeAdapter.includes("NativeModules.RestoreControlStore"),
     "Restore control-store TypeScript adapter module name has drifted"
+  );
+  assert(
+    fileSha256Adapter.includes("NativeModules.FileSha256"),
+    "File SHA-256 TypeScript adapter module name has drifted"
   );
 }
 

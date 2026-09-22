@@ -1,5 +1,10 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { File, FileMode, Paths } from "expo-file-system";
+import { Platform } from "react-native";
+import {
+  sha256FileNative,
+  sha256FileNativeSync,
+} from "../native/fileSha256";
 
 export const DEFAULT_MAX_SHA256_FILE_BYTES = 256 * 1024 * 1024;
 export const SHA256_FILE_CHUNK_BYTES = 64 * 1024;
@@ -174,7 +179,13 @@ export function sha256FileSync(
   uri: string,
   options: Sha256FileOptions = {}
 ): Sha256FileResult {
-  const { file, expectedBytes, maxBytes } = prepareFile(uri, options.maxBytes);
+  assertLocalFileUri(uri);
+  const resolvedMaxBytes = resolveMaxBytes(options.maxBytes);
+  if (Platform.OS === "android") {
+    return sha256FileNativeSync(uri, resolvedMaxBytes);
+  }
+
+  const { file, expectedBytes, maxBytes } = prepareFile(uri, resolvedMaxBytes);
   const hash = sha256.create();
   let handle: ReturnType<File["open"]> | undefined;
 
@@ -215,7 +226,13 @@ export async function sha256File(
   options: Sha256FileAsyncOptions = {}
 ): Promise<Sha256FileResult> {
   throwIfAborted(options.signal);
-  const { file, expectedBytes, maxBytes } = prepareFile(uri, options.maxBytes);
+  assertLocalFileUri(uri);
+  const resolvedMaxBytes = resolveMaxBytes(options.maxBytes);
+  if (Platform.OS === "android") {
+    return sha256FileNative(uri, resolvedMaxBytes, options.signal);
+  }
+
+  const { file, expectedBytes, maxBytes } = prepareFile(uri, resolvedMaxBytes);
   throwIfAborted(options.signal);
 
   const hash = sha256.create();

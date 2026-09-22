@@ -9,6 +9,8 @@ const {
 const KOTLIN_TEMPLATES = [
   "AppProcessIdentity.kt",
   "AppProcessIdentityModule.kt",
+  "FileSha256.kt",
+  "FileSha256Module.kt",
   "RestoreJsonEnvelope.kt",
   "RestoreControlStore.kt",
   "RestoreControlStoreModule.kt",

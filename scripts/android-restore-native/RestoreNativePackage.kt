@@ -12,6 +12,7 @@ class RestoreNativePackage : BaseReactPackage() {
     reactContext: ReactApplicationContext
   ): NativeModule? = when (name) {
     AppProcessIdentityModule.NAME -> AppProcessIdentityModule(reactContext)
+    FileSha256Module.NAME -> FileSha256Module(reactContext)
     RestoreControlStoreModule.NAME -> RestoreControlStoreModule(reactContext)
     else -> null
   }
@@ -21,6 +22,14 @@ class RestoreNativePackage : BaseReactPackage() {
       AppProcessIdentityModule.NAME to ReactModuleInfo(
         AppProcessIdentityModule.NAME,
         AppProcessIdentityModule::class.java.name,
+        false,
+        false,
+        false,
+        false
+      ),
+      FileSha256Module.NAME to ReactModuleInfo(
+        FileSha256Module.NAME,
+        FileSha256Module::class.java.name,
         false,
         false,
         false,

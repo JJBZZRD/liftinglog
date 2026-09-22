@@ -4,6 +4,11 @@ const mockOpenModes: string[] = [];
 const mockReadRequests: number[] = [];
 let mockCloseCount = 0;
 
+jest.mock("react-native", () => ({
+  Platform: { OS: "ios" },
+  NativeModules: {},
+}));
+
 type MockFileState = {
   data: Uint8Array;
   pathExists?: boolean;
@@ -330,5 +335,41 @@ describe("fileSha256", () => {
     const closeError = new Error("native close failed");
     registerFile(new Uint8Array(), { closeError });
     expect(() => sha256FileSync(FILE_URI)).toThrow(closeError);
+  });
+
+  it("routes both Android APIs through the native module without file-system IO", async () => {
+    jest.resetModules();
+    const nativeResult = {
+      status: "success",
+      sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      bytes: 3,
+    };
+    const nativeModule = {
+      sha256FileSync: jest.fn(() => nativeResult),
+      sha256FileAsync: jest.fn(async () => nativeResult),
+      cancelSha256File: jest.fn(async () => true),
+    };
+    jest.doMock("react-native", () => ({
+      Platform: { OS: "android" },
+      NativeModules: { FileSha256: nativeModule },
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const androidHelper = require("../../lib/utils/fileSha256") as typeof import("../../lib/utils/fileSha256");
+
+    expect(androidHelper.sha256FileSync(FILE_URI, { maxBytes: 3 })).toEqual({
+      sha256: nativeResult.sha256,
+      bytes: 3,
+    });
+    await expect(
+      androidHelper.sha256File(FILE_URI, { maxBytes: 3 })
+    ).resolves.toEqual({ sha256: nativeResult.sha256, bytes: 3 });
+    expect(nativeModule.sha256FileSync).toHaveBeenCalledWith(FILE_URI, 3);
+    expect(nativeModule.sha256FileAsync).toHaveBeenCalledWith(
+      FILE_URI,
+      3,
+      expect.any(String)
+    );
+    expect(mockConstructedUris).toEqual([]);
+    expect(mockOpenModes).toEqual([]);
   });
 });
