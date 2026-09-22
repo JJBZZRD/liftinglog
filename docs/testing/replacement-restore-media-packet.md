@@ -15,7 +15,8 @@ the startup gate or enable Settings import.
 Own `lib/db/replacementRestoreMedia.ts` (new), the existing facade
 `replacementRestore.ts`, `replacementRestoreRuntime.ts` and
 `replacementRestoreRecords.ts`, new `__tests__/db/replacementRestoreMedia.test.ts`,
-bounded additions to the engine test/helper, and
+new `__tests__/app/replacement-restore-media-load.test.tsx` for the ordinary set-load
+integration regression, bounded additions to the engine test/helper, and
 `docs/testing/replacement-restore-media.md`. No connection, bootstrap, schema,
 transaction, preparation, native, timers, root/router, Settings, shared contract,
 dependency or ordinary gallery-path changes. Report any needed expansion.
@@ -54,6 +55,11 @@ Use codebase-memory first, then these exact files when the graph is insufficient
    never prompts or invokes the resolver and accounts for every current row.
    Explicit skip is not evidence of permission denial: report its rows unresolved
    without inventing `skippedPermission` counts.
+   The existing permission helper returns false for both unavailable permission
+   and permission API failure. `skippedPermission` therefore means permission was
+   not affirmatively established, not proof that the user denied it. Likewise a
+   null resolver result does not identify a specific no-match/provider-error
+   cause. Use truthful generic diagnostics without expanding helper APIs.
 5. The existing bounded resolver has no AbortSignal. Check cancellation before
    and after each awaited permission/resolution call; drain any active call
    before finalizing, discard its result after cancellation, and start no later

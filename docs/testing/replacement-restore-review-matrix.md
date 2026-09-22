@@ -61,9 +61,12 @@ setup, so it cannot establish cold-cache or physical-storage worst-case performa
 
 ## Integrated engine and gate checks
 
-All rows below are pending production implementation. Host tests use the actual
-production service with controlled adapters, not a second proof implementation.
-Native tests use disposable backup/live pairs and preserved pre-run app state.
+The seven-method production engine is host-accepted as `fdd4313`; see its
+[exact-SHA audit and test evidence](replacement-restore-engine-acceptance.md).
+Rows below remain obligations for integrated/native acceptance, not claims that
+all engine behavior is still unimplemented. Media and lifecycle integration are
+still pending. Host tests use the actual production service with controlled
+adapters; native tests use disposable backup/live pairs and preserved pre-run state.
 
 | Scenario | Required result |
 | --- | --- |
