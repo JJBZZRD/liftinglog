@@ -18,9 +18,15 @@ synthetic AVD; the final release matrix remains outstanding. See the
 Both profiles pass the combined **86 suites / 1020 tests**, TypeScript and uncached
 lint (zero errors / 19 baseline warnings). Independent scoped integration review
 at `ab281ef` accepts the Settings/dialog/lifecycle/root wiring with no findings.
-Remaining work is native gallery scan/playback and permission proof, exact crash
-windows, release-binary cold links, physical Android performance/media acceptance
-and final documentation. These are acceptance obligations, not known code blockers.
+Integrated emulator gallery denial, limited selection, full-access scan,
+duplicate-match rejection and playback now pass. A native screenshot exposed
+right-edge overflow in the restore gate: MVP-006D2R owns a one-file layout fix and
+must pass native visual review. No new restore/data defect was found. Remaining
+release work is that UI correction, exact crash windows, release-binary cold links,
+physical Android performance/media acceptance and final documentation. MVP-006K
+owns a non-shipping crash diagnostic with a separate Android package and custom
+entry; production lifecycle/engine source is unchanged. Read-only 007E preparation
+has identified the stale legacy-merge documentation for the later final doc ticket.
 
 B6 candidate `b93f8345ec912a4b82ef969a653b342ac6e56f54` received independent
 source and test-delta acceptance, then exact-tree squash integration as `81e0d79`.
