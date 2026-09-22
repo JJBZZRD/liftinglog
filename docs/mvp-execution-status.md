@@ -125,6 +125,11 @@ with an exact pin and explicit Expo `FileMode.ReadOnly` handles. The existing
 not suitable for restore identity. This ticket has its own dependency installation
 and does not mutate the shared root `node_modules` used by other workers.
 
+The organiser's [restore review matrix](testing/replacement-restore-review-matrix.md)
+records the remaining native prerequisite, process-recovery, exact-replacement,
+media and export checks. Unrun scenarios are explicitly pending; diagnostic
+branches must remain separate from shipping code.
+
 MVP-001A merges first. Migration and lifecycle proof work cannot silently change
 production behavior. Findings return to the organiser for a narrowly scoped repair
 or the dependent implementation ticket. Production migrations and restore code
