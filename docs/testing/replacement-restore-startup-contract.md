@@ -43,6 +43,12 @@ type DatabaseStartupSnapshot =
       requiresExplicitMediaScan: boolean;
       progress?: RestoreProgress;
     }
+  | {
+      phase: "restored";
+      connectionInitialized: true;
+      canMountApp: false;
+      result: ReplacementRestoreResult;
+    }
   | { phase: "ready"; connectionInitialized: true; canMountApp: true };
 
 type DatabaseStartupActionKind =
@@ -50,7 +56,8 @@ type DatabaseStartupActionKind =
   | "discard_and_reload"
   | "retry_control_finalization"
   | "complete_media"
-  | "skip_media";
+  | "skip_media"
+  | "acknowledge_completion";
 
 getDatabaseStartupSnapshot(): DatabaseStartupSnapshot;
 subscribeDatabaseStartup(listener: () => void): () => void;
@@ -80,8 +87,10 @@ transaction.
 - Proven absent pending with no incomplete outcome: bootstrap, construct binding,
   then ready. Unavailable storage is not absence.
 - Successful commit and pending retirement: bootstrap/binding, then postcommit
-  while children remain unmounted, then ready only after completion or explicit
-  skip accounts for all unresolved rows.
+  while children remain unmounted, then restored only after completion or explicit
+  skip accounts for all unresolved rows. Show the typed final result, including
+  unresolved counts and warnings; a matching acknowledgement publishes ready
+  without further DB or control-state mutation.
 - Absent pending with incomplete outcome: no replacement; bootstrap/binding,
   postcommit, and user-explicit fresh scan or skip. Never replay stored media IDs.
 - Pending ambiguity, token failure, uncertain transaction, or committed control
