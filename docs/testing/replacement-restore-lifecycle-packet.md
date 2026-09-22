@@ -1,9 +1,10 @@
 # MVP-006B6 startup and navigation integration packet
 
-Organiser preparation, 2026-09-22. Not dispatched. Implementation waits for the
-complete media service and the required Android engine gate. Native timer
-generation and JS quiescence prerequisites are accepted; their source/runtime
-evidence does not replace this ticket's actual Router and startup proof.
+Organiser-frozen dispatch packet, 2026-09-22. The complete media service is
+accepted and integrated as `2c45567`, and the required Android engine gate is
+accepted in `replacement-restore-engine-android.md`. Native timer generation,
+JS quiescence and the B6A lifecycle-failure contract are also accepted. These
+prerequisites do not replace this ticket's actual Router and startup proof.
 
 Independent Sol/high packet review found required corrections before dispatch:
 a typed lifecycle failure state and gate treatment, atomic binding publication,
@@ -11,8 +12,8 @@ initial-intent startup waiting, malformed timer URL classification, timer
 reactivation after safe schedule failure, retained Expo response ownership and
 reload-only retries. The follow-up review accepted the separate
 [B6A contract](replacement-restore-lifecycle-failure-packet.md) and the delivery
-policy below. Implementation still waits for these prerequisites and the final
-SHA/file/test packet; it has not been dispatched.
+policy below. The organiser pins the final base SHA and isolated worktree in the
+worker message; the exact file/test scope below is frozen for implementation.
 
 ## Objective and scope
 
@@ -21,16 +22,29 @@ wire the accepted standalone gate outside every ordinary provider, and prevent
 old timer intents from reaching IDs reused by restore. Use one actual live SQLite
 handle and the accepted production engine; no fake DB or fallback-success engine.
 
-Proposed exclusive production scope: `lib/db/connection.ts`, new
+Exclusive production scope: `lib/db/connection.ts`, new
 `lib/db/replacementRestoreLifecycle.ts`, `app/_layout.tsx`, new
 `app/+native-intent.ts`, new `lib/restTimerNavigationGuard.ts`, and
 `lib/notificationHandler.ts`. Consume the existing gate view without rewriting
-its rendering. New focused lifecycle, root-import and actual Router integration
-tests are owned here; bounded mock updates in existing root/notification tests may
-accompany genuine import changes. Final exact test paths and base SHA will be
-pinned at dispatch. No engine, shared types, schema/bootstrap, domain query,
+its rendering. Exact test scope: new
+`__tests__/db/replacementRestoreLifecycle.test.ts`,
+`__tests__/app/replacement-restore-root.test.tsx`,
+`__tests__/routing/replacement-restore-native-intent.test.tsx`, and
+`__tests__/lib/restTimerNavigationGuard.test.ts`; bounded affected mocks/assertions
+in `__tests__/helpers/profileRouteSetup.ts`,
+`__tests__/routing/profile-route-guards.test.tsx`, and
+`__tests__/app/timer-readiness.test.tsx`. `jest.config.js` and
+`jest.router.config.js` may change only to assign the new actual-Router suite to
+the existing router project and exclude it from the unit project; no weakening
+of transforms, assertions or existing suite discovery. The existing profile
+tests may mock a stable ready lifecycle; new actual-root/import tests must not
+mock away the lifecycle or its ordering. Update `docs/db-access-patterns.md`
+only for connection versus lifecycle responsibilities and add implementation
+evidence to `docs/testing/replacement-restore-lifecycle.md`. Base SHA is pinned
+at dispatch. No engine, shared types, schema/bootstrap, domain query,
 timerStore, native, Settings, package or configuration changes. Raise any required
-contract expansion before implementation.
+contract expansion before implementation; the two exact Jest routing changes
+above are the only configuration exception.
 
 Read AGENTS.md, DB truth/access patterns, product facts sections 10-11, the accepted
 restore ADR, shared/startup contracts, lifecycle review and native generation
@@ -185,6 +199,14 @@ expansion is needed in this ticket.
 - Both-profile full tests, TypeScript and uncached lint; independent specialist
   audit of lifecycle/connection/navigation ownership. Actual Android process and
   retained-intent evidence follows source review before this integration gate closes.
+
+Targeted command is `npm.cmd test -- --runInBand --runTestsByPath` with the four
+new test paths and the existing profile-route-guards, timer-readiness and
+replacement-restore-gate suites. Run it separately with
+`EXPO_PUBLIC_RELEASE_PROFILE=full` and `mvp`; then both complete profile suites,
+`npm.cmd run typecheck`, uncached `npm.cmd run lint -- --no-cache` and
+`git diff --check`. Reuse installed Expo Router's native-intent, Expo reload and
+notification-clear APIs; introduce no new library or custom native bridge.
 
 Worker handoff includes exact SHA, files, behavior, exact commands/results,
 assumptions and remaining native proof. No merge/push or scope expansion. The
