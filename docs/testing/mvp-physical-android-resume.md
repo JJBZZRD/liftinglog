@@ -69,6 +69,32 @@ succeeded for integration `f70abcf`, diagnostic `1345128`, and physical validati
 publication occurred. Remote CI runs/protections remain unverified: the environment
 has no `gh`/`hub`, and the read-only API attempt could not connect.
 
+### Independent review and next tickets
+
+The read-only specialist confirms that a missing original filename makes
+`resolveVideoLibraryReference` return unresolved before scanning; this is the safe
+behavior required by facts section 10. The earlier
+[Android media review](mvp-android-media-review.md#open-metadata-finding) already
+records the broader system-picker identity gap. A bounded metadata-acquisition
+ticket must prove canonical identity with installed library/native contracts;
+duration alone, numeric cache filenames and undocumented URI parsing are not
+acceptable substitutes. Keep ambiguous or missing identities unresolved.
+
+No external deletion path was found in set loading, picker read/copy or restore
+reconciliation. The reviewed managed-file deletion is restricted to app storage;
+the app's gallery deletion call belongs to explicit set/clear deletion handlers,
+which were not exercised in this session. The disappearance therefore requires
+evidence of the responsible transition before a code correction is commissioned.
+
+Next executable device investigation: use the isolated package and a new pair of
+owned synthetic files; assert file hashes and exact MediaStore rows while stopped,
+after ordinary launch, after set mount, after Change Video, and after picker
+cancel/selection. Stop at the first disappearance. Retain timestamped app and
+MediaProvider/picker diagnostics and verify whether any external cleanup or user
+action occurred. Do not use personal media or modify the ordinary app. The phone
+window has ended, so this investigation waits for a later device session; source
+and metadata-contract preparation can proceed offline.
+
 ## Prepared isolated build
 
 MVP-007D-P is a non-shipping configuration branch,
