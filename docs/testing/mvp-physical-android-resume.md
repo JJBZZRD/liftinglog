@@ -85,6 +85,9 @@ reconciliation. The reviewed managed-file deletion is restricted to app storage;
 the app's gallery deletion call belongs to explicit set/clear deletion handlers,
 which were not exercised in this session. The disappearance therefore requires
 evidence of the responsible transition before a code correction is commissioned.
+The user explicitly confirmed after the session that they did not delete the test
+videos or run a phone/storage cleanup. Manual user cleanup does not explain the
+observations; the responsible app/native/OS transition remains unproven.
 
 Next executable device investigation: use the isolated package and a new pair of
 owned synthetic files; assert file hashes and exact MediaStore rows while stopped,
