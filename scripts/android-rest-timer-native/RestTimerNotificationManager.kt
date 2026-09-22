@@ -38,14 +38,8 @@ object RestTimerNotificationManager {
   private const val LEGACY_SUMMARY_NOTIFICATION_ID = 10_000
   private const val COUNTDOWN_NOTIFICATION_ID_BASE = 11_000
 
-  private data class ActiveTimerState(
-    val timerId: String,
-    val exerciseId: Int,
-    val exerciseName: String,
-    val endAtMillis: Long
-  )
-
-  private val activeTimersByExercise = ConcurrentHashMap<Int, ActiveTimerState>()
+  private val operationLock = Any()
+  private val activeTimersByExercise = ConcurrentHashMap<Int, RegisteredRestTimer>()
   @Volatile private var cachedLargeIcon: Bitmap? = null
 
   fun showCountdown(
@@ -55,49 +49,57 @@ object RestTimerNotificationManager {
     exerciseName: String,
     endAtMillis: Long
   ) {
-    val appContext = context.applicationContext
-    ensureNotificationChannels(appContext)
-
-    val timerState = ActiveTimerState(
-      timerId = timerId,
-      exerciseId = exerciseId,
-      exerciseName = exerciseName,
-      endAtMillis = endAtMillis
-    )
-
-    activeTimersByExercise[exerciseId] = timerState
-    cancelScheduledCompletion(appContext, exerciseId)
-    NotificationManagerCompat.from(appContext).cancel(completionNotificationId(exerciseId))
-    scheduleCompletion(appContext, timerState)
-    refreshCountdownNotifications(appContext)
+    synchronized(operationLock) {
+      val appContext = context.applicationContext
+      ensureNotificationChannels(appContext)
+      val timerState = RegisteredRestTimer(
+        timerId = timerId,
+        exerciseId = exerciseId,
+        exerciseName = exerciseName,
+        endAtMillis = endAtMillis
+      )
+      replaceActiveTimers(registry(appContext).register(timerState))
+      cancelScheduledCompletion(appContext, exerciseId)
+      NotificationManagerCompat.from(appContext).cancel(completionNotificationId(exerciseId))
+      scheduleCompletion(appContext, timerState)
+      refreshCountdownNotifications(appContext)
+    }
   }
 
   fun dismissCountdown(context: Context, timerId: String, exerciseId: Int) {
-    val appContext = context.applicationContext
-    val activeTimerState = activeTimersByExercise[exerciseId]
-    if (activeTimerState != null && activeTimerState.timerId != timerId) {
-      return
+    synchronized(operationLock) {
+      val appContext = context.applicationContext
+      val registeredTimers = registry(appContext).readAll()
+      val registeredTimer = registeredTimers.firstOrNull { it.exerciseId == exerciseId }
+      if (registeredTimer != null && registeredTimer.timerId != timerId) {
+        return@synchronized
+      }
+      replaceActiveTimers(registeredTimers)
+      val notificationManager = NotificationManagerCompat.from(appContext)
+      notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
+      notificationManager.cancel(countdownNotificationId(exerciseId))
     }
-
-    val notificationManager = NotificationManagerCompat.from(appContext)
-    notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
-    notificationManager.cancel(countdownNotificationId(exerciseId))
   }
 
   fun cancelCompletion(context: Context, timerId: String, exerciseId: Int) {
-    val appContext = context.applicationContext
-    val activeTimerState = activeTimersByExercise[exerciseId]
-    if (activeTimerState != null && activeTimerState.timerId != timerId) {
-      return
+    synchronized(operationLock) {
+      val appContext = context.applicationContext
+      val timerRegistry = registry(appContext)
+      val registeredTimer = timerRegistry.findByExercise(exerciseId)
+      if (registeredTimer != null && registeredTimer.timerId != timerId) {
+        return@synchronized
+      }
+      if (registeredTimer != null) {
+        timerRegistry.removeByTimerAndExercise(timerId, exerciseId)
+      }
+      activeTimersByExercise.remove(exerciseId)
+      cancelScheduledCompletion(appContext, exerciseId)
+      val notificationManager = NotificationManagerCompat.from(appContext)
+      notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
+      notificationManager.cancel(countdownNotificationId(exerciseId))
+      notificationManager.cancel(completionNotificationId(exerciseId))
+      refreshCountdownNotifications(appContext)
     }
-
-    activeTimersByExercise.remove(exerciseId)
-    cancelScheduledCompletion(appContext, exerciseId)
-    val notificationManager = NotificationManagerCompat.from(appContext)
-    notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
-    notificationManager.cancel(countdownNotificationId(exerciseId))
-    notificationManager.cancel(completionNotificationId(exerciseId))
-    refreshCountdownNotifications(appContext)
   }
 
   fun showCompletion(
@@ -107,26 +109,99 @@ object RestTimerNotificationManager {
     exerciseName: String,
     endAtMillis: Long
   ) {
-    val appContext = context.applicationContext
-    val activeTimerState = activeTimersByExercise[exerciseId]
-    if (activeTimerState != null && activeTimerState.timerId != timerId) {
-      return
+    synchronized(operationLock) {
+      val appContext = context.applicationContext
+      val timerRegistry = registry(appContext)
+      val registeredTimer = timerRegistry.findByExercise(exerciseId)
+      if (registeredTimer != null &&
+        !registeredTimer.hasIdentity(timerId, exerciseId, endAtMillis)
+      ) {
+        return@synchronized
+      }
+      if (registeredTimer != null) {
+        timerRegistry.removeExact(timerId, exerciseId, endAtMillis)
+      }
+      activeTimersByExercise.remove(exerciseId)
+      cancelScheduledCompletion(appContext, exerciseId)
+      val notificationManager = NotificationManagerCompat.from(appContext)
+      notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
+      notificationManager.cancel(countdownNotificationId(exerciseId))
+      notificationManager.notify(
+        completionNotificationId(exerciseId),
+        buildCompletionNotification(appContext, timerId, exerciseId, exerciseName, endAtMillis)
+      )
+      refreshCountdownNotifications(appContext)
     }
-
-    activeTimersByExercise.remove(exerciseId)
-    cancelScheduledCompletion(appContext, exerciseId)
-    val notificationManager = NotificationManagerCompat.from(appContext)
-    notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
-    notificationManager.cancel(countdownNotificationId(exerciseId))
-    notificationManager.notify(
-      completionNotificationId(exerciseId),
-      buildCompletionNotification(appContext, timerId, exerciseId, exerciseName, endAtMillis)
-    )
-    refreshCountdownNotifications(appContext)
   }
 
-  private fun scheduleCompletion(context: Context, timerState: ActiveTimerState) {
-    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+  fun handleCompletionDelivery(
+    context: Context,
+    timerId: String,
+    exerciseId: Int,
+    endAtMillis: Long
+  ) {
+    synchronized(operationLock) {
+      val appContext = context.applicationContext
+      val timer = registry(appContext).removeExact(timerId, exerciseId, endAtMillis)
+        ?: return@synchronized
+      activeTimersByExercise.remove(exerciseId)
+      cancelScheduledCompletion(appContext, exerciseId)
+      val notificationManager = NotificationManagerCompat.from(appContext)
+      notificationManager.cancel(LEGACY_SUMMARY_NOTIFICATION_ID)
+      notificationManager.cancel(countdownNotificationId(exerciseId))
+      notificationManager.notify(
+        completionNotificationId(exerciseId),
+        buildCompletionNotification(
+          appContext,
+          timer.timerId,
+          timer.exerciseId,
+          timer.exerciseName,
+          timer.endAtMillis
+        )
+      )
+      refreshCountdownNotifications(appContext)
+    }
+  }
+
+  fun handleCountdownDismissedDelivery(
+    context: Context,
+    timerId: String,
+    exerciseId: Int,
+    endAtMillis: Long
+  ) {
+    synchronized(operationLock) {
+      val appContext = context.applicationContext
+      val timer = registry(appContext).findExact(timerId, exerciseId, endAtMillis)
+        ?: return@synchronized
+      if (timer.endAtMillis <= System.currentTimeMillis()) {
+        return@synchronized
+      }
+      ensureNotificationChannels(appContext)
+      activeTimersByExercise[timer.exerciseId] = timer
+      refreshCountdownNotifications(appContext)
+    }
+  }
+
+  fun retireRestTimerArtifactsForReplacementRestore(
+    context: Context
+  ): RestTimerRetirementResult = synchronized(operationLock) {
+    val appContext = context.applicationContext
+    registry(appContext).retire(
+      cancelAlarm = { timer ->
+        cancelScheduledCompletionChecked(appContext, timer.exerciseId)
+      },
+      clearProcessState = activeTimersByExercise::clear,
+      clearDisplayedNotifications = {
+        val notificationManager = appContext.getSystemService(NotificationManager::class.java)
+          ?: throw IllegalStateException("NotificationManager is unavailable")
+        notificationManager.cancelAll()
+      }
+    )
+  }
+
+  private fun scheduleCompletion(context: Context, timerState: RegisteredRestTimer) {
+    val alarmManager = context.getSystemService(AlarmManager::class.java)
+      ?: throw IllegalStateException("AlarmManager is unavailable")
     val completionPendingIntent = buildCompletionBroadcastPendingIntent(context, timerState)
     val triggerAtElapsedRealtime = buildCompletionTriggerElapsedRealtime(timerState.endAtMillis)
 
@@ -169,6 +244,14 @@ object RestTimerNotificationManager {
     completionPendingIntent.cancel()
   }
 
+  private fun cancelScheduledCompletionChecked(context: Context, exerciseId: Int) {
+    val alarmManager = context.getSystemService(AlarmManager::class.java)
+      ?: throw IllegalStateException("AlarmManager is unavailable")
+    val completionPendingIntent = buildCompletionBroadcastPendingIntent(context, exerciseId)
+    alarmManager.cancel(completionPendingIntent)
+    completionPendingIntent.cancel()
+  }
+
   private fun refreshCountdownNotifications(context: Context) {
     val activeTimers = activeTimersByExercise.values.sortedBy { it.endAtMillis }
     val notificationManager = NotificationManagerCompat.from(context)
@@ -188,7 +271,7 @@ object RestTimerNotificationManager {
 
   private fun buildCountdownNotification(
     context: Context,
-    timerState: ActiveTimerState
+    timerState: RegisteredRestTimer
   ): android.app.Notification {
     val compactContentView =
       buildCountdownCompactRemoteViews(context, timerState.exerciseName, timerState.endAtMillis)
@@ -333,7 +416,7 @@ object RestTimerNotificationManager {
 
   private fun buildCompletionBroadcastPendingIntent(
     context: Context,
-    timerState: ActiveTimerState
+    timerState: RegisteredRestTimer
   ): PendingIntent = PendingIntent.getBroadcast(
     context,
     completionRequestCode(timerState.exerciseId),
@@ -351,7 +434,7 @@ object RestTimerNotificationManager {
 
   private fun buildCountdownDeletePendingIntent(
     context: Context,
-    timerState: ActiveTimerState
+    timerState: RegisteredRestTimer
   ): PendingIntent = PendingIntent.getBroadcast(
     context,
     restoreRequestCode(timerState.exerciseId),
@@ -434,12 +517,24 @@ object RestTimerNotificationManager {
   }
 
   fun canScheduleExactAlarms(context: Context): Boolean {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-      return true
-    }
+    return synchronized(operationLock) {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        return@synchronized true
+      }
 
-    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return false
-    return alarmManager.canScheduleExactAlarms()
+      val alarmManager = context.getSystemService(AlarmManager::class.java)
+        ?: return@synchronized false
+      alarmManager.canScheduleExactAlarms()
+    }
+  }
+
+  private fun registry(context: Context): RestTimerRegistry = RestTimerRegistry(
+    AtomicFileRestTimerRegistryPersistence(context)
+  )
+
+  private fun replaceActiveTimers(timers: List<RegisteredRestTimer>) {
+    activeTimersByExercise.clear()
+    timers.forEach { timer -> activeTimersByExercise[timer.exerciseId] = timer }
   }
 
   private fun getLargeIcon(context: Context): Bitmap? {

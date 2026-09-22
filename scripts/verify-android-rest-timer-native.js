@@ -175,6 +175,10 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     moduleSource.includes('const val NAME = "RestTimerNotifications"'),
     "Native rest-timer module name has drifted"
   );
+  assert(
+    moduleSource.includes("fun retireRestTimerArtifactsForReplacementRestore(promise: Promise)"),
+    "Native rest-timer retirement method is missing"
+  );
   const adapterSource = readRequiredFile(
     path.join(paths.projectRoot, "lib", "native", "restTimerNotifications.ts")
   ).toString("utf8");
@@ -223,6 +227,74 @@ function verifyIdentityAndNativeInvariants(paths, identity) {
     managerSource.includes("setExactAndAllowWhileIdle"),
     "Rest-timer manager must retain exact idle alarm scheduling"
   );
+  const registrationIndex = managerSource.indexOf("registry(appContext).register(timerState)");
+  const schedulingIndex = managerSource.indexOf("scheduleCompletion(appContext, timerState)");
+  assert(registrationIndex >= 0, "Rest-timer manager must durably register scheduled identities");
+  assert(
+    schedulingIndex > registrationIndex,
+    "Rest-timer identities must be registered before alarm scheduling"
+  );
+  assert(
+    managerSource.includes("notificationManager.cancelAll()"),
+    "Rest-timer retirement must clear every displayed app notification"
+  );
+
+  const registrySource = readRequiredFile(
+    path.join(paths.templateDir, "RestTimerRegistry.kt")
+  ).toString("utf8");
+  const registryInvariants = [
+    "class AtomicFileRestTimerRegistryPersistence",
+    "Os.lstat(file.path).st_mode",
+    "AtomicFile(baseFile)",
+    "stream.fd.sync()",
+    "published.contentEquals(bytes)",
+    "associatedFiles().filter { lstatModeOrNull(it) != null }",
+    "readBounded(atomicFile)",
+    "Rest-timer registry backup remains after AtomicFile recovery",
+    "Rest-timer registry new file remains after AtomicFile recovery",
+    "onMalformedInput(CodingErrorAction.REPORT)",
+    "requireStrictJsonCharacters(json)",
+    "reader.strictness = Strictness.STRICT",
+    "fun retire(",
+  ];
+  for (const invariant of registryInvariants) {
+    assert(registrySource.includes(invariant), `Missing rest-timer registry invariant: ${invariant}`);
+  }
+  assert(
+    !registrySource.includes("getSharedPreferences"),
+    "Rest-timer registry must not use SharedPreferences as its durable boundary"
+  );
+  const openReadIndex = registrySource.indexOf("atomicFile.openRead().use");
+  const postOpenRecoveryIndex = registrySource.indexOf(
+    "requireRecoveredReadState()",
+    openReadIndex
+  );
+  const byteReadIndex = registrySource.indexOf("input.read(", postOpenRecoveryIndex);
+  const postReadRecoveryIndex = registrySource.indexOf(
+    "requireRecoveredReadState()",
+    byteReadIndex
+  );
+  assert(openReadIndex >= 0, "Rest-timer registry must open through AtomicFile");
+  assert(
+    postOpenRecoveryIndex > openReadIndex && byteReadIndex > postOpenRecoveryIndex,
+    "Rest-timer registry must verify AtomicFile recovery before reading bytes"
+  );
+  assert(
+    postReadRecoveryIndex > byteReadIndex,
+    "Rest-timer registry must reverify AtomicFile recovery before accepting bytes"
+  );
+
+  const receiverInvariants = [
+    ["RestTimerCompletionReceiver.kt", "handleCompletionDelivery"],
+    ["RestTimerCountdownDismissedReceiver.kt", "handleCountdownDismissedDelivery"],
+  ];
+  for (const [filename, handler] of receiverInvariants) {
+    const receiverSource = readRequiredFile(path.join(paths.templateDir, filename)).toString("utf8");
+    assert(receiverSource.includes("EXTRA_TIMER_ID"), `${filename} must require timerId`);
+    assert(receiverSource.includes("EXTRA_EXERCISE_ID"), `${filename} must require exerciseId`);
+    assert(receiverSource.includes("hasExtra(RestTimerNotificationManager.EXTRA_END_AT)"), `${filename} must require endAt`);
+    assert(receiverSource.includes(handler), `${filename} must use checked registry delivery`);
+  }
 
   const schemes = [...managerSource.matchAll(/\.scheme\("([^"]+)"\)/g)].map((match) => match[1]);
   assert(schemes.length > 0, "Rest-timer manager must define notification URI schemes");

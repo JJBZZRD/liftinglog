@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -146,6 +147,28 @@ class RestTimerNotificationsModule(
         promise.reject(
           "ERR_REST_TIMER_EXACT_ALARM_SETTINGS",
           "Failed to open exact alarm settings",
+          error
+        )
+      }
+    }
+  }
+
+  @ReactMethod
+  fun retireRestTimerArtifactsForReplacementRestore(promise: Promise) {
+    UiThreadUtil.runOnUiThread {
+      try {
+        val result = RestTimerNotificationManager.retireRestTimerArtifactsForReplacementRestore(
+          reactApplicationContext
+        )
+        promise.resolve(Arguments.createMap().apply {
+          putString("status", "retired")
+          putInt("registeredTimersRetired", result.registeredTimersRetired)
+          putBoolean("displayedNotificationsCleared", true)
+        })
+      } catch (error: Exception) {
+        promise.reject(
+          "ERR_REST_TIMER_RETIRE_RESTORE",
+          "Failed to retire rest-timer artifacts for replacement restore",
           error
         )
       }

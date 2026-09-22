@@ -3,6 +3,7 @@ package com.anonymous.LiftingLog.notifications
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import java.io.IOException
 
 class RestTimerCompletionReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -12,21 +13,24 @@ class RestTimerCompletionReceiver : BroadcastReceiver() {
 
     val timerId = intent.getStringExtra(RestTimerNotificationManager.EXTRA_TIMER_ID) ?: return
     val exerciseId = intent.getIntExtra(RestTimerNotificationManager.EXTRA_EXERCISE_ID, -1)
-    if (exerciseId < 0) {
+    if (exerciseId < 0 || !intent.hasExtra(RestTimerNotificationManager.EXTRA_END_AT)) {
       return
     }
 
-    val exerciseName =
-      intent.getStringExtra(RestTimerNotificationManager.EXTRA_EXERCISE_NAME) ?: "Exercise"
-    val endAtMillis =
-      intent.getLongExtra(RestTimerNotificationManager.EXTRA_END_AT, System.currentTimeMillis())
+    val endAtMillis = intent.getLongExtra(RestTimerNotificationManager.EXTRA_END_AT, -1L)
+    if (endAtMillis <= 0L) {
+      return
+    }
 
-    RestTimerNotificationManager.showCompletion(
-      context = context,
-      timerId = timerId,
-      exerciseId = exerciseId,
-      exerciseName = exerciseName,
-      endAtMillis = endAtMillis
-    )
+    try {
+      RestTimerNotificationManager.handleCompletionDelivery(
+        context = context,
+        timerId = timerId,
+        exerciseId = exerciseId,
+        endAtMillis = endAtMillis
+      )
+    } catch (_: IOException) {
+      return
+    }
   }
 }

@@ -6,6 +6,7 @@ const { AndroidConfig } = require("expo/config-plugins");
 const KOTLIN_TEMPLATES = [
   "RestTimerNotificationsModule.kt",
   "RestTimerNotificationManager.kt",
+  "RestTimerRegistry.kt",
   "RestTimerCompletionReceiver.kt",
   "RestTimerCountdownDismissedReceiver.kt",
   "RestTimerNotificationsPackage.kt",
