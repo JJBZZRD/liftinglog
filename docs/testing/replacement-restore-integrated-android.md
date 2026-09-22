@@ -78,8 +78,9 @@ lifecycle/root and accepted engine/media boundaries. Combined host checks pass
 lint (zero errors, 19 baseline warnings).
 
 The integrated explicit gallery checks below have also passed. Still required:
-the remaining exact native crash windows and physical Android media/performance
-acceptance. Release-mode cold/warm route evidence is recorded below.
+physical Android media/performance/provider acceptance. The exact native crash
+windows are now [accepted separately](replacement-restore-crash-android.md).
+Release-mode cold/warm route evidence is recorded below.
 SAF filename/save/reopen
 is observed, but provider-returned MIME is not yet independently observed: both
 shell and app-UID CLI metadata queries were rejected by Android permissions.
@@ -198,4 +199,5 @@ existing rows and the other thirteen tables are unchanged.
 Final host checks on documentation checkpoint `19e70fb` pass 86 suites / 1020 tests
 in each profile, TypeScript and prescribed uncached lint (zero errors, nineteen
 baseline warnings). Logs are `.codex-artifacts/mvp007-final-{full,mvp,typecheck,lint}.log`.
-Exact native crash windows and physical Android acceptance remain open.
+The [six exact native crash windows](replacement-restore-crash-android.md) have
+since passed. Physical Android acceptance remains open.

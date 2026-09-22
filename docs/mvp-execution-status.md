@@ -7,7 +7,7 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 Integrated production code is `031392e`. MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
-Replacement restore remains the active implementation story: native controls,
+Replacement restore implementation and emulator acceptance are complete: native controls,
 timer retirement, schema validation, sealed export and native file hashing are
 accepted prerequisites. The replacement engine is accepted on the host and the
 synthetic Android engine gate; postcommit media is accepted on the host.
@@ -23,15 +23,20 @@ duplicate-match rejection and playback now pass. MVP-006D2R's one-line viewport
 fix is accepted and integrated as `031392e`: native scheduled/postcommit/completion
 screens fit, both-profile focused tests pass (10 each), and organiser TypeScript
 and native exact-data checks pass. No restore/data defect was found. Remaining
-release work is exact crash windows, physical Android performance/media acceptance
-and final documentation. Release-mode emulator checks now pass forty route
+release work is physical Android performance/media/provider acceptance,
+remote CI/protection verification and final documentation. All six exact native
+crash windows plus the later-process rollback/retry case now pass; see the
+[crash evidence](testing/replacement-restore-crash-android.md). Release-mode emulator checks pass forty route
 observations, including cold/warm deferred-route denial, cold stale/current timer
 links, all five calculators and the gallery-only video menu. The non-debuggable
 APK works with Metro stopped; it is locally debug-signed, not a store artifact.
 Final host checks at `19e70fb` again pass 86 suites / 1020 tests in each profile,
-TypeScript and lint with the nineteen baseline warnings. MVP-006K
-owns a non-shipping crash diagnostic with a separate Android package and custom
-entry; production lifecycle/engine source is unchanged. Read-only 007E preparation
+TypeScript and lint with the nineteen baseline warnings. MVP-006K's corrected
+non-shipping diagnostic `1345128` is independently accepted and executed in its
+separate Android package; production lifecycle/engine source is unchanged.
+The normal app's DB/WAL/SHM hashes remain unchanged after every crash run.
+Both apps and Metro are stopped. No physical phone was present in the ADB inventory.
+Read-only 007E preparation
 has identified the stale legacy-merge documentation for the later final doc ticket.
 
 B6 candidate `b93f8345ec912a4b82ef969a653b342ac6e56f54` received independent
