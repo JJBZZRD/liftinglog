@@ -11,6 +11,7 @@ import {
   pickMatchingWorkoutId,
 } from "./backupMatching";
 import { sqlite } from "./connection";
+import { createSealedBackupSnapshot } from "./backupSnapshot";
 import { updateMedia } from "./media";
 import {
   doesFileUriExist,
@@ -21,7 +22,6 @@ import {
 } from "../utils/videoStorage";
 
 const LOG_PREFIX = "[backup]";
-const DB_NAME = "LiftingLog.db";
 const BACKUP_TEMP_DB_NAME = "backup-import-temp.db";
 const SQLITE_HEADER = "SQLite format 3";
 
@@ -93,96 +93,33 @@ function logRuntimeDiagnostics(): void {
   }
 }
 
-/**
- * Resolve the path to the SQLite database file at runtime.
- * expo-sqlite stores databases in the document directory on both platforms.
- */
-function getDatabaseFile(): File {
-  logRuntimeDiagnostics();
-
-  // expo-sqlite stores databases in document directory
-  const documentDir = Paths.document;
-  if (!documentDir) {
-    console.warn(`${LOG_PREFIX} Document directory is not available.`);
-    throw new FileSystemUnavailableError(
-      "Backup requires a development build or production APK. File system is not available in this runtime."
-    );
-  }
-
-  // On Android, expo-sqlite stores in document/SQLite/
-  // On iOS, it's directly in document/
-  let dbFile: File;
-  if (Platform.OS === "android") {
-    dbFile = new File(documentDir, "SQLite", DB_NAME);
-  } else {
-    dbFile = new File(documentDir, DB_NAME);
-  }
-
-  if (__DEV__) {
-    console.log(`${LOG_PREFIX} Database file path:`, dbFile.uri);
-    try {
-      const exists = dbFile.exists;
-      console.log(`${LOG_PREFIX} Database exists:`, exists);
-    } catch (error) {
-      console.warn(`${LOG_PREFIX} Could not check if database exists:`, error);
-    }
-  }
-
-  return dbFile;
-}
-
-function checkpointDatabaseForBackup(): void {
-  try {
-    sqlite.execSync("PRAGMA wal_checkpoint(TRUNCATE);");
-    if (__DEV__) {
-      console.log(`${LOG_PREFIX} WAL checkpoint completed before backup export.`);
-    }
-  } catch (error) {
-    console.warn(`${LOG_PREFIX} Failed to checkpoint WAL before backup export:`, error);
-    throw error;
-  }
-}
-
-/**
- * Copy the database to a temporary location for export
- */
-function copyDatabaseToTemp(backupFilename: string): File {
+function createBackupTempDirectory(): Directory {
   const cacheDir = Paths.cache ?? Paths.document;
   if (!cacheDir) {
     throw new FileSystemUnavailableError(
       "No writable cache directory available."
     );
   }
-
-  const dbFile = getDatabaseFile();
-  if (!dbFile.exists) {
-    throw new FileSystemUnavailableError(
-      "Database file not found. Please ensure the app has been used at least once."
-    );
+  logRuntimeDiagnostics();
+  const directory = new Directory(
+    cacheDir,
+    `backup-export-${Date.now()}-${newUid()}`
+  );
+  if (directory.exists) {
+    throw new Error("Generated backup export directory already exists.");
   }
+  directory.create();
+  return directory;
+}
 
-  checkpointDatabaseForBackup();
-
-  const tempFile = new File(cacheDir, backupFilename);
-  console.log(`${LOG_PREFIX} Copying database to:`, tempFile.uri);
-
+function deleteBackupTempDirectory(directory: Directory): void {
   try {
-    dbFile.copy(tempFile);
-  } catch (error) {
-    console.warn(`${LOG_PREFIX} Failed to copy database:`, error);
-    throw error;
-  }
-
-  if (__DEV__) {
-    try {
-      const info = tempFile.info();
-      console.log(`${LOG_PREFIX} Temp backup info:`, { exists: info.exists, uri: tempFile.uri });
-    } catch (error) {
-      console.warn(`${LOG_PREFIX} Unable to verify temp backup:`, error);
+    if (directory.exists) {
+      directory.delete();
     }
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} Failed to clean up temporary backup files:`, error);
   }
-
-  return tempFile;
 }
 
 /**
@@ -199,22 +136,30 @@ async function saveWithAndroidSaf(tempFile: File, backupFilename: string): Promi
     throw new ExportCancelledError();
   }
 
-  // Remove .db extension for createFileAsync (it adds based on mime type)
-  const fileName = backupFilename.replace(/\.db$/i, "");
   const fileUri = await StorageAccessFramework.createFileAsync(
     permission.directoryUri,
-    fileName,
-    "application/x-sqlite3"
+    backupFilename,
+    "application/vnd.sqlite3"
   );
 
-  // Read the temp file as base64 and write to the SAF URI
-  const base64Content = await LegacyFileSystem.readAsStringAsync(tempFile.uri, {
-    encoding: LegacyFileSystem.EncodingType.Base64,
-  });
+  try {
+    // The retained SAF transport is base64-based. Snapshot construction and
+    // validation have already completed before this provider-owned write begins.
+    const base64Content = await LegacyFileSystem.readAsStringAsync(tempFile.uri, {
+      encoding: LegacyFileSystem.EncodingType.Base64,
+    });
 
-  await LegacyFileSystem.writeAsStringAsync(fileUri, base64Content, {
-    encoding: LegacyFileSystem.EncodingType.Base64,
-  });
+    await LegacyFileSystem.writeAsStringAsync(fileUri, base64Content, {
+      encoding: LegacyFileSystem.EncodingType.Base64,
+    });
+  } catch (error) {
+    try {
+      await LegacyFileSystem.deleteAsync(fileUri, { idempotent: true });
+    } catch (cleanupError) {
+      console.warn(`${LOG_PREFIX} Failed to remove incomplete SAF backup:`, cleanupError);
+    }
+    throw error;
+  }
 
   console.log(`${LOG_PREFIX} Backup saved via SAF:`, fileUri);
   return fileUri;
@@ -227,21 +172,35 @@ export async function exportDatabaseBackup(): Promise<{ uri: string; method: Exp
   console.log(`${LOG_PREFIX} Starting database backup export.`);
 
   const backupFilename = generateBackupFilename();
-  const tempFile = copyDatabaseToTemp(backupFilename);
+  const tempDirectory = createBackupTempDirectory();
 
-  if (Platform.OS === "android") {
-    const uri = await saveWithAndroidSaf(tempFile, backupFilename);
-    if (__DEV__) {
-      console.log(`${LOG_PREFIX} Export method:`, { method: "android_saf", uri });
+  try {
+    const snapshot = await createSealedBackupSnapshot({
+      sourceDatabase: sqlite,
+      destinationDirectory: tempDirectory.uri,
+      destinationName: backupFilename,
+    });
+    const tempFile = new File(snapshot.fileUri);
+
+    if (Platform.OS === "android") {
+      const uri = await saveWithAndroidSaf(tempFile, backupFilename);
+      deleteBackupTempDirectory(tempDirectory);
+      if (__DEV__) {
+        console.log(`${LOG_PREFIX} Export method:`, { method: "android_saf", uri });
+      }
+      return { uri, method: "android_saf" };
     }
-    return { uri, method: "android_saf" };
-  }
 
-  // iOS: use share sheet fallback
-  if (__DEV__) {
-    console.log(`${LOG_PREFIX} Export method:`, { method: "fallback_share", uri: tempFile.uri });
+    // The caller still needs this private file for the share sheet, so it must
+    // remain available after this function returns.
+    if (__DEV__) {
+      console.log(`${LOG_PREFIX} Export method:`, { method: "fallback_share", uri: tempFile.uri });
+    }
+    return { uri: tempFile.uri, method: "fallback_share" };
+  } catch (error) {
+    deleteBackupTempDirectory(tempDirectory);
+    throw error;
   }
-  return { uri: tempFile.uri, method: "fallback_share" };
 }
 
 /**
