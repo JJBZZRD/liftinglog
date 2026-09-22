@@ -75,12 +75,15 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B1 | Sol / high; independent Sol / high audit | Pure PB derivation, existing PB rebuild seam, focused parity tests | Independently accepted `f990f11`; clean rebase `9c0da86`; organiser 6/6 targeted tests pass; merged `288001e` without metric or persistence changes |
 | MVP-006B2 | Sol / xhigh; independent Sol / high audit | Android process token and atomic control store, isolated plugin/templates/facades/tests | Corrected `2e56151` independently accepted and merged `f6b045b`; organiser 23/23 tests pass; actual Kotlin parser suite 4/4 passes; corrected APK builds but is not installed; runtime proof pending |
 | MVP-006B2P | Terra / medium; organiser review | Separate non-shipping native-control diagnostic route and usage notes | Corrected `3f6acf1` reviewed; organiser typecheck/scoped lint pass; runtime unrun |
-| MVP-006B2C | Sol / high | Native timer registry/retirement, existing adapter, manager/module/receivers and template parity, focused tests | In implementation from `2f4acfc`; independent audit and native recovery proof required |
-| MVP-006B2D | Terra / high | TimerStore lazy readiness/quiescence, notification continuation cleanup, narrow root activation, focused tests | In implementation from `2f4acfc`; no native/DB/engine ownership |
+| MVP-006B2C | Sol / high | Native timer registry/retirement, existing adapter, manager/module/receivers and template parity, focused tests | SharedPreferences candidate rejected; AtomicFile repair `f80a3e1` also requires verified backup-recovery postconditions; repair in progress, runtime proof pending |
+| MVP-006B2R | Sol / xhigh | Native control-store recovery verification and narrow tests | In implementation from `a86d17a` after actual API 36 backup-rename failure returned non-authoritative base bytes; independent review and corrected runtime proof required |
+| MVP-006B2D | Terra / high; independent Sol / high audit | TimerStore lazy readiness/quiescence, notification continuation cleanup, narrow root activation, focused tests | Corrected `e88aefb` independently accepted and merged `9401261`; separate native completion ownership survives failed ordinary/strict cleanup retries; 25 focused tests pass in each profile |
 | MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Corrected `043347c` independently accepted and merged `f435567`; organiser 143/143 targeted tests pass; exact historical provenance and migration/future-source closure verified |
 | MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 | MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Corrected `7cc330e` reviewed; organiser typecheck/scoped lint pass; synthetic cache fixtures prepared, but diagnostic has not run |
-| MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Mechanical API declarations in implementation from `2f4acfc`; no engine behavior or successful placeholders |
+| MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Corrected `9c3c2f2` reviewed and integrated as `72d5fd4`; organiser typecheck/scoped lint pass; no engine implementation |
+| MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
+| MVP-006A2 | Sol / high | Export-only backup helpers, isolated snapshot helper and focused tests | In implementation from `9401261`; online backup, standalone sealing, validation and complete SAF filename/MIME; legacy import untouched |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -152,6 +155,22 @@ records the remaining native prerequisite, process-recovery, exact-replacement,
 media and export checks. Unrun scenarios are explicitly pending; diagnostic
 branches must remain separate from shipping code.
 
+Native checks now have a separate synthetic-only Android API 36 emulator,
+`WorkoutLogRestoreSynthetic`, created from the installed SDK system image with
+fresh configuration and writable data under
+`.codex-artifacts/restore-synthetic-avd-20260922/`. No existing AVD data image or
+workout database was copied. Its ADB endpoint is `127.0.0.1:5557` on a separate
+server port 5038; every diagnostic command must specify that endpoint and verify
+the AVD name. The original populated emulator remains outside this diagnostic.
+The reviewed native-control APK was installed only on this fresh emulator.
+[Runtime evidence](testing/android-restore-native-runtime.md) records successful
+process identity, both-record kill-before/after-publication and first-write
+checks, malformed/inaccessible controls and deletion failure/retry. It also
+records a reproduced backup-recovery failure which blocks native acceptance
+until 006B2R is independently reviewed and rerun. The existing
+private-data approval request remains unresolved and neither denied read has
+been retried.
+
 The first 006B2 independent audit found that Android `JSONTokener` accepts malformed
 JSON syntax. Corrected `2e56151` uses Gson 2.13.2 strict structural parsing plus a
 narrow lexical guard for demonstrated raw-control/BOM gaps. The actual Kotlin
@@ -184,6 +203,15 @@ The organiser integrated it as `f435567`.
 At `f435567`, both profiles pass **66 suites / 763 tests**. Typecheck passes and
 uncached lint has zero errors and the 19 retained warnings. Logs are retained at
 `.codex-artifacts/mvp-restore-prerequisites-integrated-{full,mvp}.log`.
+
+At `9401261`, the organiser reran both integrated profiles: **68 suites / 778
+tests pass**. Typecheck passes; the project `expo lint --no-cache` command reports
+zero errors and 19 retained warnings. Logs are retained at
+`.codex-artifacts/mvp-timer-lifecycle-integrated-{full,mvp}.log` and the matching
+lint log. An initial direct `eslint .` attempt traversed unrelated retained
+artifacts and failed on an inaccessible tooling directory; the repository's
+actual lint command passes. The timer worker's branch was deleted after the exact
+reviewed squash; its detached worktree and evidence remain.
 
 An independent startup/import review prompted the
 [frozen startup contract](testing/replacement-restore-startup-contract.md), committed
