@@ -1,9 +1,13 @@
 # MVP-006D3 Settings replacement restore hookup
 
-Organiser preparation, 2026-09-22. Dispatch after the media service and lifecycle
-facade have been accepted. Pin their integrated main SHA and an isolated branch
-and worktree in the final worker message. Do not add a stub lifecycle module to
-start this ticket early.
+Organiser preparation, 2026-09-22. Media is accepted. The real lifecycle facade now
+exists in source-review checkpoint `1d82389801b16ae04ae631f2343602bab91c0c0d`.
+Per plan section 3.1, D3 may use one short-lived stacked branch from that exact
+checkpoint while B6 is under review; do not add a stub lifecycle module. B6
+acceptance/integration remains a hard dependency for D3 integration. After B6
+merges, the organiser transplants only D3's own commits onto new main and pins
+final checks there. The worker must not replay the parent's implementation or
+resolve cross-ticket conflicts. The final worker message pins branch/worktree.
 
 ## Objective and scope
 

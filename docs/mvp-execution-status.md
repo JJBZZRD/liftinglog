@@ -31,8 +31,10 @@ engine, media service, timer generation and lifecycle-failure contract. One
 Sol/xhigh worker owns branch `mvp/MVP-006B6-startup-lifecycle`, worktree
 `WorkoutLog-MVP006B6`, pinned to `3e813416bc7ddd2db7a780dba48058af8dc51d84`.
 The organiser owns review, the later independent audit and Android integration
-proof. Settings D3 follows the accepted lifecycle facade, without a parallel stub
-implementation. A read-only Luna evidence inventory confirms that 006E host
+proof. Settings D3 integration follows the accepted lifecycle facade; now that
+its real source checkpoint exists under review, D3 implementation may use one
+short-lived stacked branch under plan section 3.1, without a stub. A read-only
+Luna evidence inventory confirms that 006E host
 requirements are substantially covered; [remaining evidence](testing/replacement-restore-evidence-inventory.md)
 and the [native lifecycle packet](testing/replacement-restore-lifecycle-native-packet.md)
 avoid duplicating the accepted engine and media work. Six original-file hashes
@@ -49,6 +51,15 @@ notification-response epoch correction still pending in that checkpoint.
 The organiser prepared validated synthetic picker fixtures and preserved the
 stopped synthetic AVD baseline; prefer the actual B6/D3 Settings flow for runtime
 verification before commissioning any additional diagnostic-only route.
+The D3 stacked worker owns Settings and its focused tests only. The organiser
+will transplant its own commits onto accepted B6 main before final review and
+integration; no old parent stack is carried into the next wave.
+The session reached its agent-thread creation limit, so the completed
+Luna/medium evidence-inventory worker was reassigned to this mechanical hookup.
+Its prior task is closed and its new three-file scope is isolated in
+`WorkoutLog-MVP006D3`, branch `mvp/MVP-006D3-settings-hookup`, from the exact B6
+checkpoint above. Database lifecycle ownership and its independent Sol audit
+remain unchanged; the organiser will independently review the Settings result.
 
 Independent Sol/high audit accepted the corrected engine candidate `ef0bc3c`.
 The organiser reviewed the final nine-file diff, passed **79 suites / 945 tests
