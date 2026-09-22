@@ -55,7 +55,11 @@ jest.mock("../../components/TimerModal", () => "TimerModal");
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({ useUnitPreference: () => ({ unitPreference: "kg" }) }));
 jest.mock("../../lib/config/releaseProfile", () => ({ appCapabilities: mockAppCapabilities }));
 jest.mock("../../lib/theme/ThemeContext", () => ({ useTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }) }));
-jest.mock("../../lib/db/exercises", () => ({ getLastRestSeconds: jest.fn().mockResolvedValue(null), setLastRestSeconds: jest.fn() }));
+jest.mock("../../lib/db/exercises", () => ({
+  getExerciseById: jest.fn().mockResolvedValue({ id: 1 }),
+  getLastRestSeconds: jest.fn().mockResolvedValue(null),
+  setLastRestSeconds: jest.fn(),
+}));
 jest.mock("../../lib/db/media", () => ({ listMediaForSet: jest.fn().mockResolvedValue([]), listMediaForSetIds: jest.fn().mockResolvedValue([]) }));
 jest.mock("../../lib/db/programCalendar", () => ({
   deleteUserSet: jest.fn(), getCalendarSetById: jest.fn(), getCalendarSetByWorkoutSetId: jest.fn(),

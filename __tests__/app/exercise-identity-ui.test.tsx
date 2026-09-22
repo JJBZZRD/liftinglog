@@ -103,7 +103,12 @@ jest.mock("../../lib/db/exercises", () => ({
   listExerciseLibraryGroups: jest.fn(),
   getPinnedExercises: jest.fn(),
   togglePinExercise: jest.fn(),
-  getExerciseWithParentById: jest.fn(async () => null),
+  getExerciseWithParentById: jest.fn(async () => ({
+    id: 42,
+    name: "Bench Press",
+    parentName: null,
+    isVariation: false,
+  })),
   getPinnedExercisesCount: jest.fn(async () => 0),
   isExercisePinned: jest.fn(async () => false),
 }));

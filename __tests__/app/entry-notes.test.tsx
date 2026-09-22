@@ -64,6 +64,7 @@ jest.mock("../../lib/theme/ThemeContext", () => ({
   useTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }),
 }));
 jest.mock("../../lib/db/exercises", () => ({
+  getExerciseById: jest.fn().mockResolvedValue({ id: 1 }),
   getLastRestSeconds: jest.fn().mockResolvedValue(null),
   setLastRestSeconds: jest.fn(),
 }));

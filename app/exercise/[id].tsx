@@ -13,6 +13,7 @@ import {
   togglePinExercise,
   type ExerciseWithParent,
 } from "../../lib/db/exercises";
+import { parseExerciseRouteId } from "../../lib/routing/exerciseRouteId";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import AnalyticsTab from "./tabs/AnalyticsTab";
 import HistoryTab from "./tabs/HistoryTab";
@@ -21,12 +22,17 @@ import RecordTab from "./tabs/RecordTab";
 export default function ExerciseModalScreen() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string; tab?: string; source?: string }>();
-  const exerciseId = typeof params.id === "string" ? parseInt(params.id, 10) : null;
+  const exerciseId = parseExerciseRouteId(params.id);
   const title = typeof params.name === "string" ? params.name : "Exercise";
   const layout = useWindowDimensions();
   const navigation = useNavigation();
   const [index, setIndex] = useState(0);
   const [headerExercise, setHeaderExercise] = useState<ExerciseWithParent | null>(null);
+  const [validatedExerciseId, setValidatedExerciseId] = useState<number | null>(null);
+  const [exerciseStatus, setExerciseStatus] = useState<"loading" | "available" | "unavailable" | "error">(
+    exerciseId ? "loading" : "unavailable"
+  );
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const [routes] = useState([
     { key: "record", title: "Record" },
     { key: "history", title: "History" },
@@ -41,6 +47,14 @@ export default function ExerciseModalScreen() {
 
   const triggerHistoryRefresh = useCallback(() => {
     setHistoryRefreshKey((prev) => prev + 1);
+  }, []);
+
+  const goBackToExercises = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/exercises");
   }, []);
 
   const renderScene = useCallback(
@@ -59,31 +73,52 @@ export default function ExerciseModalScreen() {
     [historyRefreshKey, triggerHistoryRefresh]
   );
 
-  // Load pin state on mount
-  useEffect(() => {
-    if (exerciseId) {
-      isExercisePinned(exerciseId).then(setIsPinned);
-    }
-  }, [exerciseId]);
-
   useEffect(() => {
     let cancelled = false;
 
     if (!exerciseId) {
+      setValidatedExerciseId(null);
+      setExerciseStatus("unavailable");
       setHeaderExercise(null);
+      setIsPinned(false);
       return () => {
         cancelled = true;
       };
     }
 
+    setValidatedExerciseId(null);
+    setExerciseStatus("loading");
+    setHeaderExercise(null);
+    setIsPinned(false);
+
     getExerciseWithParentById(exerciseId)
       .then((exercise) => {
-        if (!cancelled) {
+        if (!cancelled && exercise) {
           setHeaderExercise(exercise);
+          setValidatedExerciseId(exerciseId);
+          setExerciseStatus("available");
+          void isExercisePinned(exerciseId)
+            .then((pinned) => {
+              if (!cancelled) {
+                setIsPinned(pinned);
+              }
+            })
+            .catch(() => {
+              if (!cancelled) {
+                setIsPinned(false);
+              }
+            });
+          return;
+        }
+        if (!cancelled) {
+          setValidatedExerciseId(null);
+          setExerciseStatus("unavailable");
         }
       })
       .catch(() => {
         if (!cancelled) {
+          setValidatedExerciseId(null);
+          setExerciseStatus("error");
           setHeaderExercise(null);
         }
       });
@@ -91,7 +126,10 @@ export default function ExerciseModalScreen() {
     return () => {
       cancelled = true;
     };
-  }, [exerciseId]);
+  }, [exerciseId, validationAttempt]);
+
+  const isExerciseAvailable =
+    exerciseStatus === "available" && validatedExerciseId === exerciseId;
 
   // Switch to history tab when returning from edit-workout (indicated by refreshHistory param)
   useEffect(() => {
@@ -120,7 +158,7 @@ export default function ExerciseModalScreen() {
   }, [navigation, index]);
 
   const handlePinExercise = useCallback(async () => {
-    if (!exerciseId) return;
+    if (!exerciseId || !isExerciseAvailable) return;
     
     // If already pinned, allow unpinning
     if (isPinned) {
@@ -138,7 +176,16 @@ export default function ExerciseModalScreen() {
     
     const newPinnedState = await togglePinExercise(exerciseId);
     setIsPinned(newPinnedState);
-  }, [exerciseId, isPinned]);
+  }, [exerciseId, isExerciseAvailable, isPinned]);
+
+  const exerciseStatusMessage =
+    exerciseStatus === "loading"
+      ? "Loading exercise…"
+      : exerciseStatus === "error"
+        ? "We couldn’t load this exercise."
+        : exerciseId
+          ? "This exercise is no longer available."
+          : "This exercise link is invalid.";
 
   return (
     <View style={{ flex: 1, backgroundColor: rawColors.background }}>
@@ -188,7 +235,7 @@ export default function ExerciseModalScreen() {
               accessibilityLabel="Go back"
               onPress={() => {
                 if (index === 0) {
-                  router.back();
+                  goBackToExercises();
                   return;
                 }
                 setIndex(0);
@@ -198,7 +245,7 @@ export default function ExerciseModalScreen() {
               <MaterialCommunityIcons name="arrow-left" size={24} color={rawColors.foreground} />
             </Pressable>
           ),
-          headerRight: () => (
+          headerRight: () => isExerciseAvailable ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={isPinned ? "Unpin exercise" : "Pin exercise"}
@@ -211,29 +258,57 @@ export default function ExerciseModalScreen() {
                 color={isPinned ? rawColors.primary : rawColors.foregroundSecondary} 
               />
             </Pressable>
-          ),
+          ) : null,
         }}
       />
 
-      <TabSwipeContext.Provider value={{ setSwipeEnabled }}>
-        <TabView
-          navigationState={{ index, routes }}
-          renderScene={renderScene}
-          onIndexChange={setIndex}
-          initialLayout={{ width: layout.width }}
-          swipeEnabled={swipeEnabled}
-          renderTabBar={(props) => (
-            <TabBar
-              {...props}
-              indicatorStyle={{ backgroundColor: rawColors.primary }}
-              style={{ backgroundColor: rawColors.background }}
-              activeColor={rawColors.primary}
-              inactiveColor={rawColors.foregroundSecondary}
-              pressColor={rawColors.pressed}
-            />
-          )}
-        />
-      </TabSwipeContext.Provider>
+      {isExerciseAvailable ? (
+        <TabSwipeContext.Provider value={{ setSwipeEnabled }}>
+          <TabView
+            navigationState={{ index, routes }}
+            renderScene={renderScene}
+            onIndexChange={setIndex}
+            initialLayout={{ width: layout.width }}
+            swipeEnabled={swipeEnabled}
+            renderTabBar={(props) => (
+              <TabBar
+                {...props}
+                indicatorStyle={{ backgroundColor: rawColors.primary }}
+                style={{ backgroundColor: rawColors.background }}
+                activeColor={rawColors.primary}
+                inactiveColor={rawColors.foregroundSecondary}
+                pressColor={rawColors.pressed}
+              />
+            )}
+          />
+        </TabSwipeContext.Provider>
+      ) : (
+        <View className="flex-1 items-center justify-center gap-4 p-6 bg-background">
+          <Text className="text-base text-foreground-secondary text-center">
+            {exerciseStatusMessage}
+          </Text>
+          <View className="flex-row gap-3">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              onPress={goBackToExercises}
+              className="items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+            >
+              <Text className="text-base font-semibold text-foreground-secondary">Go back</Text>
+            </Pressable>
+            {exerciseStatus === "error" && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading exercise"
+                onPress={() => setValidationAttempt((attempt) => attempt + 1)}
+                className="items-center justify-center p-3.5 rounded-lg bg-primary"
+              >
+                <Text className="text-base font-semibold text-primary-foreground">Retry</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
     </View>
   );
 }

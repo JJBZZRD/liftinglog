@@ -24,9 +24,11 @@ import TimerModal from "../TimerModal";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { appCapabilities } from "../../lib/config/releaseProfile";
 import {
+  getExerciseById,
   getLastRestSeconds,
   setLastRestSeconds,
 } from "../../lib/db/exercises";
+import { parseExerciseRouteId } from "../../lib/routing/exerciseRouteId";
 import { listMediaForSet, listMediaForSetIds } from "../../lib/db/media";
 import {
   deleteUserSet,
@@ -94,6 +96,7 @@ type SessionNoteFlushResult = {
 type SessionNoteDraftSnapshot = {
   draftVersion: number;
   routeGeneration: number;
+  focusGeneration: number | null;
   noteValue: string | null;
   workoutId: number | null;
   workoutExerciseId: number | null;
@@ -590,8 +593,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     dateIso?: string;
     programExerciseId?: string;
   }>();
-  const exerciseId =
-    typeof params.id === "string" ? parseInt(params.id, 10) : null;
+  const exerciseId = parseExerciseRouteId(params.id);
   const exerciseNameParam =
     typeof params.name === "string" ? params.name : "Exercise";
   const paramWeId =
@@ -621,6 +623,12 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   }, [paramDateIso, paramPlannedDate]);
 
   const [workoutId, setWorkoutId] = useState<number | null>(null);
+  const [validatedExerciseId, setValidatedExerciseId] = useState<number | null>(null);
+  const [exerciseStatus, setExerciseStatus] = useState<"loading" | "available" | "unavailable" | "error">(
+    exerciseId ? "loading" : "unavailable"
+  );
+  const [validationAttempt, setValidationAttempt] = useState(0);
+  const [recordLoadError, setRecordLoadError] = useState<string | null>(null);
   const [workoutExerciseId, setWorkoutExerciseId] = useState<number | null>(
     null
   );
@@ -714,6 +722,13 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     ) => Promise<void>
   >(async () => {});
 
+  const exerciseValidationGenerationRef = useRef(0);
+  const focusGenerationRef = useRef(0);
+  const activeFocusGenerationRef = useRef<number | null>(null);
+  const currentExerciseIdRef = useRef<number | null>(exerciseId);
+  const isExerciseAvailableRef = useRef(false);
+  currentExerciseIdRef.current = exerciseId;
+
   const selectedDateIso = useMemo(() => toDateIso(selectedDate), [selectedDate]);
   const sessionNoteRouteKey = [
     exerciseId ?? "none",
@@ -722,6 +737,86 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     paramDateIso ?? "today",
     paramPlannedDate ?? "unplanned",
   ].join(":");
+
+  const isExerciseAvailable =
+    exerciseStatus === "available" && validatedExerciseId === exerciseId;
+  isExerciseAvailableRef.current = isExerciseAvailable;
+
+  const isInitializationCurrent = useCallback(
+    (id: number | null, focusGeneration: number | null) =>
+      id !== null &&
+      focusGeneration !== null &&
+      activeFocusGenerationRef.current === focusGeneration &&
+      isExerciseAvailableRef.current &&
+      currentExerciseIdRef.current === id,
+    []
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void validationAttempt;
+      const generation = exerciseValidationGenerationRef.current + 1;
+      const focusGeneration = focusGenerationRef.current + 1;
+      exerciseValidationGenerationRef.current = generation;
+      focusGenerationRef.current = focusGeneration;
+      activeFocusGenerationRef.current = focusGeneration;
+      isExerciseAvailableRef.current = false;
+
+      if (!exerciseId) {
+        setValidatedExerciseId(null);
+        setExerciseStatus("unavailable");
+        setRecordLoadError(null);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      setValidatedExerciseId(null);
+      setExerciseStatus("loading");
+      setRecordLoadError(null);
+
+      void getExerciseById(exerciseId)
+        .then((exercise) => {
+          if (
+            cancelled ||
+            exerciseValidationGenerationRef.current !== generation ||
+            activeFocusGenerationRef.current !== focusGeneration ||
+            currentExerciseIdRef.current !== exerciseId
+          ) {
+            return;
+          }
+
+          if (!exercise) {
+            setValidatedExerciseId(null);
+            setExerciseStatus("unavailable");
+            return;
+          }
+
+          setValidatedExerciseId(exerciseId);
+          setExerciseStatus("available");
+        })
+        .catch(() => {
+          if (
+            !cancelled &&
+            exerciseValidationGenerationRef.current === generation &&
+            activeFocusGenerationRef.current === focusGeneration &&
+            currentExerciseIdRef.current === exerciseId
+          ) {
+            setValidatedExerciseId(null);
+            setExerciseStatus("error");
+          }
+        });
+
+      return () => {
+        cancelled = true;
+        if (activeFocusGenerationRef.current === focusGeneration) {
+          activeFocusGenerationRef.current = null;
+          isExerciseAvailableRef.current = false;
+        }
+      };
+    }, [exerciseId, validationAttempt])
+  );
 
   const activeProgramEntry = useMemo(
     () =>
@@ -791,18 +886,22 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     overflow: "hidden" as const,
   }));
 
-  const loadLastRestTime = useCallback(async () => {
-    if (!exerciseId) {
+  const loadLastRestTime = useCallback(async (focusGeneration = activeFocusGenerationRef.current) => {
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
       return;
     }
-    const lastRest = await getLastRestSeconds(exerciseId);
-    if (lastRest !== null && lastRest > 0) {
+    const lastRest = await getLastRestSeconds(exerciseId!);
+    if (
+      isInitializationCurrent(exerciseId, focusGeneration) &&
+      lastRest !== null &&
+      lastRest > 0
+    ) {
       const mins = Math.floor(lastRest / 60);
       const secs = lastRest % 60;
       setTimerMinutes(String(mins));
       setTimerSeconds(String(secs));
     }
-  }, [exerciseId]);
+  }, [exerciseId, isInitializationCurrent]);
 
   const applyLoadedSessionNote = useCallback(
     (nextWorkoutExerciseId: number | null, nextNote: string | null | undefined) => {
@@ -829,24 +928,34 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   );
 
   const ensureManualWorkoutSession = useCallback(async (options?: { shouldApply?: () => boolean }) => {
-    if (!exerciseId) {
+    const focusGeneration = activeFocusGenerationRef.current;
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
       return null;
     }
 
     const nextWorkoutId = workoutId ?? (await getOrCreateActiveWorkout());
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+      return null;
+    }
     const existingOpenWorkoutExercise =
       workoutExerciseId != null
         ? await getWorkoutExerciseById(workoutExerciseId)
-        : await getOpenWorkoutExercise(nextWorkoutId, exerciseId);
+        : await getOpenWorkoutExercise(nextWorkoutId, exerciseId!);
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+      return null;
+    }
     const nextWorkoutExerciseId =
       existingOpenWorkoutExercise?.id ??
       (await addWorkoutExercise({
         workout_id: nextWorkoutId,
-        exercise_id: exerciseId,
+        exercise_id: exerciseId!,
         performed_at: selectedDate.getTime(),
       }));
 
-    if (options?.shouldApply?.() ?? true) {
+    if (
+      isInitializationCurrent(exerciseId, focusGeneration) &&
+      (options?.shouldApply?.() ?? true)
+    ) {
       setWorkoutId(nextWorkoutId);
       setWorkoutExerciseId(nextWorkoutExerciseId);
     }
@@ -855,7 +964,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       workoutId: nextWorkoutId,
       workoutExerciseId: nextWorkoutExerciseId,
     };
-  }, [exerciseId, selectedDate, workoutExerciseId, workoutId]);
+  }, [exerciseId, isInitializationCurrent, selectedDate, workoutExerciseId, workoutId]);
 
   const hydrateProgramInputs = useCallback(
     (entries: ProgrammedExerciseForDate[]) => {
@@ -890,12 +999,15 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     [unitPreference]
   );
 
-  const loadManualWorkout = useCallback(async () => {
-    if (!exerciseId) {
+  const loadManualWorkout = useCallback(async (focusGeneration: number | null) => {
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
       return;
     }
 
     const activeWorkoutId = await getOrCreateActiveWorkout();
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+      return;
+    }
     setWorkoutId(activeWorkoutId);
 
     let nextWorkoutExerciseId: number;
@@ -905,13 +1017,19 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     if (paramWeId) {
       nextWorkoutExerciseId = paramWeId;
       nextWorkoutExercise = await getWorkoutExerciseById(paramWeId);
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
       setWorkoutExerciseId(nextWorkoutExerciseId);
       hydratedManualEntryDateRef.current = nextWorkoutExerciseId;
     } else {
       const openWorkoutExercise = await getOpenWorkoutExercise(
         activeWorkoutId,
-        exerciseId
+        exerciseId!
       );
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
 
       if (openWorkoutExercise) {
         nextWorkoutExerciseId = openWorkoutExercise.id;
@@ -938,10 +1056,16 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       } else {
         nextWorkoutExerciseId = await addWorkoutExercise({
           workout_id: activeWorkoutId,
-          exercise_id: exerciseId,
+          exercise_id: exerciseId!,
           performed_at: selectedDate.getTime(),
         });
+        if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+          return;
+        }
         nextWorkoutExercise = await getWorkoutExerciseById(nextWorkoutExerciseId);
+        if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+          return;
+        }
         setWorkoutExerciseId(nextWorkoutExerciseId);
         hydratedManualEntryDateRef.current = nextWorkoutExerciseId;
         setWeightState("");
@@ -949,9 +1073,16 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       }
     }
 
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+      return;
+    }
+
     applyLoadedSessionNote(nextWorkoutExerciseId, nextWorkoutExercise?.note ?? null);
 
     const exerciseSets = await listSetsForWorkoutExercise(nextWorkoutExerciseId);
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+      return;
+    }
     setSets(exerciseSets);
 
     if (paramWeId && exerciseSets.length > 0) {
@@ -970,10 +1101,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       }
     }
 
-    await loadLastRestTime();
+    await loadLastRestTime(focusGeneration);
   }, [
     applyLoadedSessionNote,
     exerciseId,
+    isInitializationCurrent,
     loadLastRestTime,
     paramWeId,
     selectedDate,
@@ -983,8 +1115,12 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const loadProgramWorkout = useCallback(
     async (
       entries: ProgrammedExerciseForDate[],
-      preferredProgramExerciseId?: number | null
+      preferredProgramExerciseId: number | null | undefined,
+      focusGeneration: number | null
     ) => {
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
       const nextEntry = pickProgrammedEntry(
         entries,
         preferredProgramExerciseId ??
@@ -1012,12 +1148,20 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       }
 
       hydrateProgramInputs(entries);
-      await loadLastRestTime();
+      await loadLastRestTime(focusGeneration);
+
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
 
       const resolvedWorkoutExerciseId =
         await resolveWorkoutExerciseIdForCalendarExercise(
           nextEntry.calendarExercise.id
         );
+
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
 
       if (!resolvedWorkoutExerciseId) {
         setWorkoutId(null);
@@ -1034,6 +1178,10 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       const linkedWorkoutExercise = await getWorkoutExerciseById(
         resolvedWorkoutExerciseId
       );
+
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
 
       if (!linkedWorkoutExercise) {
         setWorkoutId(null);
@@ -1063,11 +1211,17 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
           ? String(linkedWorkoutExercise.currentReps)
           : ""
       );
-      setSets(await listSetsForWorkoutExercise(linkedWorkoutExercise.id));
+      const linkedSets = await listSetsForWorkoutExercise(linkedWorkoutExercise.id);
+      if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+        return;
+      }
+      setSets(linkedSets);
     },
     [
       applyLoadedSessionNote,
       hydrateProgramInputs,
+      exerciseId,
+      isInitializationCurrent,
       loadLastRestTime,
       paramProgramExerciseId,
       selectedProgramExerciseId,
@@ -1076,7 +1230,8 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   );
 
   const loadRecordState = useCallback(async () => {
-    if (!exerciseId) {
+    const focusGeneration = activeFocusGenerationRef.current;
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
       return;
     }
 
@@ -1087,7 +1242,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       programRepsInputsRef.current = {};
       setProgramWeightInputs({});
       setProgramRepsInputs({});
-      await loadManualWorkout();
+      await loadManualWorkout(focusGeneration);
       return;
     }
 
@@ -1099,9 +1254,13 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       exerciseName: exerciseNameParam,
     });
 
+    if (!isInitializationCurrent(exerciseId, focusGeneration)) {
+      return;
+    }
+
     if (nextProgramEntries.length > 0) {
       setProgramEntries(nextProgramEntries);
-      await loadProgramWorkout(nextProgramEntries);
+      await loadProgramWorkout(nextProgramEntries, undefined, focusGeneration);
       return;
     }
 
@@ -1111,10 +1270,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     programRepsInputsRef.current = {};
     setProgramWeightInputs({});
     setProgramRepsInputs({});
-    await loadManualWorkout();
+    await loadManualWorkout(focusGeneration);
   }, [
     clearProgramInteractionState,
     exerciseId,
+    isInitializationCurrent,
     exerciseNameParam,
     loadManualWorkout,
     loadProgramWorkout,
@@ -1135,9 +1295,47 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
 
   useFocusEffect(
     useCallback(() => {
-      void loadRecordState();
-    }, [loadRecordState])
+      let active = true;
+      if (!isExerciseAvailable) {
+        return () => {
+          active = false;
+        };
+      }
+
+      setRecordLoadError(null);
+      void loadRecordState().catch(() => {
+        if (active && isExerciseAvailableRef.current) {
+          setRecordLoadError("We couldn’t load this exercise.");
+        }
+      });
+
+      return () => {
+        active = false;
+      };
+    }, [isExerciseAvailable, loadRecordState])
   );
+
+  const retryExerciseLoad = useCallback(() => {
+    if (exerciseStatus !== "available") {
+      setValidationAttempt((attempt) => attempt + 1);
+      return;
+    }
+
+    setRecordLoadError(null);
+    void loadRecordState().catch(() => {
+      if (isExerciseAvailableRef.current) {
+        setRecordLoadError("We couldn’t load this exercise.");
+      }
+    });
+  }, [exerciseStatus, loadRecordState]);
+
+  const goBackToExercises = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/exercises");
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -1226,7 +1424,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const setWeight = useCallback(
     (value: string) => {
       setWeightState(value);
-      if (workoutExerciseId) {
+      if (workoutExerciseId && isExerciseAvailableRef.current) {
         const weightKg = parseWeightInputToKg(value, unitPreference);
         void updateWorkoutExerciseInputs(workoutExerciseId, {
           currentWeight: weightKg,
@@ -1239,7 +1437,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
   const setReps = useCallback(
     (value: string) => {
       setRepsState(value);
-      if (workoutExerciseId) {
+      if (workoutExerciseId && isExerciseAvailableRef.current) {
         const numValue = value.trim() ? parseInt(value, 10) : null;
         void updateWorkoutExerciseInputs(workoutExerciseId, {
           currentReps: numValue,
@@ -1363,8 +1561,12 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     [isProgramSetReadyForCompletion, prescribedSets, userSets]
   );
 
-  const ensureProgramWorkoutSession = useCallback(async (options?: { shouldApply?: () => boolean }) => {
-    if (!activeProgramEntry) {
+  const ensureProgramWorkoutSession = useCallback(async (options?: {
+    shouldApply?: () => boolean;
+    allowStaleSessionResult?: boolean;
+  }) => {
+    const focusGeneration = activeFocusGenerationRef.current;
+    if (!activeProgramEntry || !isInitializationCurrent(exerciseId, focusGeneration)) {
       return null;
     }
 
@@ -1375,12 +1577,22 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       performedAt: selectedDate.getTime(),
     });
 
-    if (options?.shouldApply?.() ?? true) {
+    if (
+      !isInitializationCurrent(exerciseId, focusGeneration) &&
+      !options?.allowStaleSessionResult
+    ) {
+      return null;
+    }
+
+    if (
+      isInitializationCurrent(exerciseId, focusGeneration) &&
+      (options?.shouldApply?.() ?? true)
+    ) {
       setWorkoutId(session.workoutId);
       setWorkoutExerciseId(session.workoutExerciseId);
     }
     return session;
-  }, [activeProgramEntry, selectedDate]);
+  }, [activeProgramEntry, exerciseId, isInitializationCurrent, selectedDate]);
 
   const flushSessionNoteDraft = useCallback(() => {
     const initialWorkoutExerciseId =
@@ -1388,6 +1600,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     const initialSnapshot: SessionNoteDraftSnapshot = {
       draftVersion: sessionNoteDraftVersionRef.current,
       routeGeneration: sessionNoteRouteGenerationRef.current,
+      focusGeneration: activeFocusGenerationRef.current,
       noteValue: sessionNoteRef.current.trim() || null,
       workoutId: sessionNoteWorkoutRef.current ?? workoutId,
       workoutExerciseId: initialWorkoutExerciseId,
@@ -1439,6 +1652,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
           snapshot = {
             draftVersion: sessionNoteDraftVersionRef.current,
             routeGeneration: sessionNoteRouteGenerationRef.current,
+            focusGeneration: activeFocusGenerationRef.current,
             noteValue: sessionNoteRef.current.trim() || null,
             workoutId: sessionNoteWorkoutRef.current ?? nextWorkoutId,
             workoutExerciseId:
@@ -1472,9 +1686,15 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
               nextWorkoutId = createdSession.workoutId;
               nextWorkoutExerciseId = createdSession.workoutExerciseId;
             } else {
+              if (!isInitializationCurrent(exerciseId, snapshot.focusGeneration)) {
+                throw new Error("The exercise entry is no longer available for saving.");
+              }
               const session =
                 inProgramMode && activeProgramEntry
-                  ? await ensureProgramWorkoutSession({ shouldApply: isCurrentRoute })
+                  ? await ensureProgramWorkoutSession({
+                    shouldApply: isCurrentRoute,
+                    allowStaleSessionResult: true,
+                  })
                   : await ensureManualWorkoutSession({ shouldApply: isCurrentRoute });
               if (!session) {
                 throw new Error("The exercise entry could not be prepared for saving.");
@@ -1520,6 +1740,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
             snapshot = {
               draftVersion: sessionNoteDraftVersionRef.current,
               routeGeneration: sessionNoteRouteGenerationRef.current,
+              focusGeneration: activeFocusGenerationRef.current,
               noteValue: sessionNoteRef.current.trim() || null,
               workoutId: sessionNoteWorkoutRef.current ?? nextWorkoutId,
               workoutExerciseId:
@@ -1558,9 +1779,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     return write;
   }, [
     activeProgramEntry,
+    exerciseId,
     ensureManualWorkoutSession,
     ensureProgramWorkoutSession,
     inProgramMode,
+    isInitializationCurrent,
     onHistoryRefresh,
     workoutExerciseId,
     workoutId,
@@ -1987,7 +2210,11 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       }
       await flushDirtyProgramSetCommits();
       setSelectedProgramExerciseId(programExerciseId);
-      await loadProgramWorkout(programEntries, programExerciseId);
+      await loadProgramWorkout(
+        programEntries,
+        programExerciseId,
+        activeFocusGenerationRef.current
+      );
     },
     [
       flushDirtyProgramSetCommits,
@@ -2568,12 +2795,42 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
     [onHistoryRefresh, reloadRecordState]
   );
 
-  if (!exerciseId) {
+  if (!isExerciseAvailable || recordLoadError) {
+    const exerciseStatusMessage = recordLoadError
+      ? recordLoadError
+      : exerciseStatus === "loading"
+        ? "Loading exercise…"
+        : exerciseStatus === "error"
+          ? "We couldn’t load this exercise."
+          : exerciseId
+            ? "This exercise is no longer available."
+            : "This exercise link is invalid.";
+
     return (
-      <View className="flex-1 items-center justify-center p-4 bg-background">
-        <Text className="text-base text-destructive" selectable>
-          Invalid exercise ID
+      <View className="flex-1 items-center justify-center gap-4 p-6 bg-background">
+        <Text className="text-base text-foreground-secondary text-center" selectable>
+          {exerciseStatusMessage}
         </Text>
+        <View className="flex-row gap-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={goBackToExercises}
+            className="items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
+          >
+            <Text className="text-base font-semibold text-foreground-secondary">Go back</Text>
+          </Pressable>
+          {(exerciseStatus === "error" || recordLoadError) && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading exercise"
+              onPress={retryExerciseLoad}
+              className="items-center justify-center p-3.5 rounded-lg bg-primary"
+            >
+              <Text className="text-base font-semibold text-primary-foreground">Retry</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     );
   }
@@ -3302,7 +3559,7 @@ export default function UnifiedRecordTab({ onHistoryRefresh }: RecordTabProps) {
       <TimerModal
         visible={timerModalVisible}
         onClose={() => setTimerModalVisible(false)}
-        exerciseId={exerciseId}
+        exerciseId={exerciseId!}
         exerciseName={displayExerciseName}
         currentTimer={currentTimer}
         minutes={timerMinutes}
