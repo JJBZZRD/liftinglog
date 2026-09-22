@@ -316,7 +316,7 @@ export default function ReplacementRestoreGate({ snapshot, performAction, childr
   void operationVersion;
   return (
     <View className="flex-1 items-center justify-center p-6 bg-background">
-      <ScrollView contentContainerClassName="w-full max-w-lg p-6 rounded-xl bg-surface" contentContainerStyle={{ width: "100%" }}>
+      <ScrollView className="w-full max-w-lg" contentContainerClassName="w-full p-6 rounded-xl bg-surface" contentContainerStyle={{ width: "100%" }}>
         {content}
         {visibleError ? <Text className="text-sm mt-4 text-destructive">{visibleError}</Text> : null}
       </ScrollView>
