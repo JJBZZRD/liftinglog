@@ -63,10 +63,12 @@ passed assembly; the separate native runtime evidence is linked above.
 The generation diagnostic also reproduced a pre-existing missing-exercise route
 defect: a real notification tap mounts manual logging before catalog existence is
 checked, then rejects a `workout_exercises` insert. Read-only source review found
-that this can first create an empty workout when none is active. MVP-002F is a
-bounded corrective follow-up from `c785c9b`, owned by a separate Terra/high worker;
-it must validate route IDs/existence before initialization and preserve valid
-logging behavior. It does not change the restore engine or native-intent policy.
+that this can first create an empty workout when none is active. MVP-002F's
+bounded correction is now accepted and integrated as `5cd72ee`: it validates
+route IDs/existence before initialization and preserves valid logging behavior.
+Both-profile targeted tests and synthetic Android warm-link checks pass. It does
+not change the restore engine or native-intent policy; cold release-link proof
+remains separate.
 
 The immediate-abort diagnostic worker mistakenly attempted a stash and switched
 the shared checkout. The stash failed and created no stash. The organiser stopped
@@ -162,8 +164,9 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B5 | Sol / xhigh; independent Sol / high audit | Seven-method engine subset, four bounded connection-free helpers, production-service DB tests and notes | Corrected `ef0bc3c` independently accepted (56 focused tests), exact-tree integrated `fdd4313`; organiser full/MVP 945 tests pass; [audit acceptance](testing/replacement-restore-engine-acceptance.md); native/media/lifecycle gates remain |
 | MVP-006D2 | Terra / high; organiser independent review | Standalone provider-independent gate component and focused tests/notes | Corrected `2647ed2` reviewed; organiser 9/9 in each profile; integrated `cf6280f`; root hookup excluded |
 | MVP-006C0 | Luna / medium; organiser review | Shared media completion options and two contract docs only | Reviewed `4b2b75c`, integrated `508c103`; required scan/skip mode; integrated typecheck passes; no runtime implementation |
-| MVP-006C | Sol / xhigh; independent audit before integration | Engine outcome consumers and new connection-free media coordinator/tests only | [Packet](testing/replacement-restore-media-packet.md) independently reviewed; B5 dependency accepted, ready for isolated implementation. Explicit scan/skip, strict complete outcomes and conservative no-delete cleanup boundary; no Settings/root hookup |
-| MVP-006B5P | Terra / high; organiser source/device review | Non-shipping diagnostic route and usage notes only | [Packet prepared](testing/replacement-restore-engine-native-packet.md); B5 dependency accepted. Scratch databases on fresh synthetic AVD only; no original app DB or phone access |
+| MVP-006C | Sol / xhigh; independent audit before integration | Engine outcome consumers and new connection-free media coordinator/tests only | Active isolated implementation from `f2ac660`, following the independently reviewed [packet](testing/replacement-restore-media-packet.md). Explicit scan/skip, strict complete outcomes and conservative no-delete cleanup boundary; no Settings/root hookup |
+| MVP-006B5P | Terra / high; organiser source/device review | Non-shipping diagnostic route and usage notes only | Candidate `3db07be` reviewed; per-connection foreign keys, durable fixture ownership, action serialization and cleanup/evidence corrections requested before device execution. [Packet](testing/replacement-restore-engine-native-packet.md); scratch databases on fresh synthetic AVD only; no original app DB or phone access |
+| MVP-006B6 | Organiser preparation; Sol / high packet audit | Connection, lifecycle, root and timer navigation boundary; exact implementation packet pending | [Draft packet](testing/replacement-restore-lifecycle-packet.md) under independent review; implementation waits for accepted media service and Android engine gate. Reload retry ownership and safe timer reactivation are explicit review questions |
 | MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
 | MVP-006A2 | Sol / high; independent Sol / high audit | Export-only backup helpers, isolated snapshot helper and focused tests | Corrected `b0390e9` independently accepted and integrated `b145a81`; primary error retained through close failure; [actual native busy-WAL snapshot accepted](testing/android-backup-snapshot-runtime.md); SAF release proof pending |
 | MVP-006B2CP | Terra / medium; organiser review/runtime | Non-shipping timer probe only | Corrected `3205588` reviewed and executed; no production source changes; retained diagnostic branch |
