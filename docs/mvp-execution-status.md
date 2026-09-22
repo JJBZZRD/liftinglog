@@ -5,7 +5,7 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 ## Current checkpoint
 
-Integrated production code is `cf6280f`. MVP capability restrictions, history,
+Integrated production code is `508c103` (the latest change is type-only). MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
 Replacement restore remains the active implementation story: native controls,
 timer retirement, schema validation, sealed export and native file hashing are
@@ -35,6 +35,13 @@ Logs: `.codex-artifacts/mvp006b4r-integrated-{full,mvp}.log`,
 `mvp006b4r-typecheck.log` and `mvp006b4r-lint.log`. Six untouched original-file
 hashes still match the preservation baseline. MainApplication's previously
 reviewed native integration remains separately accounted for.
+
+After standalone gate integration, both profiles pass **75 suites / 847 tests**
+at production source `cf6280f` (subsequent checkpoint commits are docs only).
+Integrated TypeScript and uncached lint pass with zero errors / 19 existing
+warnings. Logs: `.codex-artifacts/mvp006d2-integrated-{full,mvp}.log` and the
+matching typecheck/lint logs. The later type-only scan/skip contract `508c103`
+also passes integrated typecheck; it changes no runtime behavior.
 
 The immediate-abort diagnostic worker mistakenly attempted a stash and switched
 the shared checkout. The stash failed and created no stash. The organiser stopped
@@ -127,6 +134,7 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Corrected `9c3c2f2` reviewed and integrated as `72d5fd4`; organiser typecheck/scoped lint pass; no engine implementation |
 | MVP-006B5 | Sol / xhigh; independent audit before integration | Seven-method engine subset, four bounded connection-free helpers, production-service DB tests and notes | In implementation from `70bedfa`; [packet](testing/replacement-restore-engine-packet.md); media completion and lifecycle excluded |
 | MVP-006D2 | Terra / high; organiser independent review | Standalone provider-independent gate component and focused tests/notes | Corrected `2647ed2` reviewed; organiser 9/9 in each profile; integrated `cf6280f`; root hookup excluded |
+| MVP-006C0 | Luna / medium; organiser review | Shared media completion options and two contract docs only | Reviewed `4b2b75c`, integrated `508c103`; required scan/skip mode; integrated typecheck passes; no runtime implementation |
 | MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
 | MVP-006A2 | Sol / high; independent Sol / high audit | Export-only backup helpers, isolated snapshot helper and focused tests | Corrected `b0390e9` independently accepted and integrated `b145a81`; primary error retained through close failure; [actual native busy-WAL snapshot accepted](testing/android-backup-snapshot-runtime.md); SAF release proof pending |
 | MVP-006B2CP | Terra / medium; organiser review/runtime | Non-shipping timer probe only | Corrected `3205588` reviewed and executed; no production source changes; retained diagnostic branch |

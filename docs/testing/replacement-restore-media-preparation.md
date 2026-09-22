@@ -24,9 +24,9 @@ can later change a media URI.
 
 ## Contract decisions required before dispatch
 
-- Add explicit `mode: "scan" | "skip"` to
-  `CompleteReplacementRestorePostCommitOptions`; freeze the typed change before
-  consumers. The lifecycle owner never writes outcome records directly.
+- Explicit `mode: "scan" | "skip"` on
+  `CompleteReplacementRestorePostCommitOptions` is now integrated as `508c103`.
+  The lifecycle owner never writes outcome records directly.
 - Scan and skip both fresh-read current rows after proven physical pending
   absence, account every row, and persist a real final result. A cancelled scan
   stops further matching and leaves committed training records successful.
