@@ -55,3 +55,30 @@ No recursive deletion or gallery deletion is allowed. A path whose canonical
 target cannot be established must count as skipped; cleanup failure is nonfatal.
 Any needed native addition requires its own bounded owner and independent review,
 not silent expansion of the media worker's scope.
+
+## Completed-outcome boundary to freeze in the media packet
+
+ADR startup step 11 requires a strict `postCommitStatus: "complete"` record with
+the actual final result before deletion. The engine's current pending-only parser
+is an intentional intermediate subset. The media ticket must extend the internal
+record union and its startup/scheduling consumers together; merely adding a writer
+would strand the next startup behind an unknown-record error.
+
+With physical pending absence and a strictly validated complete result, leftover
+outcome deletion is harmless cleanup: it must not replay SQL or media IDs or
+require another gallery scan. Unreadable/malformed outcome storage still fails
+closed. Before publishing a later restore, retire a previous complete record and
+prove absence so a stale completed record cannot prevent the new committed
+outcome from being written. A failed cleanup can prevent that new scheduling
+attempt while leaving the already completed training data usable.
+
+The final-result validator must check all fifteen counts, PB consistency,
+`resolved + unresolved = total`, permission-skipped rows as a subset of unresolved
+rows, bounded error/warning fields, and the native control-record byte ceiling.
+Bound diagnostic detail arrays without losing aggregate counts; otherwise a large
+number of unresolved media rows could make durable completion impossible. A
+failed completion publication/readback must preserve committed-data semantics and
+keep the completion gate closed until a valid result can be established.
+
+These are organiser preparation decisions, not dispatched implementation. The
+engine audit and ownership seam still precede the final media packet.

@@ -12,8 +12,14 @@ timer retirement, schema validation, sealed export and native file hashing are
 accepted prerequisites; the replacement engine, startup gate, Settings hookup,
 postcommit media integration and final release matrix remain outstanding.
 
-The engine packet passed independent boundary review and implementation is active
-in an isolated Sol/xhigh worktree pinned to `70bedfa`. The disjoint standalone
+The engine packet passed independent boundary review and implementation is under
+independent Sol/high audit in an isolated snapshot, with corrections owned by the
+original Sol/xhigh worker. Initial dispatch was pinned to `70bedfa`; candidate
+`cfc9cfd` is rebased onto `12c247b` and passed 11 suites / 230 tests in each profile.
+Audit findings on stale outcomes, retained recovery authorization, process-token
+validation and untrusted media-context naming must be resolved on a final reviewed
+SHA before integration. These candidate checks do not close the engine gate.
+The disjoint standalone
 gate view was independently checked by the organiser and integrated as `cf6280f`
 after corrections to uncertain-outcome copy and recovery guards (9 focused tests
 in each profile). Workers receive no inherited conversation context and may not
@@ -144,16 +150,17 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B2D | Terra / high; independent Sol / high audit | TimerStore lazy readiness/quiescence, notification continuation cleanup, narrow root activation, focused tests | Corrected `e88aefb` independently accepted and merged `9401261`; separate native completion ownership survives failed ordinary/strict cleanup retries; 25 focused tests pass in each profile |
 | MVP-006B2E | Sol / high; independent Sol / high audit | Native durable navigation generation, manager/adapter and focused tests | Independently accepted `227a6d9`, exact-tree integrated `c785c9b`; 40 focused Jest / 21 JVM pass; [Android native prerequisite accepted](testing/android-rest-timer-generation-runtime.md); no router hookup |
 | MVP-006B2EP | Terra / medium; organiser review/runtime | Non-shipping generation diagnostic route and notes only | Corrected probe `089b9b4` reviewed after rebase onto accepted main; typecheck/lint pass; retained diagnostic branch, never shipping integration |
-| MVP-002F | Terra / high; organiser review before integration | Exercise route/manual initialization guards, pure ID parser and focused UI tests | In implementation from `c785c9b` after reproduced nonexistent-ID FK failure; DB helpers/schema, timers and restore lifecycle excluded |
+| MVP-002F | Terra / high; organiser review before integration | Exercise route/manual initialization guards, pure ID parser and focused UI tests | Candidate `41bed97` returned for focus-generation, note-durability and cold-link recovery corrections; DB helpers/schema, timers and restore lifecycle excluded |
 | MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Corrected `043347c` independently accepted and merged `f435567`; organiser 143/143 targeted tests pass; exact historical provenance and migration/future-source closure verified |
 | MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
 | MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Corrected `7cc330e` executed on fresh synthetic AVD; all eight async/sync digests match and abort works; maximum-size latency requires 006B4R; diagnostic remains non-shipping |
 | MVP-006B4R | Sol / high; independent Sol / high audit | Bounded native streaming SHA-256 performance follow-up | Corrected `4aef58d` independently accepted and integrated `81b1b76`; native maximum async/sync 582/182 ms; delayed/immediate cancellation 113/4 ms; emulator prerequisite accepted; [runtime evidence](testing/android-file-sha256-runtime.md) |
 | MVP-006B4RP | Luna / medium; organiser setup recovery/review | Isolated immediate-abort diagnostic extension | Reviewed probe `701782e` executed on fresh synthetic AVD; diagnostic remains outside main |
 | MVP-006B5C | Luna / medium | One dependency-free shared restore contract module | Corrected `9c3c2f2` reviewed and integrated as `72d5fd4`; organiser typecheck/scoped lint pass; no engine implementation |
-| MVP-006B5 | Sol / xhigh; independent audit before integration | Seven-method engine subset, four bounded connection-free helpers, production-service DB tests and notes | In implementation from `70bedfa`; [packet](testing/replacement-restore-engine-packet.md); media completion and lifecycle excluded |
+| MVP-006B5 | Sol / xhigh; independent Sol / high audit | Seven-method engine subset, four bounded connection-free helpers, production-service DB tests and notes | Candidate `cfc9cfd` passes 230 targeted tests per profile; audit corrections active, final acceptance pending; [packet](testing/replacement-restore-engine-packet.md); media completion and lifecycle excluded |
 | MVP-006D2 | Terra / high; organiser independent review | Standalone provider-independent gate component and focused tests/notes | Corrected `2647ed2` reviewed; organiser 9/9 in each profile; integrated `cf6280f`; root hookup excluded |
 | MVP-006C0 | Luna / medium; organiser review | Shared media completion options and two contract docs only | Reviewed `4b2b75c`, integrated `508c103`; required scan/skip mode; integrated typecheck passes; no runtime implementation |
+| MVP-006C | Sol / high or xhigh; independent audit before integration | Engine outcome consumers and new connection-free media coordinator/tests only | [Packet prepared](testing/replacement-restore-media-packet.md); dispatch waits for B5 acceptance. Explicit scan/skip, strict complete outcomes and conservative no-delete cleanup boundary; no Settings/root hookup |
 | MVP-006D1 | Terra / high; independent Sol / high audit | Standalone restore dialog, mocked-contract component tests and usage notes | Corrected `4f14086` accepted and merged `a86d17a`; 17 focused tests pass in each profile; service-scoped cleanup/preparation ownership survives remount; no Settings hookup or engine acceptance |
 | MVP-006A2 | Sol / high; independent Sol / high audit | Export-only backup helpers, isolated snapshot helper and focused tests | Corrected `b0390e9` independently accepted and integrated `b145a81`; primary error retained through close failure; [actual native busy-WAL snapshot accepted](testing/android-backup-snapshot-runtime.md); SAF release proof pending |
 | MVP-006B2CP | Terra / medium; organiser review/runtime | Non-shipping timer probe only | Corrected `3205588` reviewed and executed; no production source changes; retained diagnostic branch |
