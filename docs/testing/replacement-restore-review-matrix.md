@@ -10,9 +10,9 @@ separate from emulator evidence.
 | Ticket | Required evidence before the engine relies on it | Current disposition |
 | --- | --- | --- |
 | 006B1 PB derivation | Exact canonical validity, ordering, progression and UID ownership; real DB parity | Independently accepted and integrated as `288001e` |
-| 006B2 native controls | Valid process token; RN 0.86 synchronous bridge compatibility; atomic fixed-name records; ambiguous reads fail closed; verified deletion; plugin/template parity | In implementation; independent review and Android runtime proof pending |
-| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | In implementation; independent review pending |
-| 006B4 SHA-256 | Real maintained digest library; read-only bounded chunks; limits/abort/close failures; Metro resolution; native digest and latency comparison | In implementation; native proof pending |
+| 006B2 native controls | Valid process token; RN 0.86 synchronous bridge compatibility; atomic fixed-name records; ambiguous reads fail closed; verified deletion; plugin/template parity | First candidate rejected for lenient native JSON parsing; strict-parser correction and independent re-review pending; Android runtime proof pending |
+| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | Candidate `de660900` under independent review; organiser 62 targeted tests pass |
+| 006B4 SHA-256 | Real maintained digest library; read-only bounded chunks; limits/abort/close failures; Metro resolution; native digest and latency comparison | Code independently accepted and integrated as `ab99216`; 24 targeted tests pass; native proof pending |
 
 Native control review must distinguish successful publication from a failed write
 whose outcome is uncertain. A read error must never be converted to absent pending
@@ -29,6 +29,14 @@ No diagnostic route or test control record belongs on integrated main. Before th
 run, preserve the installed APK identity, app database and sidecars, existing
 control-directory state, managed videos, gallery fixtures, and permission grants.
 Never overwrite a pre-existing pending or outcome record with diagnostic data.
+
+The current populated-emulator run is paused before app launch pending explicit
+permission for hash-only database/sidecar preservation checks. Automatic approval
+review rejected the original copy and then the narrower metadata read; neither
+command executed. Do not infer consent or retry those reads without authorization.
+Host and code-review work remain executable. The hash diagnostic's maximum fixture
+is sparse and has already been read during setup, so it cannot establish cold-cache
+or physical-storage worst-case performance.
 
 1. Confirm canonical token A across repeated synchronous calls. Perform a JS reload
    and prove the token remains A; force-stop and restart and prove token B differs.

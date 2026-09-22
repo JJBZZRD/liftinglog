@@ -75,7 +75,8 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-006B1 | Sol / high; independent Sol / high audit | Pure PB derivation, existing PB rebuild seam, focused parity tests | Independently accepted `f990f11`; clean rebase `9c0da86`; organiser 6/6 targeted tests pass; merged `288001e` without metric or persistence changes |
 | MVP-006B2 | Sol / xhigh; independent Sol / high audit | Android process token and atomic control store, isolated plugin/templates/facades/tests | First audit rejects `e849c06` for lenient native JSON parsing; correction underway. Organiser 21/21 tests and both native verifiers pass; APK builds but is not installed; runtime proof pending |
 | MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Candidate `de660900` under independent audit; organiser 62/62 targeted tests pass; retained populated Android snapshot passes source/current catalog checks; no live writes |
-| MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Candidate `1b20d42` under independent audit; organiser 24/24 tests and uncached lint pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
+| MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
+| MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Instrumentation corrections requested before acceptance; synthetic cache fixtures prepared, but diagnostic has not run |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -122,8 +123,25 @@ file hashes still match the preservation baseline.
 006B4 selects the maintained `@noble/hashes` 2.4.0 incremental SHA-256 implementation
 with an exact pin and explicit Expo `FileMode.ReadOnly` handles. The existing
 `node:crypto` Metro shim implements a deterministic non-cryptographic hash and is
-not suitable for restore identity. This ticket has its own dependency installation
-and does not mutate the shared root `node_modules` used by other workers.
+not suitable for restore identity. The worker used an isolated dependency
+installation. After independent acceptance, the organiser installed the single
+reviewed dependency on integrated main. No unrelated dependency changes occurred.
+
+At `ab99216`, both integrated profiles pass **62 suites / 636 tests**. Typecheck
+passes; the reviewed candidate's uncached lint has zero errors and 19 retained
+warnings. Logs are retained at `.codex-artifacts/mvp-sha-integrated-{full,mvp}.log`.
+The hash diagnostic remains on its own branch and will not ship. Its maximum
+fixture is a sparse logical 256 MiB zero-filled file; any timing must disclose that
+limitation and must not be described as physical-device or cold-cache evidence.
+
+The populated-emulator preservation check is awaiting explicit approval: automatic
+approval review rejected both copying its private workout database/sidecars and
+the narrower hash-only read, classifying them as sensitive data or metadata
+transfers without specific authorization. Neither rejected command ran. Only
+hash-only permission has been requested; a reply would not authorize a raw database
+copy. Code review and host verification continue independently. Test-owned hash
+fixtures remain under app cache `mvp006b4-sha256-20260922`; no diagnostic app launch
+or native APK installation has occurred for this prerequisite.
 
 The organiser's [restore review matrix](testing/replacement-restore-review-matrix.md)
 records the remaining native prerequisite, process-recovery, exact-replacement,
