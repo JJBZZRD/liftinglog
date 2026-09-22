@@ -114,8 +114,10 @@ so it is not accepted as atomic synchronous restore-control persistence.
 006B1 exposes one pure ordered-set PB derivation for the ordinary rebuild and the
 future synchronous restore path. Its independent review found no changes to
 validity rules, strict per-rep progression, timestamp handling, SQL ordering, or
-UID ownership. The focused production parity tests pass; the 609-test integrated
-baseline above predates this extraction and is not represented as a later rerun.
+UID ownership. After integration, the organiser reran both profiles at `0acf77e`:
+**61 suites / 612 tests pass in each profile**. Logs are retained at
+`.codex-artifacts/mvp-pb-integrated-{full,mvp}.log`. All seven originally preserved
+file hashes still match the preservation baseline.
 
 006B4 selects the maintained `@noble/hashes` 2.4.0 incremental SHA-256 implementation
 with an exact pin and explicit Expo `FileMode.ReadOnly` handles. The existing
