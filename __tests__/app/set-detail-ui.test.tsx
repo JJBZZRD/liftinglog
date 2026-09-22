@@ -18,7 +18,7 @@ jest.mock("../../lib/theme/ThemeContext", () => ({ useTheme: () => ({ rawColors:
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({ useUnitPreference: () => ({ unitPreference: "kg" }) }));
 jest.mock("../../lib/db/media", () => ({ getLatestMediaForSet: jest.fn(), listMediaForLocalUris: jest.fn().mockResolvedValue([]), unlinkMediaForSet: jest.fn(), updateMedia: jest.fn(), upsertVideoForSet: jest.fn() }));
 jest.mock("../../lib/db/workouts", () => ({ getSetById: jest.fn(), updateSet: jest.fn() }));
-jest.mock("../../lib/utils/videoStorage", () => ({ deleteManagedVideoUri: jest.fn(), doesFileUriExist: jest.fn().mockResolvedValue(true), getUriScheme: jest.fn(() => "file"), inferVideoMimeFromUri: jest.fn(() => "video/mp4"), isFileUri: jest.fn(() => false), isLikelyTransientUri: jest.fn(() => false), persistVideoForSetLink: jest.fn(), persistVideoUriToAppStorage: jest.fn(), toMillis: jest.fn((value: number | null | undefined) => value ?? null) }));
+jest.mock("../../lib/utils/videoStorage", () => ({ deleteManagedVideoUri: jest.fn(), doesFileUriExist: jest.fn().mockResolvedValue(true), getUriScheme: jest.fn(() => "file"), inferVideoMimeFromUri: jest.fn(() => "video/mp4"), isFileUri: jest.fn(() => false), isLikelyTransientUri: jest.fn(() => false), persistVideoForSetLink: jest.fn(), persistVideoUriToAppStorage: jest.fn(), resolveVideoLibraryReference: jest.fn().mockResolvedValue(null), toMillis: jest.fn((value: number | null | undefined) => value ?? null) }));
 
 const setFixture = (note: string | null = null, id = 42) => ({ id, workoutId: 1, exerciseId: 1, workoutExerciseId: null, weightKg: 0, reps: 0, note, setIndex: 0, performedAt: 1_700_000_000_000 });
 

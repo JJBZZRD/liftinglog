@@ -1,3 +1,5 @@
+jest.mock("react-native", () => ({ Platform: { OS: "android" } }));
+
 jest.mock("expo-file-system/legacy", () => ({
   documentDirectory: "file:///app/documents/",
   deleteAsync: jest.fn(),

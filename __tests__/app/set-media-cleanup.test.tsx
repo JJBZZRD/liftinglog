@@ -14,7 +14,7 @@ jest.mock("../../lib/theme/ThemeContext", () => ({ useTheme: () => ({ rawColors:
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({ useUnitPreference: () => ({ unitPreference: "kg" }) }));
 jest.mock("../../lib/db/media", () => ({ getLatestMediaForSet: jest.fn(), listMediaForLocalUris: jest.fn(), unlinkMediaForSet: jest.fn(), updateMedia: jest.fn(), upsertVideoForSet: jest.fn() }));
 jest.mock("../../lib/db/workouts", () => ({ getSetById: jest.fn(), updateSet: jest.fn() }));
-jest.mock("../../lib/utils/videoStorage", () => ({ deleteManagedVideoUri: jest.fn(), doesFileUriExist: jest.fn().mockResolvedValue(false), getUriScheme: jest.fn(() => "file"), inferVideoMimeFromUri: jest.fn(() => "video/mp4"), isFileUri: jest.fn(() => true), isLikelyTransientUri: jest.fn(() => false), persistVideoForSetLink: jest.fn(), persistVideoUriToAppStorage: jest.fn(), toMillis: jest.fn((value: number | null | undefined) => value ?? null) }));
+jest.mock("../../lib/utils/videoStorage", () => ({ deleteManagedVideoUri: jest.fn(), doesFileUriExist: jest.fn().mockResolvedValue(false), getUriScheme: jest.fn(() => "file"), inferVideoMimeFromUri: jest.fn(() => "video/mp4"), isFileUri: jest.fn(() => true), isLikelyTransientUri: jest.fn(() => false), persistVideoForSetLink: jest.fn(), persistVideoUriToAppStorage: jest.fn(), resolveVideoLibraryReference: jest.fn(), toMillis: jest.fn((value: number | null | undefined) => value ?? null) }));
 
 const fixture = { id: 42, workoutId: 1, exerciseId: 1, workoutExerciseId: null, weightKg: 0, reps: 0, note: "Keep this note", setIndex: 0, performedAt: 1_700_000_000_000 };
 
@@ -59,6 +59,7 @@ describe("SetInfoScreen missing media cleanup states", () => {
     videoStorage.isLikelyTransientUri.mockReset().mockReturnValue(false);
     videoStorage.persistVideoForSetLink.mockReset();
     videoStorage.persistVideoUriToAppStorage.mockReset();
+    videoStorage.resolveVideoLibraryReference.mockReset().mockResolvedValue(null);
     videoStorage.toMillis.mockReset().mockImplementation((value: number | null | undefined) => value ?? null);
   });
 
@@ -84,9 +85,16 @@ describe("SetInfoScreen missing media cleanup states", () => {
       id: 8, localUri: "file:///app/documents/set-videos/missing.mp4", assetId: "gone-asset", mime: "video/mp4", setId: 42, workoutId: null, note: null, createdAt: 1, originalFilename: "missing.mp4", mediaCreatedAt: 1, durationMs: 1000, albumName: "LiftingLog",
     });
     MediaLibrary.getPermissionsAsync.mockResolvedValue({ granted: true, accessPrivileges: "all" });
-    MediaLibrary.getAssetInfoAsync.mockRejectedValueOnce(new Error("stale asset")).mockResolvedValue({ localUri: "content://rediscovered", uri: "content://rediscovered", filename: "missing.mp4", creationTime: 1, duration: 1 });
-    MediaLibrary.getAlbumAsync.mockResolvedValue(null);
-    MediaLibrary.getAssetsAsync.mockResolvedValue({ assets: [{ id: "recovered-asset", filename: "missing.mp4", creationTime: 1 }], hasNextPage: false, endCursor: null });
+    videoStorage.resolveVideoLibraryReference.mockResolvedValue({
+      assetId: "recovered-asset",
+      localUri: null,
+      uri: "content://rediscovered",
+      originalFilename: "missing.mp4",
+      mediaCreatedAt: 1,
+      durationMs: 1000,
+      albumName: "LiftingLog",
+      source: "library_search",
+    });
     videoStorage.isFileUri.mockImplementation((uri: string | null | undefined) => typeof uri === "string" && uri.startsWith("file://"));
     videoStorage.doesFileUriExist.mockImplementation((uri: string) => Promise.resolve(uri !== "file:///app/documents/set-videos/missing.mp4"));
     videoStorage.persistVideoUriToAppStorage.mockResolvedValue(recoveredUri);
@@ -103,6 +111,8 @@ describe("SetInfoScreen missing media cleanup states", () => {
     const actions = (jest.requireMock("react-native").Alert.alert as jest.Mock).mock.calls.find(([title]) => title === "Video options")?.[2] as Array<{ text: string; onPress?: () => void }>;
     await act(async () => { actions.find(({ text }) => text === "Change video")?.onPress?.(); await flush(); });
 
+    expect(videoStorage.resolveVideoLibraryReference).toHaveBeenCalledWith(expect.objectContaining({ assetId: "gone-asset" }));
+    expect(updateMedia).toHaveBeenCalledWith(8, expect.objectContaining({ local_uri: recoveredUri, asset_id: "recovered-asset" }));
     expect(videoStorage.deleteManagedVideoUri).toHaveBeenCalledWith(recoveredUri);
   });
 
@@ -115,9 +125,16 @@ describe("SetInfoScreen missing media cleanup states", () => {
       id: 8, localUri: priorUri, assetId: "gone-asset", mime: "video/mp4", setId: 42, workoutId: null, note: null, createdAt: 1, originalFilename: "missing.mp4", mediaCreatedAt: 1, durationMs: 1000, albumName: "LiftingLog",
     });
     MediaLibrary.getPermissionsAsync.mockResolvedValue({ granted: true, accessPrivileges: "all" });
-    MediaLibrary.getAssetInfoAsync.mockRejectedValueOnce(new Error("stale asset")).mockResolvedValue({ localUri: "content://rediscovered", uri: "content://rediscovered", filename: "missing.mp4", creationTime: 1, duration: 1 });
-    MediaLibrary.getAlbumAsync.mockResolvedValue(null);
-    MediaLibrary.getAssetsAsync.mockResolvedValue({ assets: [{ id: "recovered-asset", filename: "missing.mp4", creationTime: 1 }], hasNextPage: false, endCursor: null });
+    videoStorage.resolveVideoLibraryReference.mockResolvedValue({
+      assetId: "recovered-asset",
+      localUri: null,
+      uri: "content://rediscovered",
+      originalFilename: "missing.mp4",
+      mediaCreatedAt: 1,
+      durationMs: 1000,
+      albumName: "LiftingLog",
+      source: "library_search",
+    });
     videoStorage.isFileUri.mockImplementation((uri: string | null | undefined) => typeof uri === "string" && uri.startsWith("file://"));
     videoStorage.doesFileUriExist.mockImplementation((uri: string) => Promise.resolve(uri !== priorUri));
     videoStorage.persistVideoUriToAppStorage.mockResolvedValue("file:///app/documents/set-videos/recovered.mp4");
@@ -134,7 +151,10 @@ describe("SetInfoScreen missing media cleanup states", () => {
     const actions = (jest.requireMock("react-native").Alert.alert as jest.Mock).mock.calls.find(([title]) => title === "Video options")?.[2] as Array<{ text: string; onPress?: () => void }>;
     await act(async () => { actions.find(({ text }) => text === "Change video")?.onPress?.(); await flush(); });
 
+    expect(videoStorage.resolveVideoLibraryReference).toHaveBeenCalledWith(expect.objectContaining({ assetId: "gone-asset" }));
+    expect(updateMedia).toHaveBeenCalledWith(8, expect.objectContaining({ local_uri: "file:///app/documents/set-videos/recovered.mp4", asset_id: "recovered-asset" }));
     expect(videoStorage.deleteManagedVideoUri).toHaveBeenCalledWith(priorUri);
+    expect(videoStorage.deleteManagedVideoUri).not.toHaveBeenCalledWith("file:///app/documents/set-videos/recovered.mp4");
   });
 
   it("preserves a managed previous copy when another media row still references it", async () => {

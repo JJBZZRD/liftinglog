@@ -3,6 +3,8 @@ import {
   resolveVideoLibraryReference,
 } from "../../lib/utils/videoStorage";
 
+jest.mock("react-native", () => ({ Platform: { OS: "android" } }));
+
 jest.mock("expo-file-system/legacy", () => ({
   documentDirectory: "file:///app/documents/",
   copyAsync: jest.fn(),
@@ -17,7 +19,9 @@ jest.mock("expo-media-library/legacy", () => ({
   createAlbumAsync: jest.fn(),
   createAssetAsync: jest.fn(),
   getAssetsAsync: jest.fn(),
+  getAlbumsAsync: jest.fn(),
   getAlbumAsync: jest.fn(),
+  getAssetContentUriAsync: jest.fn(),
   getAssetInfoAsync: jest.fn(),
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
@@ -39,6 +43,7 @@ beforeEach(() => {
     uri: "content://gallery/lift",
   });
   library.getAlbumAsync.mockResolvedValue({ id: "album", title: "LiftingLog" });
+  library.getPermissionsAsync.mockResolvedValue({ granted: true, accessPrivileges: "all" });
 });
 
 describe("set detail video storage characterization", () => {

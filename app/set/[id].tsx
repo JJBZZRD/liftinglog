@@ -35,154 +35,13 @@ import {
   isLikelyTransientUri,
   persistVideoForSetLink,
   persistVideoUriToAppStorage,
+  resolveVideoLibraryReference,
   toMillis,
 } from "../../lib/utils/videoStorage";
-
-const REDISCOVERY_PAGE_SIZE = 200;
-const REDISCOVERY_MAX_SCAN_COUNT = 1500;
-const REDISCOVERY_TIME_WINDOW_MS = 60_000;
-const REDISCOVERY_MATCH_WINDOW_MS = 2000;
 
 function toDisplayMillis(value?: number): number {
   return toMillis(value) ?? Date.now();
 }
-
-
-/**
- * Attempt to re-discover a video in the MediaLibrary by matching metadata.
- * This is used when the stored asset_id is no longer valid (e.g., after app reinstall).
- * Returns the re-discovered asset info, or null if not found.
- */
-async function attemptVideoRediscovery(media: Media): Promise<{
-  assetId: string;
-  localUri: string | null;
-  uri: string | null;
-  filename: string | null;
-  creationTime: number | null;
-  durationMs: number | null;
-} | null> {
-  // Need at least some metadata to search
-  const hasFilename = !!media.originalFilename;
-  const mediaCreatedAtMs = toMillis(media.mediaCreatedAt);
-  const hasCreationTime = mediaCreatedAtMs !== null;
-  const hasAlbum = !!media.albumName;
-
-  if (!hasFilename && !hasCreationTime) {
-    if (__DEV__) {
-      console.log("[SetInfo] Cannot re-discover video: no filename or creation time metadata");
-    }
-    return null;
-  }
-
-  try {
-    // First, try to search within the specific album if we know it
-    let album: MediaLibrary.Album | null = null;
-    if (hasAlbum) {
-      album = await MediaLibrary.getAlbumAsync(media.albumName!);
-    }
-
-    // Build search options
-    const searchOptions: MediaLibrary.AssetsOptions = {
-      mediaType: MediaLibrary.MediaType.video,
-      first: REDISCOVERY_PAGE_SIZE,
-      sortBy: [[MediaLibrary.SortBy.creationTime, false]], // Newest first
-    };
-
-    if (album) {
-      searchOptions.album = album;
-    }
-
-    // If we have a creation time, narrow the search window
-    if (mediaCreatedAtMs !== null) {
-      // Search within a narrow window around the creation time first.
-      searchOptions.createdAfter = mediaCreatedAtMs - REDISCOVERY_TIME_WINDOW_MS;
-      searchOptions.createdBefore = mediaCreatedAtMs + REDISCOVERY_TIME_WINDOW_MS;
-    }
-
-    let after: string | undefined;
-    let scannedCount = 0;
-
-    while (scannedCount < REDISCOVERY_MAX_SCAN_COUNT) {
-      const page = await MediaLibrary.getAssetsAsync({
-        ...searchOptions,
-        ...(after ? { after } : {}),
-      });
-      scannedCount += page.assets.length;
-
-      if (__DEV__) {
-        console.log("[SetInfo] Re-discovery scan page:", {
-          pageCount: page.assets.length,
-          scannedCount,
-          hasNextPage: page.hasNextPage,
-        });
-      }
-
-      // Try to find a matching asset
-      for (const candidate of page.assets) {
-        // Match by filename if available
-        if (hasFilename && candidate.filename === media.originalFilename) {
-          const assetInfo = await MediaLibrary.getAssetInfoAsync(candidate.id);
-          if (__DEV__) {
-            console.log("[SetInfo] Re-discovered video by filename:", {
-              filename: media.originalFilename,
-              newAssetId: candidate.id,
-            });
-          }
-          return {
-            assetId: candidate.id,
-            localUri: assetInfo?.localUri ?? null,
-            uri: assetInfo?.uri ?? null,
-            filename: assetInfo?.filename ?? candidate.filename ?? null,
-            creationTime: assetInfo?.creationTime ?? candidate.creationTime ?? null,
-            durationMs: assetInfo?.duration != null ? Math.round(assetInfo.duration * 1000) : null,
-          };
-        }
-
-        // Match by creation time if filename metadata is absent
-        if (hasCreationTime && !hasFilename) {
-          const candidateCreationTimeMs = toMillis(candidate.creationTime);
-          if (candidateCreationTimeMs === null || mediaCreatedAtMs === null) continue;
-          const timeDiff = Math.abs(candidateCreationTimeMs - mediaCreatedAtMs);
-          if (timeDiff <= REDISCOVERY_MATCH_WINDOW_MS) {
-            const assetInfo = await MediaLibrary.getAssetInfoAsync(candidate.id);
-            if (__DEV__) {
-              console.log("[SetInfo] Re-discovered video by creation time:", {
-                creationTime: mediaCreatedAtMs,
-                candidateTime: candidateCreationTimeMs,
-                timeDiff,
-                newAssetId: candidate.id,
-              });
-            }
-            return {
-              assetId: candidate.id,
-              localUri: assetInfo?.localUri ?? null,
-              uri: assetInfo?.uri ?? null,
-              filename: assetInfo?.filename ?? candidate.filename ?? null,
-              creationTime: assetInfo?.creationTime ?? candidate.creationTime ?? null,
-              durationMs: assetInfo?.duration != null ? Math.round(assetInfo.duration * 1000) : null,
-            };
-          }
-        }
-      }
-
-      if (!page.hasNextPage || !page.endCursor || page.assets.length === 0) {
-        break;
-      }
-      after = page.endCursor;
-    }
-
-    if (__DEV__) {
-      console.log("[SetInfo] Re-discovery failed: no matching video found", { scannedCount });
-    }
-    return null;
-  } catch (error) {
-    if (__DEV__) {
-      console.warn("[SetInfo] Re-discovery error:", error);
-    }
-    return null;
-  }
-}
-
 export default function SetInfoScreen() {
   const { rawColors } = useTheme();
   const { unitPreference } = useUnitPreference();
@@ -387,6 +246,9 @@ export default function SetInfoScreen() {
       }
       const needsLibraryRepair =
         !nextUri || !isFileUri(nextUri) || isLikelyTransientUri(nextUri);
+      if (needsLibraryRepair) {
+        nextUri = null;
+      }
 
       let canReadMediaLibrary = false;
       try {
@@ -396,89 +258,30 @@ export default function SetInfoScreen() {
         canReadMediaLibrary = false;
       }
 
-      if (needsLibraryRepair && canReadMediaLibrary && media.assetId) {
-        const assetId = String(media.assetId);
-        try {
-          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
-          const resolvedLocalUri = assetInfo?.localUri ?? null;
-          const resolvedAssetUri = assetInfo?.uri ?? null;
-          const assetUriCandidate = resolvedLocalUri ?? resolvedAssetUri;
-
-          if (assetUriCandidate) {
-            nextUri = assetUriCandidate;
-            if (!isFileUri(assetUriCandidate) || isLikelyTransientUri(assetUriCandidate)) {
-              const persistedUri = await persistVideoUriToAppStorage(
-                assetUriCandidate,
-                assetInfo?.filename ?? media.originalFilename ?? null
-              );
-              if (persistedUri) {
-                nextUri = persistedUri;
-              }
-            }
-            assetResolved = true;
-          }
-
-          if (!nextOriginalFilename && assetInfo?.filename) {
-            nextOriginalFilename = assetInfo.filename;
-          }
-          if (nextMediaCreatedAt == null && assetInfo?.creationTime != null) {
-            nextMediaCreatedAt = assetInfo.creationTime;
-          }
-          if (nextDurationMs == null && assetInfo?.duration != null) {
-            nextDurationMs = Math.round(assetInfo.duration * 1000);
-          }
-          if (__DEV__) {
-            console.log("[SetInfo] Resolved media URI from assetId:", {
-              setId,
-              mediaId: media.id,
-              assetId,
-              storedLocalUri: media.localUri,
-              assetUri: resolvedAssetUri,
-              assetLocalUri: resolvedLocalUri,
-              chosenUri: nextUri,
-              chosenScheme: getUriScheme(nextUri),
-              assetResolved,
-            });
-          }
-        } catch (assetError) {
-          if (__DEV__) {
-            console.warn("[SetInfo] Failed resolving assetId to URI, will attempt re-discovery:", {
-              setId,
-              mediaId: media.id,
-              assetId,
-              error: String(assetError),
-            });
-          }
-        }
-      }
-
-      // If asset resolution failed, attempt re-discovery from metadata.
-      if (
-        needsLibraryRepair &&
-        !assetResolved &&
-        canReadMediaLibrary &&
-        (media.originalFilename || media.mediaCreatedAt != null)
-      ) {
+      if (needsLibraryRepair && canReadMediaLibrary) {
         if (__DEV__) {
-          console.log("[SetInfo] Attempting video re-discovery...", {
+          console.log("[SetInfo] Attempting verified video resolution...", {
+            assetId: media.assetId,
             originalFilename: media.originalFilename,
             mediaCreatedAt: media.mediaCreatedAt,
+            durationMs: media.durationMs,
             albumName: media.albumName,
           });
         }
 
-        const rediscovered = await attemptVideoRediscovery(media);
+        const rediscovered = await resolveVideoLibraryReference({
+          assetId: media.assetId,
+          originalFilename: media.originalFilename,
+          mediaCreatedAt: media.mediaCreatedAt,
+          durationMs: media.durationMs,
+          albumName: media.albumName,
+        });
         if (rediscovered) {
           nextAssetId = rediscovered.assetId;
-          if (!nextOriginalFilename && rediscovered.filename) {
-            nextOriginalFilename = rediscovered.filename;
-          }
-          if (nextMediaCreatedAt == null && rediscovered.creationTime != null) {
-            nextMediaCreatedAt = rediscovered.creationTime;
-          }
-          if (nextDurationMs == null && rediscovered.durationMs != null) {
-            nextDurationMs = rediscovered.durationMs;
-          }
+          nextOriginalFilename = rediscovered.originalFilename;
+          nextMediaCreatedAt = rediscovered.mediaCreatedAt;
+          nextDurationMs = rediscovered.durationMs;
+          nextAlbumName = rediscovered.albumName;
           const rediscoveredCandidate = rediscovered.localUri ?? rediscovered.uri;
           if (rediscoveredCandidate) {
             nextUri = rediscoveredCandidate;
@@ -492,7 +295,7 @@ export default function SetInfoScreen() {
           }
 
           if (__DEV__) {
-            console.log("[SetInfo] Video re-discovered successfully:", {
+            console.log("[SetInfo] Video reference verified:", {
               setId,
               mediaId: media.id,
               newAssetId: nextAssetId,
@@ -517,7 +320,7 @@ export default function SetInfoScreen() {
         }
       }
 
-      const fallbackUri = storedFileMissing ? null : storedUri;
+      const fallbackUri = needsLibraryRepair || storedFileMissing ? null : storedUri;
       const finalUri = nextUri ?? fallbackUri;
 
       const shouldPersistRepair =
@@ -636,6 +439,11 @@ export default function SetInfoScreen() {
             ? Math.round(selectedAsset.duration)
             : null,
         saveToLibrary: false,
+        gallerySelection: {
+          width: selectedAsset.width ?? null,
+          height: selectedAsset.height ?? null,
+          fileSize: selectedAsset.fileSize ?? null,
+        },
       });
 
       if (!canContinue()) return;

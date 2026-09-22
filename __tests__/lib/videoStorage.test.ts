@@ -1,3 +1,5 @@
+jest.mock("react-native", () => ({ Platform: { OS: "android" } }));
+
 jest.mock("expo-file-system/legacy", () => ({
   documentDirectory: "file:///app/documents/",
   copyAsync: jest.fn(),
@@ -13,7 +15,9 @@ jest.mock("expo-media-library/legacy", () => ({
   createAlbumAsync: jest.fn(),
   createAssetAsync: jest.fn(),
   getAssetsAsync: jest.fn(),
+  getAlbumsAsync: jest.fn(),
   getAlbumAsync: jest.fn(),
+  getAssetContentUriAsync: jest.fn(),
   getAssetInfoAsync: jest.fn(),
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
@@ -35,7 +39,9 @@ const {
   createAlbumAsync: mockCreateAlbumAsync,
   createAssetAsync: mockCreateAssetAsync,
   getAssetsAsync: mockGetAssetsAsync,
+  getAlbumsAsync: mockGetAlbumsAsync,
   getAlbumAsync: mockGetAlbumAsync,
+  getAssetContentUriAsync: mockGetAssetContentUriAsync,
   getAssetInfoAsync: mockGetAssetInfoAsync,
   getPermissionsAsync: mockGetPermissionsAsync,
   requestPermissionsAsync: mockRequestPermissionsAsync,
@@ -50,6 +56,8 @@ describe("persistVideoForSetLink", () => {
     mockMakeDirectoryAsync.mockResolvedValue(undefined);
     mockCopyAsync.mockResolvedValue(undefined);
     mockGetAlbumAsync.mockResolvedValue(null);
+    mockGetAlbumsAsync.mockResolvedValue([]);
+    mockGetAssetContentUriAsync.mockImplementation(async (id: string) => `content://media/${id}`);
     mockCreateAssetAsync.mockResolvedValue({ id: "created-asset" });
     mockCreateAlbumAsync.mockResolvedValue({ id: "created-album" });
     mockGetAssetsAsync.mockResolvedValue({
@@ -180,9 +188,15 @@ describe("resolveVideoLibraryReference", () => {
       granted: true,
       accessPrivileges: "all",
     });
+    mockGetAssetContentUriAsync.mockImplementation(async (id: string) => `content://media/${id}`);
     mockGetAlbumAsync.mockResolvedValue({ id: "album-1", title: "LiftingLog" });
     mockGetAssetInfoAsync.mockImplementation(async (assetId: string) => ({
-      filename: assetId === "album-match" ? "set-001.mp4" : "set-002.mp4",
+      filename:
+        assetId === "album-match"
+          ? "set-001.mp4"
+          : assetId === "library-match"
+            ? "outside-folder.mp4"
+            : "set-002.mp4",
       creationTime: 1700000000000,
       duration: assetId === "album-match" ? 12.5 : 8,
       localUri: `file:///media/${assetId}.mp4`,
@@ -190,7 +204,7 @@ describe("resolveVideoLibraryReference", () => {
     }));
   });
 
-  it("searches the LiftingLog album first when re-discovering imported videos", async () => {
+  it("returns one unique full-library compound metadata match", async () => {
     mockGetAssetsAsync
       .mockResolvedValueOnce({
         assets: [
@@ -211,18 +225,20 @@ describe("resolveVideoLibraryReference", () => {
       albumName: null,
     });
 
-    expect(mockGetAlbumAsync).toHaveBeenCalledWith("LiftingLog");
+    expect(mockGetAlbumAsync).not.toHaveBeenCalled();
     expect(mockGetAssetsAsync).toHaveBeenCalledTimes(1);
     expect(result?.assetId).toBe("album-match");
-    expect(result?.source).toBe("album_search");
+    expect(result?.source).toBe("library_search");
+    expect(result?.localUri).toBeNull();
+    expect(result?.uri).toBe("content://media/album-match");
   });
 
-  it("falls back to a gallery-wide search when the album does not contain the video", async () => {
+  it("does not accept a match until the complete paginated library scan finishes", async () => {
     mockGetAssetsAsync
       .mockResolvedValueOnce({
-        assets: [],
-        endCursor: null,
-        hasNextPage: false,
+        assets: [{ id: "unrelated", filename: "different.mp4", creationTime: 1700000000000 }],
+        endCursor: "next-page",
+        hasNextPage: true,
       })
       .mockResolvedValueOnce({
         assets: [

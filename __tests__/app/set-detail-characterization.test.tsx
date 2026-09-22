@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import SetInfoScreen from "../../app/set/[id]";
 import { getLatestMediaForSet, listMediaForLocalUris, unlinkMediaForSet, updateMedia, upsertVideoForSet } from "../../lib/db/media";
 import { getSetById, updateSet } from "../../lib/db/workouts";
-import { deleteManagedVideoUri, doesFileUriExist, persistVideoForSetLink } from "../../lib/utils/videoStorage";
+import { deleteManagedVideoUri, doesFileUriExist, persistVideoForSetLink, persistVideoUriToAppStorage, resolveVideoLibraryReference } from "../../lib/utils/videoStorage";
 import { mediaFixture, pressableText } from "../helpers/setDetailCharacterization";
 
 jest.mock("expo-router", () => ({ Stack: { Screen: () => null }, router: { back: jest.fn() }, useLocalSearchParams: () => ({ id: "42" }) }));
@@ -34,7 +34,7 @@ jest.mock("../../lib/theme/ThemeContext", () => ({ useTheme: () => ({ rawColors:
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({ useUnitPreference: () => ({ unitPreference: "kg" }) }));
 jest.mock("../../lib/db/media", () => ({ getLatestMediaForSet: jest.fn(), listMediaForLocalUris: jest.fn(), unlinkMediaForSet: jest.fn(), updateMedia: jest.fn(), upsertVideoForSet: jest.fn() }));
 jest.mock("../../lib/db/workouts", () => ({ getSetById: jest.fn(), updateSet: jest.fn() }));
-jest.mock("../../lib/utils/videoStorage", () => ({ deleteManagedVideoUri: jest.fn(), doesFileUriExist: jest.fn().mockResolvedValue(true), getUriScheme: jest.fn(() => "file"), inferVideoMimeFromUri: jest.fn(() => "video/mp4"), isFileUri: jest.fn((uri: string | null) => !!uri?.startsWith("file:")), isLikelyTransientUri: jest.fn(() => false), persistVideoForSetLink: jest.fn(), persistVideoUriToAppStorage: jest.fn(), toMillis: jest.fn((value: number | null | undefined) => value ?? null) }));
+jest.mock("../../lib/utils/videoStorage", () => ({ deleteManagedVideoUri: jest.fn(), doesFileUriExist: jest.fn().mockResolvedValue(true), getUriScheme: jest.fn(() => "file"), inferVideoMimeFromUri: jest.fn(() => "video/mp4"), isFileUri: jest.fn((uri: string | null) => !!uri?.startsWith("file:")), isLikelyTransientUri: jest.fn(() => false), persistVideoForSetLink: jest.fn(), persistVideoUriToAppStorage: jest.fn(), resolveVideoLibraryReference: jest.fn(), toMillis: jest.fn((value: number | null | undefined) => value ?? null) }));
 
 const mockPlayer = (jest.requireMock("expo-video").useVideoPlayer as jest.Mock)();
 const alertMock = jest.requireMock("react-native").Alert.alert as jest.Mock;
@@ -83,6 +83,7 @@ describe("SetInfoScreen characterization", () => {
     (doesFileUriExist as jest.Mock).mockReset().mockResolvedValue(true);
     (deleteManagedVideoUri as jest.Mock).mockReset();
     (persistVideoForSetLink as jest.Mock).mockReset();
+    (resolveVideoLibraryReference as jest.Mock).mockReset().mockResolvedValue(null);
     picker.getMediaLibraryPermissionsAsync.mockReset();
     picker.requestMediaLibraryPermissionsAsync.mockReset();
     picker.launchImageLibraryAsync.mockReset();
@@ -124,13 +125,18 @@ describe("SetInfoScreen characterization", () => {
   });
 
   it("adds one selected asset and passes picker milliseconds through unchanged", async () => {
-    picker.launchImageLibraryAsync.mockResolvedValue({ canceled: false, assets: [{ uri: "content://first", assetId: "asset-first", fileName: "picked.mov", duration: 12_500, mimeType: "video/mp4" }, { uri: "content://ignored", assetId: "ignored" }] } as never);
+    picker.launchImageLibraryAsync.mockResolvedValue({ canceled: false, assets: [{ uri: "content://first", assetId: "asset-first", fileName: "picked.mov", duration: 12_500, width: 1920, height: 1080, fileSize: 123_456, mimeType: "video/mp4" }, { uri: "content://ignored", assetId: "ignored" }] } as never);
     (persistVideoForSetLink as jest.Mock).mockResolvedValue({ localUri: "file:///app/set-videos/picked.mov", assetId: "asset-first", originalFilename: "picked.mov", mediaCreatedAt: 1700000000000, durationMs: 12500, albumName: "LiftingLog" });
     let renderer!: ReturnType<typeof create>;
     await act(async () => { renderer = create(<SetInfoScreen />); });
     const add = pressableContaining(renderer, "Add From Gallery");
     await act(async () => { add.props.onPress(); await flushAsyncWork(); });
-    expect(persistVideoForSetLink).toHaveBeenCalledWith(expect.objectContaining({ sourceUri: "content://first", assetId: "asset-first", durationMs: 12_500 }));
+    expect(persistVideoForSetLink).toHaveBeenCalledWith(expect.objectContaining({
+      sourceUri: "content://first",
+      assetId: "asset-first",
+      durationMs: 12_500,
+      gallerySelection: { width: 1920, height: 1080, fileSize: 123_456 },
+    }));
     expect(upsertVideoForSet).toHaveBeenCalledWith(42, expect.objectContaining({ localUri: "file:///app/set-videos/picked.mov", assetId: "asset-first", originalFilename: "picked.mov", durationMs: 12500 }));
     await act(async () => { renderer.unmount(); });
   });
@@ -244,13 +250,21 @@ describe("SetInfoScreen characterization", () => {
     const repaired = mediaFixture({ ...missing, localUri: "file:///app/set-videos/rediscovered.mp4", assetId: "rediscovered", originalFilename: "rediscovered.mp4", mediaCreatedAt: 1_700_000_000_000, durationMs: 12_500, albumName: null });
     (getLatestMediaForSet as jest.Mock).mockResolvedValueOnce(missing).mockResolvedValueOnce(repaired);
     (doesFileUriExist as jest.Mock).mockImplementation(async (uri: string) => uri !== missing.localUri);
-    mediaLibrary.getAssetInfoAsync
-      .mockRejectedValueOnce(new Error("old asset missing"))
-      .mockResolvedValueOnce({ localUri: repaired.localUri, uri: repaired.localUri, filename: "rediscovered.mp4", creationTime: 1_700_000_000_000, duration: 12.5 });
-    mediaLibrary.getAssetsAsync.mockResolvedValue({ assets: [{ id: "rediscovered", filename: "rediscovered.mp4", creationTime: 1_700_000_000_000 }], endCursor: null, hasNextPage: false });
+    (resolveVideoLibraryReference as jest.Mock).mockResolvedValue({
+      assetId: "rediscovered",
+      localUri: repaired.localUri,
+      uri: repaired.localUri,
+      originalFilename: "rediscovered.mp4",
+      mediaCreatedAt: 1_700_000_000_000,
+      durationMs: 12_500,
+      albumName: null,
+      source: "library_search",
+    });
     let renderer!: ReturnType<typeof create>;
     await act(async () => { renderer = create(<SetInfoScreen />); await flushAsyncWork(); });
     expect(updateMedia).toHaveBeenCalledWith(7, expect.objectContaining({ local_uri: repaired.localUri, asset_id: "rediscovered", original_filename: "rediscovered.mp4", media_created_at: 1_700_000_000_000, duration_ms: 12_500, album_name: null }));
+    expect(resolveVideoLibraryReference).toHaveBeenCalledWith(expect.objectContaining({ assetId: "gone" }));
+    expect(mediaLibrary.getAssetInfoAsync).not.toHaveBeenCalled();
     await act(async () => { renderer.unmount(); renderer = create(<SetInfoScreen />); await flushAsyncWork(); });
     expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(repaired.localUri);
     await act(async () => { renderer.unmount(); });
@@ -265,9 +279,9 @@ describe("SetInfoScreen characterization", () => {
     let renderer!: ReturnType<typeof create>;
     await act(async () => { renderer = create(<SetInfoScreen />); });
     await act(async () => { await flushAsyncWork(); });
-    expect(mediaLibrary.getAssetInfoAsync).toHaveBeenCalledWith("gone");
-    expect(mediaLibrary.getAlbumAsync).toHaveBeenCalledWith("LiftingLog");
-    expect(mediaLibrary.getAssetsAsync).toHaveBeenCalled();
+    expect(resolveVideoLibraryReference).toHaveBeenCalledWith(expect.objectContaining({ assetId: "gone" }));
+    expect(mediaLibrary.getAssetInfoAsync).not.toHaveBeenCalled();
+    expect(mediaLibrary.getAssetsAsync).not.toHaveBeenCalled();
     expect(unlinkMediaForSet).not.toHaveBeenCalled();
     expect(deleteManagedVideoUri).not.toHaveBeenCalled();
     expect(updateMedia).not.toHaveBeenCalled();
@@ -278,6 +292,56 @@ describe("SetInfoScreen characterization", () => {
     await act(async () => { actions.find(({ text }) => text === "Unlink video")?.onPress?.(); await flushAsyncWork(); });
     expect(unlinkMediaForSet).toHaveBeenCalledWith(42);
     expect(renderer.root.findAllByProps({ children: "Set Details" })).toHaveLength(1);
+    await act(async () => { renderer.unmount(); });
+  });
+
+  it("does not copy or play an unverified library URI when the shared resolver rejects it", async () => {
+    const unverified = mediaFixture({
+      id: 7,
+      localUri: "content://media/stale-id",
+      assetId: "stale-id",
+      originalFilename: "canonical.mp4",
+      durationMs: 2_000,
+    });
+    (getLatestMediaForSet as jest.Mock).mockResolvedValue(unverified);
+    (resolveVideoLibraryReference as jest.Mock).mockResolvedValue(null);
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<SetInfoScreen />); await flushAsyncWork(); });
+
+    expect(resolveVideoLibraryReference).toHaveBeenCalledWith(expect.objectContaining({ assetId: "stale-id" }));
+    expect(persistVideoUriToAppStorage).not.toHaveBeenCalled();
+    expect(updateMedia).not.toHaveBeenCalled();
+    expect(mockPlayer.replaceAsync).not.toHaveBeenCalledWith("content://media/stale-id");
+    expect(unlinkMediaForSet).not.toHaveBeenCalled();
+    await act(async () => { renderer.unmount(); });
+  });
+
+  it("keeps an imported empty-URI row unresolved when its stale asset ID is not uniquely verified", async () => {
+    const imported = mediaFixture({
+      id: 7,
+      localUri: "",
+      assetId: "reused-id",
+      originalFilename: "canonical.mp4",
+      mediaCreatedAt: 1_700_000_000_000,
+      durationMs: 2_000,
+    });
+    (getLatestMediaForSet as jest.Mock).mockResolvedValue(imported);
+    (resolveVideoLibraryReference as jest.Mock).mockResolvedValue(null);
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<SetInfoScreen />); await flushAsyncWork(); });
+
+    expect(resolveVideoLibraryReference).toHaveBeenCalledWith(expect.objectContaining({
+      assetId: "reused-id",
+      originalFilename: "canonical.mp4",
+      mediaCreatedAt: 1_700_000_000_000,
+      durationMs: 2_000,
+    }));
+    expect(updateMedia).not.toHaveBeenCalled();
+    expect(persistVideoUriToAppStorage).not.toHaveBeenCalled();
+    expect(mockPlayer.replaceAsync).not.toHaveBeenCalledWith(expect.any(String));
+    expect(unlinkMediaForSet).not.toHaveBeenCalled();
     await act(async () => { renderer.unmount(); });
   });
 

@@ -1,14 +1,16 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library/legacy";
+import { Platform } from "react-native";
 
 export const DEFAULT_MEDIA_ALBUM_NAME = "LiftingLog";
 export const APP_VIDEO_STORAGE_DIR = "set-videos";
 const isDevEnv = typeof __DEV__ !== "undefined" && __DEV__;
 const REDISCOVERY_PAGE_SIZE = 200;
 const REDISCOVERY_MAX_SCAN_COUNT = 1500;
-const REDISCOVERY_TIME_WINDOW_MS = 60_000;
 const REDISCOVERY_MATCH_WINDOW_MS = 2_000;
 const REDISCOVERY_DURATION_WINDOW_MS = 2_000;
+const GALLERY_METADATA_MAX_BYTES = 64 * 1024 * 1024;
+const GALLERY_METADATA_MAX_HASH_CANDIDATES = 8;
 
 export type PersistedVideoDescriptor = {
   localUri: string;
@@ -38,8 +40,47 @@ export type RediscoveredVideoReference = {
   source: "asset_id" | "album_search" | "library_search";
 };
 
+export type CanonicalVideoMetadata = {
+  assetId: string;
+  originalFilename: string | null;
+  mediaCreatedAt: number | null;
+  durationMs: number | null;
+  albumName: string | null;
+};
+
+export type SelectionMetadataResolution =
+  | {
+      status: "resolved";
+      method: "picker_asset_id" | "unique_content_match";
+      metadata: CanonicalVideoMetadata;
+    }
+  | {
+      status: "unresolved";
+      reason:
+        | "permission_denied"
+        | "asset_unreadable"
+        | "selected_file_too_large"
+        | "candidate_file_too_large"
+        | "scan_limit"
+        | "candidate_limit"
+        | "hash_unavailable"
+        | "no_match"
+        | "ambiguous";
+    };
+
+export type GallerySelectionMetadata = {
+  width: number | null;
+  height: number | null;
+  fileSize: number | null;
+};
+
 export function toMillis(value?: number | null): number | null {
   if (value === undefined || value === null || Number.isNaN(value)) return null;
+  return value < 1_000_000_000_000 ? value * 1000 : value;
+}
+
+function toPositiveMillis(value?: number | null): number | null {
+  if (value === undefined || value === null || !Number.isFinite(value) || value <= 0) return null;
   return value < 1_000_000_000_000 ? value * 1000 : value;
 }
 
@@ -173,13 +214,256 @@ function getCanonicalAssetMetadata(assetInfo: MediaLibrary.AssetInfo | null): {
         ? assetInfo.filename
         : null,
     mediaCreatedAt:
-      typeof assetInfo.creationTime === "number" && Number.isFinite(assetInfo.creationTime)
-        ? assetInfo.creationTime
-        : null,
+      toPositiveMillis(assetInfo.creationTime),
     durationMs:
-      typeof assetInfo.duration === "number" && Number.isFinite(assetInfo.duration)
+      typeof assetInfo.duration === "number" && Number.isFinite(assetInfo.duration) && assetInfo.duration > 0
         ? Math.round(assetInfo.duration * 1000)
         : null,
+  };
+}
+
+function positiveFinite(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function pickerMetadataMatchesAsset(
+  assetInfo: MediaLibrary.AssetInfo,
+  pickerDurationMs: number | null,
+  pickerWidth: number | null,
+  pickerHeight: number | null
+): boolean {
+  const expectedDuration = positiveFinite(pickerDurationMs);
+  const actualDuration = positiveFinite(assetInfo.duration);
+  if (
+    expectedDuration !== null &&
+    (actualDuration === null || Math.abs(Math.round(actualDuration * 1000) - expectedDuration) > REDISCOVERY_DURATION_WINDOW_MS)
+  ) {
+    return false;
+  }
+
+  const expectedWidth = positiveFinite(pickerWidth);
+  const expectedHeight = positiveFinite(pickerHeight);
+  if (expectedWidth !== null && expectedHeight !== null) {
+    const actualWidth = positiveFinite(assetInfo.width);
+    const actualHeight = positiveFinite(assetInfo.height);
+    if (actualWidth === null || actualHeight === null) return false;
+    const sameOrientation = actualWidth === expectedWidth && actualHeight === expectedHeight;
+    const rotated = actualWidth === expectedHeight && actualHeight === expectedWidth;
+    if (!sameOrientation && !rotated) return false;
+  }
+
+  return true;
+}
+
+function candidateMatchesPickerPrefilter(
+  candidate: MediaLibrary.Asset,
+  pickerDurationMs: number | null,
+  pickerWidth: number | null,
+  pickerHeight: number | null
+): boolean {
+  const expectedDuration = positiveFinite(pickerDurationMs);
+  const actualDuration = positiveFinite(candidate.duration);
+  if (
+    expectedDuration !== null &&
+    actualDuration !== null &&
+    Math.abs(Math.round(actualDuration * 1000) - expectedDuration) > REDISCOVERY_DURATION_WINDOW_MS
+  ) {
+    return false;
+  }
+
+  const expectedWidth = positiveFinite(pickerWidth);
+  const expectedHeight = positiveFinite(pickerHeight);
+  const actualWidth = positiveFinite(candidate.width);
+  const actualHeight = positiveFinite(candidate.height);
+  if (
+    expectedWidth !== null &&
+    expectedHeight !== null &&
+    actualWidth !== null &&
+    actualHeight !== null
+  ) {
+    const sameOrientation = actualWidth === expectedWidth && actualHeight === expectedHeight;
+    const rotated = actualWidth === expectedHeight && actualHeight === expectedWidth;
+    if (!sameOrientation && !rotated) return false;
+  }
+
+  return true;
+}
+
+async function getAlbumName(albumId: string | null | undefined): Promise<string | null> {
+  if (!albumId) return null;
+  try {
+    const albums = await MediaLibrary.getAlbumsAsync();
+    return albums.find((album) => String(album.id) === String(albumId))?.title ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function canonicalMetadataForAsset(
+  assetId: string,
+  assetInfo: MediaLibrary.AssetInfo
+): Promise<CanonicalVideoMetadata> {
+  const canonical = getCanonicalAssetMetadata(assetInfo);
+  return {
+    assetId,
+    ...canonical,
+    albumName: await getAlbumName(assetInfo.albumId),
+  };
+}
+
+async function getExistingVideoPermission(): Promise<boolean> {
+  try {
+    const permission = await MediaLibrary.getPermissionsAsync(false, ["video"]);
+    return permission.granted && permission.accessPrivileges !== "none";
+  } catch {
+    return false;
+  }
+}
+
+async function getBoundedFileInfo(
+  uri: string,
+  tooLargeReason: "selected_file_too_large" | "candidate_file_too_large"
+): Promise<{ status: "ok"; size: number } | Extract<SelectionMetadataResolution, { status: "unresolved" }>> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || !Number.isFinite(info.size) || info.size <= 0) {
+      return { status: "unresolved", reason: "asset_unreadable" };
+    }
+    if (info.size > GALLERY_METADATA_MAX_BYTES) {
+      return { status: "unresolved", reason: tooLargeReason };
+    }
+    return { status: "ok", size: info.size };
+  } catch {
+    return { status: "unresolved", reason: "asset_unreadable" };
+  }
+}
+
+async function getMd5(uri: string): Promise<string | null> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri, { md5: true });
+    return info.exists && typeof info.md5 === "string" && info.md5.length > 0 ? info.md5 : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function acquireSelectedVideoMetadata(args: {
+  durableLocalUri: string;
+  pickerAssetId: string | null;
+  pickerDurationMs: number | null;
+  pickerWidth: number | null;
+  pickerHeight: number | null;
+  pickerFileSize: number | null;
+}): Promise<SelectionMetadataResolution> {
+  if (!(await getExistingVideoPermission())) {
+    return { status: "unresolved", reason: "permission_denied" };
+  }
+
+  const pickerSize = positiveFinite(args.pickerFileSize);
+  if (pickerSize !== null && pickerSize > GALLERY_METADATA_MAX_BYTES) {
+    return { status: "unresolved", reason: "selected_file_too_large" };
+  }
+  const selectedFile = await getBoundedFileInfo(args.durableLocalUri, "selected_file_too_large");
+  if (selectedFile.status === "unresolved") return selectedFile;
+
+  if (args.pickerAssetId) {
+    const assetInfo = await getSafeAssetInfo(String(args.pickerAssetId));
+    if (
+      assetInfo &&
+      pickerMetadataMatchesAsset(
+        assetInfo,
+        args.pickerDurationMs,
+        args.pickerWidth,
+        args.pickerHeight
+      )
+    ) {
+      return {
+        status: "resolved",
+        method: "picker_asset_id",
+        metadata: await canonicalMetadataForAsset(String(args.pickerAssetId), assetInfo),
+      };
+    }
+  }
+
+  let after: string | undefined;
+  let scannedCount = 0;
+  const seenCursors = new Set<string>();
+  const plausibleCandidates: MediaLibrary.Asset[] = [];
+
+  try {
+    while (true) {
+      const remaining = REDISCOVERY_MAX_SCAN_COUNT - scannedCount;
+      if (remaining <= 0) {
+        return { status: "unresolved", reason: "scan_limit" };
+      }
+      const page = await MediaLibrary.getAssetsAsync({
+        mediaType: MediaLibrary.MediaType.video,
+        first: Math.min(REDISCOVERY_PAGE_SIZE, remaining),
+        sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+        ...(after ? { after } : {}),
+      });
+      if (page.assets.length > remaining) {
+        return { status: "unresolved", reason: "scan_limit" };
+      }
+      scannedCount += page.assets.length;
+      for (const candidate of page.assets) {
+        if (
+          candidateMatchesPickerPrefilter(
+            candidate,
+            args.pickerDurationMs,
+            args.pickerWidth,
+            args.pickerHeight
+          )
+        ) {
+          plausibleCandidates.push(candidate);
+          if (plausibleCandidates.length > GALLERY_METADATA_MAX_HASH_CANDIDATES) {
+            return { status: "unresolved", reason: "candidate_limit" };
+          }
+        }
+      }
+
+      if (!page.hasNextPage) break;
+      if (!page.endCursor || page.assets.length === 0 || seenCursors.has(page.endCursor)) {
+        return { status: "unresolved", reason: "scan_limit" };
+      }
+      if (scannedCount >= REDISCOVERY_MAX_SCAN_COUNT) {
+        return { status: "unresolved", reason: "scan_limit" };
+      }
+      seenCursors.add(page.endCursor);
+      after = page.endCursor;
+    }
+  } catch {
+    return { status: "unresolved", reason: "asset_unreadable" };
+  }
+
+  const selectedMd5 = await getMd5(args.durableLocalUri);
+  if (!selectedMd5) return { status: "unresolved", reason: "hash_unavailable" };
+
+  const matches: MediaLibrary.Asset[] = [];
+  for (const candidate of plausibleCandidates) {
+    let contentUri: string;
+    try {
+      contentUri = await MediaLibrary.getAssetContentUriAsync(candidate.id);
+    } catch {
+      return { status: "unresolved", reason: "asset_unreadable" };
+    }
+    const candidateFile = await getBoundedFileInfo(contentUri, "candidate_file_too_large");
+    if (candidateFile.status === "unresolved") return candidateFile;
+    const candidateMd5 = await getMd5(contentUri);
+    if (!candidateMd5) return { status: "unresolved", reason: "hash_unavailable" };
+    if (candidateMd5 === selectedMd5) matches.push(candidate);
+  }
+
+  if (matches.length === 0) return { status: "unresolved", reason: "no_match" };
+  if (matches.length > 1) return { status: "unresolved", reason: "ambiguous" };
+
+  const match = matches[0];
+  const assetInfo = await getSafeAssetInfo(match.id);
+  if (!assetInfo) return { status: "unresolved", reason: "asset_unreadable" };
+  return {
+    status: "resolved",
+    method: "unique_content_match",
+    metadata: await canonicalMetadataForAsset(match.id, assetInfo),
   };
 }
 
@@ -200,195 +484,132 @@ export async function ensureVideoLibraryPermission(): Promise<boolean> {
   }
 }
 
-function getDurationDeltaMs(
-  expectedDurationMs: number | null,
-  assetDurationSeconds?: number | null
-): number | null {
-  if (expectedDurationMs == null || assetDurationSeconds == null) {
-    return null;
-  }
-
-  return Math.abs(Math.round(assetDurationSeconds * 1000) - expectedDurationMs);
-}
-
-function buildResolvedReference(
+async function buildResolvedReference(
   assetId: string,
   assetInfo: MediaLibrary.AssetInfo | null,
   source: RediscoveredVideoReference["source"],
   fallbackAlbumName: string | null
-): RediscoveredVideoReference | null {
+): Promise<RediscoveredVideoReference | null> {
   if (!assetInfo) {
     return null;
   }
 
+  let localUri = assetInfo.localUri ?? null;
+  let uri = assetInfo.uri ?? null;
+  if (Platform.OS === "android") {
+    try {
+      uri = await MediaLibrary.getAssetContentUriAsync(assetId);
+      localUri = null;
+    } catch {
+      return null;
+    }
+  }
+
+  const canonical = getCanonicalAssetMetadata(assetInfo);
+
   return {
     assetId,
-    localUri: assetInfo.localUri ?? null,
-    uri: assetInfo.uri ?? null,
-    originalFilename: assetInfo.filename ?? null,
-    mediaCreatedAt: assetInfo.creationTime ?? null,
-    durationMs:
-      assetInfo.duration != null ? Math.round(assetInfo.duration * 1000) : null,
+    localUri,
+    uri,
+    ...canonical,
     albumName: fallbackAlbumName,
     source,
   };
 }
 
-async function resolveVideoByAssetId(
-  assetId: string,
-  fallbackAlbumName: string | null
-): Promise<RediscoveredVideoReference | null> {
-  const assetInfo = await getSafeAssetInfo(assetId);
-  return buildResolvedReference(assetId, assetInfo, "asset_id", fallbackAlbumName);
+function metadataMatchesCanonicalAsset(
+  metadata: VideoRediscoveryMetadata,
+  assetInfo: MediaLibrary.AssetInfo
+): boolean {
+  const expectedFilename = metadata.originalFilename?.trim() ?? "";
+  if (!expectedFilename || assetInfo.filename !== expectedFilename) return false;
+
+  const expectedCreatedAt = toPositiveMillis(metadata.mediaCreatedAt);
+  const expectedDurationMs = positiveFinite(metadata.durationMs);
+  if (expectedCreatedAt === null && expectedDurationMs === null) return false;
+
+  const canonical = getCanonicalAssetMetadata(assetInfo);
+  if (
+    expectedCreatedAt !== null &&
+    (canonical.mediaCreatedAt === null ||
+      Math.abs(canonical.mediaCreatedAt - expectedCreatedAt) > REDISCOVERY_MATCH_WINDOW_MS)
+  ) {
+    return false;
+  }
+  if (
+    expectedDurationMs !== null &&
+    (canonical.durationMs === null ||
+      Math.abs(canonical.durationMs - expectedDurationMs) > REDISCOVERY_DURATION_WINDOW_MS)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 async function searchVideoScope(
-  metadata: Required<Pick<VideoRediscoveryMetadata, "originalFilename" | "mediaCreatedAt" | "durationMs">> & {
-    albumName: string | null;
-  },
-  scope: "album" | "library"
+  metadata: VideoRediscoveryMetadata
 ): Promise<RediscoveredVideoReference | null> {
-  const hasFilename = !!metadata.originalFilename;
-  const mediaCreatedAtMs = toMillis(metadata.mediaCreatedAt);
-  const hasCreationTime = mediaCreatedAtMs !== null;
+  let after: string | undefined;
+  let scannedCount = 0;
+  const seenCursors = new Set<string>();
+  const matches: Array<{ id: string; info: MediaLibrary.AssetInfo }> = [];
 
-  if (!hasFilename && !hasCreationTime) {
+  try {
+    while (true) {
+      const remaining = REDISCOVERY_MAX_SCAN_COUNT - scannedCount;
+      if (remaining <= 0) return null;
+      const page = await MediaLibrary.getAssetsAsync({
+        mediaType: MediaLibrary.MediaType.video,
+        first: Math.min(REDISCOVERY_PAGE_SIZE, remaining),
+        sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+        ...(after ? { after } : {}),
+      });
+      if (page.assets.length > remaining) return null;
+      scannedCount += page.assets.length;
+
+      for (const candidate of page.assets) {
+        if (candidate.filename !== metadata.originalFilename) continue;
+        const assetInfo = await getSafeAssetInfo(candidate.id);
+        if (!assetInfo) return null;
+        if (metadataMatchesCanonicalAsset(metadata, assetInfo)) {
+          matches.push({ id: candidate.id, info: assetInfo });
+        }
+      }
+
+      if (!page.hasNextPage) break;
+      if (!page.endCursor || page.assets.length === 0 || seenCursors.has(page.endCursor)) return null;
+      if (scannedCount >= REDISCOVERY_MAX_SCAN_COUNT) return null;
+      seenCursors.add(page.endCursor);
+      after = page.endCursor;
+    }
+  } catch {
     return null;
   }
 
-  let album: MediaLibrary.Album | null = null;
-  if (scope === "album" && metadata.albumName) {
-    album = await MediaLibrary.getAlbumAsync(metadata.albumName);
-    if (!album) {
-      return null;
-    }
-  }
-
-  const searchOptions: MediaLibrary.AssetsOptions = {
-    mediaType: MediaLibrary.MediaType.video,
-    first: REDISCOVERY_PAGE_SIZE,
-    sortBy: [[MediaLibrary.SortBy.creationTime, false]],
-    ...(album ? { album } : {}),
-  };
-
-  if (mediaCreatedAtMs !== null) {
-    searchOptions.createdAfter = mediaCreatedAtMs - REDISCOVERY_TIME_WINDOW_MS;
-    searchOptions.createdBefore = mediaCreatedAtMs + REDISCOVERY_TIME_WINDOW_MS;
-  }
-
-  let after: string | undefined;
-  let scannedCount = 0;
-  let bestMatch:
-    | {
-        score: number;
-        reference: RediscoveredVideoReference;
-      }
-    | null = null;
-
-  while (scannedCount < REDISCOVERY_MAX_SCAN_COUNT) {
-    const page = await MediaLibrary.getAssetsAsync({
-      ...searchOptions,
-      ...(after ? { after } : {}),
-    });
-    scannedCount += page.assets.length;
-
-    for (const candidate of page.assets) {
-      const candidateCreationTimeMs = toMillis(candidate.creationTime);
-      const filenameMatches =
-        hasFilename && candidate.filename === metadata.originalFilename;
-      const creationTimeMatches =
-        hasCreationTime &&
-        candidateCreationTimeMs !== null &&
-        mediaCreatedAtMs !== null &&
-        Math.abs(candidateCreationTimeMs - mediaCreatedAtMs) <= REDISCOVERY_MATCH_WINDOW_MS;
-
-      if (!filenameMatches && !creationTimeMatches) {
-        continue;
-      }
-
-      const assetInfo = await getSafeAssetInfo(candidate.id);
-      if (!assetInfo) {
-        continue;
-      }
-
-      let score = 0;
-      if (filenameMatches) score += 5;
-      if (creationTimeMatches) score += 4;
-
-      const durationDeltaMs = getDurationDeltaMs(metadata.durationMs, assetInfo.duration);
-      if (durationDeltaMs !== null) {
-        if (durationDeltaMs <= REDISCOVERY_DURATION_WINDOW_MS) {
-          score += 3;
-        } else if (durationDeltaMs <= REDISCOVERY_TIME_WINDOW_MS) {
-          score += 1;
-        }
-      }
-
-      if (!bestMatch || score > bestMatch.score) {
-        const reference = buildResolvedReference(
-          candidate.id,
-          assetInfo,
-          scope === "album" ? "album_search" : "library_search",
-          metadata.albumName
-        );
-        if (reference) {
-          bestMatch = { score, reference };
-        }
-      }
-    }
-
-    if (!page.hasNextPage || !page.endCursor || page.assets.length === 0) {
-      break;
-    }
-    after = page.endCursor;
-  }
-
-  return bestMatch?.reference ?? null;
+  if (matches.length !== 1) return null;
+  const match = matches[0];
+  return await buildResolvedReference(
+    match.id,
+    match.info,
+    metadata.assetId != null && String(metadata.assetId) === match.id
+      ? "asset_id"
+      : "library_search",
+    metadata.albumName ?? null
+  );
 }
 
 export async function resolveVideoLibraryReference(
   metadata: VideoRediscoveryMetadata
 ): Promise<RediscoveredVideoReference | null> {
-  const preferredAlbumNames = [...new Set(
-    [metadata.albumName, DEFAULT_MEDIA_ALBUM_NAME].filter(
-      (value): value is string => typeof value === "string" && value.trim().length > 0
-    )
-  )];
-
-  if (metadata.assetId) {
-    const direct = await resolveVideoByAssetId(
-      String(metadata.assetId),
-      preferredAlbumNames[0] ?? null
-    );
-    if (direct) {
-      return direct;
-    }
+  const filename = metadata.originalFilename?.trim() ?? "";
+  if (
+    !filename ||
+    (toPositiveMillis(metadata.mediaCreatedAt) === null && positiveFinite(metadata.durationMs) === null)
+  ) {
+    return null;
   }
-
-  for (const albumName of preferredAlbumNames) {
-    const match = await searchVideoScope(
-      {
-        originalFilename: metadata.originalFilename ?? null,
-        mediaCreatedAt: metadata.mediaCreatedAt ?? null,
-        durationMs: metadata.durationMs ?? null,
-        albumName,
-      },
-      "album"
-    );
-    if (match) {
-      return match;
-    }
-  }
-
-  return await searchVideoScope(
-    {
-      originalFilename: metadata.originalFilename ?? null,
-      mediaCreatedAt: metadata.mediaCreatedAt ?? null,
-      durationMs: metadata.durationMs ?? null,
-      albumName: preferredAlbumNames[0] ?? null,
-    },
-    "library"
-  );
+  if (!(await getExistingVideoPermission())) return null;
+  return await searchVideoScope({ ...metadata, originalFilename: filename });
 }
 
 async function createLibraryAssetFromManagedVideo(
@@ -426,10 +647,43 @@ export async function persistVideoForSetLink(args: {
   durationMs?: number | null;
   albumName?: string | null;
   saveToLibrary?: boolean;
+  gallerySelection?: GallerySelectionMetadata;
 }): Promise<PersistedVideoDescriptor | null> {
   const durableLocalUri = await persistVideoUriToAppStorage(args.sourceUri, args.filenameHint);
   if (!durableLocalUri) {
     return null;
+  }
+
+  if (args.gallerySelection) {
+    let resolution: SelectionMetadataResolution;
+    try {
+      resolution = await acquireSelectedVideoMetadata({
+        durableLocalUri,
+        pickerAssetId: args.assetId ?? null,
+        pickerDurationMs: args.durationMs ?? null,
+        pickerWidth: args.gallerySelection.width,
+        pickerHeight: args.gallerySelection.height,
+        pickerFileSize: args.gallerySelection.fileSize,
+      });
+    } catch {
+      resolution = { status: "unresolved", reason: "asset_unreadable" };
+    }
+
+    if (resolution.status === "resolved") {
+      return {
+        localUri: durableLocalUri,
+        ...resolution.metadata,
+      };
+    }
+
+    return {
+      localUri: durableLocalUri,
+      assetId: null,
+      originalFilename: null,
+      mediaCreatedAt: null,
+      durationMs: positiveFinite(args.durationMs),
+      albumName: null,
+    };
   }
 
   let nextAssetId = args.assetId ?? null;
