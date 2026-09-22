@@ -36,6 +36,12 @@ non-shipping diagnostic `1345128` is independently accepted and executed in its
 separate Android package; production lifecycle/engine source is unchanged.
 The normal app's DB/WAL/SHM hashes remain unchanged after every crash run.
 Both apps and Metro are stopped. No physical phone was present in the ADB inventory.
+A separately packaged physical-test APK is now built and emulator-smoke-checked
+from `3cb74cb` (ARM64/x86_64, release mode, embedded MVP, local debug certificate).
+It is named WorkoutLog MVP Check and is also stopped. See the
+[physical acceptance resume point](testing/mvp-physical-android-resume.md).
+The user requested remote backups; the push remains pending exact-destination
+confirmation required by automatic approval review. No remote backup is claimed.
 Read-only 007E preparation
 has identified the stale legacy-merge documentation for the later final doc ticket.
 
