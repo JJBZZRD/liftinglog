@@ -73,10 +73,11 @@ local evidence; no worktree files or shared dependency junctions were deleted.
 | MVP-004E3 | Sol / high | Video storage acquisition/resolution helper, set gallery/repair integration, focused tests | Corrected `f4ab9cb` reviewed; organiser 57/57 targeted checks pass; both profiles 59 suites / 594 tests pass; merged `e8caf44`; [emulator integration accepted](testing/mvp-gallery-resolution-review.md), including ambiguity rejection and unique repair |
 | MVP-006A | Sol / xhigh; separate Sol / xhigh audit | Restore ADR and isolated proof/fixtures only | Third review accepts `100a812`; organiser independently passes 15/15; clean rebase integrated `f045adb`; design accepted, production obligations remain |
 | MVP-006B1 | Sol / high; independent Sol / high audit | Pure PB derivation, existing PB rebuild seam, focused parity tests | Independently accepted `f990f11`; clean rebase `9c0da86`; organiser 6/6 targeted tests pass; merged `288001e` without metric or persistence changes |
-| MVP-006B2 | Sol / xhigh; independent Sol / high audit | Android process token and atomic control store, isolated plugin/templates/facades/tests | First audit rejects `e849c06` for lenient native JSON parsing; correction underway. Organiser 21/21 tests and both native verifiers pass; APK builds but is not installed; runtime proof pending |
-| MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | Candidate `de660900` under independent audit; organiser 62/62 targeted tests pass; retained populated Android snapshot passes source/current catalog checks; no live writes |
+| MVP-006B2 | Sol / xhigh; independent Sol / high audit | Android process token and atomic control store, isolated plugin/templates/facades/tests | Corrected `2e56151` independently accepted and merged `f6b045b`; organiser 23/23 tests pass; actual Kotlin parser suite 4/4 passes; corrected APK builds but is not installed; runtime proof pending |
+| MVP-006B2P | Terra / medium; organiser review | Separate non-shipping native-control diagnostic route and usage notes | In implementation; no device execution authorized by this ticket |
+| MVP-006B3 | Sol / xhigh; independent Sol / xhigh audit | Read-only historical/current schema manifests and disposable validation fixtures | First audit rejects `de660900` for historical fixture provenance and source/current migration closure; correction underway; prior 62/62 tests and retained Android catalog comparison do not waive these findings |
 | MVP-006B4 | Sol / high; independent Sol / high audit | Maintained streaming SHA-256 helper, exact dependency/lockfile change, focused tests | Independently accepted `1b20d42`; clean rebase `63c9f1d`; merged `ab99216`; organiser 24/24 targeted tests pass; 256 MiB default ceiling, 64 KiB reads; native proof remains required |
-| MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Instrumentation corrections requested before acceptance; synthetic cache fixtures prepared, but diagnostic has not run |
+| MVP-006B4P | Luna / medium; organiser review | Separate non-shipping hash diagnostic route and usage notes | Corrected `7cc330e` reviewed; organiser typecheck/scoped lint pass; synthetic cache fixtures prepared, but diagnostic has not run |
 
 At integrated note-editor source `a550a8a` (subsequent `7ca6e9b` is docs only),
 both full and MVP profiles pass 58 suites / 578 tests. Typecheck passes; lint has
@@ -149,11 +150,29 @@ media and export checks. Unrun scenarios are explicitly pending; diagnostic
 branches must remain separate from shipping code.
 
 The first 006B2 independent audit found that Android `JSONTokener` accepts malformed
-JSON syntax. The native prerequisite must reject that input on read and write;
-the candidate remains unmerged pending correction and another review. Its passing
-Jest facade tests, Kotlin compilation and emulator APK build do not close that
-finding. The APK was not installed. Build evidence is retained under
-`.codex-artifacts/mvp-restore-native-review-20260922/`.
+JSON syntax. Corrected `2e56151` uses Gson 2.13.2 strict structural parsing plus a
+narrow lexical guard for demonstrated raw-control/BOM gaps. The actual Kotlin
+helper suite passes 4 tests; the independent reviewer accepted the correction and
+the original process/atomic guarantees. The organiser built the corrected APK
+(SHA-256 `8C1FFEC9AE94076B7347528B6DECD589431121938BBEE1FF789F353A56A0D550`)
+and integrated the exact reviewed tree as `f6b045b`. It has not been installed.
+Build evidence is retained under `.codex-artifacts/mvp-restore-native-review-20260922/`.
+
+Both integrated profiles at `f6b045b` pass **65 suites / 659 tests**; typecheck and
+the native integration verifier pass. Logs are retained at
+`.codex-artifacts/mvp-native-controls-integrated-{full,mvp}.log`. Six untouched
+preservation-baseline files still match their original hashes. `MainApplication.kt`
+was verified byte-identical to HEAD before integration; its original LF format is
+retained and only the four reviewed native registration/initialization lines were
+added. The original copy remains in the native-review artifact directory.
+
+006B3's audit found later columns/indexes incorrectly attributed to the pinned
+historical revision. It also found accepted migrated current catalogs rejected as
+new restore sources, and permitted missing old tables recreated by bootstrap but
+then rejected by the current catalog. The worker must correct provenance and prove
+source-to-bootstrap-to-current-to-source closure, including the permitted optional
+table cases, before another independent review. These are supported-backup
+compatibility failures; no live database was written.
 
 The 006B4 handoff's unresolved-PSL lint error was not reproduced without cache.
 The organiser verified both installed PSL entry files and resolution, then ran

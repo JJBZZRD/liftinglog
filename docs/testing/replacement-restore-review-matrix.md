@@ -10,8 +10,8 @@ separate from emulator evidence.
 | Ticket | Required evidence before the engine relies on it | Current disposition |
 | --- | --- | --- |
 | 006B1 PB derivation | Exact canonical validity, ordering, progression and UID ownership; real DB parity | Independently accepted and integrated as `288001e` |
-| 006B2 native controls | Valid process token; RN 0.86 synchronous bridge compatibility; atomic fixed-name records; ambiguous reads fail closed; verified deletion; plugin/template parity | First candidate rejected for lenient native JSON parsing; strict-parser correction and independent re-review pending; Android runtime proof pending |
-| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | Candidate `de660900` under independent review; organiser 62 targeted tests pass |
+| 006B2 native controls | Valid process token; RN 0.86 synchronous bridge compatibility; atomic fixed-name records; ambiguous reads fail closed; verified deletion; plugin/template parity | Strict-parser correction independently accepted and integrated `f6b045b`; 23 Jest and 4 actual Kotlin parser tests pass; Android runtime proof pending |
+| 006B3 schema manifests | Actual historical DDL, supported migrated physical layouts, complete catalog constraints/indexes/FKs, unknown-object rejection, populated Android schema comparison | First candidate rejected for incorrect historical provenance and incomplete source/current migration closure; correction pending |
 | 006B4 SHA-256 | Real maintained digest library; read-only bounded chunks; limits/abort/close failures; Metro resolution; native digest and latency comparison | Code independently accepted and integrated as `ab99216`; 24 targeted tests pass; native proof pending |
 
 Native control review must distinguish successful publication from a failed write
