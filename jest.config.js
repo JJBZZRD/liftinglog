@@ -17,7 +17,7 @@ const unitProject = {
     ],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(drizzle-orm|program-specification-language)/)',
+    'node_modules/(?!(drizzle-orm|program-specification-language|@noble/hashes)/)',
   ],
   collectCoverageFrom: [
     'lib/**/*.{ts,tsx}',
