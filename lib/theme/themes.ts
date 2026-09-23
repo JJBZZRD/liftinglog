@@ -396,7 +396,7 @@ function hexToRgbString(hex: string): string {
   return `${r} ${g} ${b}`;
 }
 
-function createThemeVars(colors: RawThemeColors) {
+export function createThemeVars(colors: RawThemeColors) {
   return vars({
     "--color-primary": hexToRgbString(colors.primary),
     "--color-primary-light": hexToRgbString(colors.primaryLight),

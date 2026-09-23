@@ -9,7 +9,7 @@ import {
   type ThemePreference,
   type ColorThemeId 
 } from "../db/settings";
-import { themes, getRawThemeColors, type RawThemeColors, type ColorScheme } from "./themes";
+import { themes, getRawThemeColors, createThemeVars, type RawThemeColors, type ColorScheme } from "./themes";
 
 // Re-export types for convenience
 export type { ColorThemeId, ColorScheme, RawThemeColors };
@@ -134,6 +134,18 @@ export function useTheme() {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
+}
+
+/** Scope a redesigned surface without changing the user's other screens. */
+export function ThemeColorScope({ colors, children }: { colors: RawThemeColors; children: ReactNode }) {
+  const parent = useTheme();
+  return (
+    <ThemeContext.Provider value={{ ...parent, rawColors: colors }}>
+      <View style={[{ flex: 1, backgroundColor: colors.background }, createThemeVars(colors)]}>
+        {children}
+      </View>
+    </ThemeContext.Provider>
+  );
 }
 
 /**
