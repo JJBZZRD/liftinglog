@@ -42,7 +42,11 @@ package is needed. The pinned-exercises overlay is hidden on Workouts.
 The rules and migration details in [database-ground-truth.md](database-ground-truth.md)
 remain authoritative. Names are an additive nullable column and workout notes use
 the existing `workouts.note`. Existing set and exercise notes are preserved.
-Completing a workout requires confirmation if any exercise entry is unfinished.
+An exercise joins the workout when its first set is recorded. Opening the exercise,
+choosing a workout, or opening its camera does not add it to the workout list.
+Only entries with recorded sets count as exercises; they are in progress until
+completed. Empty drafts and unconfirmed planned sets are excluded from this view.
+Completing a workout requires confirmation if any recorded exercise is unfinished.
 The write closes those entries and the workout together. Resuming or creating a
 workout cannot silently finish another active workout.
 

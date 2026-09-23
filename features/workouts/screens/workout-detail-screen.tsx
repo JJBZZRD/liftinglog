@@ -89,7 +89,7 @@ function WorkoutDetailContent() {
                 if (active) setSelectedWorkoutId(id);
                 router.push({ pathname: '/exercise/[id]', params: { id: String(entry.exerciseId), name: entry.exerciseName, weId: String(entry.id), workoutId: String(id) } });
               }} />)}
-              {workout.exercises.length === 0 && workout.unassignedSets.length === 0 && <WorkoutEmpty title="Your session starts here" description="Add your first exercise, then record your sets as you train." />}
+              {workout.exercises.length === 0 && workout.unassignedSets.length === 0 && <WorkoutEmpty title="Your session starts here" description="Choose an exercise and record a set to add it here." />}
               {workout.unassignedSets.length > 0 && <View style={{ borderWidth: 1, borderColor: rawColors.border, borderRadius: 18, backgroundColor: rawColors.surface, overflow: 'hidden' }}>
                 <Text style={{ color: rawColors.foregroundSecondary, padding: 18, fontWeight: '600' }}>Other logged sets</Text>
                 {workout.unassignedSets.map((set, index) => <View key={set.id}>

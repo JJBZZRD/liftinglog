@@ -392,7 +392,11 @@ export async function listInProgressExercises(workoutId: number): Promise<InProg
     // Match HistoryTab semantics: an "in progress" session exists when there's an open workout_exercise WITH sets.
     // RecordTab may create an open entry before any sets are logged; we intentionally exclude those here.
     .innerJoin(sets, eq(sets.workoutExerciseId, workoutExercises.id))
-    .where(and(eq(workoutExercises.workoutId, workoutId), isNull(workoutExercises.completedAt)))
+    .where(and(
+      eq(workoutExercises.workoutId, workoutId),
+      isNull(workoutExercises.completedAt),
+      sql`coalesce(substr(${sets.note}, 1, 9), '') != '[PLANNED]'`
+    ))
     .groupBy(
       workoutExercises.id,
       exercises.id,
@@ -670,7 +674,7 @@ export async function getExerciseHistory(exerciseId: number): Promise<WorkoutHis
     const workout = workoutMap.get(we.workoutId);
     if (workout) {
       const weSets = setsByWorkoutExercise.get(we.id) ?? [];
-      if (weSets.length > 0) {
+      if (weSets.length > 0 && (we.completedAt !== null || weSets.some((set) => !(set.note ?? "").startsWith("[PLANNED]")))) {
         const loggedExercise = exerciseMetaById.get(we.exerciseId);
         entries.push({
           workout,
@@ -867,6 +871,7 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
     .where(sql`EXISTS (
       SELECT 1 FROM ${sets}
       WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
+        AND (${workoutExercises.completedAt} IS NOT NULL OR coalesce(substr(${sets.note}, 1, 9), '') != '[PLANNED]')
     )`)
     .orderBy(desc(effectivePerformedAt))
     .limit(1);
@@ -899,6 +904,7 @@ export async function getLastWorkoutDay(): Promise<LastWorkoutDayResult | null> 
         sql`EXISTS (
           SELECT 1 FROM ${sets}
           WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
+            AND (${workoutExercises.completedAt} IS NOT NULL OR coalesce(substr(${sets.note}, 1, 9), '') != '[PLANNED]')
         )`,
         sql`${effectivePerformedAt} >= ${dayStart.getTime()}`,
         sql`${effectivePerformedAt} <= ${dayEnd.getTime()}`
@@ -1059,6 +1065,7 @@ export async function getQuickStats(): Promise<QuickStats> {
     WHERE EXISTS (
       SELECT 1 FROM sets visible_sets
       WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
     )
   `);
 
@@ -1124,6 +1131,7 @@ export async function listWorkoutDays(params: {
     WHERE EXISTS (
       SELECT 1 FROM sets visible_sets
       WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
     )
     GROUP BY dayKey
     ORDER BY dayKey DESC
@@ -1183,6 +1191,7 @@ export async function getWorkoutDayDetails(dayKey: string): Promise<WorkoutDayDe
       AND EXISTS (
         SELECT 1 FROM sets visible_sets
         WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
       )
     ORDER BY COALESCE(we.order_index, 999999), e.name ASC, ${historyEntryTimestampSql}, we.id
     LIMIT 27
@@ -1365,6 +1374,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       WHERE EXISTS (
           SELECT 1 FROM sets visible_sets
           WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
         )
         ${dateFilterClause}
         AND (
@@ -1397,7 +1407,11 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       FROM workout_exercises we
       INNER JOIN workouts w ON w.id = we.workout_id
       INNER JOIN sets s ON s.workout_exercise_id = we.id
-      WHERE 1 = 1
+      WHERE (we.completed_at IS NOT NULL OR EXISTS (
+          SELECT 1 FROM sets recorded_sets
+          WHERE recorded_sets.workout_exercise_id = we.id
+            AND coalesce(substr(recorded_sets.note, 1, 9), '') != '[PLANNED]'
+        ))
         ${dateFilterClause}
         AND (s.reps = ? OR (s.weight_kg >= ? AND s.weight_kg <= ?))
     `);
@@ -1443,6 +1457,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       WHERE EXISTS (
           SELECT 1 FROM sets visible_sets
           WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
         )
         ${dateFilterClause}
       GROUP BY dayKey
@@ -1508,6 +1523,7 @@ export async function searchWorkoutDays(params: SearchWorkoutDaysParams): Promis
       AND EXISTS (
         SELECT 1 FROM sets visible_sets
         WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
       )
     GROUP BY dayKey
     ORDER BY dayKey DESC
@@ -1608,6 +1624,7 @@ export async function getWorkoutDayPage(dayKey: string): Promise<WorkoutDayPageD
       AND EXISTS (
         SELECT 1 FROM sets visible_sets
         WHERE visible_sets.workout_exercise_id = we.id
+          AND (we.completed_at IS NOT NULL OR coalesce(substr(visible_sets.note, 1, 9), '') != '[PLANNED]')
       )
     ORDER BY COALESCE(we.order_index, 999999), e.name ASC, ${historyEntryTimestampSql}, we.id
     LIMIT 27
@@ -1824,6 +1841,9 @@ export async function getWorkoutExercisesForDate(
     .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM ${sets}
+          WHERE ${sets.workoutExerciseId} = ${workoutExercises.id}
+            AND coalesce(substr(${sets.note}, 1, 9), '') != '[PLANNED]')`,
         sql`${workoutExercises.performedAt} >= ${dayStart.getTime()}`,
         sql`${workoutExercises.performedAt} <= ${dayEnd.getTime()}`
       )

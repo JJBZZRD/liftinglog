@@ -143,6 +143,16 @@ Top-level workout container.
   set activity. They retain one canonical ID and their original name; totals
   cover the entire envelope. Detail retains each entry/set's actual date and
   exposes legacy unassigned sets separately.
+- Adding an exercise to a workout means recording at least one canonical set.
+  Empty exercise-entry rows remain in storage for compatibility but are excluded
+  from session details, exercise counts and in-progress counts. A set whose note
+  starts with the exact marker `[PLANNED]` is an unconfirmed placeholder and does
+  not qualify. Session details, set counts and volume include recorded sets only;
+  recording screens retain their raw set reads so placeholders can be confirmed.
+  Zero-load/bodyweight sets still count. An entry is in progress only while it
+  has a recorded set and `completed_at IS NULL`. Completing the workout may also
+  close hidden empty entries atomically without presenting them as unfinished
+  recorded exercises in the confirmation warning.
 
 ### `workout_exercises`
 
@@ -297,20 +307,25 @@ Implication:
 
 This is the normal non-program logging flow.
 
-1. `RecordTab` calls `getOrCreateActiveWorkout()`.
-2. It tries `getOpenWorkoutExercise(activeWorkoutId, exerciseId)`.
-3. If an open row exists, it reuses it.
-4. Otherwise it creates a new `workout_exercise`.
-5. Each confirmed set is written directly into `sets` with `workout_id`, `exercise_id`, and `workout_exercise_id`.
-6. PB events are rebuilt from the real set data.
-7. When the user presses Complete, `completeExerciseEntry(workoutExerciseId, performedAt)` sets `completed_at` and `performed_at` on the `workout_exercise`.
-8. Only then is the session unambiguously complete in the main history model.
+1. Opening the recording screen reads the explicitly selected or active workout
+   and any requested existing exercise entry; opening a screen creates no entry.
+2. The first validated confirmed-set action resolves an open entry for the
+   selected workout and concrete exercise, or creates the entry when needed.
+3. That confirmed set is written directly into `sets` with `workout_id`,
+   `exercise_id`, and `workout_exercise_id`. This makes the exercise appear in the
+   workout and in progress. An empty row left by an interrupted save does neither.
+4. PB events are rebuilt from the real set data.
+5. Pressing Complete Exercise sets `workout_exercises.completed_at` while
+   retaining the entry's effective performed date. Recording another entry after
+   completion requires the explicit add-another-entry action.
 
 Important consequence:
 
-- open `workout_exercises` with real sets are in-progress history
+- open `workout_exercises` with recorded, non-`[PLANNED]` sets are in-progress history
 - completed `workout_exercises` with real sets are completed history
 - empty entries are drafts and stay out of broad history, regardless of completion
+- legacy completed history retains its existing inclusion rules; this does not
+  reinterpret already completed historical records or delete planned rows
 
 ### B. Manual set edit/delete
 
@@ -339,7 +354,9 @@ It is built from:
 
 Current rule:
 
-- Null `workout_exercises.completed_at` means In Progress; it does not exclude an entry with real sets.
+- Null `workout_exercises.completed_at` means In Progress only when a linked
+  recorded set exists; an entry containing only `[PLANNED]` placeholders is not
+  in-progress history.
 - List, search, day details, day page, Overview's last day, and quick-stat day count use this inclusion rule before pagination. Set counts include zero-load set rows; existing volume and E1RM formulas are unchanged.
 - Entry read models return `completedAt: number | null`; day summaries return `inProgressCount`. UI labels consume those fields in MVP-002C.
 - Local calendar days group entries; they do not identify a workout. Multiple workout IDs and repeated entries for one exercise remain distinct within a day.

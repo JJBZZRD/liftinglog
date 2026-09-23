@@ -68,6 +68,16 @@ function rowsStartingOnDay(timestamp: number): WorkoutRow[] {
     .orderBy(asc(workouts.startedAt), asc(workouts.id)).all();
 }
 
+// A canonical set row records activity unless it is an unconfirmed legacy plan.
+// Do not require positive load/reps: zero-load/bodyweight history is still real.
+const recordedSetCondition = sql`coalesce(substr(${sets.note}, 1, 9), '') != '[PLANNED]'`;
+
+function entryHasRecordedSets() {
+  return exists(db.select({ id: sets.id }).from(sets).where(and(
+    eq(sets.workoutExerciseId, workoutExercises.id), recordedSetCondition
+  )));
+}
+
 function rowsForDay(timestamp: number): WorkoutRow[] {
   const [start, end] = dayBounds(timestamp);
   // Older loggers reused an active envelope across calendar days. Preserve that
@@ -76,9 +86,9 @@ function rowsForDay(timestamp: number): WorkoutRow[] {
   const legacySetDate = sql<number>`coalesce(${sets.performedAt}, ${workouts.startedAt})`;
   const dayEntries = db.select({ id: workoutExercises.id }).from(workoutExercises)
     .innerJoin(sets, eq(sets.workoutExerciseId, workoutExercises.id))
-    .where(and(eq(workoutExercises.workoutId, workouts.id), gte(entryDate, start), lt(entryDate, end)));
+    .where(and(eq(workoutExercises.workoutId, workouts.id), recordedSetCondition, gte(entryDate, start), lt(entryDate, end)));
   const dayLegacySets = db.select({ id: sets.id }).from(sets)
-    .where(and(eq(sets.workoutId, workouts.id), isNull(sets.workoutExerciseId), gte(legacySetDate, start), lt(legacySetDate, end)));
+    .where(and(eq(sets.workoutId, workouts.id), recordedSetCondition, isNull(sets.workoutExerciseId), gte(legacySetDate, start), lt(legacySetDate, end)));
   return db.select().from(workouts)
     .where(or(and(gte(workouts.startedAt, start), lt(workouts.startedAt, end)), exists(dayEntries), exists(dayLegacySets)))
     .orderBy(asc(workouts.startedAt), asc(workouts.id)).all();
@@ -91,12 +101,12 @@ function summarize(rows: WorkoutRow[]): WorkoutSessionSummary[] {
     workoutId: workoutExercises.workoutId,
     count: sql<number>`count(*)`,
     open: sql<number>`sum(case when ${workoutExercises.completedAt} is null then 1 else 0 end)`,
-  }).from(workoutExercises).where(inArray(workoutExercises.workoutId, ids)).groupBy(workoutExercises.workoutId).all();
+  }).from(workoutExercises).where(and(inArray(workoutExercises.workoutId, ids), entryHasRecordedSets())).groupBy(workoutExercises.workoutId).all();
   const totals = db.select({
     workoutId: sets.workoutId,
     count: sql<number>`count(*)`,
     volume: sql<number>`coalesce(sum(${sets.weightKg} * ${sets.reps}), 0)`,
-  }).from(sets).where(inArray(sets.workoutId, ids)).groupBy(sets.workoutId).all();
+  }).from(sets).where(and(inArray(sets.workoutId, ids), recordedSetCondition)).groupBy(sets.workoutId).all();
   const entryByWorkout = new Map(entries.map((entry) => [entry.workoutId, entry]));
   const totalsByWorkout = new Map(totals.map((total) => [total.workoutId, total]));
   const ordinals = new Map<number, number>();
@@ -134,9 +144,9 @@ export async function getWorkoutSessionDetail(id: number): Promise<WorkoutSessio
     performedAt: workoutExercises.performedAt,
     note: workoutExercises.note,
   }).from(workoutExercises).innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
-    .where(eq(workoutExercises.workoutId, id))
+    .where(and(eq(workoutExercises.workoutId, id), entryHasRecordedSets()))
     .orderBy(asc(workoutExercises.orderIndex), asc(workoutExercises.id)).all();
-  const loggedSets = db.select().from(sets).where(eq(sets.workoutId, id))
+  const loggedSets = db.select().from(sets).where(and(eq(sets.workoutId, id), recordedSetCondition))
     .orderBy(asc(sets.setIndex), asc(sets.id)).all();
   const setsByEntry = new Map<number, SetRow[]>();
   const entryIds = new Set(entries.map((entry) => entry.id));

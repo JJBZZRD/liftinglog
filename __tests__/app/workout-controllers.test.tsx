@@ -32,6 +32,11 @@ const summary = (id: number): WorkoutSummary => ({
   note: null, exerciseCount: 0, setCount: 0, volumeKg: 0, inProgressCount: 0,
 });
 const detail = (id = 1): WorkoutDetail => ({ ...summary(id), exercises: [], unassignedSets: [] });
+const recordedSet = (id: number): WorkoutDetail['exercises'][number]['sets'][number] => ({
+  id, uid: `set-${id}`, workoutId: 1, exerciseId: 5, workoutExerciseId: id,
+  setGroupId: null, setIndex: 0, weightKg: 0, reps: 5, rpe: null, rir: null,
+  isWarmup: false, note: null, supersetGroupId: null, performedAt: 1_700_000_000_000,
+});
 let controller: ReturnType<typeof useWorkoutDetail>;
 let listController: ReturnType<typeof useWorkoutList>;
 let dateController: ReturnType<typeof useWorkoutDate>;
@@ -54,9 +59,10 @@ describe('workout screen controllers', () => {
     await act(async () => { tree = renderer.create(<DetailHarness />); });
     const latest = detail();
     latest.exercises = [
-      { id: 11, exerciseId: 5, exerciseName: 'Bench press', completedAt: null, performedAt: null, note: null, sets: [] },
-      { id: 12, exerciseId: 5, exerciseName: 'Bench press', completedAt: null, performedAt: null, note: null, sets: [] },
-      { id: 13, exerciseId: 6, exerciseName: 'Row', completedAt: 123, performedAt: 123, note: null, sets: [] },
+      { id: 11, exerciseId: 5, exerciseName: 'Bench press', completedAt: null, performedAt: null, note: null, sets: [recordedSet(11)] },
+      { id: 12, exerciseId: 5, exerciseName: 'Bench press', completedAt: null, performedAt: null, note: null, sets: [recordedSet(12)] },
+      { id: 13, exerciseId: 6, exerciseName: 'Row', completedAt: 123, performedAt: 123, note: null, sets: [recordedSet(13)] },
+      { id: 14, exerciseId: 7, exerciseName: 'Unstarted exercise', completedAt: null, performedAt: null, note: null, sets: [] },
     ];
     jest.mocked(getWorkoutSessionDetail).mockResolvedValue(latest);
     await act(async () => { await controller.requestComplete(); });
@@ -68,6 +74,17 @@ describe('workout screen controllers', () => {
     expect(completeWorkoutSession).toHaveBeenCalledTimes(1);
     expect(completeWorkoutSession).toHaveBeenCalledWith(1);
     expect(controller.unfinished).toBeNull();
+  });
+
+  it('completes without an unfinished-exercise warning when there are only empty drafts', async () => {
+    const latest = detail();
+    latest.exercises = [{ id: 14, exerciseId: 7, exerciseName: 'Unstarted exercise',
+      completedAt: null, performedAt: null, note: null, sets: [] }];
+    jest.mocked(getWorkoutSessionDetail).mockResolvedValue(latest);
+    await act(async () => { tree = renderer.create(<DetailHarness />); });
+    await act(async () => { await controller.requestComplete(); });
+    expect(controller.unfinished).toBeNull();
+    expect(completeWorkoutSession).toHaveBeenCalledWith(1);
   });
 
   it('writes the workout name and note together and clears a blank note', async () => {

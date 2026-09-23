@@ -71,7 +71,7 @@ export function useWorkoutDetail(id: number) {
     const latest = await getWorkoutSessionDetail(id);
     if (!latest) throw new Error('This workout is no longer available.');
     setWorkout(latest);
-    const entries = latest.exercises.filter((entry) => entry.completedAt === null);
+    const entries = latest.exercises.filter((entry) => entry.completedAt === null && entry.sets.length > 0);
     if (entries.length) {
       setUnfinished(entries);
       return;

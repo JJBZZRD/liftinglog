@@ -66,7 +66,10 @@ describe("named workout sessions on SQLite", () => {
     const detail = (await sessions.getWorkoutSessionDetail(id))!;
     expect(detail.inProgressCount).toBe(0);
     expect(detail.exercises[0]).toMatchObject({ performedAt: day(23), note: "Entry note", sets: [expect.objectContaining({ note: "Set note", performedAt: day(23, 11) })] });
-    expect(detail.exercises[1].performedAt).toBe(day(23));
+    expect(detail.exercises).toHaveLength(1);
+    expect(mockDatabase.rows("SELECT performed_at, completed_at FROM workout_exercises WHERE id = 900")).toEqual([
+      { performed_at: day(23), completed_at: detail.completedAt },
+    ]);
     expect(detail.exercises.every((item) => item.completedAt !== null)).toBe(true);
   });
 
