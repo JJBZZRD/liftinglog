@@ -1,5 +1,6 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
+import '../support/workout-native-mocks';
 
 type TestNode = { props: Record<string, unknown> };
 
@@ -8,6 +9,8 @@ const mockGetLastWorkoutDay = jest.fn();
 const mockGetQuickStats = jest.fn();
 const mockGetTotalPBCount = jest.fn();
 const mockAppCapabilities = { healthMetrics: false };
+const mockListWorkoutSessionsForDate = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ MaterialCommunityIcons: "Icon" }));
 jest.mock("react-native", () => ({
@@ -15,12 +18,18 @@ jest.mock("react-native", () => ({
   ScrollView: "ScrollView",
   Text: "Text",
   View: "View",
+  ActivityIndicator: "ActivityIndicator",
+  RefreshControl: "RefreshControl",
+  Modal: ({ visible, children }: any) => visible ? children : null,
+  AppState: { addEventListener: () => ({ remove: jest.fn() }) },
+  StyleSheet: { create: (style: unknown) => style },
 }));
-jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock("expo-router", () => {
   const React = require("react");
   return {
-    router: { push: jest.fn() },
+    router: { push: mockPush },
+    Stack: { Screen: () => null },
     useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
   };
 });
@@ -30,8 +39,14 @@ jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({ useUnitPreference
 jest.mock("../../lib/db/pbEvents", () => ({ getTotalPBCount: mockGetTotalPBCount }));
 jest.mock("../../lib/db/userCheckins", () => ({ getLatestUserMetricsSnapshot: mockGetLatestUserMetricsSnapshot }));
 jest.mock("../../lib/db/workouts", () => ({
+  getActiveWorkout: jest.fn(async () => null),
   getLastWorkoutDay: mockGetLastWorkoutDay,
   getQuickStats: mockGetQuickStats,
+}));
+jest.mock("../../lib/db/workoutSessions", () => ({
+  listWorkoutSessionsForDate: mockListWorkoutSessionsForDate,
+  createWorkoutSession: jest.fn(),
+  ActiveWorkoutConflictError: class extends Error {},
 }));
 jest.mock("../../lib/theme/ThemeContext", () => ({ useTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }) }));
 jest.mock("../../lib/utils/units", () => ({
@@ -49,6 +64,7 @@ describe("capability entry points", () => {
     mockGetQuickStats.mockResolvedValue({ totalWorkoutDays: 0, totalVolumeKg: 0 });
     mockGetTotalPBCount.mockResolvedValue(0);
     mockGetLatestUserMetricsSnapshot.mockResolvedValue(null);
+    mockListWorkoutSessionsForDate.mockResolvedValue([]);
   });
 
   it("does not query or render health metrics in MVP", async () => {
@@ -59,10 +75,8 @@ describe("capability entry points", () => {
     });
 
     expect(mockGetLatestUserMetricsSnapshot).not.toHaveBeenCalled();
-    expect(tree!.root.findAll((node: TestNode) => node.props.children === "User Metrics")).toHaveLength(0);
-    expect(mockGetLastWorkoutDay).toHaveBeenCalledTimes(1);
-    expect(mockGetQuickStats).toHaveBeenCalledTimes(1);
-    expect(mockGetTotalPBCount).toHaveBeenCalledTimes(1);
+    expect(tree!.root.findAll((node: TestNode) => node.props.children === "Health metrics")).toHaveLength(0);
+    expect(mockListWorkoutSessionsForDate).toHaveBeenCalledTimes(1);
     await act(async () => {
       tree!.unmount();
     });
@@ -75,8 +89,10 @@ describe("capability entry points", () => {
       tree = renderer.create(<OverviewScreen />);
     });
 
-    expect(mockGetLatestUserMetricsSnapshot).toHaveBeenCalledTimes(1);
-    expect(tree!.root.findAll((node: TestNode) => node.props.children === "User Metrics")).toHaveLength(1);
+    const metricsLabel = tree!.root.findAll((node: TestNode) => node.props.children === "Health metrics");
+    expect(metricsLabel).toHaveLength(1);
+    await act(async () => { metricsLabel[0].parent!.props.onPress(); });
+    expect(mockPush).toHaveBeenCalledWith('/user-metrics');
     await act(async () => {
       tree!.unmount();
     });

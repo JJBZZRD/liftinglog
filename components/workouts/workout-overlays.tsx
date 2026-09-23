@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import { useEffect, useState, type RefObject, type ComponentProps } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import Animated, { FadeInDown, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CALCULATORS } from '@/lib/calculators/catalog';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
@@ -18,7 +18,8 @@ export function WorkoutOverlays({ active, onClose, blurTarget }: {
 }) {
   const { rawColors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  return <Modal visible={active !== null} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+  const reducedMotion = useReducedMotion();
+  return <Modal visible={active !== null} transparent animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={onClose} statusBarTranslucent>
     <View style={{ flex: 1 }}>
       <BlurView blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" intensity={42}
         tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -41,8 +42,9 @@ export function WorkoutOverlays({ active, onClose, blurTarget }: {
         {active === 'calculators' ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
           {CALCULATORS.map((calculator) => <Pressable key={calculator.id} accessibilityRole="button"
             onPress={() => { onClose(); router.push(calculator.href); }}
-            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18,
-              borderBottomWidth: 1, borderColor: rawColors.borderLight, opacity: pressed ? 0.6 : 1 })}>
+            className="active:opacity-60"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18,
+              borderBottomWidth: 1, borderColor: rawColors.borderLight }}>
             <MaterialCommunityIcons name={calculator.icon as ComponentProps<typeof MaterialCommunityIcons>['name']} size={25} color={rawColors.primary} />
             <View style={{ flex: 1, gap: 5 }}>
               <Text style={{ color: rawColors.foreground, fontSize: 16, fontWeight: '600' }}>{calculator.title}</Text>
@@ -71,7 +73,7 @@ function QuickStatsPanel() {
     return () => { mounted = false; };
   }, [attempt]);
   if (error) return <View style={{ gap: 12 }}>
-    <Text selectable style={{ color: rawColors.foregroundSecondary }}>Couldn't load your stats.</Text>
+    <Text selectable style={{ color: rawColors.foregroundSecondary }}>{"Couldn't load your stats."}</Text>
     <Pressable onPress={() => setAttempt((value) => value + 1)}><Text style={{ color: rawColors.primary }}>Try again</Text></Pressable>
   </View>;
   if (!data) return <ActivityIndicator color={rawColors.primary} style={{ marginVertical: 36 }} />;
@@ -82,7 +84,9 @@ function QuickStatsPanel() {
       <Metric label="PERSONAL BESTS" value={data.pbs} />
     </View>
     <View style={{ height: 1, backgroundColor: rawColors.border }} />
-    <Metric label={`TOTAL VOLUME / ${getWeightUnitLabel(unitPreference).toUpperCase()}`}
-      value={formatVolumeFromKg(data.stats.totalVolumeKg, unitPreference, { abbreviate: true })} />
+    <View style={{ flexDirection: 'row' }}>
+      <Metric label={`TOTAL VOLUME / ${getWeightUnitLabel(unitPreference).toUpperCase()}`}
+        value={formatVolumeFromKg(data.stats.totalVolumeKg, unitPreference, { abbreviate: true })} />
+    </View>
   </View>;
 }

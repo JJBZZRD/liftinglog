@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports, import/first, react/display-name */
+import '../support/workout-native-mocks';
 
 jest.mock("react-native", () => {
   const React = require("react");
@@ -18,6 +19,9 @@ jest.mock("react-native", () => {
     Pressable: createHost("Pressable"),
     TextInput: createHost("TextInput"),
     ActivityIndicator: createHost("ActivityIndicator"),
+    RefreshControl: createHost("RefreshControl"),
+    Modal: ({ visible, children }: any) => visible ? children : null,
+    AppState: { addEventListener: () => ({ remove: jest.fn() }) },
     StyleSheet: {
       create: (styles: Record<string, unknown>) => styles,
       flatten: (style: unknown) =>
@@ -29,6 +33,7 @@ jest.mock("react-native", () => {
 jest.mock("react-native-safe-area-context", () => {
   const React = require("react");
   return {
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
     SafeAreaView: React.forwardRef(
       (
         { children, ...props }: { children?: React.ReactNode } & Record<string, unknown>,
@@ -90,11 +95,18 @@ jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({
 }));
 
 jest.mock("../../lib/db/workouts", () => ({
+  getActiveWorkout: jest.fn(async () => null),
   getLastWorkoutDay: jest.fn(async () => null),
   getQuickStats: jest.fn(async () => ({
     totalWorkoutDays: 12,
     totalVolumeKg: 34567,
   })),
+}));
+
+jest.mock("../../lib/db/workoutSessions", () => ({
+  listWorkoutSessionsForDate: jest.fn(async () => []),
+  createWorkoutSession: jest.fn(),
+  ActiveWorkoutConflictError: class extends Error {},
 }));
 
 jest.mock("../../lib/db/pbEvents", () => ({
@@ -135,13 +147,11 @@ describe("calculators UI", () => {
     });
   });
 
-  it("shows the overview card and routes to calculators", async () => {
+  it("opens the calculators overlay from Home and routes to a calculator", async () => {
     render(<OverviewScreen />);
-
-    const card = await screen.findByTestId("calculators-summary-card");
-    fireEvent.press(card);
-
-    expect(mockPush).toHaveBeenCalledWith("/calculators");
+    fireEvent.press(await screen.findByLabelText("Open calculators"));
+    fireEvent.press(screen.getByText("1RM Toolkit"));
+    expect(mockPush).toHaveBeenCalledWith("/calculators/1rm-toolkit");
   });
 
   it("renders the calculators hub with categories and calculator cards", () => {

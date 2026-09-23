@@ -11,9 +11,10 @@ export function IconButton({ icon, label, onPress, disabled = false }: {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label}
       accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14,
+      className="active:opacity-60"
+      style={{ width: 44, height: 44, borderRadius: 14,
         alignItems: 'center', justifyContent: 'center',
-        backgroundColor: pressed ? rawColors.pressed : 'transparent', opacity: disabled ? 0.35 : 1 })}>
+        opacity: disabled ? 0.35 : 1 }}>
       <MaterialCommunityIcons name={icon} size={23} color={rawColors.foreground} />
     </Pressable>
   );

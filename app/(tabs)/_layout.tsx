@@ -4,12 +4,16 @@ import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { useWorkoutTheme } from "../../components/workouts/workout-theme";
 
 const TabsLayout = () => {
-  const { rawColors } = useTheme();
+  const theme = useTheme();
+  const workoutTheme = useWorkoutTheme();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const activeTab = segments[segments.length - 1];
+  const isWorkoutsTab = activeTab === "(tabs)";
+  const rawColors = isWorkoutsTab ? workoutTheme.rawColors : theme.rawColors;
   const showAddExerciseFab = activeTab === "exercises";
   const exerciseCardHorizontalInset = 20;
   const floatingTabBarBottom = 24;
@@ -24,6 +28,7 @@ const TabsLayout = () => {
     <View className="flex-1 bg-background">
       <Tabs
         screenOptions={{
+          animation: "shift",
           tabBarStyle: {
             position: "absolute",
             left: 12,
@@ -47,8 +52,8 @@ const TabsLayout = () => {
       >
         <Tabs.Screen 
           name="index" 
-          options={{ title: "Overview", headerShown: false, tabBarIcon: ({ color, size }) => (
-          <MaterialCommunityIcons name="home" color={color} size={size} />
+          options={{ title: "Workouts", headerShown: false, tabBarIcon: ({ color, size }) => (
+          <MaterialCommunityIcons name="view-day-outline" color={color} size={size} />
         )}} />
         <Tabs.Screen 
           name="exercises" 
@@ -66,7 +71,7 @@ const TabsLayout = () => {
           <MaterialCommunityIcons name="cog" color={color} size={size} />
         )}} />
       </Tabs>
-      <PinnedExercisesOverlay />
+      {!isWorkoutsTab && <PinnedExercisesOverlay />}
       {showAddExerciseFab ? (
         <View
           pointerEvents="box-none"
@@ -92,13 +97,13 @@ const TabsLayout = () => {
             accessibilityRole="button"
             accessibilityLabel="Add exercise"
             onPress={() => router.setParams({ addExerciseRequest: `${Date.now()}` })}
-            style={({ pressed }) => ({
+            className="active:opacity-80"
+            style={{
               width: "100%",
               height: "100%",
               alignItems: "center",
               justifyContent: "center",
-              opacity: pressed ? 0.9 : 1,
-            })}
+            }}
           >
             <MaterialCommunityIcons name="plus" size={28} color={rawColors.primaryForeground} />
           </Pressable>

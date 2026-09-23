@@ -6,6 +6,7 @@ const unitProject = {
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
+    '<rootDir>/.codex-artifacts/',
     '<rootDir>/__tests__/setup.ts',
     '<rootDir>/__tests__/routing/profile-route-guards.test.tsx',
     '<rootDir>/__tests__/routing/replacement-restore-native-intent.test.tsx',

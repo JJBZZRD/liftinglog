@@ -1,7 +1,12 @@
 import { Stack } from "expo-router";
 import { useTheme } from "../../lib/theme/ThemeContext";
+import { WorkoutThemeBoundary } from "../../components/workouts/workout-theme";
 
 export default function CalculatorsLayout() {
+  return <WorkoutThemeBoundary><CalculatorsStack /></WorkoutThemeBoundary>;
+}
+
+function CalculatorsStack() {
   const { rawColors } = useTheme();
 
   return (

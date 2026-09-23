@@ -1,5 +1,6 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
+import '../support/workout-native-mocks';
 
 type TestNode = { type: unknown; props: Record<string, unknown> };
 type RenderedTree = ReturnType<typeof renderer.create>;
@@ -14,12 +15,16 @@ const mockGetWorkoutDayDetails = jest.fn();
 const mockGetWorkoutDayPage = jest.fn();
 const mockListMediaForSetIds = jest.fn();
 const mockRouterPush = jest.fn();
+const mockListWorkoutSessionsForDate = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ MaterialCommunityIcons: "Icon" }));
 jest.mock("react-native", () => {
   const React = require("react");
   return {
     ActivityIndicator: "ActivityIndicator",
+    RefreshControl: "RefreshControl",
+    Modal: ({ visible, children }: any) => visible ? children : null,
+    AppState: { addEventListener: () => ({ remove: jest.fn() }) },
     Alert: { alert: jest.fn() },
     FlatList: React.forwardRef(({ data, renderItem, ...props }: any, _ref: unknown) =>
       React.createElement(
@@ -41,7 +46,7 @@ jest.mock("react-native", () => {
     View: "View",
   };
 });
-jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock("expo-router", () => {
   const React = require("react");
   return {
@@ -66,6 +71,7 @@ jest.mock("../../lib/db/media", () => ({ listMediaForSetIds: mockListMediaForSet
 jest.mock("../../lib/db/pbEvents", () => ({ getTotalPBCount: mockGetTotalPBCount }));
 jest.mock("../../lib/db/userCheckins", () => ({ getLatestUserMetricsSnapshot: mockGetLatestUserMetricsSnapshot }));
 jest.mock("../../lib/db/workouts", () => ({
+  getActiveWorkout: jest.fn(async () => null),
   dayKeyToTimestamp: () => new Date(2026, 8, 20).getTime(),
   deleteWorkoutExercise: jest.fn(),
   getLastWorkoutDay: mockGetLastWorkoutDay,
@@ -74,6 +80,11 @@ jest.mock("../../lib/db/workouts", () => ({
   getWorkoutDayPage: mockGetWorkoutDayPage,
   listWorkoutDays: mockListWorkoutDays,
   searchWorkoutDays: mockSearchWorkoutDays,
+}));
+jest.mock("../../lib/db/workoutSessions", () => ({
+  listWorkoutSessionsForDate: mockListWorkoutSessionsForDate,
+  createWorkoutSession: jest.fn(),
+  ActiveWorkoutConflictError: class extends Error {},
 }));
 jest.mock("../../lib/theme/ThemeContext", () => ({
   useTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }),
@@ -220,15 +231,11 @@ describe("history in-progress status", () => {
     });
   });
 
-  it("shows the same entry status in Overview and keeps last-workout navigation", async () => {
-    mockGetLastWorkoutDay.mockResolvedValue({
-      date: new Date(2026, 8, 20, 8).getTime(),
-      exercises: [
-        { ...completedEntry, bestSet: completedEntry.bestSet },
-        { ...inProgressEntry, bestSet: null },
-      ],
-      hasMore: false,
-    });
+  it("shows individual workout status on Home and retains workout history access", async () => {
+    mockListWorkoutSessionsForDate.mockResolvedValue([
+      { id: 1, name: 'Morning session', startedAt: completedAt, completedAt, note: null, exerciseCount: 1, setCount: 1, volumeKg: 500, inProgressCount: 0 },
+      { id: 2, name: 'Evening session', startedAt: completedAt + 60_000, completedAt: null, note: null, exerciseCount: 1, setCount: 1, volumeKg: 0, inProgressCount: 1 },
+    ]);
 
     let tree: RenderedTree;
     await act(async () => {
@@ -236,15 +243,18 @@ describe("history in-progress status", () => {
       await new Promise((resolve) => setImmediate(resolve));
     });
 
-    expect(findText(tree!, "In Progress")).toHaveLength(1);
-    const pressables = tree!.root.findAll((node: TestNode) => node.type === "Pressable");
+    expect(findText(tree!, "In progress")).toHaveLength(1);
+    expect(findText(tree!, "Completed")).toHaveLength(1);
+    const session = tree!.root.findAll((node: TestNode) => node.type === 'Pressable' && String(node.props.accessibilityLabel).startsWith('Evening session'))[0];
     await act(async () => {
-      (pressables[pressables.length - 1].props.onPress as () => void)();
+      (session.props.onPress as () => void)();
     });
     expect(mockRouterPush).toHaveBeenCalledWith({
-      pathname: "/workout/[dayKey]",
-      params: { dayKey: "2026-09-20" },
+      pathname: "/workout-session/[id]",
+      params: { id: "2" },
     });
+    await act(async () => { findText(tree!, 'Workout history')[0].parent!.props.onPress(); });
+    expect(mockRouterPush).toHaveBeenCalledWith('/workout-history');
     await act(async () => {
       tree!.unmount();
     });
