@@ -13,6 +13,7 @@ import {
   completeExerciseEntry,
   deleteSet,
   deleteSetsForWorkoutExercise,
+  getWorkoutExerciseById,
   updateSet,
   updateWorkoutExerciseInputs,
   type SetRow,
@@ -63,7 +64,8 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
   "loadRecordState" |
   "ensureManualWorkoutSession" |
   "ensureProgramWorkoutSession" |
-  "reloadRecordState"
+  "reloadRecordState" |
+  "startAnotherEntry"
 >) {
   const {
     recordIdentityRef, entryPerformedAt,
@@ -106,6 +108,7 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     ensureManualWorkoutSession,
     ensureProgramWorkoutSession,
     reloadRecordState,
+    startAnotherEntry,
   } = context;
   const handleAddSet = useCallback(async () => {
     const identity = recordIdentityRef.current;
@@ -114,7 +117,7 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
-    if (!weightValueKg || weightValueKg === 0 || !repsValue || repsValue === 0) {
+    if (!weight.trim() || weightValueKg == null || !Number.isFinite(weightValueKg) || weightValueKg < 0 || !repsValue || repsValue <= 0) {
       return;
     }
 
@@ -274,7 +277,23 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     setDeleteMediaSetIds(mediaRows.length > 0 ? [set.id] : []);
   }, [setDeleteConfirmVisible, setDeleteMediaAvailable, setDeleteMediaChecked, setDeleteMediaSetIds, setDeleteTarget]);
 
+  const reloadAfterSetDeletion = useCallback(async (identity: number) => {
+    if (recordIdentityRef.current !== identity) return;
+    if (!inProgramMode && workoutExerciseId) {
+      const entry = await getWorkoutExerciseById(workoutExerciseId);
+      if (recordIdentityRef.current !== identity) return;
+      // Deleting the last set can remove a completed entry. Keep its workout
+      // selected and prepare a fresh entry without creating an empty row.
+      if (!entry) {
+        startAnotherEntry();
+        return;
+      }
+    }
+    await reloadRecordState();
+  }, [inProgramMode, recordIdentityRef, reloadRecordState, startAnotherEntry, workoutExerciseId]);
+
   const handleConfirmDeleteSet = useCallback(async () => {
+    const identity = recordIdentityRef.current;
     if (!deleteTarget) {
       return;
     }
@@ -295,7 +314,7 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     }
 
     closeDeleteConfirm();
-    await reloadRecordState();
+    await reloadAfterSetDeletion(identity);
     onHistoryRefresh?.();
   }, [
     closeDeleteConfirm,
@@ -304,7 +323,8 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     deleteMediaSetIds,
     deleteTarget,
     onHistoryRefresh,
-    reloadRecordState,
+    recordIdentityRef,
+    reloadAfterSetDeletion,
   ]);
 
   const closeClearConfirm = useCallback(() => {
@@ -328,6 +348,7 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
   }, [setClearConfirmVisible, setClearMediaAvailable, setClearMediaChecked, setClearMediaSetIds, sets]);
 
   const handleConfirmClearSets = useCallback(async () => {
+    const identity = recordIdentityRef.current;
     const setIds = sets.map((set) => set.id).filter((id) => id > 0);
     if (setIds.length === 0) {
       return;
@@ -363,7 +384,7 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     }
 
     closeClearConfirm();
-    await reloadRecordState();
+    await reloadAfterSetDeletion(identity);
     onHistoryRefresh?.();
   }, [
     clearMediaAvailable,
@@ -372,7 +393,8 @@ export function useRecordingActions(context: Pick<RecordingContextController & R
     closeClearConfirm,
     inProgramMode,
     onHistoryRefresh,
-    reloadRecordState,
+    recordIdentityRef,
+    reloadAfterSetDeletion,
     sets,
     workoutExerciseId,
   ]);

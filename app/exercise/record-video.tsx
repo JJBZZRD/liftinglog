@@ -7,10 +7,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
 import { PinchGestureHandler, State } from "react-native-gesture-handler";
 import { runOnJS, SensorType, useAnimatedReaction, useAnimatedSensor, useSharedValue } from "react-native-reanimated";
-import BaseModal from "../../components/modals/BaseModal";
+import AppModal from "../../components/modals/BaseModal";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { addMedia } from "../../lib/db/media";
-import { addSet, listSetsForWorkoutExercise } from "../../lib/db/workouts";
+import { getExerciseById } from "../../lib/db/exercises";
+import { getCalendarExerciseById, linkCalendarExerciseToWorkoutExercise, linkExerciseToDb } from "../../lib/db/programCalendar";
+import { addSet, addWorkoutExercise, getOpenWorkoutExercise, getWorkoutById, getWorkoutExerciseById, listSetsForWorkoutExercise } from "../../lib/db/workouts";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { DEFAULT_MEDIA_ALBUM_NAME, inferVideoMimeFromUri, persistVideoForSetLink } from "../../lib/utils/videoStorage";
 import { getWeightUnitLabel, parseWeightInputToKg } from "../../lib/utils/units";
@@ -70,6 +72,9 @@ export default function RecordVideoScreen() {
     name?: string;
     workoutId?: string;
     workoutExerciseId?: string;
+    programExerciseId?: string;
+    dateIso?: string;
+    newEntry?: string;
     performedAt?: string;
     setIndex?: string;
   }>();
@@ -81,10 +86,14 @@ export default function RecordVideoScreen() {
   const workoutId = Number.isFinite(parsedWorkoutId) ? parsedWorkoutId : null;
   const parsedWorkoutExerciseId = typeof params.workoutExerciseId === "string" ? Number(params.workoutExerciseId) : NaN;
   const workoutExerciseId = Number.isFinite(parsedWorkoutExerciseId) ? parsedWorkoutExerciseId : null;
-  const parsedPerformedAt = typeof params.performedAt === "string" ? Number(params.performedAt) : NaN;
-  const performedAt = Number.isFinite(parsedPerformedAt) ? parsedPerformedAt : Date.now();
   const parsedSetIndex = typeof params.setIndex === "string" ? Number(params.setIndex) : NaN;
   const initialSetIndex = Number.isFinite(parsedSetIndex) && parsedSetIndex > 0 ? parsedSetIndex : 1;
+
+  const parsedProgramExerciseId = typeof params.programExerciseId === "string" ? Number(params.programExerciseId) : NaN;
+  const programExerciseId = Number.isInteger(parsedProgramExerciseId) && parsedProgramExerciseId > 0 ? parsedProgramExerciseId : null;
+  const newEntryRequested = params.newEntry === "1";
+  const savedEntryIdRef = useRef(workoutExerciseId);
+  const savingRef = useRef(false);
 
   const cameraRef = useRef<CameraView | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -118,7 +127,7 @@ export default function RecordVideoScreen() {
     adjustToInterfaceOrientation: false,
   });
 
-  const isReadyForSet = !!exerciseId && !!workoutId && !!workoutExerciseId;
+  const isReadyForSet = !!exerciseId && !!workoutId;
   const canSaveVideo = !!recordedUri && !isRecording && isReadyForSet;
 
   const applyControlsRotation = useCallback((deg: number, source: string) => {
@@ -228,16 +237,17 @@ export default function RecordVideoScreen() {
   }, [canSaveVideo]);
 
   const handleSaveSet = useCallback(async () => {
-    if (!recordedUri || !exerciseId || !workoutId || !workoutExerciseId) return;
+    if (!recordedUri || !exerciseId || !workoutId || savingRef.current) return;
 
     const weightValueKg = parseWeightInputToKg(weight, unitPreference);
     const repsValue = reps.trim() ? parseInt(reps, 10) : null;
     const noteValue = note.trim() || null;
 
-    if (!weightValueKg || weightValueKg <= 0 || !repsValue || repsValue <= 0) {
+    if (!weight.trim() || weightValueKg == null || !Number.isFinite(weightValueKg) || weightValueKg < 0 || !repsValue || repsValue <= 0) {
       return;
     }
 
+    savingRef.current = true;
     setIsSaving(true);
     try {
       const mediaStatus = await ensureMediaPermission();
@@ -253,15 +263,55 @@ export default function RecordVideoScreen() {
         return;
       }
 
+      // The camera can stay open while the workout changes elsewhere. Resolve
+      // ownership after the durable copy, immediately before writing history.
+      const parent = await getWorkoutById(workoutId);
+      const exercise = await getExerciseById(exerciseId);
+      if (!parent || parent.completedAt != null || !exercise) {
+        throw new Error("Resume the workout before saving this set.");
+      }
+      const calendarExercise = programExerciseId ? await getCalendarExerciseById(programExerciseId) : null;
+      if (programExerciseId && (!calendarExercise || (calendarExercise.exerciseId != null && calendarExercise.exerciseId !== exerciseId))) {
+        throw new Error("The programmed exercise is no longer available.");
+      }
+      const linkedEntryId = calendarExercise?.workoutExerciseId ?? savedEntryIdRef.current;
+      const existingEntry = linkedEntryId
+        ? await getWorkoutExerciseById(linkedEntryId)
+        : newEntryRequested || programExerciseId ? null : await getOpenWorkoutExercise(workoutId, exerciseId);
+      if (existingEntry && (existingEntry.workoutId !== workoutId || existingEntry.exerciseId !== exerciseId)) {
+        throw new Error("This exercise entry belongs to another workout.");
+      }
+      if (!programExerciseId && (existingEntry?.completedAt != null || (linkedEntryId && !existingEntry))) {
+        throw new Error("Choose a new exercise entry before saving this set.");
+      }
+      const latestParent = await getWorkoutById(workoutId);
+      if (!latestParent || latestParent.completedAt != null) {
+        throw new Error("Resume the workout before saving this set.");
+      }
+      const workoutDate = new Date(latestParent.startedAt);
+      workoutDate.setHours(12, 0, 0, 0);
+      if (programExerciseId && calendarExercise?.exerciseId == null) {
+        await linkExerciseToDb(programExerciseId, exerciseId);
+      }
+      const nextEntryId = existingEntry?.id ?? await addWorkoutExercise({
+        workout_id: workoutId,
+        exercise_id: exerciseId,
+        performed_at: workoutDate.getTime(),
+        ...(calendarExercise ? { order_index: calendarExercise.orderIndex } : {}),
+      });
+      savedEntryIdRef.current = nextEntryId;
+      if (programExerciseId && calendarExercise?.workoutExerciseId !== nextEntryId) {
+        await linkCalendarExerciseToWorkoutExercise(programExerciseId, nextEntryId);
+      }
       const setId = await addSet({
         workout_id: workoutId,
         exercise_id: exerciseId,
-        workout_exercise_id: workoutExerciseId,
+        workout_exercise_id: nextEntryId,
         weight_kg: weightValueKg,
         reps: repsValue,
         note: noteValue,
         set_index: nextSetIndex,
-        performed_at: performedAt,
+        performed_at: workoutDate.getTime(),
       });
 
       await addMedia({
@@ -278,22 +328,36 @@ export default function RecordVideoScreen() {
       });
 
       setShowAddSetModal(false);
-      router.back();
+      router.dismissTo({
+        pathname: "/exercise/[id]",
+        params: {
+          id: String(exerciseId),
+          name: exerciseName,
+          weId: String(nextEntryId),
+          workoutId: String(workoutId),
+          tab: "record",
+          ...(programExerciseId ? { programExerciseId: String(programExerciseId), dateIso: params.dateIso } : {}),
+        },
+      });
     } catch (error) {
       console.warn("Failed to save video set:", error);
+      Alert.alert("Unable to save set", error instanceof Error ? error.message : "Please try again.");
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   }, [
     recordedUri,
     exerciseId,
+    exerciseName,
+    params.dateIso,
     workoutId,
-    workoutExerciseId,
+    programExerciseId,
+    newEntryRequested,
     weight,
     reps,
     note,
     nextSetIndex,
-    performedAt,
     ensureMediaPermission,
     router,
     unitPreference,
@@ -569,7 +633,7 @@ export default function RecordVideoScreen() {
 
       </View>
 
-      <BaseModal
+      <AppModal
         visible={showAddSetModal}
         onClose={() => setShowAddSetModal(false)}
         maxWidth={420}
@@ -653,7 +717,7 @@ export default function RecordVideoScreen() {
             </Text>
           </Pressable>
         </View>
-      </BaseModal>
+      </AppModal>
     </View>
   );
 }

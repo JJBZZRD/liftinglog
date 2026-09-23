@@ -458,7 +458,8 @@ export function useRecordingContext(onHistoryRefresh?: () => void) {
           !(set.note ?? "").startsWith("[PLANNED]") &&
           set.weightKg !== null &&
           set.reps !== null &&
-          set.weightKg > 0 &&
+          Number.isFinite(set.weightKg) &&
+          set.weightKg >= 0 &&
           set.reps > 0
       ),
     [sets]

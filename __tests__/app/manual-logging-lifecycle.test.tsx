@@ -33,7 +33,7 @@ jest.mock("react-native", () => ({
   View: "View",
 }));
 jest.mock("expo-router", () => {
-  const React = require("react");
+  const React = jest.requireActual("react");
   return {
     router: { back: jest.fn(), push: jest.fn() },
     useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
@@ -98,14 +98,14 @@ jest.mock("../../lib/db/workoutSessions", () => ({
   moveWorkoutExerciseToWorkout: jest.fn().mockResolvedValue(undefined), listWorkoutSessionsForDate: jest.fn().mockResolvedValue([]),
 }));
 
-const UnifiedRecordTab = require("../../components/exercise/UnifiedRecordTab").default;
+const UnifiedRecordTab = jest.requireActual("../../components/exercise/UnifiedRecordTab").default;
 
 
-const mockWorkouts = require("../../lib/db/workouts");
-const mockSessions = require("../../lib/db/workoutSessions");
-const mockCalendar = require("../../lib/db/programCalendar");
-const { useRecordingController } = require("../../components/exercise/recording/use-recording-controller");
-const selection = require("../../lib/workouts/selection-store");
+const mockWorkouts = jest.requireMock("../../lib/db/workouts");
+const mockSessions = jest.requireMock("../../lib/db/workoutSessions");
+const mockCalendar = jest.requireMock("../../lib/db/programCalendar");
+const { useRecordingController } = jest.requireActual("../../components/exercise/recording/use-recording-controller");
+const selection = jest.requireActual("../../lib/workouts/selection-store");
 const activeWorkout = { id: 10, startedAt: new Date("2026-09-20T18:00:00").getTime(), completedAt: null, name: "Evening workout" };
 const openEntry = { id: 20, exerciseId: 1, workoutId: 10, note: null, currentWeight: 100, currentReps: 5 };
 type Tree = ReturnType<typeof renderer.create>;
@@ -130,6 +130,8 @@ describe("workout-aware recording lifecycle", () => {
     mockWorkouts.getActiveWorkout.mockResolvedValue(activeWorkout);
     mockWorkouts.getWorkoutById.mockImplementation((id: number) => Promise.resolve({ ...activeWorkout, id }));
     mockWorkouts.getWorkoutExerciseById.mockResolvedValue(openEntry);
+    mockWorkouts.deleteSet.mockReset();
+    mockWorkouts.deleteSetsForWorkoutExercise.mockReset();
     mockSessions.moveWorkoutExerciseToWorkout.mockResolvedValue(undefined);
     jest.useFakeTimers(); jest.setSystemTime(new Date("2026-09-20T23:59:00"));
   });
@@ -143,6 +145,101 @@ describe("workout-aware recording lifecycle", () => {
     expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ workout_id: 10, exercise_id: 1 }));
     expect(mockAddSet).toHaveBeenCalledWith(expect.objectContaining({ workout_id: 10, workout_exercise_id: 20 }));
     await act(async () => tree.unmount());
+  });
+
+  it("opens the camera without creating manual or programmed entries", async () => {
+    const tree = await renderTab();
+    await act(async () => { tree.root.findByProps({ accessibilityLabel: "Record video" }).props.onPress(); });
+    expect(mockAddWorkoutExercise).not.toHaveBeenCalled();
+    expect(jest.requireMock("expo-router").router.push).toHaveBeenCalledWith(expect.objectContaining({
+      pathname: "/exercise/record-video",
+      params: expect.objectContaining({ id: "1", workoutId: "10" }),
+    }));
+    expect(jest.requireMock("expo-router").router.push.mock.calls[0][0].params.workoutExerciseId).toBeUndefined();
+    await act(async () => tree.unmount());
+  });
+
+  it.each(["", "-1", "Infinity"])("does not create an entry for invalid weight %s", async (weight) => {
+    const tree = await renderTab();
+    const inputs = tree.root.findAllByType("TextInput");
+    await act(async () => { inputs[0].props.onChangeText(weight); inputs[1].props.onChangeText("5"); });
+    await act(async () => { await tree.root.findByProps({ accessibilityLabel: "Add Set" }).props.onPress(); });
+    expect(mockAddWorkoutExercise).not.toHaveBeenCalled();
+    expect(mockAddSet).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({ accessibilityLabel: "Complete Exercise" }).props.disabled).toBe(true);
+    await act(async () => tree.unmount());
+  });
+
+  it("enables completion only after a successful real set, including 0 kg", async () => {
+    let saved = false;
+    mockListSetsForWorkoutExercise.mockImplementation(async () => saved ? [{ id: 30, weightKg: 0, reps: 5, note: null }] : []);
+    mockAddSet.mockRejectedValueOnce(new Error("Write failed")).mockImplementation(async () => { saved = true; return 30; });
+    const tree = await renderTab();
+    const inputs = tree.root.findAllByType("TextInput");
+    await act(async () => { inputs[0].props.onChangeText("0"); inputs[1].props.onChangeText("5"); });
+    await act(async () => { await expect(tree.root.findByProps({ accessibilityLabel: "Add Set" }).props.onPress()).rejects.toThrow("Write failed"); });
+    expect(tree.root.findByProps({ accessibilityLabel: "Complete Exercise" }).props.disabled).toBe(true);
+    await act(async () => { await tree.root.findByProps({ accessibilityLabel: "Add Set" }).props.onPress(); });
+    expect(mockAddWorkoutExercise).toHaveBeenCalledTimes(1);
+    expect(mockAddSet).toHaveBeenLastCalledWith(expect.objectContaining({ weight_kg: 0, reps: 5, workout_exercise_id: 20 }));
+    expect(tree.root.findByProps({ accessibilityLabel: "Complete Exercise" }).props.disabled).toBe(false);
+    await act(async () => tree.unmount());
+  });
+
+  it("stops treating an open entry as recorded after its last set is deleted and reuses it on the next set", async () => {
+    const set = { id: 30, weightKg: 100, reps: 5, note: null };
+    let saved = true;
+    mockGetOpenWorkoutExercise.mockResolvedValue(openEntry);
+    mockListSetsForWorkoutExercise.mockImplementation(async () => saved ? [set] : []);
+    mockWorkouts.deleteSet.mockImplementation(async () => { saved = false; });
+    mockAddSet.mockImplementation(async () => { saved = true; return 31; });
+    let controller: any;
+    function Harness() { controller = useRecordingController(); return null; }
+    let tree: Tree;
+    await act(async () => { tree = renderer.create(<Harness />); });
+    expect(controller.hasConfirmedSets).toBe(true);
+    await act(async () => { await controller.handleDeleteSetPress(set, 1); });
+    await act(async () => { await controller.handleConfirmDeleteSet(); });
+    expect(controller.hasConfirmedSets).toBe(false);
+    await act(async () => { await controller.handleCompleteManualExercise(); });
+    expect(mockWorkouts.completeExerciseEntry).not.toHaveBeenCalled();
+    await act(async () => { await controller.handleAddSet(); });
+    expect(controller.hasConfirmedSets).toBe(true);
+    expect(mockAddWorkoutExercise).not.toHaveBeenCalled();
+    expect(mockAddSet).toHaveBeenCalledWith(expect.objectContaining({ workout_exercise_id: 20 }));
+    await act(async () => tree!.unmount());
+  });
+
+  it.each(["delete", "clear"])("prepares a read-only replacement in the same workout after %s removes the last completed-entry set", async (action) => {
+    Object.assign(mockParams, { weId: "42" });
+    const set = { id: 30, weightKg: 100, reps: 5, note: null };
+    let exists = true;
+    mockWorkouts.getWorkoutExerciseById.mockImplementation(async (id: number) => id === 42
+      ? exists ? { ...openEntry, id: 42, workoutId: 55, completedAt: Date.now() } : null
+      : { ...openEntry, workoutId: 55 });
+    mockListSetsForWorkoutExercise.mockImplementation(async () => exists ? [set] : []);
+    mockWorkouts.deleteSet.mockImplementation(async () => { exists = false; });
+    mockWorkouts.deleteSetsForWorkoutExercise.mockImplementation(async () => { exists = false; });
+    let controller: any;
+    function Harness() { controller = useRecordingController(); return null; }
+    let tree: Tree;
+    await act(async () => { tree = renderer.create(<Harness />); });
+    if (action === "delete") {
+      await act(async () => { await controller.handleDeleteSetPress(set, 1); });
+      await act(async () => { await controller.handleConfirmDeleteSet(); });
+    } else {
+      await act(async () => { await controller.handleConfirmClearSets(); });
+    }
+    expect(controller.recordLoadError).toBeNull();
+    expect(controller.workoutId).toBe(55);
+    expect(controller.hasConfirmedSets).toBe(false);
+    expect(controller.workoutExerciseId).toBeNull();
+    expect(mockAddWorkoutExercise).not.toHaveBeenCalled();
+    await act(async () => { controller.setWeight("100"); controller.setReps("5"); });
+    await act(async () => { await controller.handleAddSet(); });
+    expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ workout_id: 55 }));
+    expect(mockAddSet).toHaveBeenCalledWith(expect.objectContaining({ workout_id: 55, workout_exercise_id: 20 }));
+    await act(async () => tree!.unmount());
   });
 
   it("keeps the workout day when adding a set after midnight", async () => {
@@ -254,6 +351,10 @@ describe("workout-aware recording lifecycle", () => {
     const tree = await renderTab();
     expect(mockGetProgrammedExercisesForExerciseOnDate).toHaveBeenCalledWith(expect.objectContaining({ dateIso: "2026-09-18", exerciseId: 1 }));
     expect(tree.root.findAllByProps({ accessibilityLabel: "Record video" })).toHaveLength(1);
+    await act(async () => { tree.root.findByProps({ accessibilityLabel: "Record video" }).props.onPress(); });
+    expect(jest.requireMock("../../lib/programs/programExerciseHistory").ensureProgramExerciseWorkoutSession).not.toHaveBeenCalled();
+    expect(mockAddWorkoutExercise).not.toHaveBeenCalled();
+    expect(jest.requireMock("expo-router").router.push).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ programExerciseId: "999" }) }));
     await act(async () => tree.unmount());
   });
 
@@ -263,6 +364,7 @@ describe("workout-aware recording lifecycle", () => {
     const tree = await renderTab();
     expect(tree.root.findAllByProps({ accessibilityLabel: "Add Set" })).toHaveLength(0);
     await act(async () => { tree.root.findByProps({ accessibilityLabel: "Add another entry" }).props.onPress(); });
+    expect(mockAddWorkoutExercise).not.toHaveBeenCalled();
     mockWorkouts.getWorkoutExerciseById.mockResolvedValue(openEntry);
     await addSet(tree);
     expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ workout_id: 10, exercise_id: 1 }));

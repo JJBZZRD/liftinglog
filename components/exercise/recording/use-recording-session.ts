@@ -585,6 +585,7 @@ export function useRecordingSession(context: Pick<RecordingContextController,
   }, [applyLoadedSessionNote, recordIdentityRef, entryIdRef, setWorkoutId, setWorkoutExerciseId, setEntryPerformedAt, setSets]);
   const startAnotherEntry = useCallback(() => {
     recordIdentityRef.current += 1;
+    workoutOverrideRef.current = workoutId;
     entryIdRef.current = null;
     setEntryPerformedAt(null);
     setNewEntryRequested(true);
@@ -601,6 +602,8 @@ export function useRecordingSession(context: Pick<RecordingContextController,
     setNewEntryRequested,
     setSets,
     setWorkoutExerciseId,
+    workoutId,
+    workoutOverrideRef,
   ]);
   return {
     startAnotherEntry,

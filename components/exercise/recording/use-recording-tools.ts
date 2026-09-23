@@ -5,9 +5,8 @@ import { setLastRestSeconds } from "../../../lib/db/exercises";
 import { timerStore } from "../../../lib/timerStore";
 import { formatTime, parseTimerDurationSeconds } from "../../../lib/utils/formatters";
 import type { RecordingContextController } from "./use-recording-context";
-import type { RecordingSessionController } from "./use-recording-session";
 
-export function useRecordingTools(context: Pick<RecordingContextController & RecordingSessionController,
+export function useRecordingTools(context: Pick<RecordingContextController,
   "exerciseId" |
   "workoutId" |
   "workoutExerciseId" |
@@ -20,11 +19,11 @@ export function useRecordingTools(context: Pick<RecordingContextController & Rec
   "setTimerSeconds" |
   "selectedDate" |
   "activeProgramEntry" |
+  "programDateIso" |
   "inProgramMode" |
   "displayExerciseName" |
   "nextSetIndex" |
-  "ensureManualWorkoutSession" |
-  "ensureProgramWorkoutSession"
+  "newEntryRequested"
 >) {
   const {
     exerciseId,
@@ -39,11 +38,11 @@ export function useRecordingTools(context: Pick<RecordingContextController & Rec
     setTimerSeconds,
     selectedDate,
     activeProgramEntry,
+    programDateIso,
     inProgramMode,
     displayExerciseName,
     nextSetIndex,
-    ensureManualWorkoutSession,
-    ensureProgramWorkoutSession,
+    newEntryRequested,
   } = context;
   useEffect(() => {
     const unsubscribe = timerStore.subscribe((timersByExercise) => {
@@ -111,63 +110,24 @@ export function useRecordingTools(context: Pick<RecordingContextController & Rec
     setTimerModalVisible(true);
   }, [currentTimer, setTimerMinutes, setTimerModalVisible, setTimerSeconds]);
 
-  const handleRecordVideoPress = useCallback(async () => {
-    if (!appCapabilities.videoRecording) {
-      return;
-    }
-
-    if (!exerciseId) {
-      return;
-    }
-    let nextWorkoutId = workoutId;
-    let nextWorkoutExerciseId =
-      workoutExerciseId;
-    let nextExerciseId = exerciseId;
-
-    if (inProgramMode && activeProgramEntry && (!nextWorkoutId || !nextWorkoutExerciseId)) {
-      const session = await ensureProgramWorkoutSession();
-      if (!session) {
-        return;
-      }
-      nextWorkoutId = session.workoutId;
-      nextWorkoutExerciseId = session.workoutExerciseId;
-      nextExerciseId = session.exerciseId;
-    }
-
-    if (!inProgramMode) {
-      const session = await ensureManualWorkoutSession();
-      if (!session) return;
-      nextWorkoutId = session.workoutId;
-      nextWorkoutExerciseId = session.workoutExerciseId;
-    }
-
-    if (!nextWorkoutId || !nextWorkoutExerciseId || !nextExerciseId) {
-      return;
-    }
-
+  const handleRecordVideoPress = useCallback(() => {
+    if (!appCapabilities.videoRecording || !exerciseId || !workoutId) return;
+    // Opening or cancelling the camera is read-only. The camera creates an
+    // entry only when a valid set and its durable video are ready to save.
     router.push({
       pathname: "/exercise/record-video",
       params: {
-        id: String(nextExerciseId),
+        id: String(exerciseId),
         name: displayExerciseName,
-        workoutId: String(nextWorkoutId),
-        workoutExerciseId: String(nextWorkoutExerciseId),
+        workoutId: String(workoutId),
+        ...(workoutExerciseId ? { workoutExerciseId: String(workoutExerciseId) } : {}),
+        ...(inProgramMode && activeProgramEntry ? { programExerciseId: String(activeProgramEntry.calendarExercise.id), dateIso: programDateIso } : {}),
+        ...(newEntryRequested ? { newEntry: "1" } : {}),
         performedAt: String(selectedDate.getTime()),
         setIndex: String(nextSetIndex),
       },
     });
-  }, [
-    activeProgramEntry,
-    displayExerciseName,
-    ensureManualWorkoutSession,
-    ensureProgramWorkoutSession,
-    exerciseId,
-    inProgramMode,
-    nextSetIndex,
-    selectedDate,
-    workoutExerciseId,
-    workoutId,
-  ]);
+  }, [activeProgramEntry, programDateIso, displayExerciseName, exerciseId, inProgramMode, newEntryRequested, nextSetIndex, selectedDate, workoutExerciseId, workoutId]);
 
   const timerDisplayText = currentTimer
     ? formatTime(currentTimer.remainingSeconds)
@@ -176,7 +136,7 @@ export function useRecordingTools(context: Pick<RecordingContextController & Rec
   const canOpenCamera =
     appCapabilities.videoRecording &&
     !!exerciseId &&
-    (inProgramMode || !!workoutId);
+    !!workoutId;
   return {
     handleTimerPress,
     handleSaveRestTime,
