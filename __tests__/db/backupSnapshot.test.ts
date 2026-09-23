@@ -58,7 +58,7 @@ describe("sealed database backup snapshots", () => {
     const destinationPath = join(fixture.directory, destinationName);
     try {
       source.exec("PRAGMA journal_mode=WAL;");
-      source.exec("INSERT INTO workouts (id, started_at) VALUES (900001, 1);");
+      source.exec("INSERT INTO workouts (id, started_at, completed_at) VALUES (900001, 1, 1);");
       source.exec("PRAGMA wal_checkpoint(TRUNCATE);");
       reader = new DatabaseSync(fixture.path);
       reader.exec("BEGIN;");
@@ -67,7 +67,7 @@ describe("sealed database backup snapshots", () => {
       ).toBeDefined();
 
       source.exec(
-        "INSERT INTO workouts (id, started_at) VALUES (900002, 2);"
+        "INSERT INTO workouts (id, started_at, completed_at) VALUES (900002, 2, 2);"
       );
       const checkpoint = source
         .prepare("PRAGMA wal_checkpoint(TRUNCATE);")

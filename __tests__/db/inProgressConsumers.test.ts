@@ -88,6 +88,8 @@ describe("in-progress history consumers", () => {
 
   beforeEach(() => {
     mockCsvWrites.length = 0;
+    // Retain earlier history fixtures while making room for this test's active session.
+    mockDatabase.expoDatabase.execSync("UPDATE workouts SET completed_at = started_at WHERE completed_at IS NULL;");
   });
 
   it("keeps an empty draft out of PBs, analytics, history, and CSV", async () => {

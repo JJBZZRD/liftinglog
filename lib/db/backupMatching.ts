@@ -3,11 +3,13 @@ interface HasId {
 }
 
 interface BackupWorkoutMatchInput {
+  name?: string | null;
   completed_at: number | null;
   note: string | null;
 }
 
 interface WorkoutCandidate extends HasId {
+  name?: string | null;
   completed_at: number | null;
   note: string | null;
 }
@@ -92,6 +94,9 @@ export function pickMatchingWorkoutId(
   candidates: WorkoutCandidate[]
 ): number | null {
   let remaining = candidates;
+
+  // Distinct named sessions sharing a start timestamp are not the same workout.
+  if (row.name != null) remaining = remaining.filter((candidate) => candidate.name == null || candidate.name === row.name);
 
   remaining = preferMatchingCandidates(remaining, row.completed_at, (candidate) => candidate.completed_at);
   if (remaining.length > 1) {

@@ -11,6 +11,7 @@ This document covers the behavior of:
 - `lib/db/schema.ts`
 - `lib/db/connection.ts`
 - `lib/db/workouts.ts`
+- `lib/db/workoutSessions.ts`
 - `lib/db/programCalendar.ts`
 - `lib/programs/programExerciseHistory.ts`
 - `app/exercise/tabs/RecordTab.tsx`
@@ -120,6 +121,28 @@ Top-level workout container.
 - Can also be referenced directly by `sets`.
 - `started_at` is always present.
 - `completed_at` exists, but many user-facing history features key more strongly off `workout_exercises.performed_at` and `workout_exercises.completed_at`.
+- `name` is nullable and independent of `note`. A blank/missing name displays as
+  `Workout N Thu 24 Oct`, where N is the session's chronological ordinal within
+  its local start day (start timestamp then ID). Existing notes are never used as
+  names, rewritten, or combined with entry/set notes.
+- Multiple sessions can share a local day. At most one container is active
+  (`completed_at IS NULL`) globally, enforced by the partial unique index
+  `idx_workouts_single_active` and checked by session create/resume APIs.
+- Starting or resuming another session raises `ActiveWorkoutConflictError` with
+  the current active workout ID. Legacy/manual/program `getOrCreateActiveWorkout`
+  reuses the one active container; it never completes exercises to make room.
+- Completing a container atomically completes its open exercise entries while
+  preserving their effective performed date, notes, sets and program/media links.
+  Existing non-null `performed_at` values remain unchanged; an open legacy entry
+  with a null value receives its workout start timestamp so the completion-time
+  fallback cannot move its history to today's date. Resuming
+  a container does not reopen already completed entries.
+- Session lists include empty containers on their start day. For legacy
+  envelopes reused across dates, they also appear on days with real linked
+  exercise activity (using section 7C's effective timestamp) or unassigned real
+  set activity. They retain one canonical ID and their original name; totals
+  cover the entire envelope. Detail retains each entry/set's actual date and
+  exposes legacy unassigned sets separately.
 
 ### `workout_exercises`
 
@@ -433,6 +456,31 @@ Rule:
 
 - if future migrations change program-history linkage, keep a repair/backfill story for previously-bad rows
 
+The named-session migration adds only nullable `workouts.name`; it preserves
+workout, exercise-entry and set identities and all existing notes. Before creating
+the unique active index, it keeps the newest open container by `started_at`, then
+ID. Older open envelopes receive a deterministic archive timestamp: the latest
+of their start, set performed timestamps and entry completion/performed
+timestamps. Their unfinished exercises stay unfinished and can be recovered by
+explicitly resuming that container. It never merges or deletes containers, moves
+history, or completes entries as part of active reconciliation. Reconciliation
+and index creation are atomic and idempotent; failures block startup.
+
+### J. Moving an exercise entry between workout sessions
+
+`moveWorkoutExerciseToWorkout()` owns the whole move in one synchronous Drizzle
+transaction. It retains entry/set IDs, notes, values and completion state, updates
+the entry and all linked sets' workout IDs, and follows those sets with set-linked
+media. Workout-only media stays on its original container. The entry and sets
+move to the destination's local calendar date while retaining local time where
+the destination day's daylight-saving rules allow it. PB events are rebuilt
+inside the same transaction because their chronological order can change.
+Program entry/set links retain their IDs and logged timestamps follow moved
+sets; the original program schedule date remains plan provenance. An open entry
+can only move into an active destination; a completed entry can move into a
+completed destination. Moving never silently completes an entry or switches the
+active workout.
+
 The exercise-name migration accepts five evidenced historical layouts and preserves
 column order, IDs, existing UIDs, data and dependent schema objects. Exercise UID
 backfill must complete before rebuilding the table. Unknown layouts/index drift
@@ -479,6 +527,15 @@ Current import merge order is:
 6. rebuild `pr_events` from merged `sets`
 
 Program tables are not part of this merge.
+
+Named workouts preserve imported names and notes independently; older backups
+without a name column remain supported. Existing local names, notes and
+completion/open state win. Distinct non-null workout UIDs do not collapse merely
+because start timestamps match. A merge preserves the live active container; if
+none exists, only the newest imported open container becomes active. Other
+imported open envelopes are archived at their start timestamps without
+completing their exercise entries. The unique index remains enabled throughout
+the transaction, and repeated imports retain the same canonical identities.
 
 Implication:
 

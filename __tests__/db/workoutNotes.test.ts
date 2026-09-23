@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createManualLoggingDatabase,
+  createArchivedWorkoutFixture,
   initializeTestDatabaseBindings,
 } from "../helpers/manualLoggingDatabase";
 
@@ -91,11 +92,12 @@ describe("canonical workout note persistence", () => {
     const openWorkoutId = await workouts.createWorkout({
       started_at: localTimestamp(2026, 9, 21, 8),
     });
-    const completedWorkoutId = await workouts.createWorkout({
+    const completedWorkoutId = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 21, 9),
       note: "completed original",
+      completed_at: localTimestamp(2026, 9, 21, 11),
     });
-    const otherWorkoutId = await workouts.createWorkout({
+    const otherWorkoutId = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 21, 10),
       note: "other envelope",
     });
@@ -173,7 +175,7 @@ describe("canonical workout note persistence", () => {
   });
 
   it("surfaces a SQLite write failure and leaves all data unchanged", async () => {
-    const workoutId = await workouts.createWorkout({
+    const workoutId = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 22, 8),
       note: "before forced failure",
     });
@@ -199,11 +201,11 @@ describe("canonical workout note persistence", () => {
 
   it("returns workout identity and workout notes separately for two envelopes on one local day", async () => {
     const dayKey = "2026-09-23";
-    const firstWorkoutId = await workouts.createWorkout({
+    const firstWorkoutId = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 23, 8),
       note: "first workout note",
     });
-    const secondWorkoutId = await workouts.createWorkout({
+    const secondWorkoutId = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 23, 18),
       note: "second workout note",
     });

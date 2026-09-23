@@ -1,5 +1,6 @@
 import {
   createManualLoggingDatabase,
+  createArchivedWorkoutFixture,
   initializeTestDatabaseBindings,
 } from "../helpers/manualLoggingDatabase";
 
@@ -41,7 +42,7 @@ type EntryFixture = {
 
 async function createEntry(fixture: EntryFixture) {
   const exerciseId = mockDatabase.insertExercise(fixture.exerciseName);
-  const workoutId = fixture.workoutId ?? await workouts.createWorkout({
+  const workoutId = fixture.workoutId ?? await createArchivedWorkoutFixture(mockDatabase, {
     started_at: fixture.performedAt,
   });
   const workoutExerciseId = await workouts.addWorkoutExercise({
@@ -87,10 +88,10 @@ describe("broad workout history read model", () => {
   let summaryOpenEntryId: number;
 
   beforeAll(async () => {
-    const recentWorkoutA = await workouts.createWorkout({
+    const recentWorkoutA = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 22, 8),
     });
-    const recentWorkoutB = await workouts.createWorkout({
+    const recentWorkoutB = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 22, 10),
     });
     recentCompletedEntryId = (await createEntry({
@@ -125,10 +126,10 @@ describe("broad workout history read model", () => {
       set: null,
     });
 
-    const summaryWorkoutA = await workouts.createWorkout({
+    const summaryWorkoutA = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 20, 8),
     });
-    const summaryWorkoutB = await workouts.createWorkout({
+    const summaryWorkoutB = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 20, 9),
     });
     summaryCompletedEntryId = (await createEntry({
@@ -163,7 +164,7 @@ describe("broad workout history read model", () => {
       set: null,
     });
 
-    const overflowWorkout = await workouts.createWorkout({
+    const overflowWorkout = await createArchivedWorkoutFixture(mockDatabase, {
       started_at: localTimestamp(2026, 9, 19, 7),
     });
     for (let index = 0; index < 27; index += 1) {
@@ -234,7 +235,7 @@ describe("broad workout history read model", () => {
   it("shows the first real set immediately and hides the entry after its last set is deleted", async () => {
     const performedAt = localTimestamp(2026, 9, 21, 15);
     const exerciseId = mockDatabase.insertExercise("Transient First Set Exercise");
-    const workoutId = await workouts.createWorkout({ started_at: performedAt });
+    const workoutId = await createArchivedWorkoutFixture(mockDatabase, { started_at: performedAt });
     const workoutExerciseId = await workouts.addWorkoutExercise({
       workout_id: workoutId,
       exercise_id: exerciseId,

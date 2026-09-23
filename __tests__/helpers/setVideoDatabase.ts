@@ -80,8 +80,8 @@ export function createSetVideoDatabase() {
         .prepare("INSERT INTO exercises (name, is_bodyweight, is_pinned) VALUES (?, 0, 0)")
         .run(`Video exercise ${Date.now()}-${Math.random()}`);
       const workout = database
-        .prepare("INSERT INTO workouts (started_at) VALUES (?)")
-        .run(Date.now());
+        .prepare("INSERT INTO workouts (started_at, completed_at) VALUES (?, ?)")
+        .run(Date.now(), Date.now());
       const set = database
         .prepare("INSERT INTO sets (workout_id, exercise_id, is_warmup) VALUES (?, ?, 0)")
         .run(Number(workout.lastInsertRowid), Number(exercise.lastInsertRowid));

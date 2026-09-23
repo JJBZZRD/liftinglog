@@ -105,6 +105,17 @@ function projectToOriginalData(
   const exerciseKeys = Object.keys(original.exercises[0] as Record<string, unknown>);
   return {
     ...current,
+    workouts: current.workouts.map((value) => {
+      const row = value as Record<string, unknown>;
+      if ("name" in row && !("name" in (original.workouts[0] as Record<string, unknown>))) {
+        // The later named-workout migration is additive and must not rewrite data.
+        expect(row.name).toBeNull();
+        const legacyColumns = { ...row };
+        delete legacyColumns.name;
+        return legacyColumns;
+      }
+      return row;
+    }),
     exercises: current.exercises.map((value) =>
       Object.fromEntries(
         exerciseKeys.map((key) => [key, (value as Record<string, unknown>)[key]])
@@ -210,7 +221,10 @@ describe("MVP-003B production exercise-name migration", () => {
         expect(withoutExerciseTable(afterMigration.catalog)).toEqual(
           withoutExerciseTable(beforeMigration.catalog)
         );
-        expect(dataSnapshot(fixture.database)).toEqual(afterMigration.data);
+        expect(dataSnapshot(fixture.database)).toEqual({
+          ...afterMigration.data,
+          workouts: afterMigration.data.workouts.map((row) => ({ ...(row as object), name: null })),
+        });
 
         const migratedExerciseUids = fixture.database
           .prepare("SELECT id, uid FROM exercises ORDER BY id;")

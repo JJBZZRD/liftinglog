@@ -77,6 +77,11 @@ Files like `exercises.ts`, `workouts.ts`, `programCalendar.ts`, `settings.ts`, e
 - Keep cross-table invariants close to the write path that owns them.
 - Exercise-family lifecycle belongs in `lib/db/exercises.ts`.
 - Parent exercise rollups are query-time behavior. Do not introduce a second persistence layer for family history or analytics.
+- Workout-container reads, naming, lifecycle and entry moves belong in
+  `workoutSessions.ts`; legacy `workouts.ts` lifecycle wrappers delegate there.
+  Use synchronous Drizzle transactions for create/resume conflict checks,
+  completing a container with its open entries, and moving linked history/media.
+  Do not await inside these transaction callbacks.
 
 ## 2. Query Rules
 

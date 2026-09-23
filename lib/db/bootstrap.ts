@@ -50,7 +50,8 @@ const SCHEMA_BOOTSTRAP_SQL = `
     uid TEXT,
     started_at INTEGER NOT NULL,
     completed_at INTEGER,
-    note TEXT
+    note TEXT,
+    name TEXT
   );
 
   CREATE TABLE IF NOT EXISTS workout_exercises (
@@ -476,6 +477,33 @@ export function initializeDatabase(sqlite: SQLiteDatabase): void {
   assertExerciseIndexes(sqlite, false, true);
   logWorkoutExerciseColumnStatus(sqlite);
   repairProgramLinkedWorkoutExercises(sqlite);
+  if (!loadTableColumns(sqlite, "workouts")?.has("name")) {
+    sqlite.execSync("ALTER TABLE workouts ADD COLUMN name TEXT;");
+  }
+  reconcileActiveWorkouts(sqlite);
+}
+
+/** Preserve legacy exercise state while retaining only the newest active envelope. */
+function reconcileActiveWorkouts(sqlite: SQLiteDatabase): void {
+  sqlite.execSync("BEGIN IMMEDIATE;");
+  try {
+    sqlite.execSync(`
+      UPDATE workouts SET completed_at = MAX(
+        started_at,
+        COALESCE((SELECT MAX(performed_at) FROM sets WHERE workout_id = workouts.id), started_at),
+        COALESCE((SELECT MAX(COALESCE(completed_at, performed_at)) FROM workout_exercises WHERE workout_id = workouts.id), started_at)
+      )
+      WHERE completed_at IS NULL AND id != (
+        SELECT id FROM workouts WHERE completed_at IS NULL ORDER BY started_at DESC, id DESC LIMIT 1
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_workouts_single_active ON workouts((1)) WHERE completed_at IS NULL;
+    `);
+    sqlite.execSync("COMMIT;");
+  } catch (error) {
+    sqlite.execSync("ROLLBACK;");
+    // Failing startup is safer than exposing a database with multiple active sessions.
+    throw error;
+  }
 }
 
 function queryRows<T>(sqlite: SQLiteDatabase, sql: string, params: SQLiteBindParams = []): T[] {

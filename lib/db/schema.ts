@@ -59,6 +59,7 @@ export const workouts = sqliteTable("workouts", {
   startedAt: integer("started_at").notNull(),
   completedAt: integer("completed_at"),
   note: text("note"),
+  name: text("name"),
 });
 
 export const workoutExercises = sqliteTable("workout_exercises", {

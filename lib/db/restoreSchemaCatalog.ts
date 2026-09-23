@@ -24,7 +24,8 @@ export type RestoreTableShape = {
 };
 
 export type RestoreIndex = {
-  readonly columns: readonly string[];
+  readonly columns: readonly (string | null)[];
+  readonly partial?: 0 | 1;
   readonly name: string;
   readonly origin: "c" | "u";
   readonly sql: string | null;
@@ -205,6 +206,8 @@ const exercisesE9ee8ed = tableShape("exercises-e9ee8ed", [
 
 const workoutsCurrent = tableShape("workouts-current", [id(), uid(), column("started_at", "INTEGER", { notNull: true }), column("completed_at", "INTEGER"), column("note", "TEXT")]);
 const workoutsUidAppended = tableShape("workouts-uid-appended", [id(), column("started_at", "INTEGER", { notNull: true }), column("completed_at", "INTEGER"), column("note", "TEXT"), uid()]);
+const namedWorkoutsCurrent = tableShape("workouts-named-current", [...workoutsCurrent.columns, column("name", "TEXT")]);
+const namedWorkoutsUidAppended = tableShape("workouts-named-uid-appended", [...workoutsUidAppended.columns, column("name", "TEXT")]);
 const workoutsE9ee8ed = tableShape("workouts-e9ee8ed", [id(), column("started_at", "INTEGER", { notNull: true }), column("completed_at", "INTEGER"), column("note", "TEXT")]);
 
 const workoutExerciseFks = [foreignKey("workout_id", "workouts", "id", "CASCADE"), foreignKey("exercise_id", "exercises", "id", "RESTRICT")] as const;
@@ -393,6 +396,11 @@ const currentDeclaredIndexes = [
 ] as const;
 
 const tagsImplicitIndex = implicitUniqueIndex("sqlite_autoindex_tags_1", "tags", "name");
+const singleActiveWorkoutIndex: RestoreIndex = {
+  name: "idx_workouts_single_active", table: "workouts", columns: [null],
+  origin: "c", unique: 1, partial: 1,
+  sql: "CREATE UNIQUE INDEX idx_workouts_single_active ON workouts((1)) WHERE completed_at IS NULL",
+};
 const exercisesImplicitIndex = implicitUniqueIndex("sqlite_autoindex_exercises_1", "exercises", "name");
 const baseFixtureIndexes = currentDeclaredIndexes.slice(0, 13);
 
@@ -421,13 +429,13 @@ const CORE_TABLES = ["exercises", "workouts", "workout_exercises", "sets"] as co
 export const CURRENT_SCHEMA_PROFILES: readonly RestoreSchemaProfile[] = [
   {
     id: "current-canonical-and-five-exercise-layouts",
-    indexes: [...currentDeclaredIndexes, tagsImplicitIndex], optionalTables: [],
-    requiredTables: Object.keys(canonicalCurrentTables), tables: canonicalCurrentTables,
+    indexes: [...currentDeclaredIndexes, tagsImplicitIndex, singleActiveWorkoutIndex], optionalTables: [],
+    requiredTables: Object.keys(canonicalCurrentTables), tables: { ...canonicalCurrentTables, workouts: [namedWorkoutsCurrent] },
   },
   {
     id: "e9ee8ed-migrated-current",
-    indexes: [...currentDeclaredIndexes, tagsImplicitIndex], optionalTables: [],
-    requiredTables: Object.keys(e9ee8edMigratedCurrentTables), tables: e9ee8edMigratedCurrentTables,
+    indexes: [...currentDeclaredIndexes, tagsImplicitIndex, singleActiveWorkoutIndex], optionalTables: [],
+    requiredTables: Object.keys(e9ee8edMigratedCurrentTables), tables: { ...e9ee8edMigratedCurrentTables, workouts: [namedWorkoutsUidAppended] },
   },
 ];
 
@@ -446,6 +454,10 @@ const direct0923FixtureTables = {
 } as const;
 
 export const SOURCE_SCHEMA_PROFILES: readonly RestoreSchemaProfile[] = [
+  ...CURRENT_SCHEMA_PROFILES.map((profile) => ({
+    ...profile, id: `${profile.id}-named-workout-source`,
+    optionalTables: SOURCE_OPTIONAL_TABLES, requiredTables: CORE_TABLES,
+  })),
   {
     id: "mvp003b-production-fixtures-indexed",
     indexes: [

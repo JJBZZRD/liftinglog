@@ -278,7 +278,7 @@ function indexMatches(
     row.tbl_name !== expected.table ||
     Number(listRow.unique) !== expected.unique ||
     listRow.origin !== expected.origin ||
-    Number(listRow.partial) !== 0
+    Number(listRow.partial) !== (expected.partial ?? 0)
   ) {
     return false;
   }
@@ -302,6 +302,7 @@ function indexMatches(
     keyColumns.every(
       (candidate, index) =>
         candidate.name === expected.columns[index] &&
+        (expected.columns[index] !== null || Number(candidate.cid) === -2) &&
         Number(candidate.desc) === 0 &&
         candidate.coll === "BINARY"
     ) &&

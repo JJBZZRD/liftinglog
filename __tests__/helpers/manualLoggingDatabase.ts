@@ -103,3 +103,18 @@ export function createManualLoggingDatabase(path = ":memory:") {
     },
   };
 }
+
+/** Historical fixtures may contain unfinished entries in reconciled, archived envelopes. */
+export function createArchivedWorkoutFixture(
+  database: { expoDatabase: { prepareSync: (sql: string) => { executeSync: (params: unknown) => { lastInsertRowId: number }; finalizeSync: () => void } } },
+  data: { started_at: number; completed_at?: number; note?: string | null }
+): number {
+  const statement = database.expoDatabase.prepareSync(
+    "INSERT INTO workouts(started_at, completed_at, note) VALUES (?, ?, ?)"
+  );
+  try {
+    return statement.executeSync([data.started_at, data.completed_at ?? data.started_at, data.note ?? null]).lastInsertRowId;
+  } finally {
+    statement.finalizeSync();
+  }
+}

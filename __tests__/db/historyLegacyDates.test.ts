@@ -1,5 +1,6 @@
 import {
   createManualLoggingDatabase,
+  createArchivedWorkoutFixture,
   initializeTestDatabaseBindings,
 } from "../helpers/manualLoggingDatabase";
 
@@ -45,7 +46,7 @@ type LegacyEntryFixture = {
 };
 
 async function createLegacyEntry(fixture: LegacyEntryFixture) {
-  const workoutId = await workouts.createWorkout({ started_at: fixture.workoutStartedAt });
+  const workoutId = await createArchivedWorkoutFixture(mockDatabase, { started_at: fixture.workoutStartedAt });
   const workoutExerciseId = await workouts.addWorkoutExercise({
     workout_id: workoutId,
     exercise_id: fixture.exerciseId,

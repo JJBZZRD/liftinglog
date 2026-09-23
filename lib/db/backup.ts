@@ -351,6 +351,7 @@ interface BackupWorkout {
   started_at: number;
   completed_at: number | null;
   note: string | null;
+  name: string | null;
 }
 
 interface BackupWorkoutExercise {
@@ -388,6 +389,7 @@ interface LiveWorkoutCandidate {
   id: number;
   completed_at: number | null;
   note: string | null;
+  name: string | null;
 }
 
 interface LiveWorkoutExerciseCandidate {
@@ -555,7 +557,7 @@ function findExistingWorkoutId(backupUid: string, row: BackupWorkout): number | 
   }
 
   const candidates = queryLiveRows<LiveWorkoutCandidate>(
-    `SELECT id, completed_at, note FROM workouts WHERE started_at = ${sqlLiteral(row.started_at)};`
+    `SELECT id, completed_at, note, name FROM workouts WHERE started_at = ${sqlLiteral(row.started_at)}${row.uid ? " AND uid IS NULL" : ""};`
   );
   return pickMatchingWorkoutId(row, candidates);
 }
@@ -949,8 +951,16 @@ function mergeWorkouts(
   backupDb: SQLiteDatabase,
   uidMap: Map<number, number> // backup.id -> live.id
 ): { inserted: number; updated: number } {
-  const columns = ["id", "uid", "started_at", "completed_at", "note"];
-  const rows = readBackupTable<BackupWorkout>(backupDb, "workouts", columns);
+  const columns = ["id", "uid", "started_at", "completed_at", "note", "name"];
+  const rows = readBackupTable<BackupWorkout>(backupDb, "workouts", columns)
+    .sort((a, b) => b.started_at - a.started_at || b.id - a.id);
+  // Preserve the live active choice. With no live active, the newest imported
+  // open envelope may become active. Other envelopes are archived without
+  // marking any imported exercise entry complete.
+  const originalActiveId = queryLiveRows<{ id: number }>(
+    "SELECT id FROM workouts WHERE completed_at IS NULL LIMIT 1;"
+  )[0]?.id ?? null;
+  let hasActiveWorkout = originalActiveId !== null;
 
   let inserted = 0;
   let updated = 0;
@@ -965,20 +975,23 @@ function mergeWorkouts(
         UPDATE workouts SET
           uid = COALESCE(uid, ${sqlLiteral(backupUid)}),
           note = COALESCE(note, ${sqlLiteral(row.note)}),
-          completed_at = COALESCE(completed_at, ${row.completed_at ?? "NULL"})
+          name = COALESCE(name, ${sqlLiteral(row.name)})
         WHERE id = ${liveId};
       `);
       uidMap.set(row.id, liveId);
       updated++;
     } else {
+      const completedAt = row.completed_at ?? (hasActiveWorkout ? row.started_at : null);
+      if (completedAt === null) hasActiveWorkout = true;
       // Insert new row
       sqlite.execSync(`
-        INSERT INTO workouts (uid, started_at, completed_at, note)
+        INSERT INTO workouts (uid, started_at, completed_at, note, name)
         VALUES (
           ${sqlLiteral(backupUid)},
           ${row.started_at},
-          ${row.completed_at ?? "NULL"},
-          ${sqlLiteral(row.note)}
+          ${completedAt ?? "NULL"},
+          ${sqlLiteral(row.note)},
+          ${sqlLiteral(row.name)}
         );
       `);
       const lastIdStmt = sqlite.prepareSync(`SELECT last_insert_rowid() as id;`);
@@ -1041,7 +1054,6 @@ function mergeWorkoutExercises(
           order_index = COALESCE(order_index, ${row.order_index ?? "NULL"}),
           current_weight = COALESCE(current_weight, ${row.current_weight ?? "NULL"}),
           current_reps = COALESCE(current_reps, ${row.current_reps ?? "NULL"}),
-          completed_at = COALESCE(completed_at, ${row.completed_at ?? "NULL"}),
           performed_at = COALESCE(performed_at, ${row.performed_at ?? "NULL"})
         WHERE id = ${liveId};
       `);
@@ -1096,9 +1108,14 @@ function mergeSets(
 
   for (const row of rows) {
     // Resolve foreign keys
-    const liveWorkoutId = workoutUidMap.get(row.workout_id);
-    const liveExerciseId = exerciseUidMap.get(row.exercise_id);
     const liveWorkoutExerciseId = row.workout_exercise_id !== null ? workoutExerciseUidMap.get(row.workout_exercise_id) : null;
+    // A matching entry may have been moved after this backup was taken. Its
+    // current parent owns any newly imported child sets.
+    const linkedEntry = liveWorkoutExerciseId == null ? undefined : queryLiveRows<{ workout_id: number; exercise_id: number }>(
+      `SELECT workout_id, exercise_id FROM workout_exercises WHERE id = ${liveWorkoutExerciseId};`
+    )[0];
+    const liveWorkoutId = linkedEntry?.workout_id ?? workoutUidMap.get(row.workout_id);
+    const liveExerciseId = linkedEntry?.exercise_id ?? exerciseUidMap.get(row.exercise_id);
 
     if (liveWorkoutId === undefined || liveExerciseId === undefined) {
       if (__DEV__) {
@@ -1301,8 +1318,11 @@ function mergeMedia(
   for (const row of rows) {
     const liveSetId =
       row.set_id !== null ? setUidMap.get(row.set_id) ?? null : null;
-    const liveWorkoutId =
-      row.workout_id !== null ? workoutUidMap.get(row.workout_id) ?? null : null;
+    const linkedSetWorkout = liveSetId === null ? undefined : queryLiveRows<{ workout_id: number }>(
+      `SELECT workout_id FROM sets WHERE id = ${liveSetId};`
+    )[0]?.workout_id;
+    const liveWorkoutId = linkedSetWorkout ??
+      (row.workout_id !== null ? workoutUidMap.get(row.workout_id) ?? null : null);
 
     if (row.set_id !== null && liveSetId === null) {
       if (__DEV__) {

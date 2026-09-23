@@ -175,6 +175,31 @@ describe("restore schema manifests", () => {
     }
   );
 
+  test("named workout backups validate without weakening the active-workout index fingerprint", () => {
+    withFixture(openHistoricalRestoreFixture, (fixture) => {
+      initializeRestoreFixture(fixture);
+      fixture.database.prepare('INSERT INTO workouts (started_at, completed_at, name, note) VALUES (?, ?, ?, ?)')
+        .run(1000, 2000, 'Upper body', 'Keep this workout note');
+      expect(validateRestoreSchema(fixture.connection, "source").tables).toEqual(RESTORE_APP_TABLES);
+      expect(validateRestoreSchema(fixture.connection, "current").tables).toEqual(RESTORE_APP_TABLES);
+      fixture.database.exec('DROP INDEX idx_workouts_single_active');
+      fixture.database.exec('CREATE UNIQUE INDEX idx_workouts_single_active ON workouts((2)) WHERE completed_at IS NULL');
+      expectUnsupported(() => validateRestoreSchema(fixture.connection, "current"), { objectType: "index", objectName: "idx_workouts_single_active" });
+    });
+  });
+
+  test("pre-redesign backups remain supported source schemas", () => {
+    withFixture(openHistoricalRestoreFixture, (fixture) => {
+      initializeRestoreFixture(fixture);
+      fixture.database.exec('DROP INDEX idx_workouts_single_active');
+      fixture.database.exec('ALTER TABLE workouts DROP COLUMN name');
+      expect(validateRestoreSchema(fixture.connection, "source").tables).toEqual(RESTORE_APP_TABLES);
+      expectUnsupported(() => validateRestoreSchema(fixture.connection, "current"));
+      initializeRestoreFixture(fixture);
+      expect(validateRestoreSchema(fixture.connection, "current").tables).toEqual(RESTORE_APP_TABLES);
+    });
+  });
+
   test("the e9ee8ed historical DDL validates and migrates to its evidenced current output", () => {
     withFixture(openHistoricalRestoreFixture, (fixture) => {
       const source = validateRestoreSchema(fixture.connection, "source");

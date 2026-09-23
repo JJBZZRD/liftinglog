@@ -16,6 +16,7 @@ import {
   syncLinkedProgramSetsByWorkoutSetIds,
 } from "./programCalendar";
 import { refreshUpcomingCalendarForPrograms } from "../programs/psl/programRuntime";
+import { completeWorkoutSessionAt, createWorkoutSessionWithMetadata } from "./workoutSessions";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
@@ -121,15 +122,11 @@ async function listExerciseDisplayMeta(
 }
 
 export async function createWorkout(data?: { started_at?: number; note?: string | null }): Promise<number> {
-  const res = await db
-    .insert(workouts)
-    .values({ uid: newUid(), startedAt: data?.started_at ?? Date.now(), note: data?.note ?? null })
-    .run();
-  return (res.lastInsertRowId as number) ?? 0;
+  return createWorkoutSessionWithMetadata({ startedAt: data?.started_at ?? Date.now(), note: data?.note });
 }
 
 export async function completeWorkout(workoutId: number, completedAt?: number): Promise<void> {
-  await db.update(workouts).set({ completedAt: completedAt ?? Date.now() }).where(eq(workouts.id, workoutId)).run();
+  completeWorkoutSessionAt(workoutId, completedAt ?? Date.now());
 }
 
 export async function updateWorkoutDate(workoutId: number, date: number): Promise<void> {
@@ -178,9 +175,10 @@ export async function getActiveWorkout(): Promise<Workout | null> {
 }
 
 export async function getOrCreateActiveWorkout(): Promise<number> {
-  const active = await getActiveWorkout();
+  // This synchronous check/create sequence shares the same event-loop turn.
+  const active = db.select().from(workouts).where(isNull(workouts.completedAt)).get();
   if (active) return active.id;
-  return await createWorkout();
+  return createWorkoutSessionWithMetadata({ startedAt: Date.now() });
 }
 
 export async function deleteWorkout(id: number): Promise<void> {
