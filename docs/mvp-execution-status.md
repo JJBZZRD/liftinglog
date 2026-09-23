@@ -5,6 +5,13 @@ Updated 2026-09-22. The product contract and delivery order are defined in
 
 ## Current checkpoint
 
+New 2026-09-23 finding: an Android development build crashed during exercise-tab
+swiping with the native pager's attached-view recycling exception. Build and
+JavaScript bundling succeeded; the Metro disk-cache fallback was a separate
+recoverable warning. Independent source review and 112 organiser swipe attempts
+have not established a reproducer or accepted fix. Track the open release blocker
+and bounded next investigation in [MVP-007H](testing/mvp-android-pager-crash.md).
+
 Integrated production code is `031392e`. MVP capability restrictions, history,
 exercise identity, notes and gallery attachment work are integrated and reviewed.
 Replacement restore implementation and emulator acceptance are complete: native controls,
