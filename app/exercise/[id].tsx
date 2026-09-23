@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { TabBar, TabView } from "react-native-tab-view";
 import VariationExerciseLabel from "../../components/exercise/VariationExerciseLabel";
+import { WorkoutThemeBoundary } from "../../components/workouts/workout-theme";
 import { TabSwipeContext } from "../../lib/contexts/TabSwipeContext";
 import {
   MAX_PINNED_EXERCISES,
@@ -20,6 +21,10 @@ import HistoryTab from "./tabs/HistoryTab";
 import RecordTab from "./tabs/RecordTab";
 
 export default function ExerciseModalScreen() {
+  return <WorkoutThemeBoundary><ExerciseScreenContent /></WorkoutThemeBoundary>;
+}
+
+function ExerciseScreenContent() {
   const { rawColors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; name?: string; refreshHistory?: string; tab?: string; source?: string }>();
   const exerciseId = parseExerciseRouteId(params.id);

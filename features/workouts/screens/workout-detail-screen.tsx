@@ -43,8 +43,9 @@ function WorkoutDetailContent() {
   return (
     <View style={{ flex: 1, backgroundColor: rawColors.background }}>
       <Stack.Screen options={{ title: workout ? workoutTitle(workout) : 'Workout', headerShown: false }} />
-      <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
+      <BlurTargetView ref={blurTarget} style={{ flex: 1, backgroundColor: rawColors.background }}>
         <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}
+          style={{ backgroundColor: rawColors.background }}
           onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 8)} scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 22, paddingBottom: Math.max(insets.bottom, 20) + 30, gap: 26, maxWidth: 700, width: '100%', alignSelf: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -10 }}>

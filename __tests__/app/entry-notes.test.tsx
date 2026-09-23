@@ -83,6 +83,8 @@ jest.mock("../../lib/db/workouts", () => ({
   addSet: jest.fn(), addWorkoutExercise: jest.fn().mockResolvedValue(20),
   completeExerciseEntry: mockCompleteExerciseEntry, deleteSet: jest.fn(), deleteSetsForWorkoutExercise: jest.fn(),
   getOpenWorkoutExercise: mockGetOpenWorkoutExercise,
+  getActiveWorkout: jest.fn().mockResolvedValue({ id: 10, startedAt: new Date("2026-09-20T18:00:00").getTime(), completedAt: null, name: "Evening workout" }),
+  getWorkoutById: jest.fn().mockResolvedValue({ id: 10, startedAt: new Date("2026-09-20T18:00:00").getTime(), completedAt: null, name: "Evening workout" }),
   getOrCreateActiveWorkout: jest.fn().mockResolvedValue(10),
   getWorkoutExerciseById: mockGetWorkoutExerciseById,
   listSetsForWorkoutExercise: mockListSetsForWorkoutExercise,
@@ -105,498 +107,91 @@ jest.mock("../../lib/utils/units", () => ({
   getWeightUnitLabel: () => "kg", parseWeightInputToKg: (value: string) => Number(value),
 }));
 
+jest.mock("../../components/workouts/workout-theme", () => ({
+  WorkoutThemeBoundary: ({ children }: { children: unknown }) => children,
+  useWorkoutTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }),
+}));
+jest.mock("../../components/exercise/recording/workout-picker-modal", () => "WorkoutPickerModal");
+jest.mock("../../lib/db/workoutSessions", () => ({
+  getWorkoutSessionDetail: jest.fn().mockResolvedValue(null),
+  moveWorkoutExerciseToWorkout: jest.fn().mockResolvedValue(undefined), listWorkoutSessionsForDate: jest.fn().mockResolvedValue([]),
+}));
+
 const UnifiedRecordTab = require("../../components/exercise/UnifiedRecordTab").default;
 
-function sessionNoteInput(tree: ReturnType<typeof renderer.create>) {
-  return tree.root
-    .findAllByType(require("react-native").TextInput)
-    .find((node: TestNode) => node.props.accessibilityLabel === "Exercise note")!;
-}
 
-function completeButton(tree: ReturnType<typeof renderer.create>) {
-  return (tree.root as unknown as { findAllByType: (type: string) => TestNode[] })
-    .findAllByType("Pressable")
-    .find((node) => node.findAll((child) => child.props.children === "Complete Exercise").length > 0)!;
-}
+const mockWorkouts = require("../../lib/db/workouts");
+const mockSessions = require("../../lib/db/workoutSessions");
+const selection = require("../../lib/workouts/selection-store");
+async function renderRecordTab() { let tree: ReturnType<typeof renderer.create>; await act(async () => { tree = renderer.create(<UnifiedRecordTab />); }); return tree!; }
 
-async function renderRecordTab() {
-  let tree: ReturnType<typeof renderer.create>;
-  await act(async () => {
-    tree = renderer.create(<UnifiedRecordTab />);
-  });
-  return tree!;
-}
-
-describe("exercise-entry note lifecycle", () => {
+describe("historical exercise notes in workout recording", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.clearAllMocks(); selection.setSelectedWorkoutId(null);
     mockAppCapabilities.programsExperience = "coming-soon";
     delete (mockParams as Record<string, string | undefined>).weId;
     delete (mockParams as Record<string, string | undefined>).programExerciseId;
     delete (mockParams as Record<string, string | undefined>).dateIso;
-    mockGetOpenWorkoutExercise.mockResolvedValue({
-      id: 20, workoutId: 10, note: null, currentWeight: null, currentReps: null,
-    });
-    mockListSetsForWorkoutExercise.mockResolvedValue([]);
+    const entry = { id: 20, exerciseId: 1, workoutId: 10, note: "Keep my historical exercise note", currentWeight: null, currentReps: null };
+    mockGetOpenWorkoutExercise.mockResolvedValue(entry); mockGetWorkoutExerciseById.mockResolvedValue(entry);
+    mockListSetsForWorkoutExercise.mockResolvedValue([{ id: 30, workoutId: 10, workoutExerciseId: 20, note: "Keep my set note", weightKg: 100, reps: 5 }]);
     mockGetProgrammedExercisesForExerciseOnDate.mockResolvedValue([]);
     mockResolveWorkoutExerciseIdForCalendarExercise.mockResolvedValue(null);
-    mockGetWorkoutExerciseById.mockImplementation((id: number) =>
-      Promise.resolve({ id, workoutId: 10, note: null, currentWeight: null, currentReps: null })
-    );
-    mockUpdateWorkoutExerciseNote.mockResolvedValue(undefined);
     mockCompleteExerciseEntry.mockResolvedValue(undefined);
   });
 
-  it("serializes a newer draft after an older deferred write instead of letting the older write win", async () => {
-    const writes: Array<{ note: string | null; resolve: () => void }> = [];
-    mockUpdateWorkoutExerciseNote.mockImplementation((_id: number, note: string | null) =>
-      new Promise<void>((resolve) => writes.push({ note, resolve }))
-    );
+  it("shows stored entry notes read-only and keeps a separate explicitly labeled set note input", async () => {
     const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("first draft");
-      input.props.onBlur();
-    });
-    await act(async () => {
-      input.props.onChangeText("newer draft");
-      input.props.onBlur();
-    });
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0].note).toBe("first draft");
-
-    await act(async () => {
-      writes[0].resolve();
-    });
-    expect(writes).toHaveLength(2);
-    expect(writes[1].note).toBe("newer draft");
-
-    await act(async () => {
-      writes[1].resolve();
-      await Promise.resolve();
-    });
+    expect(tree.root.findAllByProps({ accessibilityLabel: "Exercise note" })).toHaveLength(0);
+    expect(tree.root.findAll((node: any) => node.type === "Text" && node.props.children === "Keep my historical exercise note")).toHaveLength(1);
+    expect(tree.root.findAllByProps({ placeholder: "Add a set note..." })).toHaveLength(1);
+    expect(tree.root.findByType("FlatList").props.data[0].note).toBe("Keep my set note");
     await act(async () => tree.unmount());
+    expect(mockUpdateWorkoutExerciseNote).not.toHaveBeenCalled();
   });
 
-  it("trims entry notes and persists an empty edit as null", async () => {
+  it("completes a manual exercise without replacing its historical note", async () => {
     const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("  first note  ");
-      input.props.onBlur();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      input.props.onChangeText("  edited note  ");
-      input.props.onBlur();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      input.props.onChangeText("   ");
-      input.props.onBlur();
-      await Promise.resolve();
-    });
-
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenNthCalledWith(1, 20, "first note");
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenNthCalledWith(2, 20, "edited note");
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenNthCalledWith(3, 20, null);
-    await act(async () => tree.unmount());
-  });
-
-  it("creates at most one entry when concurrent flushes begin before an entry exists", async () => {
-    const writes: Array<{ resolve: () => void }> = [];
-    mockGetOpenWorkoutExercise.mockResolvedValue(null);
-    mockUpdateWorkoutExerciseNote.mockImplementation(() =>
-      new Promise<void>((resolve) => writes.push({ resolve }))
-    );
-    const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("draft");
-      input.props.onBlur();
-      input.props.onBlur();
-      await Promise.resolve();
-    });
-
-    expect(require("../../lib/db/workouts").addWorkoutExercise).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      writes[0].resolve();
-      await Promise.resolve();
-    });
-    await act(async () => tree.unmount());
-  });
-
-  it("keeps pending writes attached to their original entry when the route changes", async () => {
-    const writes: Array<{ id: number; note: string | null; resolve: () => void }> = [];
-    mockUpdateWorkoutExerciseNote.mockImplementation((id: number, note: string | null) =>
-      new Promise<void>((resolve) => writes.push({ id, note, resolve }))
-    );
-    const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("entry twenty");
-      input.props.onBlur();
-      await Promise.resolve();
-    });
-    Object.assign(mockParams, { weId: "30" });
-    await act(async () => {
-      tree.update(<UnifiedRecordTab />);
-      await Promise.resolve();
-    });
-    const nextInput = sessionNoteInput(tree);
-    await act(async () => {
-      nextInput.props.onChangeText("entry thirty");
-      nextInput.props.onBlur();
-    });
-
-    expect(writes).toHaveLength(1);
-    expect(writes[0]).toEqual(expect.objectContaining({ id: 20, note: "entry twenty" }));
-    await act(async () => {
-      writes[0].resolve();
-      await Promise.resolve();
-    });
-    expect(writes[1]).toEqual(expect.objectContaining({ id: 30, note: "entry thirty" }));
-    await act(async () => {
-      writes[1].resolve();
-      await Promise.resolve();
-      tree.unmount();
-    });
-    delete (mockParams as Record<string, string | undefined>).weId;
-  });
-
-  it("keeps a failed draft visible, offers retry, and prevents completion from claiming success", async () => {
-    mockListSetsForWorkoutExercise.mockResolvedValue([
-      { id: 30, note: null, weightKg: 100, reps: 5, performedAt: Date.now() },
-    ]);
-    mockUpdateWorkoutExerciseNote
-      .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce(undefined);
-    const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("keep me");
-      await (completeButton(tree).props.onPress as () => Promise<void>)();
-    });
-
-    expect(mockCompleteExerciseEntry).not.toHaveBeenCalled();
-    expect(
-      tree.root.findAll((node: TestNode) => node.props.children === "Retry save")
-    ).toHaveLength(1);
-    const retry = (tree.root as unknown as { findAllByType: (type: string) => TestNode[] })
-      .findAllByType("Pressable")
-      .find((node) => node.props.accessibilityLabel === "Retry saving exercise note")!;
-    await act(async () => {
-      (retry.props.onPress as () => void)();
-      await Promise.resolve();
-    });
-
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenLastCalledWith(20, "keep me");
-    await act(async () => tree.unmount());
-  });
-
-  it("waits for the latest note write before completing the current entry", async () => {
-    const writes: Array<{ resolve: () => void }> = [];
-    mockListSetsForWorkoutExercise.mockResolvedValue([
-      { id: 30, note: null, weightKg: 100, reps: 5, performedAt: Date.now() },
-    ]);
-    mockUpdateWorkoutExerciseNote.mockImplementation(() =>
-      new Promise<void>((resolve) => writes.push({ resolve }))
-    );
-    const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-    let completion: Promise<void>;
-
-    await act(async () => {
-      input.props.onChangeText("finish with this");
-      completion = (completeButton(tree).props.onPress as () => Promise<void>)();
-      await Promise.resolve();
-    });
-
-    expect(mockCompleteExerciseEntry).not.toHaveBeenCalled();
-    expect(writes).toHaveLength(1);
-    await act(async () => {
-      writes[0].resolve();
-      await completion!;
-    });
-
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenCalledWith(20, "finish with this");
+    await act(async () => { await tree.root.findByProps({ accessibilityLabel: "Complete Exercise" }).props.onPress(); });
     expect(mockCompleteExerciseEntry).toHaveBeenCalledWith(20, expect.any(Number));
+    expect(mockUpdateWorkoutExerciseNote).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
 
-  it("persists a draft typed during a pending completion write before closing", async () => {
-    const writes: Array<{ note: string | null; resolve: () => void }> = [];
-    mockListSetsForWorkoutExercise.mockResolvedValue([
-      { id: 30, note: null, weightKg: 100, reps: 5, performedAt: Date.now() },
-    ]);
-    mockUpdateWorkoutExerciseNote.mockImplementation((_id: number, note: string | null) =>
-      new Promise<void>((resolve) => writes.push({ note, resolve }))
-    );
+  it("preserves a legacy entry's stored day when completing it inside a differently dated workout", async () => {
+    const performedAt = new Date("2026-09-19T15:30:00").getTime();
+    mockGetOpenWorkoutExercise.mockResolvedValue({ id: 20, exerciseId: 1, workoutId: 10, note: "Historical note", performedAt });
     const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-    let completion: Promise<void>;
-
-    await act(async () => {
-      input.props.onChangeText("note A");
-      completion = (completeButton(tree).props.onPress as () => Promise<void>)();
-      await Promise.resolve();
-    });
-    expect(writes).toHaveLength(1);
-    await act(async () => {
-      input.props.onChangeText("note B");
-      writes[0].resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockCompleteExerciseEntry).not.toHaveBeenCalled();
-    expect(writes).toHaveLength(2);
-    expect(writes[1].note).toBe("note B");
-    await act(async () => {
-      writes[1].resolve();
-      await completion!;
-    });
-
-    expect(mockCompleteExerciseEntry).toHaveBeenCalledWith(20, expect.any(Number));
+    await act(async () => { await tree.root.findByProps({ accessibilityLabel: "Complete Exercise" }).props.onPress(); });
+    expect(mockCompleteExerciseEntry).toHaveBeenCalledWith(20, performedAt);
+    expect(mockUpdateWorkoutExerciseNote).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
 
-  it("skips an older queued snapshot after a newer unblurred draft is saved", async () => {
-    const writes: Array<{ note: string | null; resolve: () => void }> = [];
-    mockUpdateWorkoutExerciseNote.mockImplementation((_id: number, note: string | null) =>
-      new Promise<void>((resolve) => writes.push({ note, resolve }))
-    );
+  it("preserves entry and set notes through workout reassignment", async () => {
     const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("note A");
-      input.props.onBlur();
-      await Promise.resolve();
-      input.props.onChangeText("note B");
-      input.props.onBlur();
-      input.props.onChangeText("note C");
-      writes[0].resolve();
-      await Promise.resolve();
-    });
-
-    expect(writes).toHaveLength(2);
-    expect(writes[1].note).toBe("note C");
-    await act(async () => {
-      writes[1].resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(writes).toHaveLength(2);
+    const destination = { id: 11, name: "Another workout", startedAt: Date.now(), completedAt: null };
+    mockWorkouts.getWorkoutById.mockResolvedValue(destination);
+    mockGetWorkoutExerciseById.mockResolvedValue({ id: 20, exerciseId: 1, workoutId: 11, note: "Keep my historical exercise note" });
+    await act(async () => { await tree.root.findByType("WorkoutPickerModal").props.onSelect(destination); });
+    expect(mockSessions.moveWorkoutExerciseToWorkout).toHaveBeenCalledWith(20, 11);
+    expect(tree.root.findByType("FlatList").props.data[0].note).toBe("Keep my set note");
+    expect(mockUpdateWorkoutExerciseNote).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
 
-  it("does not let an old queued snapshot overwrite a newer old-context save after navigation", async () => {
-    let persistedNote: string | null = null;
-    const writes: Array<{ note: string | null; resolve: () => void }> = [];
-    mockUpdateWorkoutExerciseNote.mockImplementation((_id: number, note: string | null) =>
-      new Promise<void>((resolve) =>
-        writes.push({
-          note,
-          resolve: () => {
-            persistedNote = note;
-            resolve();
-          },
-        })
-      )
-    );
-    const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-
-    await act(async () => {
-      input.props.onChangeText("note A");
-      input.props.onBlur();
-      await Promise.resolve();
-      input.props.onChangeText("note B");
-      input.props.onBlur();
-      input.props.onChangeText("note C");
-      writes[0].resolve();
-      await Promise.resolve();
-    });
-    expect(writes[1].note).toBe("note C");
-
-    Object.assign(mockParams, { weId: "30" });
-    await act(async () => {
-      tree.update(<UnifiedRecordTab />);
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      writes[1].resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    if (writes[2]) {
-      await act(async () => {
-        writes[2].resolve();
-        await Promise.resolve();
-      });
-    }
-    expect(writes).toHaveLength(2);
-    expect(persistedNote).toBe("note C");
-    await act(async () => tree.unmount());
-  });
-
-  it("reuses one created entry for queued no-entry note flushes", async () => {
-    let resolveFirstCreation: (session: {
-      workoutId: number;
-      workoutExerciseId: number;
-      exerciseId: number;
-    }) => void;
+  it("reads a linked program entry note without creating or rewriting history", async () => {
     mockAppCapabilities.programsExperience = "enabled";
     Object.assign(mockParams, { programExerciseId: "900", dateIso: "2026-09-20" });
-    mockGetProgrammedExercisesForExerciseOnDate.mockResolvedValue([
-      {
-        calendar: { programId: 1, sessionName: "Day 1" },
-        calendarExercise: { id: 900, status: "pending", exerciseName: "Bench Press" },
-        programName: "Program",
-        sets: [],
-      },
-    ]);
-    mockEnsureProgramExerciseWorkoutSession.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveFirstCreation = resolve;
-        })
-    );
+    mockResolveWorkoutExerciseIdForCalendarExercise.mockResolvedValue(20);
+    mockGetProgrammedExercisesForExerciseOnDate.mockResolvedValue([{
+      calendar: { programId: 1, sessionName: "Day 1" }, calendarExercise: { id: 900, status: "pending", exerciseName: "Bench Press" },
+      programName: "Program", sets: [],
+    }]);
     const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-    await act(async () => {
-      input.props.onChangeText("first");
-      input.props.onBlur();
-      await Promise.resolve();
-      input.props.onChangeText("second");
-      input.props.onBlur();
-      resolveFirstCreation!({ workoutId: 10, workoutExerciseId: 20, exerciseId: 1 });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockEnsureProgramExerciseWorkoutSession).toHaveBeenCalledTimes(1);
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenNthCalledWith(1, 20, "first");
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenLastCalledWith(20, "second");
-    await act(async () => tree.unmount());
-  });
-
-  it("does not let a stale created entry consume the next route's note draft", async () => {
-    let resolveOldProgramEntry: (session: {
-      workoutId: number;
-      workoutExerciseId: number;
-      exerciseId: number;
-    }) => void;
-    mockAppCapabilities.programsExperience = "enabled";
-    Object.assign(mockParams, { programExerciseId: "900", dateIso: "2026-09-20" });
-    mockGetProgrammedExercisesForExerciseOnDate.mockResolvedValue([
-      {
-        calendar: { programId: 1, sessionName: "Day 1" },
-        calendarExercise: { id: 900, status: "pending", exerciseName: "Bench Press" },
-        programName: "Program",
-        sets: [],
-      },
-    ]);
-    mockEnsureProgramExerciseWorkoutSession.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveOldProgramEntry = resolve;
-        })
-    );
-    const tree = await renderRecordTab();
-    const oldInput = sessionNoteInput(tree);
-    await act(async () => {
-      oldInput.props.onChangeText("entry twenty");
-      oldInput.props.onBlur();
-      await Promise.resolve();
-    });
-
-    mockAppCapabilities.programsExperience = "coming-soon";
-    delete (mockParams as Record<string, string | undefined>).programExerciseId;
-    delete (mockParams as Record<string, string | undefined>).dateIso;
-    Object.assign(mockParams, { weId: "30" });
-    await act(async () => {
-      tree.update(<UnifiedRecordTab />);
-      await Promise.resolve();
-    });
-    const newInput = sessionNoteInput(tree);
-    await act(async () => {
-      newInput.props.onChangeText("entry thirty");
-      newInput.props.onBlur();
-      resolveOldProgramEntry!({ workoutId: 10, workoutExerciseId: 20, exerciseId: 1 });
-      await Promise.resolve();
-    });
-
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenNthCalledWith(1, 20, "entry twenty");
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenLastCalledWith(30, "entry thirty");
-    await act(async () => tree.unmount());
-  });
-
-  it("blocks a pending completion when its entry is no longer the current route", async () => {
-    let resolveWrite: () => void;
-    let resolveNewRouteEntry: (entry: {
-      id: number;
-      workoutId: number;
-      note: null;
-      currentWeight: null;
-      currentReps: null;
-    }) => void;
-    mockListSetsForWorkoutExercise.mockResolvedValue([
-      { id: 30, note: null, weightKg: 100, reps: 5, performedAt: Date.now() },
-    ]);
-    mockUpdateWorkoutExerciseNote.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveWrite = resolve;
-        })
-    );
-    const tree = await renderRecordTab();
-    const input = sessionNoteInput(tree);
-    let completion: Promise<void>;
-    await act(async () => {
-      input.props.onChangeText("entry twenty");
-      completion = (completeButton(tree).props.onPress as () => Promise<void>)();
-      await Promise.resolve();
-    });
-
-    Object.assign(mockParams, { weId: "30" });
-    mockGetWorkoutExerciseById.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveNewRouteEntry = resolve;
-        })
-    );
-    await act(async () => {
-      tree.update(<UnifiedRecordTab />);
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      resolveWrite!();
-      await completion!;
-    });
-
-    expect(mockCompleteExerciseEntry).not.toHaveBeenCalled();
-    await act(async () => {
-      resolveNewRouteEntry!({
-        id: 30,
-        workoutId: 10,
-        note: null,
-        currentWeight: null,
-        currentReps: null,
-      });
-      await Promise.resolve();
-    });
+    expect(tree.root.findAll((node: any) => node.type === "Text" && node.props.children === "Keep my historical exercise note")).toHaveLength(1);
+    expect(mockEnsureProgramExerciseWorkoutSession).not.toHaveBeenCalled();
+    expect(mockUpdateWorkoutExerciseNote).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
 });

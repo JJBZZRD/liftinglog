@@ -34,8 +34,9 @@ function WorkoutsHomeContent() {
   return (
     <View style={{ flex: 1, backgroundColor: rawColors.background }}>
       <Stack.Screen options={{ title: 'Workouts', headerShown: false }} />
-      <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
+      <BlurTargetView ref={blurTarget} style={{ flex: 1, backgroundColor: rawColors.background }}>
         <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}
+          style={{ backgroundColor: rawColors.background }}
           onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 8)} scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={loading && workouts.length > 0} onRefresh={() => void reload()} tintColor={rawColors.primary} />}
           contentContainerStyle={{ paddingHorizontal: 22, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) + 92, gap: 24, maxWidth: 700, width: '100%', alignSelf: 'center' }}>

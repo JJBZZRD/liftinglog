@@ -93,6 +93,8 @@ jest.mock("../../lib/db/workouts", () => ({
   deleteSet: jest.fn(),
   deleteSetsForWorkoutExercise: jest.fn(),
   getOpenWorkoutExercise: mockGetOpenWorkoutExercise,
+  getActiveWorkout: jest.fn().mockResolvedValue({ id: 10, startedAt: new Date("2026-09-20T18:00:00").getTime(), completedAt: null, name: "Evening workout" }),
+  getWorkoutById: jest.fn().mockResolvedValue({ id: 10, startedAt: new Date("2026-09-20T18:00:00").getTime(), completedAt: null, name: "Evening workout" }),
   getOrCreateActiveWorkout: mockGetOrCreateActiveWorkout,
   getWorkoutExerciseById: mockGetWorkoutExerciseById,
   listSetsForWorkoutExercise: jest.fn().mockResolvedValue([]),
@@ -116,7 +118,18 @@ jest.mock("../../lib/utils/units", () => ({
 
 import { parseExerciseRouteId } from "../../lib/routing/exerciseRouteId";
 
+jest.mock("../../components/workouts/workout-theme", () => ({
+  WorkoutThemeBoundary: ({ children }: { children: unknown }) => children,
+  useWorkoutTheme: () => ({ rawColors: new Proxy({}, { get: () => "#000" }) }),
+}));
+jest.mock("../../components/exercise/recording/workout-picker-modal", () => "WorkoutPickerModal");
+jest.mock("../../lib/db/workoutSessions", () => ({
+  getWorkoutSessionDetail: jest.fn().mockResolvedValue(null),
+  moveWorkoutExerciseToWorkout: jest.fn().mockResolvedValue(undefined), listWorkoutSessionsForDate: jest.fn().mockResolvedValue([]),
+}));
+
 const UnifiedRecordTab = require("../../components/exercise/UnifiedRecordTab").default;
+const mockWorkouts = require("../../lib/db/workouts");
 const mockRouter = require("expo-router").router;
 type RenderTree = ReturnType<typeof renderer.create>;
 
@@ -143,9 +156,10 @@ describe("invalid exercise route protection", () => {
     mockParams.name = "Bench Press";
     mockGetExerciseById.mockResolvedValue({ id: 1 });
     mockGetOrCreateActiveWorkout.mockResolvedValue(10);
+    mockWorkouts.getActiveWorkout.mockResolvedValue({ id: 10, startedAt: Date.now(), completedAt: null });
     mockGetOpenWorkoutExercise.mockResolvedValue(null);
     mockAddWorkoutExercise.mockResolvedValue(20);
-    mockGetWorkoutExerciseById.mockResolvedValue({ id: 20, note: null, currentWeight: null, currentReps: null });
+    mockGetWorkoutExerciseById.mockResolvedValue({ id: 20, exerciseId: 1, workoutId: 10, note: null, currentWeight: null, currentReps: null });
     mockAddSet.mockResolvedValue(30);
     mockRouter.canGoBack.mockReturnValue(true);
   });
@@ -189,7 +203,7 @@ describe("invalid exercise route protection", () => {
     await act(async () => tree!.unmount());
   });
 
-  it("waits for the current route lookup before creating the current exercise entry", async () => {
+  it("waits for the current route lookup before hydrating its workout", async () => {
     let resolveFirst: ((value: { id: number }) => void) | undefined;
     let resolveSecond: ((value: { id: number }) => void) | undefined;
     mockGetExerciseById.mockImplementation((id: number) =>
@@ -223,62 +237,43 @@ describe("invalid exercise route protection", () => {
       await Promise.resolve();
     });
 
-    expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ exercise_id: 2 }));
+    expect(mockGetOpenWorkoutExercise).toHaveBeenCalledWith(10, 2);
+    expectNoHistoryWrites();
     expect(mockAddWorkoutExercise).not.toHaveBeenCalledWith(expect.objectContaining({ exercise_id: 1 }));
     await act(async () => tree!.unmount());
   });
 
-  it("continues to create a manual entry after a valid catalog lookup", async () => {
+  it("hydrates after a valid catalog lookup without creating an empty entry", async () => {
     let tree: RenderTree;
     await act(async () => {
       tree = renderer.create(<UnifiedRecordTab />);
     });
     await flushEffects();
 
-    expect(mockGetOrCreateActiveWorkout).toHaveBeenCalledTimes(1);
-    expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ workout_id: 10, exercise_id: 1 }));
+    expect(mockWorkouts.getActiveWorkout).toHaveBeenCalledTimes(1);
+    expect(mockGetOpenWorkoutExercise).toHaveBeenCalledWith(10, 1);
+    expectNoHistoryWrites();
     await act(async () => tree!.unmount());
   });
 
-  it("does not expose a created entry after its readback resolves for a replacement route", async () => {
-    let resolveReadback: ((value: { id: number; note: null; currentWeight: null; currentReps: null }) => void) | undefined;
-    mockGetWorkoutExerciseById.mockImplementation(
-      () => new Promise((resolve) => {
-        resolveReadback = resolve;
-      })
-    );
-
+  it("does not expose a stale open entry after a replacement route", async () => {
+    let resolveOpen: (value: unknown) => void;
+    mockGetOpenWorkoutExercise.mockImplementation(() => new Promise(resolve => { resolveOpen = resolve; }));
     let tree: RenderTree;
-    await act(async () => {
-      tree = renderer.create(<UnifiedRecordTab />);
-    });
-    await flushEffects();
-    expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ exercise_id: 1 }));
-
-    mockGetExerciseById.mockImplementation(
-      (id: number) =>
-        id === 2
-          ? new Promise(() => {})
-          : Promise.resolve({ id: 1 })
-    );
+    await act(async () => { tree = renderer.create(<UnifiedRecordTab />); });
+    mockGetExerciseById.mockImplementation(() => new Promise(() => {}));
     mockParams.id = "2";
-    await act(async () => {
-      tree!.update(<UnifiedRecordTab />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      resolveReadback?.({ id: 20, note: null, currentWeight: null, currentReps: null });
-      await Promise.resolve();
-    });
-
-    expect(tree!.root.findAllByProps({ accessibilityLabel: "Exercise note" })).toHaveLength(0);
+    await act(async () => { tree!.update(<UnifiedRecordTab />); });
+    await act(async () => { resolveOpen!({ id: 20, exerciseId: 1, workoutId: 10, note: "Old entry" }); });
+    expect(tree!.root.findAllByType("TextInput")).toHaveLength(0);
+    expectNoHistoryWrites();
     await act(async () => tree!.unmount());
   });
 
   it("contains a manual initializer rejection and retries from the real record tab", async () => {
-    mockGetOrCreateActiveWorkout
+    mockWorkouts.getActiveWorkout
       .mockRejectedValueOnce(new Error("workout unavailable"))
-      .mockResolvedValueOnce(10);
+      .mockResolvedValueOnce({ id: 10, startedAt: Date.now(), completedAt: null });
 
     let tree: RenderTree;
     await act(async () => {
@@ -293,8 +288,9 @@ describe("invalid exercise route protection", () => {
       await Promise.resolve();
     });
 
-    expect(mockGetOrCreateActiveWorkout).toHaveBeenCalledTimes(2);
-    expect(mockAddWorkoutExercise).toHaveBeenCalledWith(expect.objectContaining({ exercise_id: 1 }));
+    expect(mockWorkouts.getActiveWorkout).toHaveBeenCalledTimes(2);
+    expect(mockGetOpenWorkoutExercise).toHaveBeenCalledWith(10, 1);
+    expectNoHistoryWrites();
     await act(async () => tree!.unmount());
   });
 
@@ -375,31 +371,14 @@ describe("invalid exercise route protection", () => {
     await act(async () => tree!.unmount());
   });
 
-  it("flushes an already-owned note after blur invalidates fresh initialization", async () => {
-    mockGetOpenWorkoutExercise.mockResolvedValue({
-      id: 20,
-      workoutId: 10,
-      note: null,
-      currentWeight: null,
-      currentReps: null,
-    });
-
+  it("preserves historical notes on blur without writing them", async () => {
+    mockGetOpenWorkoutExercise.mockResolvedValue({ id: 20, exerciseId: 1, workoutId: 10, note: "Keep this note", currentWeight: null, currentReps: null });
     let tree: RenderTree;
-    await act(async () => {
-      tree = renderer.create(<UnifiedRecordTab />);
-    });
-    await flushEffects();
-    const noteInput = tree!.root
-      .findAllByType("TextInput")
-      .find((node: any) => node.props.accessibilityLabel === "Exercise note");
-    await act(async () => {
-      noteInput?.props.onChangeText("Keep this note");
-      setFocused(false);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockUpdateWorkoutExerciseNote).toHaveBeenCalledWith(20, "Keep this note");
+    await act(async () => { tree = renderer.create(<UnifiedRecordTab />); });
+    expect(tree!.root.findAllByProps({ accessibilityLabel: "Exercise note" })).toHaveLength(0);
+    expect(tree!.root.findAll((node: any) => node.type === "Text" && node.props.children === "Keep this note")).toHaveLength(1);
+    await act(async () => { setFocused(false); });
+    expect(mockUpdateWorkoutExerciseNote).not.toHaveBeenCalled();
     await act(async () => tree!.unmount());
   });
 

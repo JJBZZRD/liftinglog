@@ -11,7 +11,7 @@ export function ScrollFade({ edge, blurTarget, inset = 0 }: { edge: 'top' | 'bot
     {[0, 1, 2].map((step) => <BlurView key={step} pointerEvents="none"
       blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus"
       tint={isDark ? 'dark' : 'light'} intensity={8 + step * 8}
-      style={{ position: 'absolute', left: 0, right: 0, [edge]: 0, height: 36 - step * 12, opacity: 0.3 }} />)}
+      style={{ position: 'absolute', left: 0, right: 0, [edge]: 0, height: 36 - step * 12, opacity: 0.12 }} />)}
     <LinearGradient colors={top ? [rawColors.background, `${rawColors.background}00`] : [`${rawColors.background}00`, rawColors.background]}
       style={StyleSheet.absoluteFill} />
   </View>;
