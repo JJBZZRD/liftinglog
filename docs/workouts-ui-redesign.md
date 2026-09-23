@@ -10,6 +10,8 @@ workouts can share a day. The app opens on the current local day.
 - `features/workouts/screens` composes the Home and detail views.
 - `features/workouts/hooks` owns loading, request freshness, edits and lifecycle actions.
 - `features/workouts/components` owns session rows, exercise/set rows and dialogs.
+- `features/exercises` separates the exercise library's query/grouping logic,
+  actions and dialogs from its route and screen composition.
 - `components/workouts` provides the scoped slate palette, brand header, calendar,
   frosted tools overlay and scroll-edge treatment.
 - `components/exercise/recording` separates workout assignment, session loading,

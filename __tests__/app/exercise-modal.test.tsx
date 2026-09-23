@@ -88,6 +88,7 @@ jest.mock("react-native-tab-view", () => ({
 }));
 
 jest.mock("../../lib/theme/ThemeContext", () => ({
+  ThemeColorScope: ({ children }: { children: React.ReactNode }) => children,
   useTheme: jest.fn(() => ({
     rawColors: {
       background: "#ffffff",

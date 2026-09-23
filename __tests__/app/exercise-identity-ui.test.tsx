@@ -76,6 +76,7 @@ jest.mock("../../components/modals/BaseModal", () => ({ visible = true, children
   return visible ? React.createElement("Modal", null, children) : null;
 });
 jest.mock("../../lib/theme/ThemeContext", () => ({
+  ThemeColorScope: ({ children }: { children: React.ReactNode }) => children,
   useTheme: () => ({ rawColors: new Proxy({}, { get: () => "#123456" }), isDark: false }),
 }));
 jest.mock("../../lib/utils/layoutAnimation", () => ({ enableLegacyAndroidLayoutAnimationsIfNeeded: jest.fn() }));
