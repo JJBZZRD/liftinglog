@@ -37,6 +37,11 @@ are explicit; devices below Android 12 receive the library's translucent fallbac
 The calendar uses the existing `react-native-calendars` dependency. No new native
 package is needed. The pinned-exercises overlay is hidden on Workouts.
 
+The legacy Workout History link is hidden in both release profiles. Exercise
+history and chart actions open the named workout's detail page instead of the
+old day-based view. The legacy history and day-view routes and their underlying
+code remain in the repository; no history data is removed.
+
 ## Persistence and compatibility
 
 The rules and migration details in [database-ground-truth.md](database-ground-truth.md)

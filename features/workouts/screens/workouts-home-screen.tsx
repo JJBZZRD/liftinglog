@@ -70,18 +70,13 @@ function WorkoutsHomeContent() {
               : workouts.map((workout, index) => <WorkoutSessionRow key={workout.id} workout={workout} index={index} onPress={() => open(workout.id)} />)}
             {!loading && !error && workouts.length === 0 && <WorkoutEmpty title="A fresh page" description="No workouts on this day yet. Start a session and build your next personal best." />}
           </View>
-          <View style={{ borderTopWidth: 1, borderColor: rawColors.borderLight, paddingTop: 14, gap: 4 }}>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/workout-history')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}>
-              <MaterialCommunityIcons name="history" size={22} color={rawColors.foregroundSecondary} />
-              <Text style={{ flex: 1, color: rawColors.foregroundSecondary, fontSize: 15, fontWeight: '600' }}>Workout history</Text>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={rawColors.foregroundMuted} />
-            </Pressable>
-            {appCapabilities.healthMetrics && <Pressable accessibilityRole="button" onPress={() => router.push('/user-metrics')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}>
+          {appCapabilities.healthMetrics && <View style={{ borderTopWidth: 1, borderColor: rawColors.borderLight, paddingTop: 14, gap: 4 }}>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/user-metrics')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}>
               <MaterialCommunityIcons name="heart-pulse" size={22} color={rawColors.foregroundSecondary} />
               <Text style={{ flex: 1, color: rawColors.foregroundSecondary, fontSize: 15, fontWeight: '600' }}>Health metrics</Text>
               <MaterialCommunityIcons name="chevron-right" size={20} color={rawColors.foregroundMuted} />
-            </Pressable>}
-          </View>
+            </Pressable>
+          </View>}
         </ScrollView>
       </BlurTargetView>
       {scrolled && <ScrollFade edge="top" blurTarget={blurTarget} />}

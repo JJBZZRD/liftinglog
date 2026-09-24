@@ -126,14 +126,6 @@ function hasDisplayableNote(note: string | null | undefined): note is string {
   return typeof note === "string" && note.trim().length > 0;
 }
 
-function timestampToDayKey(timestamp: number): string {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 /**
  * Calculate estimated 1RM using Epley formula
  * e1RM = weight × (1 + 0.0333 × reps)
@@ -538,8 +530,7 @@ export default function HistoryTab({ refreshKey }: HistoryTabProps) {
   };
 
   const handleViewWorkout = useCallback((entry: WorkoutHistoryEntry) => {
-    const dayKey = timestampToDayKey(getHistoryEntryTimestamp(entry));
-    router.push({ pathname: "/workout/[dayKey]", params: { dayKey } });
+    router.push({ pathname: "/workout-session/[id]", params: { id: String(entry.workout.id) } });
   }, []);
 
   const handleEdit = useCallback((entry: WorkoutHistoryEntry) => {

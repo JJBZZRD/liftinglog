@@ -253,8 +253,7 @@ describe("history in-progress status", () => {
       pathname: "/workout-session/[id]",
       params: { id: "2" },
     });
-    await act(async () => { findText(tree!, 'Workout history')[0].parent!.props.onPress(); });
-    expect(mockRouterPush).toHaveBeenCalledWith('/workout-history');
+    expect(findText(tree!, 'Workout history')).toHaveLength(0);
     await act(async () => {
       tree!.unmount();
     });
