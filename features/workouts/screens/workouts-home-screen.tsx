@@ -39,12 +39,8 @@ function WorkoutsHomeContent() {
           style={{ backgroundColor: rawColors.background }}
           onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 8)} scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={loading && workouts.length > 0} onRefresh={() => void reload()} tintColor={rawColors.primary} />}
-          contentContainerStyle={{ paddingHorizontal: 22, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) + 92, gap: 24, maxWidth: 700, width: '100%', alignSelf: 'center' }}>
+          contentContainerStyle={{ paddingHorizontal: 22, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) + 92, gap: 18, maxWidth: 700, width: '100%', alignSelf: 'center' }}>
           <WorkoutHeader onCalculators={() => setOverlay('calculators')} onStats={() => setOverlay('stats')} />
-          <View style={{ gap: 8, paddingTop: 4 }}>
-            <Text accessibilityRole="header" style={{ fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -1.1, color: rawColors.foreground }}>Workouts</Text>
-            <Text style={{ color: rawColors.foregroundSecondary, fontSize: 15 }}>Make every session count.</Text>
-          </View>
           <WorkoutDateSelector date={date} onChange={setDate} onCalendar={() => setCalendarVisible(true)} />
           <Pressable onPress={() => void newWorkout()} disabled={creating} accessibilityRole="button" accessibilityState={{ disabled: creating }}
             className="active:opacity-70" style={{ backgroundColor: rawColors.primary, opacity: creating ? 0.8 : 1, borderRadius: 16, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
@@ -62,7 +58,7 @@ function WorkoutsHomeContent() {
           </Pressable>}
           <View style={{ gap: 14 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6 }}>
-              <Text style={{ color: rawColors.foregroundMuted, fontSize: 11, letterSpacing: 1.5, fontWeight: '700' }}>YOUR SESSIONS</Text>
+              <Text accessibilityRole="header" style={{ color: rawColors.foreground, fontSize: 18, fontWeight: '600', letterSpacing: -0.3 }}>Workouts</Text>
               <Text style={{ color: rawColors.foregroundMuted, fontSize: 12 }}>{workouts.length} {workouts.length === 1 ? 'workout' : 'workouts'}</Text>
             </View>
             {error && <WorkoutError message={error} onRetry={() => void reload()} />}
