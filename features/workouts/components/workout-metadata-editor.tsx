@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import BaseModal from '@/components/modals/BaseModal';
+import AppModal from '@/components/modals/BaseModal';
+import { useFrostedModalTarget } from '@/components/modals/frosted-modal-context';
 import { useTheme } from '@/lib/theme/ThemeContext';
 
 export function WorkoutMetadataEditor({ visible, name, note, busy, error, onClose, onSave }: {
@@ -8,6 +9,7 @@ export function WorkoutMetadataEditor({ visible, name, note, busy, error, onClos
   onClose: () => void; onSave: (name: string, note: string) => Promise<boolean>;
 }) {
   const { rawColors } = useTheme();
+  const frostedTarget = useFrostedModalTarget();
   const [draftName, setDraftName] = useState(name);
   const [draftNote, setDraftNote] = useState(note ?? '');
   useEffect(() => {
@@ -17,8 +19,8 @@ export function WorkoutMetadataEditor({ visible, name, note, busy, error, onClos
     if (draftName.trim() && await onSave(draftName, draftNote)) onClose();
   };
   return (
-    <BaseModal visible={visible} onClose={busy ? () => {} : onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <AppModal visible={visible} onClose={busy ? () => { } : onClose}>
+      <KeyboardAvoidingView enabled={!frostedTarget} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 450 }}>
           <Text className="text-xl font-bold text-foreground mb-5">Edit workout</Text>
           <Text className="text-sm font-semibold text-foreground-secondary mb-2">Workout name</Text>
@@ -40,6 +42,6 @@ export function WorkoutMetadataEditor({ visible, name, note, busy, error, onClos
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </BaseModal>
+    </AppModal>
   );
 }

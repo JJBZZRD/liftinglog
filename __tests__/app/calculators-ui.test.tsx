@@ -20,6 +20,8 @@ jest.mock("react-native", () => {
     TextInput: createHost("TextInput"),
     ActivityIndicator: createHost("ActivityIndicator"),
     RefreshControl: createHost("RefreshControl"),
+    KeyboardAvoidingView: createHost("KeyboardAvoidingView"),
+    Platform: { OS: 'ios' },
     Modal: ({ visible, children }: any) => visible ? children : null,
     AppState: { addEventListener: () => ({ remove: jest.fn() }) },
     StyleSheet: {

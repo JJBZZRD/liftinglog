@@ -12,8 +12,10 @@
 import { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, View, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFrostedModalTarget } from './frosted-modal-context';
+import { FrostedModal } from './frosted-modal';
 
-interface BaseModalProps {
+export interface BaseModalProps {
   /** Whether the modal is visible */
   visible: boolean;
   /** Called when the modal should close (backdrop press or back button) */
@@ -47,6 +49,14 @@ export default function BaseModal({
   centerContent = true,
 }: BaseModalProps) {
   const insets = useSafeAreaInsets();
+  const blurTarget = useFrostedModalTarget();
+
+  if (blurTarget) {
+    return <FrostedModal visible={visible} onClose={onClose} blurTarget={blurTarget}
+      animationType={animationType} contentStyle={contentStyle} maxWidth={maxWidth} centerContent={centerContent}>
+      {children}
+    </FrostedModal>;
+  }
 
   return (
     <Modal

@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
 import { WorkoutThemeBoundary } from '@/components/workouts/workout-theme';
 import { IconButton, Metric, WorkoutStatus } from '@/components/workouts/workout-ui';
 import { ScrollFade } from '@/components/workouts/scroll-fade';
@@ -16,6 +17,7 @@ import { WorkoutExerciseEntry, WorkoutSetRow } from '../components/workout-exerc
 import { WorkoutEmpty, WorkoutError } from '../components/workout-feedback';
 import { WorkoutMetadataEditor } from '../components/workout-metadata-editor';
 import { useWorkoutDetail } from '../hooks/use-workout-detail';
+import { useWorkoutCurrentPBBadges } from '../hooks/use-workout-current-pb-badges';
 import { dateLabel, workoutTitle } from '../workout-types';
 
 function WorkoutDetailContent() {
@@ -29,6 +31,7 @@ function WorkoutDetailContent() {
   const [scrolled, setScrolled] = useState(false);
   const detail = useWorkoutDetail(id);
   const { workout, loading, busy, error } = detail;
+  const { pbBadges, pbError } = useWorkoutCurrentPBBadges(workout);
   const active = workout?.completedAt === null;
   const back = () => router.canGoBack() ? router.back() : router.replace('/(tabs)');
   const openSet = (setId: number) => router.push({ pathname: '/set/[id]', params: { id: String(setId) } });
@@ -41,6 +44,7 @@ function WorkoutDetailContent() {
   };
 
   return (
+    <FrostedModalProvider blurTarget={blurTarget}>
     <View style={{ flex: 1, backgroundColor: rawColors.background }}>
       <Stack.Screen options={{ title: workout ? workoutTitle(workout) : 'Workout', headerShown: false }} />
       <BlurTargetView ref={blurTarget} style={{ flex: 1, backgroundColor: rawColors.background }}>
@@ -85,7 +89,8 @@ function WorkoutDetailContent() {
                 <Text style={{ color: rawColors.foregroundMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 }}>EXERCISES</Text>
                 <Text style={{ color: rawColors.foregroundMuted, fontSize: 12 }}>{workout.exercises.filter((entry) => entry.completedAt !== null).length} / {workout.exercises.length} complete</Text>
               </View>
-              {workout.exercises.map((entry, index) => <WorkoutExerciseEntry key={entry.id} entry={entry} index={index} onSetPress={openSet} onPress={() => {
+              {pbError && <WorkoutError message={pbError} onRetry={() => void detail.reload()} />}
+              {workout.exercises.map((entry, index) => <WorkoutExerciseEntry key={entry.id} entry={entry} index={index} pbBadges={pbBadges} onSetPress={openSet} onPress={() => {
                 if (active) setSelectedWorkoutId(id);
                 router.push({ pathname: '/exercise/[id]', params: { id: String(entry.exerciseId), name: entry.exerciseName, weId: String(entry.id), workoutId: String(id) } });
               }} />)}
@@ -94,7 +99,7 @@ function WorkoutDetailContent() {
                 <Text style={{ color: rawColors.foregroundSecondary, padding: 18, fontWeight: '600' }}>Other logged sets</Text>
                 {workout.unassignedSets.map((set, index) => <View key={set.id}>
                   <Text style={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6, color: rawColors.foreground, fontSize: 15, fontWeight: '600' }}>{set.exerciseName}</Text>
-                  <WorkoutSetRow set={set} index={index} onPress={() => openSet(set.id)} />
+                  <WorkoutSetRow set={set} index={index} pbBadge={pbBadges.get(set.id)} onPress={() => openSet(set.id)} />
                 </View>)}
               </View>}
               <Pressable onPress={() => void addExercise()} disabled={busy} accessibilityRole="button" accessibilityState={{ disabled: busy }}
@@ -122,6 +127,7 @@ function WorkoutDetailContent() {
       }} />
       {workout && <WorkoutMetadataEditor visible={editing} name={workoutTitle(workout)} note={workout.note} busy={busy} error={error} onClose={() => setEditing(false)} onSave={detail.save} />}
     </View>
+    </FrostedModalProvider>
   );
 }
 

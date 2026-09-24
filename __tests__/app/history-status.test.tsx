@@ -23,6 +23,7 @@ jest.mock("react-native", () => {
   return {
     ActivityIndicator: "ActivityIndicator",
     RefreshControl: "RefreshControl",
+    KeyboardAvoidingView: "KeyboardAvoidingView",
     Modal: ({ visible, children }: any) => visible ? children : null,
     AppState: { addEventListener: () => ({ remove: jest.fn() }) },
     Alert: { alert: jest.fn() },

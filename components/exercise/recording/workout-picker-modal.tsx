@@ -72,7 +72,7 @@ export default function WorkoutPickerModal({ visible, date, workoutId, onClose, 
         onDayPress={({ dateString }) => { setDay(dateString); setError(null); }}
         markedDates={{ [day]: { selected: true, selectedColor: rawColors.primary } }}
         theme={{
-          calendarBackground: rawColors.surface, textSectionTitleColor: rawColors.foregroundSecondary,
+          calendarBackground: 'transparent', backgroundColor: 'transparent', textSectionTitleColor: rawColors.foregroundSecondary,
           dayTextColor: rawColors.foreground, monthTextColor: rawColors.foreground, textDisabledColor: rawColors.foregroundMuted,
           arrowColor: rawColors.primary, todayTextColor: rawColors.primary
         }}
@@ -93,7 +93,7 @@ export default function WorkoutPickerModal({ visible, date, workoutId, onClose, 
               <Text className="text-base font-semibold text-foreground">{workout.name || 'Workout'}</Text>
               <Text className="text-sm text-foreground-secondary">
                 {new Date(workout.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                {' · '}{workout.exerciseCount} exercises{' · '}{workout.completedAt == null ? 'Active' : 'Completed'}
+                {' · '}{workout.exerciseCount} {workout.exerciseCount === 1 ? 'exercise' : 'exercises'}{' · '}{workout.completedAt == null ? 'Active' : 'Completed'}
               </Text>
             </View>
             {saving === workout.id && <ActivityIndicator color={rawColors.primary} />}

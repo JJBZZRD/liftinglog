@@ -1,10 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import { useEffect, useState, type RefObject, type ComponentProps } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { FrostedModal } from '@/components/modals/frosted-modal';
 import { CALCULATORS } from '@/lib/calculators/catalog';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
 import { getTotalPBCount } from '@/lib/db/pbEvents';
@@ -16,46 +14,35 @@ import { IconButton, Metric } from './workout-ui';
 export function WorkoutOverlays({ active, onClose, blurTarget }: {
   active: 'calculators' | 'stats' | null; onClose: () => void; blurTarget: RefObject<View | null>;
 }) {
-  const { rawColors, isDark } = useTheme();
-  const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
-  return <Modal visible={active !== null} transparent animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={onClose} statusBarTranslucent>
-    <View style={{ flex: 1 }}>
-      <BlurView blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" intensity={42}
-        tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      <Pressable accessibilityLabel="Dismiss overlay" onPress={onClose}
-        style={[StyleSheet.absoluteFill, { backgroundColor: rawColors.overlay }]} />
-      <Animated.View entering={FadeInDown.duration(260).reduceMotion(ReduceMotion.System)}
-        accessibilityViewIsModal style={{ marginTop: insets.top + 70, marginBottom: insets.bottom + 24,
-          marginHorizontal: 16, maxWidth: 560, width: 'auto', alignSelf: 'stretch', flexShrink: 1,
-          borderRadius: 24, borderWidth: 1, borderColor: `${rawColors.border}B3`,
-          backgroundColor: `${rawColors.surface}EB`, overflow: 'hidden', padding: 22 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <View style={{ gap: 5 }}>
-            <Text style={{ color: rawColors.foregroundSecondary, fontSize: 10, fontWeight: '700', letterSpacing: 2 }}>LIFTINGLOG / TOOLS</Text>
-            <Text accessibilityRole="header" style={{ color: rawColors.foreground, fontSize: 28, fontWeight: '700', letterSpacing: -0.8 }}>
-              {active === 'calculators' ? 'Calculators' : 'Quick stats'}
-            </Text>
-          </View>
-          <IconButton icon="close" label="Close overlay" onPress={onClose} />
-        </View>
-        {active === 'calculators' ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
-          {CALCULATORS.map((calculator) => <Pressable key={calculator.id} accessibilityRole="button"
-            onPress={() => { onClose(); router.push(calculator.href); }}
-            className="active:opacity-60"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18,
-              borderBottomWidth: 1, borderColor: rawColors.borderLight }}>
-            <MaterialCommunityIcons name={calculator.icon as ComponentProps<typeof MaterialCommunityIcons>['name']} size={25} color={rawColors.primary} />
-            <View style={{ flex: 1, gap: 5 }}>
-              <Text style={{ color: rawColors.foreground, fontSize: 16, fontWeight: '600' }}>{calculator.title}</Text>
-              <Text style={{ color: rawColors.foregroundSecondary, fontSize: 12, lineHeight: 18 }}>{calculator.description}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={rawColors.foregroundMuted} />
-          </Pressable>)}
-        </ScrollView> : active === 'stats' ? <QuickStatsPanel /> : null}
-      </Animated.View>
+  const { rawColors } = useTheme();
+  return <FrostedModal visible={active !== null} onClose={onClose} blurTarget={blurTarget}
+    centerContent={false} topOffset={70} maxWidth={560}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <View style={{ gap: 5 }}>
+        <Text style={{ color: rawColors.foregroundSecondary, fontSize: 10, fontWeight: '700', letterSpacing: 2 }}>LIFTINGLOG / TOOLS</Text>
+        <Text accessibilityRole="header" style={{ color: rawColors.foreground, fontSize: 28, fontWeight: '700', letterSpacing: -0.8 }}>
+          {active === 'calculators' ? 'Calculators' : 'Quick stats'}
+        </Text>
+      </View>
+      <IconButton icon="close" label="Close overlay" onPress={onClose} />
     </View>
-  </Modal>;
+    {active === 'calculators' ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
+      {CALCULATORS.map((calculator) => <Pressable key={calculator.id} accessibilityRole="button"
+        onPress={() => { onClose(); router.push(calculator.href); }}
+        className="active:opacity-60"
+        style={{
+          flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18,
+          borderBottomWidth: 1, borderColor: rawColors.borderLight
+        }}>
+        <MaterialCommunityIcons name={calculator.icon as ComponentProps<typeof MaterialCommunityIcons>['name']} size={25} color={rawColors.primary} />
+        <View style={{ flex: 1, gap: 5 }}>
+          <Text style={{ color: rawColors.foreground, fontSize: 16, fontWeight: '600' }}>{calculator.title}</Text>
+          <Text style={{ color: rawColors.foregroundSecondary, fontSize: 12, lineHeight: 18 }}>{calculator.description}</Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={rawColors.foregroundMuted} />
+      </Pressable>)}
+    </ScrollView> : active === 'stats' ? <QuickStatsPanel /> : null}
+  </FrostedModal>;
 }
 
 function QuickStatsPanel() {

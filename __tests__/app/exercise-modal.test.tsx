@@ -87,6 +87,9 @@ jest.mock("react-native-tab-view", () => ({
   },
 }));
 
+jest.mock('expo-blur', () => ({ BlurTargetView: 'BlurTargetView' }));
+jest.mock('../../components/modals/BaseModal', () => ({ visible, children }: { visible: boolean; children: React.ReactNode }) => visible ? children : null);
+
 jest.mock("../../lib/theme/ThemeContext", () => ({
   ThemeColorScope: ({ children }: { children: React.ReactNode }) => children,
   useTheme: jest.fn(() => ({

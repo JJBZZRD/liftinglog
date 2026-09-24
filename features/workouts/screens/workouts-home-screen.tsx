@@ -4,6 +4,7 @@ import { router, Stack } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
 import { WorkoutCalendar } from '@/components/workouts/workout-calendar';
 import { WorkoutHeader } from '@/components/workouts/workout-header';
 import { WorkoutOverlays } from '@/components/workouts/workout-overlays';
@@ -32,6 +33,7 @@ function WorkoutsHomeContent() {
   const open = (id: number) => router.push({ pathname: '/workout-session/[id]', params: { id: String(id) } });
   const newWorkout = async () => { const id = await create(); if (id !== null) open(id); };
   return (
+    <FrostedModalProvider blurTarget={blurTarget}>
     <View style={{ flex: 1, backgroundColor: rawColors.background }}>
       <Stack.Screen options={{ title: 'Workouts', headerShown: false }} />
       <BlurTargetView ref={blurTarget} style={{ flex: 1, backgroundColor: rawColors.background }}>
@@ -84,6 +86,7 @@ function WorkoutsHomeContent() {
         setSelectedWorkoutId(conflictId); open(conflictId); setConflictId(null);
       }} />
     </View>
+    </FrostedModalProvider>
   );
 }
 

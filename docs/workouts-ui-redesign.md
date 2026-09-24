@@ -14,6 +14,7 @@ workouts can share a day. The app opens on the current local day.
   actions and dialogs from its route and screen composition.
 - `components/workouts` provides the scoped slate palette, brand header, calendar,
   frosted tools overlay and scroll-edge treatment.
+- `components/modals` owns the reusable frosted presentation and opt-in page scope.
 - `components/exercise/recording` separates workout assignment, session loading,
   program persistence, input handling, actions and presentation.
 - `lib/db/workoutSessions.ts` owns the container read models and transactional writes.
@@ -32,8 +33,14 @@ recording flow, and calculators; existing theme choices still apply elsewhere
 during this phased migration. Existing NativeWind class tokens are inherited by
 dialogs. Modal action buttons retain the repository's shared class pattern.
 
-Calculators and quick stats use `expo-blur` and Reanimated. Android blur targets
-are explicit; devices below Android 12 receive the library's translucent fallback.
+The date navigator follows the LiftingLog header directly, with arrows grouped
+around the date and a labeled Calendar button. The session list is titled Workouts.
+
+Calculators, quick stats, and dialogs in the redesigned workout/exercise flow
+share `expo-blur` and Reanimated presentation. A page-level provider opts existing
+modal consumers into the frosted treatment without changing legacy pages.
+Android blur targets are explicit; devices below Android 12 receive the library's
+translucent fallback. Modal action buttons remain opaque for readability.
 The calendar uses the existing `react-native-calendars` dependency. No new native
 package is needed. The pinned-exercises overlay is hidden on Workouts.
 
@@ -51,6 +58,9 @@ An exercise joins the workout when its first set is recorded. Opening the exerci
 choosing a workout, or opening its camera does not add it to the workout list.
 Only entries with recorded sets count as exercises; they are in progress until
 completed. Empty drafts and unconfirmed planned sets are excluded from this view.
+Workout detail marks current PB sets using the same exercise-family scope and
+current PB events as exercise history, including legacy sets without an entry.
+Badges are read-only presentation of the existing PB records.
 Completing a workout requires confirmation if any recorded exercise is unfinished.
 The write closes those entries and the workout together. Resuming or creating a
 workout cannot silently finish another active workout.

@@ -1,5 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { useFrostedModalTarget } from "./modals/frosted-modal-context";
+import { FrostedModal } from "./modals/frosted-modal";
 import { timerStore, type Timer } from "../lib/timerStore";
 import { useTheme } from "../lib/theme/ThemeContext";
 import { formatTime, parseTimerDurationSeconds } from "../lib/utils/formatters";
@@ -39,6 +41,7 @@ export default function TimerModal({
   onSaveRestTime,
 }: TimerModalProps) {
   const { rawColors } = useTheme();
+  const blurTarget = useFrostedModalTarget();
 
   const handleStartTimer = async () => {
     const totalSeconds = parseTimerDurationSeconds(minutes, seconds);
@@ -80,6 +83,106 @@ export default function TimerModal({
     onSecondsChange(presetSeconds);
   };
 
+  const content = (<>
+    <Text className="text-xl font-bold mb-5 text-center text-foreground">Rest Timer</Text>
+
+    {/* Current timer status if exists */}
+    {currentTimer && (
+      <View className="rounded-xl p-4 mb-5 items-center bg-surface-secondary">
+        <Text className="text-sm mb-1 text-foreground-secondary">
+          {currentTimer.isRunning ? "Running" : "Paused"}
+        </Text>
+        <Text className="text-3xl font-bold text-primary">
+          {formatTime(currentTimer.remainingSeconds)}
+        </Text>
+      </View>
+    )}
+
+    {/* Time input */}
+    <View className="flex-row items-center justify-center gap-2 mb-5">
+      <View className="items-center">
+        <Text className="text-xs mb-1 text-foreground-secondary">Minutes</Text>
+        <TextInput
+          className="rounded-lg px-4 py-3 text-2xl font-semibold text-center w-20 bg-surface-secondary text-foreground"
+          value={minutes}
+          onChangeText={onMinutesChange}
+          placeholder="0"
+          placeholderTextColor={rawColors.foregroundMuted}
+          keyboardType="number-pad"
+          maxLength={2}
+        />
+      </View>
+      <Text className="text-3xl font-semibold mt-4 text-foreground">:</Text>
+      <View className="items-center">
+        <Text className="text-xs mb-1 text-foreground-secondary">Seconds</Text>
+        <TextInput
+          className="rounded-lg px-4 py-3 text-2xl font-semibold text-center w-20 bg-surface-secondary text-foreground"
+          value={seconds}
+          onChangeText={onSecondsChange}
+          placeholder="0"
+          placeholderTextColor={rawColors.foregroundMuted}
+          keyboardType="number-pad"
+          maxLength={2}
+        />
+      </View>
+    </View>
+
+    {/* Quick presets */}
+    <View className="flex-row flex-wrap gap-2 justify-center mb-6">
+      {PRESETS.map((preset) => (
+        <Pressable
+          key={preset.label}
+          className="px-4 py-2 rounded-full border border-border bg-surface-secondary"
+          onPress={() => applyPreset(preset.minutes, preset.seconds)}
+        >
+          <Text className="text-sm font-medium text-primary">{preset.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+
+    {/* Action buttons */}
+    <View className="flex-row gap-3 justify-center">
+      {currentTimer && (
+        <>
+          <Pressable
+            className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 border bg-surface"
+            style={{ borderColor: rawColors.destructive }}
+            onPress={handleDeleteTimer}
+          >
+            <MaterialCommunityIcons name="delete" size={20} color={rawColors.destructive} />
+          </Pressable>
+          <Pressable
+            className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 bg-surface-secondary"
+            onPress={handleResetTimer}
+          >
+            <MaterialCommunityIcons name="refresh" size={20} color={rawColors.foregroundSecondary} />
+          </Pressable>
+        </>
+      )}
+      <Pressable
+        className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 bg-surface-secondary"
+        onPress={onClose}
+      >
+        <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
+      </Pressable>
+      <Pressable
+        className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 flex-1 max-w-[120px] bg-primary"
+        onPress={handleStartTimer}
+      >
+        <MaterialCommunityIcons name="play" size={20} color={rawColors.surface} />
+        <Text className="text-base font-semibold text-primary-foreground">
+          {currentTimer ? "Update" : "Start"}
+        </Text>
+      </Pressable>
+    </View>
+  </>);
+
+  if (blurTarget) {
+    return <FrostedModal visible={visible} onClose={onClose} blurTarget={blurTarget} maxWidth={400} contentStyle={{ padding: 24 }}>
+      {content}
+    </FrostedModal>;
+  }
+
   return (
     <Modal
       visible={visible}
@@ -89,101 +192,11 @@ export default function TimerModal({
       onRequestClose={onClose}
     >
       <Pressable className="flex-1 justify-center items-center bg-overlay-dark" onPress={onClose}>
-        <View 
+        <View
           className="rounded-2xl p-6 w-[85%] max-w-[400px] bg-surface"
           onStartShouldSetResponder={() => true}
         >
-          <Text className="text-xl font-bold mb-5 text-center text-foreground">Rest Timer</Text>
-
-          {/* Current timer status if exists */}
-          {currentTimer && (
-            <View className="rounded-xl p-4 mb-5 items-center bg-surface-secondary">
-              <Text className="text-sm mb-1 text-foreground-secondary">
-                {currentTimer.isRunning ? "Running" : "Paused"}
-              </Text>
-              <Text className="text-3xl font-bold text-primary">
-                {formatTime(currentTimer.remainingSeconds)}
-              </Text>
-            </View>
-          )}
-
-          {/* Time input */}
-          <View className="flex-row items-center justify-center gap-2 mb-5">
-            <View className="items-center">
-              <Text className="text-xs mb-1 text-foreground-secondary">Minutes</Text>
-              <TextInput
-                className="rounded-lg px-4 py-3 text-2xl font-semibold text-center w-20 bg-surface-secondary text-foreground"
-                value={minutes}
-                onChangeText={onMinutesChange}
-                placeholder="0"
-                placeholderTextColor={rawColors.foregroundMuted}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </View>
-            <Text className="text-3xl font-semibold mt-4 text-foreground">:</Text>
-            <View className="items-center">
-              <Text className="text-xs mb-1 text-foreground-secondary">Seconds</Text>
-              <TextInput
-                className="rounded-lg px-4 py-3 text-2xl font-semibold text-center w-20 bg-surface-secondary text-foreground"
-                value={seconds}
-                onChangeText={onSecondsChange}
-                placeholder="0"
-                placeholderTextColor={rawColors.foregroundMuted}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </View>
-          </View>
-
-          {/* Quick presets */}
-          <View className="flex-row flex-wrap gap-2 justify-center mb-6">
-            {PRESETS.map((preset) => (
-              <Pressable
-                key={preset.label}
-                className="px-4 py-2 rounded-full border border-border bg-surface-secondary"
-                onPress={() => applyPreset(preset.minutes, preset.seconds)}
-              >
-                <Text className="text-sm font-medium text-primary">{preset.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Action buttons */}
-          <View className="flex-row gap-3 justify-center">
-            {currentTimer && (
-              <>
-                <Pressable
-                  className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 border bg-surface"
-                  style={{ borderColor: rawColors.destructive }}
-                  onPress={handleDeleteTimer}
-                >
-                  <MaterialCommunityIcons name="delete" size={20} color={rawColors.destructive} />
-                </Pressable>
-                <Pressable
-                  className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 bg-surface-secondary"
-                  onPress={handleResetTimer}
-                >
-                  <MaterialCommunityIcons name="refresh" size={20} color={rawColors.foregroundSecondary} />
-                </Pressable>
-              </>
-            )}
-            <Pressable 
-              className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 bg-surface-secondary" 
-              onPress={onClose}
-            >
-              <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
-            </Pressable>
-            <Pressable 
-              className="flex-row items-center justify-center px-4 py-3 rounded-lg gap-1.5 flex-1 max-w-[120px] bg-primary" 
-              onPress={handleStartTimer}
-            >
-              <MaterialCommunityIcons name="play" size={20} color={rawColors.surface} />
-              <Text className="text-base font-semibold text-primary-foreground">
-                {currentTimer ? "Update" : "Start"}
-              </Text>
-            </Pressable>
-          </View>
+          {content}
         </View>
       </Pressable>
     </Modal>

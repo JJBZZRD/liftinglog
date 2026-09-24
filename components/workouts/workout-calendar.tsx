@@ -18,7 +18,7 @@ export function WorkoutCalendar({ visible, date, onSelect, onClose }: {
     {visible && <Calendar key={`${localDayKey(date)}-${isDark}`} current={localDayKey(date)} enableSwipeMonths
       markedDates={{ [localDayKey(date)]: { selected: true, selectedColor: rawColors.primary } }}
       onDayPress={({ year, month, day }) => { onSelect(new Date(year, month - 1, day, 12)); onClose(); }}
-      theme={{ backgroundColor: rawColors.surface, calendarBackground: rawColors.surface,
+      theme={{ backgroundColor: 'transparent', calendarBackground: 'transparent',
         dayTextColor: rawColors.foreground, monthTextColor: rawColors.foreground,
         textDisabledColor: rawColors.foregroundMuted, textSectionTitleColor: rawColors.foregroundSecondary,
         todayTextColor: rawColors.primary, arrowColor: rawColors.primary,

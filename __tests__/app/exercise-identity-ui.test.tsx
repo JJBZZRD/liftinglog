@@ -54,7 +54,7 @@ jest.mock("expo-router", () => {
 });
 
 jest.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
-jest.mock("expo-blur", () => ({ BlurView: "BlurView" }));
+jest.mock("expo-blur", () => ({ BlurView: "BlurView", BlurTargetView: "BlurTargetView" }));
 jest.mock("@expo/vector-icons", () => ({ MaterialCommunityIcons: "MaterialCommunityIcons" }));
 jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock("react-native-gesture-handler", () => ({ Swipeable: "Swipeable" }));
