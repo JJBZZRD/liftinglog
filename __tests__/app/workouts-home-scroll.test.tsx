@@ -23,6 +23,21 @@ jest.mock('react-native', () => ({
   ScrollView: 'ScrollView', Text: 'Text', View: 'View',
   useWindowDimensions: () => mockWindow,
 }));
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+  return {
+    __esModule: true,
+    default: { ScrollView: 'ScrollView' },
+    useSharedValue: (value: number) => React.useRef({ value }).current,
+    useDerivedValue: (derive: () => number) => {
+      const deriveRef = React.useRef(derive);
+      deriveRef.current = derive;
+      return React.useRef({ get value() { return deriveRef.current(); } }).current;
+    },
+    useAnimatedScrollHandler: (handler: (event: unknown) => void) =>
+      (event: { nativeEvent: unknown }) => handler(event.nativeEvent),
+  };
+});
 jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'Icon' }));
 jest.mock('expo-blur', () => ({ BlurTargetView: 'BlurTargetView' }));
 jest.mock('expo-router', () => ({ router: { push: mockPush }, Stack: { Screen: () => null } }));
@@ -55,7 +70,8 @@ type TestNode = { type: unknown; props: Record<string, any> };
 
 const find = (tree: Tree, type: string) => tree.root.findAll((node: TestNode) => node.type === type);
 const getList = (tree: Tree) => find(tree, 'ScrollView')[0];
-const fadeEdges = (tree: Tree) => find(tree, 'ScrollFade').filter((node: TestNode) => node.props.visible).map((node: TestNode) => node.props.edge);
+const fadeEdges = (tree: Tree) => find(tree, 'ScrollFade').filter((node: TestNode) => node.props.opacity.value > 0).map((node: TestNode) => node.props.edge);
+const fadeOpacities = (tree: Tree) => Object.fromEntries(find(tree, 'ScrollFade').map((node: TestNode) => [node.props.edge, node.props.opacity.value]));
 
 describe('Workouts Home list viewport', () => {
   let tree: Tree;
@@ -129,14 +145,67 @@ describe('Workouts Home list viewport', () => {
       list.props.onScroll({ nativeEvent: { contentOffset: { y: 0 } } });
     });
     expect(fadeEdges(tree!)).toEqual([]);
-    // Stay mounted at either boundary so opacity can animate back to zero.
+    // Both overlays stay mounted at either boundary.
     expect(find(tree!, 'ScrollFade')).toEqual(fades);
+  });
+
+  it('tracks partial scrolls, fast jumps, and reversals immediately at both edges', async () => {
+    await act(async () => { tree = renderer.create(<WorkoutsHomeScreen />); });
+    const list = getList(tree!);
+    await act(async () => {
+      list.props.onLayout({ nativeEvent: { layout: { height: 400 } } });
+      list.props.onContentSizeChange(350, 1000);
+    });
+
+    // Read the live opacity on each event without a timer or React rerender.
+    for (const [offset, top, bottom] of [
+      [0, 0, 1], [9, 0.25, 1], [18, 0.5, 1], [36, 1, 1],
+      [582, 1, 0.5], [600, 1, 0], [591, 1, 0.25], [564, 1, 1],
+      [18, 0.5, 1], [0, 0, 1], [-80, 0, 1], [680, 1, 0],
+    ]) {
+      list.props.onScroll({ nativeEvent: { contentOffset: { y: offset } } });
+      expect(fadeOpacities(tree!)).toEqual({ top, bottom });
+    }
+
+    await act(async () => { tree!.update(<WorkoutsHomeScreen />); });
+    expect(fadeOpacities(tree!)).toEqual({ top: 1, bottom: 0 });
+  });
+
+  it('hides unmeasured or fitting content and recalculates fades when dimensions change', async () => {
+    await act(async () => { tree = renderer.create(<WorkoutsHomeScreen />); });
+    const list = getList(tree!);
+    await act(async () => {
+      list.props.onContentSizeChange(350, 1000);
+      list.props.onScroll({ nativeEvent: { contentOffset: { y: 300 } } });
+    });
+    expect(fadeOpacities(tree!)).toEqual({ top: 0, bottom: 0 });
+    await act(async () => { list.props.onLayout({ nativeEvent: { layout: { height: 400 } } }); });
+    expect(fadeOpacities(tree!)).toEqual({ top: 1, bottom: 1 });
+
+    // A content shrink must hide both fades even before a correcting scroll event.
+    await act(async () => { list.props.onContentSizeChange(350, 250); });
+    expect(fadeOpacities(tree!)).toEqual({ top: 0, bottom: 0 });
+    await act(async () => { list.props.onContentSizeChange(350, 400); });
+    expect(fadeOpacities(tree!)).toEqual({ top: 0, bottom: 0 });
+    await act(async () => {
+      list.props.onContentSizeChange(350, 418);
+      list.props.onScroll({ nativeEvent: { contentOffset: { y: 9 } } });
+    });
+    expect(fadeOpacities(tree!)).toEqual({ top: 0.25, bottom: 0.25 });
+    await act(async () => { list.props.onScroll({ nativeEvent: { contentOffset: { y: 60 } } }); });
+    expect(fadeOpacities(tree!)).toEqual({ top: 0.5, bottom: 0 });
+    await act(async () => { list.props.onLayout({ nativeEvent: { layout: { height: 500 } } }); });
+    expect(fadeOpacities(tree!)).toEqual({ top: 0, bottom: 0 });
   });
 
   it('resets the native scroll view and fade state when the selected date changes', async () => {
     await act(async () => { tree = renderer.create(<WorkoutsHomeScreen />); });
     const oldList = getList(tree!);
-    await act(async () => { oldList.props.onScroll({ nativeEvent: { contentOffset: { y: 300 } } }); });
+    await act(async () => {
+      oldList.props.onLayout({ nativeEvent: { layout: { height: 400 } } });
+      oldList.props.onContentSizeChange(350, 1000);
+      oldList.props.onScroll({ nativeEvent: { contentOffset: { y: 300 } } });
+    });
     expect(fadeEdges(tree!)).toContain('top');
     await act(async () => { find(tree!, 'WorkoutDateSelector')[0].props.onChange(new Date(2026, 8, 24)); });
     expect(getList(tree!)).not.toBe(oldList);

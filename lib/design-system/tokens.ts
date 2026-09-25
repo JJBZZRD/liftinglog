@@ -48,7 +48,7 @@ export const typography = {
 
 export const motion = { layout: 180, listEnter: 240, dialogEnter: 260, stagger: 40 } as const;
 
-export const sizes = { touchTarget: 44, icon: 23, pageMaxWidth: 700, dialogMaxWidth: 420 } as const;
+export const sizes = { touchTarget: 44, icon: 23, pageMaxWidth: 700, dialogMaxWidth: 420, scrollFade: 36 } as const;
 
 export const glass = { blurIntensity: 42, borderAlpha: 'B3', surfaceAlpha: 'EB' } as const;
 

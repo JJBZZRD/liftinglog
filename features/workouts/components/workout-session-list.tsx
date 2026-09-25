@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useRef } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import { ScrollFade } from '@/components/workouts/scroll-fade';
-import { radius, space, typography } from '@/lib/design-system/tokens';
+import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { dateLabel, workoutTitle, type WorkoutSummary } from '../workout-types';
 import { WorkoutEmpty, WorkoutError } from './workout-feedback';
@@ -24,24 +25,34 @@ type WorkoutSessionListProps = {
 export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, onRefresh, onOpen, showHealthMetrics, onHealthMetrics }: WorkoutSessionListProps) {
   const { rawColors } = useTheme();
   const blurTarget = useRef<View>(null);
-  const scrollMetrics = useRef({ offset: 0, contentHeight: 0, viewportHeight: 0 });
-  const [edges, setEdges] = useState({ top: false, bottom: false });
-  const updateEdges = () => {
-    const { offset, contentHeight, viewportHeight } = scrollMetrics.current;
-    const top = offset > space[8];
-    const bottom = viewportHeight > 0 && contentHeight - viewportHeight - Math.max(0, offset) > space[8];
-    setEdges((current) => current.top === top && current.bottom === bottom ? current : { top, bottom });
-  };
+  const offset = useSharedValue(0);
+  const contentHeight = useSharedValue(0);
+  const viewportHeight = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    offset.value = event.contentOffset.y;
+  });
+  // Opacity follows distance on the UI thread. No threshold, timer, or JS render
+  // can leave the glass catching up after a fast swipe or a direction change.
+  const topOpacity = useDerivedValue(() => {
+    const overflow = Math.max(0, contentHeight.value - viewportHeight.value);
+    const distance = Math.max(0, Math.min(offset.value, overflow));
+    return viewportHeight.value > 0 ? Math.min(1, distance / sizes.scrollFade) : 0;
+  });
+  const bottomOpacity = useDerivedValue(() => {
+    const overflow = Math.max(0, contentHeight.value - viewportHeight.value);
+    const distance = Math.max(0, overflow - Math.max(0, offset.value));
+    return viewportHeight.value > 0 ? Math.min(1, distance / sizes.scrollFade) : 0;
+  });
 
   return (
     <View style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
       <BlurTargetView ref={blurTarget} style={{ flex: 1, minHeight: 0, backgroundColor: rawColors.background }}>
-        <ScrollView accessibilityLabel="Workouts list" contentInsetAdjustmentBehavior="never"
+        <Animated.ScrollView accessibilityLabel="Workouts list" contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false} showsVerticalScrollIndicator={false}
           style={{ flex: 1, minHeight: 0 }}
-          onLayout={(event) => { scrollMetrics.current.viewportHeight = event.nativeEvent.layout.height; updateEdges(); }}
-          onContentSizeChange={(_, height) => { scrollMetrics.current.contentHeight = height; updateEdges(); }}
-          onScroll={(event) => { scrollMetrics.current.offset = event.nativeEvent.contentOffset.y; updateEdges(); }}
+          onLayout={(event) => { viewportHeight.value = event.nativeEvent.layout.height; }}
+          onContentSizeChange={(_, height) => { contentHeight.value = height; }}
+          onScroll={scrollHandler}
           scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={loading && workouts.length > 0} onRefresh={onRefresh} tintColor={rawColors.primary} />}
           contentContainerStyle={{ gap: space[16], paddingBottom: space[16] }}>
@@ -65,10 +76,10 @@ export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, 
               <MaterialCommunityIcons name="chevron-right" size={20} color={rawColors.foregroundMuted} />
             </Pressable>
           </View>}
-        </ScrollView>
+        </Animated.ScrollView>
       </BlurTargetView>
-      <ScrollFade edge="top" blurTarget={blurTarget} visible={edges.top} />
-      <ScrollFade edge="bottom" blurTarget={blurTarget} visible={edges.bottom} />
+      <ScrollFade edge="top" blurTarget={blurTarget} opacity={topOpacity} />
+      <ScrollFade edge="bottom" blurTarget={blurTarget} opacity={bottomOpacity} />
     </View>
   );
 }

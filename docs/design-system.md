@@ -139,10 +139,16 @@ content.
 ### Scrollable list edge fades
 
 When a scrollable list uses edge fades, reuse `ScrollFade` and keep the overlays
-mounted. Toggle their `visible` prop according to whether more content remains
-beyond each edge. Their opacity must ease in and out using `motion.layout`
-(currently 180 ms), respecting system reduced motion. Do not conditionally mount
-an overlay at a scroll threshold: this makes the glass snap into view.
+mounted. Drive their `opacity` shared value directly from the distance scrolled
+away from the corresponding boundary: `clamp(distance / sizes.scrollFade, 0, 1)`.
+The ramp spans the fade's height (currently 36 dp). Update it on the UI thread
+using Reanimated's scroll handler, so slow drags, fast swipes, momentum, and
+direction changes all track the content without delay.
+
+Do not use a timed animation, spring, or binary scroll threshold for this effect.
+Opacity must stop changing when scrolling stops and reverse immediately with the
+gesture. This direct opacity mapping adds no autonomous motion or transforms,
+including with reduced motion enabled.
 
 Hide the corresponding fade at the start or end of the list, and hide both when
 the content fits without scrolling. Keep fades inside the list viewport, outside
