@@ -136,6 +136,20 @@ dialogs. Keep the final list item reachable above the floating tab bar. A smalle
 screen must reduce the viewport height, not turn the fixed controls into scroll
 content.
 
+### Scrollable list edge fades
+
+When a scrollable list uses edge fades, reuse `ScrollFade` and keep the overlays
+mounted. Toggle their `visible` prop according to whether more content remains
+beyond each edge. Their opacity must ease in and out using `motion.layout`
+(currently 180 ms), respecting system reduced motion. Do not conditionally mount
+an overlay at a scroll threshold: this makes the glass snap into view.
+
+Hide the corresponding fade at the start or end of the list, and hide both when
+the content fits without scrolling. Keep fades inside the list viewport, outside
+their blur target, and non-interactive. They must not shift content or obscure
+the final item when the user reaches it. The Workouts list is the reference
+implementation; apply this behaviour to new or redesigned scrollable lists.
+
 ### Active-workout shortcut
 
 The Exercises library keeps a floating return action above the tab bar while a
@@ -241,10 +255,8 @@ modal transition and its content entrance when reduced motion is enabled.
 Animation should explain a state or navigation change. Sequence dependent route
 transitions using navigation lifecycle events, not guessed timeouts. Scroll-edge
 fades are decorative, ignore touches, and must not permanently obscure content.
-On the Workouts list, keep both edge overlays mounted and animate their visibility
-over the shared 180 ms layout duration. Fade out at the corresponding boundary as
-well as in when scrolling away; respect system reduced motion. Do not conditionally
-mount them at a scroll threshold, which makes the glass snap into view.
+Follow the [scrollable list edge fade guidelines](#scrollable-list-edge-fades)
+for their visibility transitions and boundary behaviour.
 
 ## Using the system in a new feature
 
