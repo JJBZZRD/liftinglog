@@ -102,14 +102,17 @@ not require clipping text or disabling accessibility scaling.
 
 Align visible glyphs and borders, not only touch rectangles. The Workouts date
 navigator reserves its date and return-to-today slots so actions do not shift
-when the date changes. Its small, documented optical offset balances the visible
-chevron-to-label and label-to-Calendar gaps. Preserve that correction when
+when the date changes. Its small, documented optical offset includes half the
+outer row gap to center the return label between the arrow button and Calendar
+button edges. Preserve that correction when
 refactoring; do not turn this feature-specific offset into a general token.
 
 ## Components and interaction
 
 - Use `IconButton` for a single icon action. It provides a 44 dp target, an
-  accessibility label, disabled semantics, and press feedback.
+  accessibility label, disabled semantics, and press feedback. Use
+  `variant="secondary"` for a visible slate button surface with the same 12 dp
+  corners and secondary foreground as Calendar; the default stays plain.
 - Use `Metric` for a value with a short supporting label. Keep workout-specific
   status and PB components in their feature/domain folders.
 - Give a screen one clearly dominant action where practical. Secondary controls

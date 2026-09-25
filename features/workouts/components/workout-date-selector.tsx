@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { IconButton } from '@/components/workouts/workout-ui';
+import { radius, space } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { dateLabel } from '../workout-types';
 
@@ -17,29 +18,29 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
   const isToday = date.toDateString() === new Date().toDateString();
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[4] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', flexGrow: 1, flexShrink: 1, maxWidth: '100%' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
-          <IconButton icon="chevron-left" label="Previous day" onPress={() => move(-1)} />
+          <IconButton icon="chevron-left" label="Previous day" variant="secondary" onPress={() => move(-1)} />
           <Text accessibilityRole="header" style={{ width: 112 * fontScale, color: rawColors.foreground, fontSize: 17, lineHeight: 24, fontWeight: '600', fontVariant: ['tabular-nums'], textAlign: 'center', flexShrink: 1, paddingHorizontal: 2 }}>
             {dateLabel(date)}
           </Text>
-          <IconButton icon="chevron-right" label="Next day" onPress={() => move(1)} />
+          <IconButton icon="chevron-right" label="Next day" variant="secondary" onPress={() => move(1)} />
         </View>
         {/* Reserve this space on today too, so hiding the action never shifts the controls. */}
         <View style={{ flex: 1, minWidth: 88, minHeight: 44 }}>
           {!isToday && (
             <Pressable onPress={() => onChange(new Date())} accessibilityRole="button" accessibilityLabel="Back to today"
               className="active:opacity-70" style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
-              {/* Balance the visible chevron tip against the Calendar edge, excluding icon touch padding. */}
-              <Text style={{ color: rawColors.primary, fontWeight: '600', fontSize: 13, textAlign: 'center', transform: [{ translateX: -7.5 }] }}>Back to today</Text>
+              {/* Include half the outer row gap to center text between the two visible button edges. */}
+              <Text style={{ color: rawColors.primary, fontWeight: '600', fontSize: 13, textAlign: 'center', transform: [{ translateX: space[4] / 2 }] }}>Back to today</Text>
             </Pressable>
           )}
         </View>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="Choose workout date" onPress={onCalendar}
         className="active:opacity-70"
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 44, gap: 7, paddingHorizontal: 12, borderRadius: 12, backgroundColor: rawColors.surfaceSecondary }}>
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 44, gap: 7, paddingHorizontal: 12, borderRadius: radius.control, backgroundColor: rawColors.surfaceSecondary }}>
         <MaterialCommunityIcons name="calendar-blank-outline" size={19} color={rawColors.foregroundSecondary} />
         <Text style={{ color: rawColors.foregroundSecondary, fontSize: 14, fontWeight: '600' }}>Calendar</Text>
       </Pressable>
