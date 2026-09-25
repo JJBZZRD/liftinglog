@@ -18,7 +18,7 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, maxWidth: '100%', gap: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexGrow: 1, flexShrink: 1, maxWidth: '100%', gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
           <IconButton icon="chevron-left" label="Previous day" onPress={() => move(-1)} />
           <Text accessibilityRole="header" style={{ width: 112 * fontScale, color: rawColors.foreground, fontSize: 17, lineHeight: 24, fontWeight: '600', fontVariant: ['tabular-nums'], textAlign: 'center', flexShrink: 1, paddingHorizontal: 2 }}>
@@ -27,11 +27,11 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
           <IconButton icon="chevron-right" label="Next day" onPress={() => move(1)} />
         </View>
         {/* Reserve this space on today too, so hiding the action never shifts the controls. */}
-        <View style={{ width: 88, minHeight: 44 }}>
+        <View style={{ flex: 1, minWidth: 88, minHeight: 44 }}>
           {!isToday && (
             <Pressable onPress={() => onChange(new Date())} accessibilityRole="button" accessibilityLabel="Back to today"
-              className="active:opacity-70" style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
-              <Text style={{ color: rawColors.primary, fontWeight: '600', fontSize: 13 }}>Back to today</Text>
+              className="active:opacity-70" style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+              <Text style={{ color: rawColors.primary, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>Back to today</Text>
             </Pressable>
           )}
         </View>
