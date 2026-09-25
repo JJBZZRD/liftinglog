@@ -18,7 +18,7 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexGrow: 1, flexShrink: 1, maxWidth: '100%', gap: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexGrow: 1, flexShrink: 1, maxWidth: '100%' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
           <IconButton icon="chevron-left" label="Previous day" onPress={() => move(-1)} />
           <Text accessibilityRole="header" style={{ width: 112 * fontScale, color: rawColors.foreground, fontSize: 17, lineHeight: 24, fontWeight: '600', fontVariant: ['tabular-nums'], textAlign: 'center', flexShrink: 1, paddingHorizontal: 2 }}>
@@ -31,7 +31,8 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
           {!isToday && (
             <Pressable onPress={() => onChange(new Date())} accessibilityRole="button" accessibilityLabel="Back to today"
               className="active:opacity-70" style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
-              <Text style={{ color: rawColors.primary, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>Back to today</Text>
+              {/* Balance the visible chevron tip against the Calendar edge, excluding icon touch padding. */}
+              <Text style={{ color: rawColors.primary, fontWeight: '600', fontSize: 13, textAlign: 'center', transform: [{ translateX: -7.5 }] }}>Back to today</Text>
             </Pressable>
           )}
         </View>
