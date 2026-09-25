@@ -6,7 +6,7 @@ import {
 
 import "./global.css";
 
-import { Stack, router } from "expo-router";
+import { Stack } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useSyncExternalStore } from "react";
@@ -20,18 +20,10 @@ import { useNotificationHandler } from "../lib/notificationHandler";
 import { isCapabilityEnabled } from "../lib/routing/capabilityAccess";
 import { ThemeProvider, useTheme } from "../lib/theme/ThemeContext";
 import { timerStore } from "../lib/timerStore";
-import { consumeExerciseNavigation } from "../lib/workouts/selection-store";
 
 function isActivityUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.toLowerCase().includes("current activity is no longer available");
-}
-
-function openPendingExerciseLibrary() {
-  const workoutId = consumeExerciseNavigation();
-  if (workoutId !== null) {
-    router.navigate({ pathname: "/(tabs)/exercises", params: { workoutId: String(workoutId) } });
-  }
 }
 
 function RootLayoutContent() {
@@ -67,16 +59,7 @@ function RootLayoutContent() {
   return (
     <GestureHandlerRootView className="flex-1">
       <StatusBar style={isDark ? "light" : "dark"} />
-      <Stack screenListeners={({ route }) => ({
-        focus: () => {
-          // The web stack has no native transitionEnd event.
-          if (process.env.EXPO_OS === 'web' && route.name === '(tabs)') openPendingExerciseLibrary();
-        },
-        transitionEnd: (event) => {
-          if (!event.data.closing && route.name !== '(tabs)') return;
-          openPendingExerciseLibrary();
-        },
-      })}>
+      <Stack>
         <Stack.Screen 
           name="(tabs)" 
           options={{ headerShown: false, animation: "fade_from_bottom" }} />

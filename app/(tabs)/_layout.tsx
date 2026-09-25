@@ -1,7 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Tabs, router, useSegments } from "expo-router";
-import { Pressable, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Tabs, useSegments } from "expo-router";
+import { View } from "react-native";
 import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
 import { useTheme } from "../../lib/theme/ThemeContext";
 import { useWorkoutTheme } from "../../components/workouts/workout-theme";
@@ -9,26 +8,17 @@ import { useWorkoutTheme } from "../../components/workouts/workout-theme";
 const TabsLayout = () => {
   const theme = useTheme();
   const workoutTheme = useWorkoutTheme();
-  const insets = useSafeAreaInsets();
   const segments = useSegments();
   const activeTab = segments[segments.length - 1];
   const isWorkoutsTab = activeTab === "(tabs)";
-  const rawColors = isWorkoutsTab ? workoutTheme.rawColors : theme.rawColors;
-  const showAddExerciseFab = activeTab === "exercises";
-  const exerciseCardHorizontalInset = 20;
-  const floatingTabBarBottom = 24;
-  const floatingTabBarHeight = 64;
-  const addExerciseFabGapAboveTabBar = 9;
-  const addExerciseFabBottom = Math.max(
-    insets.bottom + floatingTabBarBottom + floatingTabBarHeight + addExerciseFabGapAboveTabBar,
-    112
-  );
+  const rawColors = (isWorkoutsTab || activeTab === "exercises") ? workoutTheme.rawColors : theme.rawColors;
 
   return (
     <View className="flex-1 bg-background">
       <Tabs
         screenOptions={{
           animation: "shift",
+          tabBarHideOnKeyboard: true,
           tabBarStyle: {
             position: "absolute",
             left: 12,
@@ -57,7 +47,7 @@ const TabsLayout = () => {
         )}} />
         <Tabs.Screen 
           name="exercises" 
-          options={{ title: "Exercises", headerShown: false, tabBarIcon: ({ color, size }) => (
+          options={{ animation: "none", title: "Exercises", headerShown: false, tabBarIcon: ({ color, size }) => (
           <MaterialCommunityIcons name="dumbbell" color={color} size={size} />
         )}} />
         <Tabs.Screen 
@@ -72,43 +62,7 @@ const TabsLayout = () => {
         )}} />
       </Tabs>
       {!isWorkoutsTab && <PinnedExercisesOverlay />}
-      {showAddExerciseFab ? (
-        <View
-          pointerEvents="box-none"
-          style={{
-            position: "absolute",
-            right: exerciseCardHorizontalInset,
-            bottom: addExerciseFabBottom,
-            width: 58,
-            height: 58,
-            borderRadius: 18,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: rawColors.primary,
-            shadowColor: rawColors.primary,
-            shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.22,
-            shadowRadius: 20,
-            elevation: 8,
-            zIndex: 1001,
-          }}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Add exercise"
-            onPress={() => router.setParams({ addExerciseRequest: `${Date.now()}` })}
-            className="active:opacity-80"
-            style={{
-              width: "100%",
-              height: "100%",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <MaterialCommunityIcons name="plus" size={28} color={rawColors.primaryForeground} />
-          </Pressable>
-        </View>
-      ) : null}
+
     </View>
   );
 };

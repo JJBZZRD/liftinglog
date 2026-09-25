@@ -136,6 +136,27 @@ dialogs. Keep the final list item reachable above the floating tab bar. A smalle
 screen must reduce the viewport height, not turn the fixed controls into scroll
 content.
 
+### Active-workout shortcut
+
+The Exercises library keeps a floating return action above the tab bar while a
+workout is active. Use the shared slate surface, border, blue accent, action
+radius and glass tokens in both light and dark modes. The workout name and
+explicit active status sit on the left; the return label and arrow sit on the
+right. Long names may truncate because the full name is available at the
+destination and in the accessibility label. Keep the action readable at larger
+text sizes rather than forcing the whole bar onto one text line.
+
+The shortcut overlays the list without moving its rows. Reserve measured bottom
+clearance so the final exercise can scroll fully above it, and hide it while the
+search keyboard is open. Its blur samples the list only; the surrounding modal
+blur target includes both the list and shortcut. Search and the library's Add
+button share a row, with a reserved clear-search slot so typing does not move
+the Add button or resize the input.
+
+Navigate directly from workout detail to Exercises. Do not stage a return via
+the Workouts tab or wait for one animation before starting another. The shortcut
+uses the actual active workout, independently of a historical workout selection.
+
 ## Components and interaction
 
 - Use `IconButton` for a single icon action. It provides a 44 dp target, an
@@ -267,6 +288,7 @@ both mechanisms on one element.
 | Icon actions and metric summaries | Shared primitives used by the current Workouts UI |
 | Frosted dialog shell | Shared, token-driven, opt-in through page scope |
 | Workout set rows | Reuse the exercise-history `SetItem` with a slate variant and reserved accessory space |
+| Exercise library search and active-workout shortcut | Shared slate theme, inline Add action, frosted return shortcut above the tab bar |
 | Workouts, detail, exercise recording, calculators | Reference direction; some local spacing and typography still await token adoption |
 | Brand header, date navigator, workout/PB rows | Existing shared/domain components; retain their behavior and optical adjustments |
 | Legacy screens and selectable color themes | Still supported during phased migration; do not extend these palettes for new features |

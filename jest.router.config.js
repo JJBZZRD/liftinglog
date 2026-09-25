@@ -10,6 +10,7 @@ module.exports = {
   testMatch: [
     '<rootDir>/__tests__/routing/profile-route-guards.test.tsx',
     '<rootDir>/__tests__/routing/replacement-restore-native-intent.test.tsx',
+    '<rootDir>/__tests__/routing/workout-exercise-navigation.test.tsx',
   ],
   moduleNameMapper: {
     ...(jestExpo.moduleNameMapper ?? {}),

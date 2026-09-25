@@ -11,7 +11,7 @@ import { ScrollFade } from '@/components/workouts/scroll-fade';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { formatVolumeFromKg, getWeightUnitLabel } from '@/lib/utils/units';
-import { requestExerciseNavigation, setSelectedWorkoutId } from '@/lib/workouts/selection-store';
+import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
 import { ActiveWorkoutDialog, CompleteWorkoutDialog } from '../components/workout-dialogs';
 import { WorkoutExerciseEntry, WorkoutSetRow } from '../components/workout-exercise-entry';
 import { WorkoutEmpty, WorkoutError } from '../components/workout-feedback';
@@ -39,8 +39,8 @@ function WorkoutDetailContent() {
     if (!workout || busy) return;
     // Resuming through the domain layer checks for a conflicting active workout.
     if (!active && !await detail.resume()) return;
-    requestExerciseNavigation(id);
-    router.dismissTo('/(tabs)');
+    setSelectedWorkoutId(id);
+    router.dismissTo({ pathname: '/(tabs)/exercises', params: { workoutId: String(id) } });
   };
 
   return (
@@ -53,7 +53,7 @@ function WorkoutDetailContent() {
           onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 8)} scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 22, paddingBottom: Math.max(insets.bottom, 20) + 30, gap: 26, maxWidth: 700, width: '100%', alignSelf: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -10 }}>
-            <IconButton icon="arrow-left" label="Back to workouts" onPress={back} />
+            <IconButton icon="arrow-left" label="Go back" onPress={back} />
             <Text style={{ flex: 1, color: rawColors.foregroundSecondary, fontSize: 15, fontWeight: '600' }}>Workouts</Text>
             {workout && <WorkoutStatus active={active} />}
           </View>
