@@ -12,8 +12,11 @@ workouts can share a day. The app opens on the current local day.
 - `features/workouts/components` owns session rows, exercise/set rows and dialogs.
 - `features/exercises` separates the exercise library's query/grouping logic,
   actions and dialogs from its route and screen composition.
-- `components/workouts` provides the scoped slate palette, brand header, calendar,
-  frosted tools overlay and scroll-edge treatment.
+- `lib/design-system` and `components/design-system` own shared visual tokens,
+  the slate provider, icon actions and metric summaries. See the
+  [design system](design-system.md) before adding or changing UI.
+- `components/workouts` provides the brand header, calendar, frosted tools overlay
+  and scroll-edge treatment; its theme exports remain compatibility aliases.
 - `components/modals` owns the reusable frosted presentation and opt-in page scope.
 - `components/exercise/recording` separates workout assignment, session loading,
   program persistence, input handling, actions and presentation.

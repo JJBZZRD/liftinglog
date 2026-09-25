@@ -23,6 +23,18 @@ Non-negotiable rules:
 - Do not add new persistence paths that only update `program_calendar_sets` without also considering the main history tables.
 - Always search for plugins or libraries that can fulfill the users needs before creating an implemenation, especially when it comes to UI elements or features. Quite frequently the work has already been done by someone else and in an optimal way and you can save a lot of time.
 
+## UI design system
+
+Before adding or changing UI, read [docs/design-system.md](docs/design-system.md).
+It defines the LiftingLog slate design system and its current migration scope.
+
+- Use `lib/design-system/tokens.ts` for shared visual values and `components/design-system` for generic primitives.
+- Wrap new or redesigned screens in `DesignSystemProvider` under the existing app theme provider; use `useTheme` in descendants so native styles and NativeWind classes share the same palette.
+- Reuse `BaseModal` with a page `FrostedModalProvider` for redesigned dialogs. Do not duplicate blur, scrim, keyboard, or animation shells.
+- Preserve light/dark mode, font scaling, safe areas, reduced motion, and accessible action labels.
+- Keep feature behavior in `features/<feature>` and route files small. Shared visual primitives must not depend on workout or database state.
+- Update the design-system document when changing a shared design rule. Keep legacy theme behavior intact outside the migrated scope.
+
 UI consistency rule (modals and action buttons):
 
 - For modal action rows, reuse the same class-based button styling pattern used in `components/AddExerciseModal.tsx`.
