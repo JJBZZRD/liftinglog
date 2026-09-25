@@ -55,7 +55,7 @@ type TestNode = { type: unknown; props: Record<string, any> };
 
 const find = (tree: Tree, type: string) => tree.root.findAll((node: TestNode) => node.type === type);
 const getList = (tree: Tree) => find(tree, 'ScrollView')[0];
-const fadeEdges = (tree: Tree) => find(tree, 'ScrollFade').map((node: TestNode) => node.props.edge);
+const fadeEdges = (tree: Tree) => find(tree, 'ScrollFade').filter((node: TestNode) => node.props.visible).map((node: TestNode) => node.props.edge);
 
 describe('Workouts Home list viewport', () => {
   let tree: Tree;
@@ -105,6 +105,9 @@ describe('Workouts Home list viewport', () => {
   it('shows fades only at overflowing edges and targets the list without including its fades', async () => {
     await act(async () => { tree = renderer.create(<WorkoutsHomeScreen />); });
     const list = getList(tree!);
+    const fades = find(tree!, 'ScrollFade');
+    expect(fades).toHaveLength(2);
+    expect(fadeEdges(tree!)).toEqual([]);
     await act(async () => {
       list.props.onLayout({ nativeEvent: { layout: { height: 400 } } });
       list.props.onContentSizeChange(350, 1000);
@@ -112,6 +115,7 @@ describe('Workouts Home list viewport', () => {
     expect(fadeEdges(tree!)).toEqual(['bottom']);
     await act(async () => { list.props.onScroll({ nativeEvent: { contentOffset: { y: 100 } } }); });
     expect(fadeEdges(tree!)).toEqual(['top', 'bottom']);
+    expect(find(tree!, 'ScrollFade')).toEqual(fades);
     const targets = find(tree!, 'BlurTargetView');
     expect(targets).toHaveLength(2);
     expect(targets[1].findAll((node: TestNode) => node.type === 'ScrollFade')).toHaveLength(0);
@@ -125,6 +129,8 @@ describe('Workouts Home list viewport', () => {
       list.props.onScroll({ nativeEvent: { contentOffset: { y: 0 } } });
     });
     expect(fadeEdges(tree!)).toEqual([]);
+    // Stay mounted at either boundary so opacity can animate back to zero.
+    expect(find(tree!, 'ScrollFade')).toEqual(fades);
   });
 
   it('resets the native scroll view and fade state when the selected date changes', async () => {

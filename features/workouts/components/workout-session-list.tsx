@@ -67,8 +67,8 @@ export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, 
           </View>}
         </ScrollView>
       </BlurTargetView>
-      {edges.top && <ScrollFade edge="top" blurTarget={blurTarget} />}
-      {edges.bottom && <ScrollFade edge="bottom" blurTarget={blurTarget} />}
+      <ScrollFade edge="top" blurTarget={blurTarget} visible={edges.top} />
+      <ScrollFade edge="bottom" blurTarget={blurTarget} visible={edges.bottom} />
     </View>
   );
 }

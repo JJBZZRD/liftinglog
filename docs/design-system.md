@@ -241,6 +241,10 @@ modal transition and its content entrance when reduced motion is enabled.
 Animation should explain a state or navigation change. Sequence dependent route
 transitions using navigation lifecycle events, not guessed timeouts. Scroll-edge
 fades are decorative, ignore touches, and must not permanently obscure content.
+On the Workouts list, keep both edge overlays mounted and animate their visibility
+over the shared 180 ms layout duration. Fade out at the corresponding boundary as
+well as in when scrolling away; respect system reduced motion. Do not conditionally
+mount them at a scroll threshold, which makes the glass snap into view.
 
 ## Using the system in a new feature
 
