@@ -17,7 +17,7 @@ import { WorkoutExerciseEntry, WorkoutSetRow } from '../components/workout-exerc
 import { WorkoutEmpty, WorkoutError } from '../components/workout-feedback';
 import { WorkoutMetadataEditor } from '../components/workout-metadata-editor';
 import { useWorkoutDetail } from '../hooks/use-workout-detail';
-import { useWorkoutCurrentPBBadges } from '../hooks/use-workout-current-pb-badges';
+import { useWorkoutPBBadges } from '../hooks/use-workout-pb-badges';
 import { dateLabel, workoutTitle } from '../workout-types';
 
 function WorkoutDetailContent() {
@@ -31,7 +31,7 @@ function WorkoutDetailContent() {
   const [scrolled, setScrolled] = useState(false);
   const detail = useWorkoutDetail(id);
   const { workout, loading, busy, error } = detail;
-  const { pbBadges, pbError } = useWorkoutCurrentPBBadges(workout);
+  const { pbBadges, pbError } = useWorkoutPBBadges(workout);
   const active = workout?.completedAt === null;
   const back = () => router.canGoBack() ? router.back() : router.replace('/(tabs)');
   const openSet = (setId: number) => router.push({ pathname: '/set/[id]', params: { id: String(setId) } });

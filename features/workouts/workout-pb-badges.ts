@@ -1,33 +1,21 @@
-import { getExerciseScopeIdsForView } from '@/lib/db/exercises';
-import { getCurrentPBEventsForExercise } from '@/lib/db/pbEvents';
-import type { SetRow } from '@/lib/db/workouts';
+import { getPBEventsBySetIds } from '@/lib/db/pbEvents';
 import type { WorkoutDetail } from './workout-types';
 
 export type WorkoutPBBadges = ReadonlyMap<number, string>;
 
-/** Match HistoryTab's current-PB scope while retaining concrete workout rows. */
-export async function loadWorkoutCurrentPBBadges(
+/** Keep every record achieved in this workout, including subsequently beaten PBs. */
+export async function loadWorkoutPBBadges(
   workout: Pick<WorkoutDetail, 'exercises' | 'unassignedSets'>,
 ): Promise<WorkoutPBBadges> {
-  const setsByExercise = new Map<number, SetRow[]>();
-  const displayedSets = [...workout.exercises.flatMap((entry) => entry.sets), ...workout.unassignedSets];
-  for (const set of displayedSets) {
-    if (set.note?.startsWith('[PLANNED]')) continue;
-    const exerciseSets = setsByExercise.get(set.exerciseId) ?? [];
-    exerciseSets.push(set);
-    setsByExercise.set(set.exerciseId, exerciseSets);
-  }
-
+  const displayedSets = [...workout.exercises.flatMap((entry) => entry.sets), ...workout.unassignedSets]
+    .filter((set) => !set.note?.startsWith('[PLANNED]'));
+  const ids = [...new Set(displayedSets.map((set) => set.id))];
+  if (!ids.length) return new Map();
+  const events = await getPBEventsBySetIds(ids);
   const badges = new Map<number, string>();
-  await Promise.all([...setsByExercise].map(async ([exerciseId, exerciseSets]) => {
-    const scopeIds = await getExerciseScopeIdsForView(exerciseId);
-    if (scopeIds.length === 0) return;
-    // A list passed to this API is one family scope, never all workout exercises.
-    const currentPBs = await getCurrentPBEventsForExercise(scopeIds);
-    for (const set of exerciseSets) {
-      const type = currentPBs.get(set.id)?.type;
-      if (type) badges.set(set.id, type.toUpperCase());
-    }
-  }));
+  for (const id of ids) {
+    const type = events.get(id)?.type;
+    if (type) badges.set(id, type.toUpperCase());
+  }
   return badges;
 }

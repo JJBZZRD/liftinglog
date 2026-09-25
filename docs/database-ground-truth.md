@@ -182,6 +182,10 @@ Derived table from `sets`.
 - PB data is not independently authored.
 - It is rebuilt when sets are inserted, updated, or deleted.
 - If a performance does not exist in `sets`, it cannot produce correct PB behavior.
+- Workout detail reads PB events by canonical set ID so its collapsed highlights
+  retain every record achieved in that entry, even if a later set beat it.
+  Exercise history's current-record badges remain a separate latest-event read.
+  Tying a record still does not create another PB event.
 
 ### `media`
 

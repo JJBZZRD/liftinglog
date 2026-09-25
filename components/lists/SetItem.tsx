@@ -79,7 +79,12 @@ function WorkoutSetContent({
               <MaterialCommunityIcons name="trophy-outline" size={14} color={rawColors.pbGold} />
               <Text style={{ color: rawColors.foreground, fontSize: 11, fontWeight: '600', flexShrink: 1 }}>{pbBadge}</Text>
             </View>
-          ) : isBestSet ? <MaterialCommunityIcons name="trophy" size={14} color={rawColors.primary} /> : null}
+          ) : isBestSet ? (
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+              style={{ maxWidth: '100%', paddingHorizontal: space[6], paddingVertical: space[4], borderRadius: radius.badge, backgroundColor: rawColors.primaryLight }}>
+              <Text style={{ color: rawColors.primary, fontSize: 11, fontWeight: '600' }}>Best</Text>
+            </View>
+          ) : null}
         </View>
         <View style={{ width: 16, alignItems: 'center' }}>
           <MaterialCommunityIcons name="chevron-right" size={16} color={rawColors.foregroundMuted} />

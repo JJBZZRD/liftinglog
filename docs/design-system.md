@@ -170,6 +170,13 @@ uses the actual active workout, independently of a historical workout selection.
   inline PB recognition, and notes below. The status/date row of an exercise card
   belongs above the exercise name. PB indicators stay alongside their specific
   sets, including when narrow widths require units to sit below their values.
+  Each exercise entry starts with its best set plus every set that achieved a PB,
+  in original set order and with original numbering. Show a set only once when it
+  belongs to both groups. A separate Show all / Show highlights control expands
+  the entry without changing exercise or set navigation; omit it when every set
+  is already visible. Best uses a blue label, while PBs retain gold recognition.
+  Workout PB badges represent records achieved at the time, including records
+  later beaten. Exercise history retains its current-record badge behavior.
 - Give a screen one clearly dominant action where practical. Secondary controls
   use the secondary surface; destructive actions have an explicit verb and color.
 - Use static `Pressable` styles with NativeWind active classes, such as

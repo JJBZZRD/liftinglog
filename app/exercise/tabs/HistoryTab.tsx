@@ -29,6 +29,7 @@ import { getCurrentPBEventsForExercise } from "../../../lib/db/pbEvents";
 import { deleteWorkoutExercise, getExerciseHistory, type WorkoutHistoryEntry, type SetRow } from "../../../lib/db/workouts";
 import { listMediaForSetIds } from "../../../lib/db/media";
 import { useTheme } from "../../../lib/theme/ThemeContext";
+import { calculateE1RM } from "../../../lib/utils/estimated-one-rep-max";
 import { convertWeightToKg, formatVolumeFromKg, getWeightUnitLabel } from "../../../lib/utils/units";
 
 // Date range presets
@@ -124,15 +125,6 @@ function getHistoryEntryTimestamp(entry: WorkoutHistoryEntry): number {
 
 function hasDisplayableNote(note: string | null | undefined): note is string {
   return typeof note === "string" && note.trim().length > 0;
-}
-
-/**
- * Calculate estimated 1RM using Epley formula
- * e1RM = weight × (1 + 0.0333 × reps)
- */
-function calculateE1RM(weight: number | null, reps: number | null): number {
-  if (weight === null || reps === null || weight <= 0 || reps <= 0) return 0;
-  return weight * (1 + 0.0333 * reps);
 }
 
 /**

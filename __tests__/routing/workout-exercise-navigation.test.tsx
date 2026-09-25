@@ -66,8 +66,8 @@ jest.mock('../../features/workouts/components/workout-dialogs', () => ({
     ? jest.requireActual('react').createElement(jest.requireActual('react-native').Text, { testID: 'active-workout-conflict' }, 'Another workout is active')
     : null,
 }));
-jest.mock('../../features/workouts/hooks/use-workout-current-pb-badges', () => ({
-  useWorkoutCurrentPBBadges: () => ({ pbBadges: new Map(), pbError: null }),
+jest.mock('../../features/workouts/hooks/use-workout-pb-badges', () => ({
+  useWorkoutPBBadges: () => ({ pbBadges: new Map(), pbError: null }),
 }));
 
 function workout(completedAt: number | null = null) {

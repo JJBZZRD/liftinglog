@@ -3,18 +3,16 @@ import renderer, { act } from 'react-test-renderer';
 import { useWindowDimensions } from 'react-native';
 import SetItem from '@/components/lists/SetItem';
 import { WorkoutExerciseEntry, WorkoutSetRow } from '@/features/workouts/components/workout-exercise-entry';
-import { useWorkoutCurrentPBBadges } from '@/features/workouts/hooks/use-workout-current-pb-badges';
-import { loadWorkoutCurrentPBBadges } from '@/features/workouts/workout-pb-badges';
+import { useWorkoutPBBadges } from '@/features/workouts/hooks/use-workout-pb-badges';
+import { loadWorkoutPBBadges } from '@/features/workouts/workout-pb-badges';
 import type { WorkoutDetail, WorkoutExercise } from '@/features/workouts/workout-types';
-import { getExerciseScopeIdsForView } from '@/lib/db/exercises';
-import { getCurrentPBEventsForExercise, type PBEvent } from '@/lib/db/pbEvents';
+import { getPBEventsBySetIds, type PBEvent } from '@/lib/db/pbEvents';
 import type { SetRow } from '@/lib/db/workouts';
 
 type TestNode = { type: unknown; props: Record<string, unknown> };
 let mockUnitPreference: 'kg' | 'lb' = 'kg';
 
-jest.mock('@/lib/db/exercises', () => ({ getExerciseScopeIdsForView: jest.fn() }));
-jest.mock('@/lib/db/pbEvents', () => ({ getCurrentPBEventsForExercise: jest.fn() }));
+jest.mock('@/lib/db/pbEvents', () => ({ getPBEventsBySetIds: jest.fn() }));
 jest.mock('react-native', () => ({
   Pressable: 'Pressable', Text: 'Text', View: 'View',
   useWindowDimensions: jest.fn(() => ({ width: 448, height: 998, scale: 3, fontScale: 1 })),
@@ -56,79 +54,60 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUnitPreference = 'kg';
   jest.mocked(useWindowDimensions).mockReturnValue({ width: 448, height: 998, scale: 3, fontScale: 1 });
-  jest.mocked(getExerciseScopeIdsForView).mockImplementation(async (id) => [id]);
-  jest.mocked(getCurrentPBEventsForExercise).mockResolvedValue(new Map());
+  jest.mocked(getPBEventsBySetIds).mockResolvedValue(new Map());
 });
 
-describe('workout current PB matching', () => {
-  it('queries unrelated exercises independently and shares reads across repeated entries', async () => {
-    jest.mocked(getCurrentPBEventsForExercise).mockImplementation(async (scope) => {
-      expect(Array.isArray(scope)).toBe(true);
-      return (scope as number[])[0] === 1
-        ? new Map([[11, event(11, 1)]])
-        : new Map([[21, event(21, 2)]]);
-    });
-    const badges = await loadWorkoutCurrentPBBadges(workout([
+describe('workout achieved PB matching', () => {
+  it('reads canonical set IDs together across exercises and repeated entries', async () => {
+    jest.mocked(getPBEventsBySetIds).mockResolvedValue(new Map([[11, event(11, 1)], [21, event(21, 2)]]));
+    const badges = await loadWorkoutPBBadges(workout([
       entry(1, [set(10, 1), set(11, 1)]), entry(1, [set(12, 1)], 3), entry(2, [set(21, 2)]),
     ]));
-    expect(getExerciseScopeIdsForView).toHaveBeenCalledTimes(2);
-    expect(getCurrentPBEventsForExercise).toHaveBeenCalledTimes(2);
-    expect(getCurrentPBEventsForExercise).toHaveBeenCalledWith([1]);
-    expect(getCurrentPBEventsForExercise).toHaveBeenCalledWith([2]);
+    expect(getPBEventsBySetIds).toHaveBeenCalledTimes(1);
+    expect(getPBEventsBySetIds).toHaveBeenCalledWith([10, 11, 12, 21]);
     expect(badges).toEqual(new Map([[11, '5RM'], [21, '5RM']]));
-    expect(badges.has(10)).toBe(false); // Matching values or a former record do not establish a current PB.
-    expect(badges.has(12)).toBe(false);
+    expect(badges.has(10)).toBe(false); // A matching performance alone does not create a PB event.
   });
 
-  it('uses family PBs for a parent and concrete PBs for a variation, like HistoryTab', async () => {
-    jest.mocked(getExerciseScopeIdsForView).mockImplementation(async (id) => id === 1 ? [1, 3, 4] : [3]);
-    jest.mocked(getCurrentPBEventsForExercise).mockImplementation(async (scope) => (
-      (scope as number[]).length > 1
-        ? new Map([[99, event(99, 4)], [11, event(11, 1, '8rm')]])
-        : new Map([[30, event(30, 3)]])
-    ));
-    const badges = await loadWorkoutCurrentPBBadges(workout([
-      entry(1, [set(10, 1), set(11, 1)]), entry(3, [set(30, 3)]),
+  it('retains all three progressive records for the same rep count, excluding records outside the entry', async () => {
+    jest.mocked(getPBEventsBySetIds).mockResolvedValue(new Map([
+      [10, event(10, 1)], [11, event(11, 1)], [12, event(12, 1)], [99, event(99, 1)],
     ]));
-    expect(getCurrentPBEventsForExercise).toHaveBeenCalledWith([1, 3, 4]);
-    expect(getCurrentPBEventsForExercise).toHaveBeenCalledWith([3]);
-    expect(badges).toEqual(new Map([[11, '8RM'], [30, '5RM']]));
-    expect(badges.has(99)).toBe(false); // A PB elsewhere in the family is not a set in this workout.
+    const badges = await loadWorkoutPBBadges(workout([
+      entry(1, [set(10, 1, { weightKg: 100 }), set(11, 1, { weightKg: 110 }), set(12, 1), set(13, 1)]),
+    ]));
+    expect(badges).toEqual(new Map([[10, '5RM'], [11, '5RM'], [12, '5RM']]));
+    expect(badges.has(13)).toBe(false); // Repeating the record is still not a new PB.
+    expect(badges.has(99)).toBe(false);
   });
 
   it('includes legacy recorded sets and never assigns badges to planned placeholders', async () => {
-    jest.mocked(getCurrentPBEventsForExercise).mockResolvedValue(new Map([
-      [81, event(81, 8)], [90, event(90, 9)],
-    ]));
-    const badges = await loadWorkoutCurrentPBBadges(workout([
+    jest.mocked(getPBEventsBySetIds).mockResolvedValue(new Map([[81, event(81, 8)], [90, event(90, 9)]]));
+    const badges = await loadWorkoutPBBadges(workout([
       entry(9, [set(90, 9, { note: '[PLANNED] 5 reps' })]),
     ], [{ ...set(81, 8, { workoutExerciseId: null, weightKg: 0 }), exerciseName: 'Bodyweight' }]));
-    expect(getExerciseScopeIdsForView).toHaveBeenCalledTimes(1);
-    expect(getExerciseScopeIdsForView).toHaveBeenCalledWith(8);
-    expect(badges).toEqual(new Map([[81, '5RM']])); // The read API remains authoritative; no local PB calculation.
+    expect(getPBEventsBySetIds).toHaveBeenCalledWith([81]);
+    expect(badges).toEqual(new Map([[81, '5RM']]));
   });
 
-  it('skips empty sessions and missing exercise scopes', async () => {
-    expect(await loadWorkoutCurrentPBBadges(workout([]))).toEqual(new Map());
-    expect(getExerciseScopeIdsForView).not.toHaveBeenCalled();
-    jest.mocked(getExerciseScopeIdsForView).mockResolvedValue([]);
-    expect(await loadWorkoutCurrentPBBadges(workout([entry(9, [set(90, 9)])]))).toEqual(new Map());
-    expect(getCurrentPBEventsForExercise).not.toHaveBeenCalled();
+  it('skips empty sessions', async () => {
+    expect(await loadWorkoutPBBadges(workout([]))).toEqual(new Map());
+    expect(getPBEventsBySetIds).not.toHaveBeenCalled();
   });
 });
 
 describe('workout PB badge refresh', () => {
-  let state: ReturnType<typeof useWorkoutCurrentPBBadges>;
+  let state: ReturnType<typeof useWorkoutPBBadges>;
   let tree: ReturnType<typeof renderer.create>;
   function Harness({ detail }: { detail: WorkoutDetail | null }) {
-    state = useWorkoutCurrentPBBadges(detail);
+    state = useWorkoutPBBadges(detail);
     return null;
   }
   afterEach(async () => { if (tree) await act(async () => tree.unmount()); });
 
   it('does not let an older workout response overwrite newer badges', async () => {
     let finishOld!: (value: Map<number, PBEvent>) => void;
-    jest.mocked(getCurrentPBEventsForExercise)
+    jest.mocked(getPBEventsBySetIds)
       .mockReturnValueOnce(new Promise((resolve) => { finishOld = resolve; }))
       .mockResolvedValueOnce(new Map([[20, event(20, 2)]]));
     await act(async () => { tree = renderer.create(<Harness detail={workout([entry(1, [set(10, 1)])])} />); });
@@ -140,14 +119,14 @@ describe('workout PB badge refresh', () => {
     expect(state.pbBadges.size).toBe(0);
   });
 
-  it('refreshes current records when the same workout is reloaded and reports read failures', async () => {
+  it('refreshes achieved records when the same workout is reloaded and reports read failures', async () => {
     const detail = workout([entry(1, [set(10, 1)])]);
-    jest.mocked(getCurrentPBEventsForExercise).mockResolvedValueOnce(new Map([[10, event(10, 1)]]));
+    jest.mocked(getPBEventsBySetIds).mockResolvedValueOnce(new Map([[10, event(10, 1)]]));
     await act(async () => { tree = renderer.create(<Harness detail={detail} />); });
     expect(state.pbBadges.get(10)).toBe('5RM');
     await act(async () => { tree.update(<Harness detail={{ ...detail }} />); });
     expect(state.pbBadges.size).toBe(0);
-    jest.mocked(getCurrentPBEventsForExercise).mockRejectedValueOnce(new Error('Database unavailable'));
+    jest.mocked(getPBEventsBySetIds).mockRejectedValueOnce(new Error('Database unavailable'));
     await act(async () => { tree.update(<Harness detail={{ ...detail }} />); });
     expect(state.pbBadges.size).toBe(0);
     expect(state.pbError).toBe('Personal bests could not be loaded.');
@@ -158,6 +137,43 @@ describe('workout PB indicators', () => {
   let tree: ReturnType<typeof renderer.create>;
   afterEach(async () => { if (tree) await act(async () => tree.unmount()); });
 
+  it('starts with best plus all PB sets, preserves original numbers, and expands independently of navigation', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => set(index + 1, 1, { weightKg: 50 + index * 5, setIndex: index }));
+    const exercise = entry(1, rows);
+    const onSetPress = jest.fn();
+    const onPress = jest.fn();
+    const props = { entry: exercise, index: 0, onSetPress, onPress, pbBadges: new Map([[3, '5RM'], [6, '5RM'], [9, '5RM']]) };
+    await act(async () => { tree = renderer.create(<WorkoutExerciseEntry {...props} />); });
+    const visible = () => tree.root.findAllByType(WorkoutSetRow).map((row: any) => row.props.set.id);
+    expect(visible()).toEqual([3, 6, 9, 12]);
+    expect(tree.root.findAllByType(WorkoutSetRow).map((row: any) => row.props.index)).toEqual([2, 5, 8, 11]);
+    expect(tree.root.findAll((node: TestNode) => node.type === 'Text' && node.props.children === '5RM')).toHaveLength(3);
+    expect(tree.root.findAll((node: TestNode) => node.type === 'Text' && node.props.children === 'Best')).toHaveLength(1);
+    const toggle = tree.root.find((node: TestNode) => node.props.accessibilityLabel === 'Show all 12 sets for Exercise 1');
+    expect(toggle.props.accessibilityState).toEqual({ expanded: false });
+    await act(async () => { toggle.props.onPress(); });
+    expect(visible()).toEqual(rows.map((row) => row.id));
+    expect(toggle.props.accessibilityState).toEqual({ expanded: true });
+    expect(onPress).not.toHaveBeenCalled();
+    await act(async () => { tree.root.findAllByType(WorkoutSetRow)[4].props.onPress(); });
+    expect(onSetPress).toHaveBeenCalledWith(5);
+    // Refreshing PBs must not collapse an entry the user has expanded.
+    await act(async () => { tree.update(<WorkoutExerciseEntry {...props} pbBadges={new Map([[3, '5RM'], [6, '5RM'], [12, '5RM']])} />); });
+    expect(visible()).toHaveLength(12);
+    await act(async () => { toggle.props.onPress(); });
+    expect(visible()).toEqual([3, 6, 12]); // The best/PB overlap is rendered only once.
+  });
+
+  it('adds asynchronously loaded PB highlights and omits a toggle when every set is already visible', async () => {
+    const exercise = entry(1, [set(1, 1, { weightKg: 100 }), set(2, 1, { weightKg: 110 }), set(3, 1)]);
+    const props = { entry: exercise, index: 0, onSetPress: jest.fn(), onPress: jest.fn() };
+    await act(async () => { tree = renderer.create(<WorkoutExerciseEntry {...props} />); });
+    expect(tree.root.findAllByType(WorkoutSetRow).map((row: any) => row.props.set.id)).toEqual([3]);
+    await act(async () => { tree.update(<WorkoutExerciseEntry {...props} pbBadges={new Map([[1, '5RM'], [2, '5RM'], [3, '5RM']])} />); });
+    expect(tree.root.findAllByType(WorkoutSetRow).map((row: any) => row.props.set.id)).toEqual([1, 2, 3]);
+    expect(tree.root.findAll((node: TestNode) => node.props.accessibilityState !== undefined)).toHaveLength(0);
+  });
+
   it('labels only matching sets, summarizes that exercise, and keeps set navigation intact', async () => {
     const onSetPress = jest.fn();
     await act(async () => { tree = renderer.create(
@@ -165,9 +181,9 @@ describe('workout PB indicators', () => {
         onPress={() => {}} onSetPress={onSetPress} pbBadges={new Map([[11, '5RM'], [99, '8RM']])} />,
     ); });
     const buttons = tree.root.findAll((node: TestNode) => node.type === 'Pressable');
-    expect(buttons[0].props.accessibilityLabel).toBe('Open Exercise 1, 1 current personal best set');
+    expect(buttons[0].props.accessibilityLabel).toBe('Open Exercise 1, 1 personal best set achieved');
     expect(buttons[1].props.accessibilityLabel).not.toContain('personal best');
-    expect(buttons[2].props.accessibilityLabel).toContain('current personal best, 5RM');
+    expect(buttons[2].props.accessibilityLabel).toContain('personal best achieved, 5RM');
     await act(async () => { buttons[2].props.onPress(); });
     expect(onSetPress).toHaveBeenCalledWith(11);
     const pbText = tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '5RM');
@@ -187,7 +203,7 @@ describe('workout PB indicators', () => {
     await act(async () => { tree = renderer.create(<WorkoutSetRow set={set(81, 8)} index={0} onPress={() => {}} />); });
     expect(tree.root.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(0);
     await act(async () => { tree.update(<WorkoutSetRow set={set(81, 8)} index={0} onPress={() => {}} pbBadge="10RM" />); });
-    expect(tree.root.find((node: TestNode) => node.type === 'Pressable').props.accessibilityLabel).toContain('current personal best, 10RM');
+    expect(tree.root.find((node: TestNode) => node.type === 'Pressable').props.accessibilityLabel).toContain('personal best achieved, 10RM');
   });
 
   it('displays missing measurements as em dashes without reporting zero reps', async () => {
@@ -223,7 +239,7 @@ describe('workout PB indicators', () => {
     expect(pbText.parent.parent.parent).toBe(mainRows[1]);
     expect(pbText.parent.props.style.maxWidth).toBe('100%');
     expect(pbText.props.style.flexShrink).toBe(1);
-    expect(buttons[1].props.accessibilityLabel).toContain('warm-up, current personal best, 100RM');
+    expect(buttons[1].props.accessibilityLabel).toContain('warm-up, personal best achieved, 100RM');
     expect(buttons[1].find((node: TestNode) => node.type === 'Text' && node.props.children === 'Controlled tempo')).toBeDefined();
     expect(mainRows[1].findAll((node: TestNode) => node.type === 'Text' && node.props.children === 'Warm-up')).toHaveLength(0);
   });

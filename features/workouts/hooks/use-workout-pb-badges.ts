@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
-import { loadWorkoutCurrentPBBadges, type WorkoutPBBadges } from '../workout-pb-badges';
+import { loadWorkoutPBBadges, type WorkoutPBBadges } from '../workout-pb-badges';
 import type { WorkoutDetail } from '../workout-types';
 
 const EMPTY_BADGES: WorkoutPBBadges = new Map();
 type PBResult = { workout: WorkoutDetail; badges: WorkoutPBBadges; error: string | null };
 
-export function useWorkoutCurrentPBBadges(workout: WorkoutDetail | null) {
+export function useWorkoutPBBadges(workout: WorkoutDetail | null) {
   const [result, setResult] = useState<PBResult | null>(null);
 
   useEffect(() => {
     if (!workout) return;
     let cancelled = false;
-    void loadWorkoutCurrentPBBadges(workout).then(
+    void loadWorkoutPBBadges(workout).then(
       (badges) => { if (!cancelled) setResult({ workout, badges, error: null }); },
       () => {
         if (!cancelled) setResult({ workout, badges: EMPTY_BADGES, error: 'Personal bests could not be loaded.' });
