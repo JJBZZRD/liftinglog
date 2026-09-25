@@ -145,6 +145,12 @@ The ramp spans the fade's height (currently 36 dp). Update it on the UI thread
 using Reanimated's scroll handler, so slow drags, fast swipes, momentum, and
 direction changes all track the content without delay.
 
+Scrolling speed therefore controls how quickly the fade changes: a faster swipe
+traverses the opacity ramp faster, while a slower drag reveals it gradually. At
+the same scroll position, opacity must be identical regardless of speed or elapsed
+time. For example, 18 dp from an edge gives 50% opacity across the 36 dp ramp,
+and pausing there keeps it at 50% without continuing to fade in.
+
 Do not use a timed animation, spring, or binary scroll threshold for this effect.
 Opacity must stop changing when scrolling stops and reverse immediately with the
 gesture. This direct opacity mapping adds no autonomous motion or transforms,
