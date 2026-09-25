@@ -1,5 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
+import { useWindowDimensions } from 'react-native';
+import SetItem from '@/components/lists/SetItem';
 import { WorkoutExerciseEntry, WorkoutSetRow } from '@/features/workouts/components/workout-exercise-entry';
 import { useWorkoutCurrentPBBadges } from '@/features/workouts/hooks/use-workout-current-pb-badges';
 import { loadWorkoutCurrentPBBadges } from '@/features/workouts/workout-pb-badges';
@@ -9,19 +11,23 @@ import { getCurrentPBEventsForExercise, type PBEvent } from '@/lib/db/pbEvents';
 import type { SetRow } from '@/lib/db/workouts';
 
 type TestNode = { type: unknown; props: Record<string, unknown> };
+let mockUnitPreference: 'kg' | 'lb' = 'kg';
 
 jest.mock('@/lib/db/exercises', () => ({ getExerciseScopeIdsForView: jest.fn() }));
 jest.mock('@/lib/db/pbEvents', () => ({ getCurrentPBEventsForExercise: jest.fn() }));
-jest.mock('react-native', () => ({ Pressable: 'Pressable', Text: 'Text', View: 'View' }));
+jest.mock('react-native', () => ({
+  Pressable: 'Pressable', Text: 'Text', View: 'View',
+  useWindowDimensions: jest.fn(() => ({ width: 448, height: 998, scale: 3, fontScale: 1 })),
+}));
 jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'Icon' }));
 jest.mock('react-native-reanimated', () => {
   const animation = { duration: () => animation, delay: () => animation, reduceMotion: () => animation };
   return { __esModule: true, default: { View: 'View' }, FadeInDown: animation, LinearTransition: animation, ReduceMotion: { System: 'system' } };
 });
-jest.mock('@/lib/contexts/UnitPreferenceContext', () => ({ useUnitPreference: () => ({ unitPreference: 'kg' }) }));
+jest.mock('@/lib/contexts/UnitPreferenceContext', () => ({ useUnitPreference: () => ({ unitPreference: mockUnitPreference }) }));
 jest.mock('@/lib/theme/ThemeContext', () => ({ useTheme: () => ({ rawColors: {
   foreground: '#14202C', foregroundSecondary: '#53606C', foregroundMuted: '#78838D',
-  surface: '#FFFFFF', border: '#DCE3E8', borderLight: '#EDF1F4', pbGold: '#C88730', primary: '#475569',
+  surface: '#FFFFFF', surfaceSecondary: '#EAEFF4', border: '#DCE3E8', borderLight: '#EDF1F4', pbGold: '#C88730', primary: '#475569',
 } }) }));
 
 function set(id: number, exerciseId: number, patch: Partial<SetRow> = {}): SetRow {
@@ -48,6 +54,8 @@ function event(setId: number, exerciseId: number, type = '5rm'): PBEvent {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUnitPreference = 'kg';
+  jest.mocked(useWindowDimensions).mockReturnValue({ width: 448, height: 998, scale: 3, fontScale: 1 });
   jest.mocked(getExerciseScopeIdsForView).mockImplementation(async (id) => [id]);
   jest.mocked(getCurrentPBEventsForExercise).mockResolvedValue(new Map());
 });
@@ -162,7 +170,7 @@ describe('workout PB indicators', () => {
     expect(buttons[2].props.accessibilityLabel).toContain('current personal best, 5RM');
     await act(async () => { buttons[2].props.onPress(); });
     expect(onSetPress).toHaveBeenCalledWith(11);
-    const pbText = tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '5RM PB');
+    const pbText = tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '5RM');
     expect(pbText.props.style.color).toBe('#14202C');
     expect(pbText.props.numberOfLines).toBeUndefined();
     expect(pbText.props.allowFontScaling).not.toBe(false);
@@ -170,7 +178,9 @@ describe('workout PB indicators', () => {
       expect(typeof button.props.style).not.toBe('function');
       expect(button.props.className).toContain('active:opacity-70');
     }
-    expect(tree.root.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(2);
+    expect(tree.root.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(1);
+    const matchingWeight = buttons[2].find((node: TestNode) => node.type === 'Text' && node.props.children === '120 kg');
+    expect(pbText.parent.parent.parent).toBe(matchingWeight.parent.parent);
   });
 
   it('supports legacy rows without showing a trophy on ordinary recorded sets', async () => {
@@ -178,5 +188,64 @@ describe('workout PB indicators', () => {
     expect(tree.root.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(0);
     await act(async () => { tree.update(<WorkoutSetRow set={set(81, 8)} index={0} onPress={() => {}} pbBadge="10RM" />); });
     expect(tree.root.find((node: TestNode) => node.type === 'Pressable').props.accessibilityLabel).toContain('current personal best, 10RM');
+  });
+
+  it('displays missing measurements as em dashes without reporting zero reps', async () => {
+    jest.mocked(useWindowDimensions).mockReturnValue({ width: 320, height: 800, scale: 3, fontScale: 1.3 });
+    await act(async () => { tree = renderer.create(<WorkoutSetRow set={set(81, 8, { weightKg: null, reps: null })} index={0} onPress={() => {}} />); });
+    expect(tree.root.findAll((node: TestNode) => node.type === 'Text' && node.props.children === '\u2014')).toHaveLength(2);
+    expect(tree.root.find((node: TestNode) => node.type === 'Pressable').props.accessibilityLabel).toContain('not recorded reps');
+  });
+
+  it('puts status and date above the exercise name independently of PBs', async () => {
+    const exercise = { ...entry(1, [set(11, 1)]), completedAt: null };
+    await act(async () => { tree = renderer.create(<WorkoutExerciseEntry entry={exercise} index={0}
+      onPress={() => {}} onSetPress={() => {}} pbBadges={new Map([[11, '5RM']])} />); });
+    const header = tree.root.findAll((node: TestNode) => node.type === 'Pressable')[0];
+    expect(header.children[0].find((node: TestNode) => node.type === 'Text' && node.props.children === 'In progress')).toBeDefined();
+    expect(header.children[1].find((node: TestNode) => node.type === 'Text' && node.props.children === 'Exercise 1')).toBeDefined();
+    expect(header.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(0);
+    await act(async () => { tree.update(<WorkoutExerciseEntry entry={{ ...exercise, completedAt: 123 }} index={0}
+      onPress={() => {}} onSetPress={() => {}} />); });
+    expect(header.children[0].find((node: TestNode) => node.type === 'Text' && node.props.children === 'Completed')).toBeDefined();
+  });
+
+  it('keeps inline PB and value columns stable with warm-ups, notes and larger narrow-screen text', async () => {
+    jest.mocked(useWindowDimensions).mockReturnValue({ width: 320, height: 800, scale: 3, fontScale: 1.3 });
+    await act(async () => { tree = renderer.create(<WorkoutExerciseEntry
+      entry={entry(1, [set(10, 1), set(11, 1, { isWarmup: true, note: 'Controlled tempo' })])}
+      index={0} onPress={() => {}} onSetPress={() => {}} pbBadges={new Map([[11, '100RM']])} />); });
+    const buttons = tree.root.findAll((node: TestNode) => node.type === 'Pressable').slice(1);
+    const weights = buttons.map((button: any) => button.find((node: TestNode) => node.type === 'Text' && node.props.children === '120'));
+    const mainRows = weights.map((weight: any) => weight.parent.parent);
+    expect(mainRows[0].children.map((child: any) => child.props.style)).toEqual(mainRows[1].children.map((child: any) => child.props.style));
+    const pbText = tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '100RM');
+    expect(pbText.parent.parent.parent).toBe(mainRows[1]);
+    expect(pbText.parent.props.style.maxWidth).toBe('100%');
+    expect(pbText.props.style.flexShrink).toBe(1);
+    expect(buttons[1].props.accessibilityLabel).toContain('warm-up, current personal best, 100RM');
+    expect(buttons[1].find((node: TestNode) => node.type === 'Text' && node.props.children === 'Controlled tempo')).toBeDefined();
+    expect(mainRows[1].findAll((node: TestNode) => node.type === 'Text' && node.props.children === 'Warm-up')).toHaveLength(0);
+  });
+
+  it.each(['default', 'compact'] as const)('preserves %s history set interactions, units, note and media', async (variant) => {
+    mockUnitPreference = 'lb';
+    const onPress = jest.fn();
+    const onLongPress = jest.fn();
+    await act(async () => { tree = renderer.create(<SetItem index={2} weightKg={120} reps={5} variant={variant}
+      note="Keep elbows tucked" pbBadge="5RM" isBestSet onPress={onPress} onLongPress={onLongPress}
+      delayLongPress={600} rightActions={<React.Fragment>media action</React.Fragment>} />); });
+    const button = tree.root.find((node: TestNode) => node.type === 'Pressable');
+    expect(button.props.delayLongPress).toBe(600);
+    expect(typeof button.props.style).not.toBe('function');
+    await act(async () => { button.props.onPress(); button.props.onLongPress(); });
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+    expect(tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '264.6 lb')).toBeDefined();
+    expect(tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '5RM')).toBeDefined();
+    expect(tree.root.find((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy')).toBeDefined();
+    expect(tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === 'Keep elbows tucked').props.numberOfLines)
+      .toBe(variant === 'compact' ? 1 : undefined);
+    expect(JSON.stringify(tree.toJSON())).toContain('media action');
   });
 });

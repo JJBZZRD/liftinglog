@@ -10,6 +10,8 @@ workouts can share a day. The app opens on the current local day.
 - `features/workouts/screens` composes the Home and detail views.
 - `features/workouts/hooks` owns loading, request freshness, edits and lifecycle actions.
 - `features/workouts/components` owns session rows, exercise/set rows and dialogs.
+- `components/lists/SetItem.tsx` supplies the shared exercise-history set layout;
+  workout detail uses its slate variant with inline PBs and stable value columns.
 - `features/exercises` separates the exercise library's query/grouping logic,
   actions and dialogs from its route and screen composition.
 - `lib/design-system` and `components/design-system` own shared visual tokens,
@@ -38,8 +40,17 @@ dialogs. Modal action buttons retain the repository's shared class pattern.
 
 The date navigator follows the LiftingLog header directly, with arrows grouped
 around the date and a labeled Calendar button. The session list is titled Workouts.
+The brand header, date controls, New Workout action, and Workouts heading remain
+fixed while the list beneath them scrolls independently. Conditional active-workout
+content is inside the list so it cannot shift those controls. Scroll fades are
+bounded to that viewport, and changing the day resets its scroll position.
 Workouts and the workout picker list sessions newest first by start time, then ID;
 default workout names retain their chronological numbering.
+
+Exercise cards place completion status and date above the exercise name. Set rows
+follow exercise history's numbered weight/reps presentation, with current PB badges
+inline beside their sets. Reserved accessory space keeps values and navigation
+aligned with or without badges; notes can expand below without moving columns.
 
 Calculators, quick stats, and dialogs in the redesigned workout/exercise flow
 share `expo-blur` and Reanimated presentation. A page-level provider opts existing

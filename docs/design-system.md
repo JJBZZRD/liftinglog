@@ -16,6 +16,7 @@ hierarchy, and restrained translucency and motion.
 | Current scoped colors in a component | `useTheme().rawColors` from [`ThemeContext`](../lib/theme/ThemeContext.tsx) |
 | Generic icon action | [`IconButton`](../components/design-system/icon-button.tsx) |
 | Numeric summary | [`Metric`](../components/design-system/metric.tsx) |
+| Logged set presentation | [`SetItem`](../components/lists/SetItem.tsx); `workout` variant for redesigned workout detail |
 | Dialog presentation | [`BaseModal`](../components/modals/BaseModal.tsx), [`FrostedModal`](../components/modals/frosted-modal.tsx) |
 | Dialog blur target | [`FrostedModalProvider`](../components/modals/frosted-modal-context.tsx) |
 | Logo asset | [`liftinglog-logo.svg`](../assets/branding/liftinglog-logo.svg) |
@@ -104,8 +105,36 @@ Align visible glyphs and borders, not only touch rectangles. The Workouts date
 navigator reserves its date and return-to-today slots so actions do not shift
 when the date changes. Its small, documented optical offset includes half the
 outer row gap to center the return label between the arrow button and Calendar
-button edges. Preserve that correction when
-refactoring; do not turn this feature-specific offset into a general token.
+button edges. Preserve that correction when refactoring; do not turn this
+feature-specific offset into a general token.
+
+If the date controls cannot fit at the available width and font scale, put the
+complete arrow/date group on a centered first row, with Back to today and Calendar
+on a second row. Choose that layout independently of the selected date. Reserve
+the return action's wrapped space even when hidden, and constrain the date slot
+so it can wrap without disappearing or forcing the list off screen.
+
+Optional content must not decide where a row's primary values or actions sit.
+Reserve an accessory column for conditional PB badges or trailing controls, and
+use the same value columns for every row in a list. Check the combinations with
+and without badges, notes, warm-up labels, and status. Notes may increase row
+height; they must not move the weight, reps, or navigation columns sideways.
+Use a consistent responsive layout for narrow screens and larger type rather than
+shrinking an individual row's font to make its badge fit.
+
+### Fixed controls and bounded scrolling
+
+On Workouts, the brand header, date navigator, New Workout action, and Workouts
+heading stay fixed. Only the list viewport scrolls. Give that viewport bounded
+flex ancestors, with `flex: 1` and `minHeight: 0` where it must consume remaining
+space. Keep its refresh control, empty/error content, active-workout banner, and
+optional footer in the scrolling area. Changing the date resets the list position.
+
+Scroll fades belong to the list viewport and must sample a target that excludes
+the fades themselves. The full page remains the separate target for frosted
+dialogs. Keep the final list item reachable above the floating tab bar. A smaller
+screen must reduce the viewport height, not turn the fixed controls into scroll
+content.
 
 ## Components and interaction
 
@@ -115,6 +144,11 @@ refactoring; do not turn this feature-specific offset into a general token.
   corners and secondary foreground as Calendar; the default stays plain.
 - Use `Metric` for a value with a short supporting label. Keep workout-specific
   status and PB components in their feature/domain folders.
+- Reuse `SetItem` for logged sets. Its `workout` variant adapts the exercise-history
+  pattern to slate surfaces, with a numbered badge, aligned weight/reps columns,
+  inline PB recognition, and notes below. The status/date row of an exercise card
+  belongs above the exercise name. PB indicators stay alongside their specific
+  sets, including when narrow widths require units to sit below their values.
 - Give a screen one clearly dominant action where practical. Secondary controls
   use the secondary surface; destructive actions have an explicit verb and color.
 - Use static `Pressable` styles with NativeWind active classes, such as
@@ -232,6 +266,7 @@ both mechanisms on one element.
 | Slate colors and provider | Shared source; previous Workouts exports remain compatibility aliases |
 | Icon actions and metric summaries | Shared primitives used by the current Workouts UI |
 | Frosted dialog shell | Shared, token-driven, opt-in through page scope |
+| Workout set rows | Reuse the exercise-history `SetItem` with a slate variant and reserved accessory space |
 | Workouts, detail, exercise recording, calculators | Reference direction; some local spacing and typography still await token adoption |
 | Brand header, date navigator, workout/PB rows | Existing shared/domain components; retain their behavior and optical adjustments |
 | Legacy screens and selectable color themes | Still supported during phased migration; do not extend these palettes for new features |

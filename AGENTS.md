@@ -32,6 +32,7 @@ It defines the LiftingLog slate design system and its current migration scope.
 - Wrap new or redesigned screens in `DesignSystemProvider` under the existing app theme provider; use `useTheme` in descendants so native styles and NativeWind classes share the same palette.
 - Reuse `BaseModal` with a page `FrostedModalProvider` for redesigned dialogs. Do not duplicate blur, scrim, keyboard, or animation shells.
 - Preserve light/dark mode, font scaling, safe areas, reduced motion, and accessible action labels.
+- Keep primary values and controls aligned when optional badges, status labels, or actions appear. Reserve consistent accessory space or use shared columns; review both populated and absent states at narrow widths and larger text sizes.
 - Keep feature behavior in `features/<feature>` and route files small. Shared visual primitives must not depend on workout or database state.
 - Update the design-system document when changing a shared design rule. Keep legacy theme behavior intact outside the migrated scope.
 
