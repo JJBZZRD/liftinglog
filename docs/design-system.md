@@ -12,6 +12,8 @@ hierarchy, and restrained translucency and motion.
 | Responsibility | Source |
 | --- | --- |
 | Light/dark semantic colors, spacing, type, radii, motion, glass | [`lib/design-system/tokens.ts`](../lib/design-system/tokens.ts) |
+| Responsive gutters, card padding, and gaps | [`useResponsiveLayout`](../lib/design-system/use-responsive-layout.ts), [`getResponsiveLayout`](../lib/design-system/responsive-layout.ts) |
+| Actual width available to a nested row | [`useContainerWidth`](../lib/design-system/use-container-width.ts) |
 | Slate theme scope, shared by inline styles and NativeWind | [`DesignSystemProvider`](../components/design-system/design-system-provider.tsx) |
 | Current scoped colors in a component | `useTheme().rawColors` from [`ThemeContext`](../lib/theme/ThemeContext.tsx) |
 | Generic icon action | [`IconButton`](../components/design-system/icon-button.tsx) |
@@ -65,8 +67,8 @@ surfaces in both modes. Do not solve low contrast by lowering text opacity.
 
 ## Layout, spacing, and typography
 
-Use the exported spacing and size tokens. The page reference uses 22 dp horizontal
-padding and a centered maximum content width of 700 dp. Cards use 20 dp padding,
+Use the exported spacing and size tokens. The wide page reference uses 22 dp horizontal
+padding and a centered maximum page width of 700 dp. Cards use up to 20 dp padding,
 18 dp corners, and internal dividers for sets or metrics. Use normal document flow
 and flex gaps; reserve absolute positioning for overlays and scroll fades.
 
@@ -99,6 +101,51 @@ Respect safe areas and bottom navigation. Keep long content scrollable and allow
 rows to wrap at narrow widths or larger text sizes. A fixed visual position must
 not require clipping text or disabling accessibility scaling.
 
+### Responsive sizing across devices
+
+Use the available **layout width in dp**, not the phone's physical pixel resolution
+or the emulator's dimensions. `useResponsiveLayout()` tracks the app window and
+font scale, subtracts horizontal safe-area insets, and returns shared bounded
+spacing. Its `pageWidth` is capped at 700 dp. Apply horizontal safe-area insets once
+outside that page, then use `pageGutter` for its internal padding.
+
+| Responsive value | At 360 dp and narrower | At 448 dp and wider |
+| --- | --- | --- |
+| Page gutter | 16 dp | 22 dp |
+| Card padding | 16 dp | 20 dp |
+| Item gap | 12 dp | 18 dp |
+
+Spacing interpolates between those widths and stays within those limits. Use it
+for new or redesigned screens and shared components. Do not globally multiply
+font sizes, icons, controls, or whole-screen transforms by a width ratio. Keep
+44 dp touch targets, system font scaling, and the established text roles. The
+installed React Native [window-dimension hook](https://reactnative.dev/docs/usewindowdimensions)
+and flex layout provide the required responsive behaviour; no scaling package is
+needed for these foundations.
+
+For a constrained row, use `useContainerWidth(initialWidth)` and attach its
+`onLayout` to the row's outer container. Window width alone is insufficient inside
+a card, modal, split view, or padded page. Fit the complete row, including gaps,
+icons, padding, and the user's font scale. Prefer flexible content with
+`minWidth: 0` and intentional wrapping; give fixed action targets `flexShrink: 0`.
+Do not rely on clipping, `numberOfLines`, or an arbitrary font-size reduction to
+conceal overflowing controls.
+
+Use explicit presentation modes when space is limited: full labels first,
+compact spacing and approved shorter labels next, then a deliberate wrapped
+layout when necessary. Compact text uses a defined readable style, not continuous
+font shrinking. Keep the full meaning in accessibility labels. Reserve slots for
+conditional actions, and choose the mode independently of whether those actions
+are currently visible. Rotation, window resizing, and font-scale changes must
+recalculate the fit without retaining stale measurements.
+
+Workouts, its date navigator, workout cards, and the shared header, metrics,
+icon buttons, and frosted modal demonstrate this approach. Existing legacy pages
+still require deliberate adoption; these helpers do not automatically make every
+fixed-width component responsive. Check 320, 360, 390, and 448 dp widths, larger
+font scales (including 1.3 and 2), and landscape or split-window layouts. Verify
+actual text and button bounds on a physical device as well as the emulator.
+
 ### Alignment is visual as well as geometric
 
 Align visible glyphs and borders, not only touch rectangles. The Workouts date
@@ -108,11 +155,16 @@ outer row gap to center the return label between the arrow button and Calendar
 button edges. Preserve that correction when refactoring; do not turn this
 feature-specific offset into a general token.
 
-If the date controls cannot fit at the available width and font scale, put the
-complete arrow/date group on a centered first row, with Back to today and Calendar
-on a second row. Choose that layout independently of the selected date. Reserve
-the return action's wrapped space even when hidden, and constrain the date slot
-so it can wrap without disappearing or forcing the list off screen.
+The date controls use a full single row when space allows. On narrower phones,
+use a compact single row with `Today`, a 15 dp date label, and the Calendar label;
+the return action's accessibility label remains `Back to today`. Keep both arrows
+at 44 dp and reserve the return slot on today too. If even the compact row cannot
+fit the measured width and font scale, put the complete arrow/date group on a
+centered first row, with Today and Calendar on a second row. Budget both actions
+explicitly rather than restricting Calendar to half the row, which can split its
+label at larger font scales. Choose that
+layout independently of the selected date. Constrain the date slot so large text
+can wrap without disappearing or forcing controls outside the page.
 
 Optional content must not decide where a row's primary values or actions sit.
 Reserve an accessory column for conditional PB badges or trailing controls, and
@@ -263,6 +315,11 @@ The current motion tokens are 180 ms for layout changes, 240 ms for list entranc
 260 ms for dialog entrances, and 40 ms list stagger. Limit stagger to the first few
 items. Use Reanimated's system reduced-motion support, and suppress both the native
 modal transition and its content entrance when reduced motion is enabled.
+
+Let wrapped text determine card height directly. On Android, layout transitions
+can capture a height before larger or newly wrapped text finishes measuring,
+causing clipped labels or overlapping rows. The workout cards retain entrance
+animations but do not animate their content-driven height.
 
 Animation should explain a state or navigation change. Sequence dependent route
 transitions using navigation lifecycle events, not guessed timeouts. Scroll-edge

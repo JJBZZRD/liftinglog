@@ -41,7 +41,7 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'Icon' }));
 jest.mock('expo-blur', () => ({ BlurTargetView: 'BlurTargetView' }));
 jest.mock('expo-router', () => ({ router: { push: mockPush }, Stack: { Screen: () => null } }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16 }) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 jest.mock('../../lib/theme/ThemeContext', () => ({ useTheme: () => ({ rawColors: new Proxy({}, { get: () => '#000000' }) }) }));
 jest.mock('../../lib/config/releaseProfile', () => ({ appCapabilities: mockCapabilities }));
 jest.mock('../../lib/workouts/selection-store', () => ({ setSelectedWorkoutId: jest.fn() }));
@@ -252,22 +252,52 @@ describe('Workouts date navigator responsive layout', () => {
   it('preserves the wide date width, inline controls, and optical return-label adjustment', async () => {
     await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
     const root = find(tree!, 'View')[0];
-    expect(root.props.style).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap', gap: 4 });
-    expect(dateText().props.style).toMatchObject({ width: 112, flexShrink: 1 });
+    expect(root.props.style).toMatchObject({ flexDirection: 'row', gap: 4 });
+    expect(dateText().props.style).toMatchObject({ width: 112, flexShrink: 0 });
     const backLabel = button('Back to today').find((node: TestNode) => node.type === 'Text');
     expect(backLabel.props.style.transform).toEqual([{ translateX: 2 }]);
     expect(button('Choose workout date').parent).toBe(root);
     expect(button('Back to today').parent.props.style).toEqual({ flex: 1, minWidth: 88, minHeight: 44 });
   });
 
-  it.each([[320, 1.3], [390, 1], [448, 1.3]])('uses stable two-row controls at width %s and font scale %s', async (width, fontScale) => {
+  it.each([[360, 1], [390, 1], [448, 1.3]])('fits a compact single row at width %s and font scale %s', async (width, fontScale) => {
+    mockWindow = { ...mockWindow, width, fontScale };
+    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
+    const root = find(tree!, 'View')[0];
+    expect(root.props.style.flexDirection).toBe('row');
+    const calendar = button('Choose workout date');
+    const today = button('Back to today');
+    expect(calendar.parent).toBe(root);
+    expect(today.find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
+    expect(calendar.find((node: TestNode) => node.type === 'Text').props.children).toBe('Calendar');
+    expect(dateText().props.style).toMatchObject({ width: 100 * fontScale, fontSize: 15 });
+    const { contentWidth } = jest.requireActual('../../lib/design-system/responsive-layout').getResponsiveLayout(width);
+    const requiredWidth = button('Previous day').props.style.width + dateText().props.style.width
+      + button('Next day').props.style.width + today.parent.props.style.minWidth
+      + calendar.props.style.width + root.props.style.gap;
+    expect(requiredWidth).toBeLessThanOrEqual(contentWidth);
+    expect(button('Previous day').props.style.width).toBe(44);
+    expect(button('Next day').props.style.width).toBe(44);
+    expect(calendar.props.style.minHeight).toBe(44);
+    const reservedWidth = dateText().props.style.width;
+    await act(async () => { tree.update(renderSelector(new Date(2026, 10, 11))); });
+    expect(dateText().props.style.width).toBe(reservedWidth);
+    expect(button('Choose workout date')).toBe(calendar);
+    await act(async () => { tree.update(renderSelector(new Date())); });
+    expect(button('Back to today')).toBe(today);
+    expect(today.props.style.opacity).toBe(0);
+    expect(today.props.disabled).toBe(true);
+    expect(today.props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it.each([[320, 1.3], [360, 1.3], [448, 2]])('uses stable two-row controls at width %s and font scale %s', async (width, fontScale) => {
     mockWindow = { ...mockWindow, width, fontScale };
     await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
     const root = find(tree!, 'View')[0];
     const dateRow = dateText().parent.parent;
     const actionsRow = button('Choose workout date').parent;
     const todaySlot = button('Back to today').parent;
-    expect(root.props.style).toEqual({ gap: 8 });
+    expect(root.props.style).toMatchObject({ gap: 8 });
     expect(dateRow.props.style).toEqual({ alignItems: 'center' });
     expect(dateText().props.style).toMatchObject({ width: 112 * fontScale, flexShrink: 0 });
     expect(dateText().props.numberOfLines).toBeUndefined();
@@ -288,11 +318,28 @@ describe('Workouts date navigator responsive layout', () => {
     expect(button('Back to today').props.importantForAccessibility).toBe('no-hide-descendants');
   });
 
+  it('uses its measured container and recalculates presentation after resizing', async () => {
+    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
+    let root = find(tree!, 'View')[0];
+    await act(async () => { root.props.onLayout({ nativeEvent: { layout: { width: 328 } } }); });
+    expect(button('Back to today').find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
+    await act(async () => { root.props.onLayout({ nativeEvent: { layout: { width: 280 } } }); });
+    root = find(tree!, 'View')[0];
+    expect(root.props.style.flexDirection).toBeUndefined();
+    mockWindow = { ...mockWindow, width: 390 };
+    await act(async () => { tree.update(renderSelector(pastDate)); });
+    expect(find(tree!, 'View')[0].props.style.flexDirection).toBe('row');
+    expect(button('Back to today').find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
+  });
+
   it('bounds very large type within both arrow targets and retains date actions', async () => {
     mockWindow = { ...mockWindow, width: 320, fontScale: 2 };
     await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
-    expect(dateText().props.style).toMatchObject({ width: 188, flexShrink: 0 });
-    expect(button('Choose workout date').props.style.maxWidth).toBe('50%');
+    expect(dateText().props.style).toMatchObject({ width: 200, flexShrink: 0 });
+    const calendarWidth = button('Choose workout date').props.style.width;
+    expect(calendarWidth).toBeGreaterThanOrEqual(44);
+    expect(calendarWidth + button('Back to today').parent.props.style.minWidth + 4).toBeLessThanOrEqual(288);
+    expect(button('Back to today').find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
     await act(async () => { button('Previous day').props.onPress(); });
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 22));
     await act(async () => { button('Next day').props.onPress(); });

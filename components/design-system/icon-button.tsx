@@ -14,7 +14,7 @@ export function IconButton({ icon, label, onPress, disabled = false, variant = '
     <Pressable accessibilityRole="button" accessibilityLabel={label}
       accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
       className="active:opacity-60"
-      style={{ width: sizes.touchTarget, height: sizes.touchTarget,
+      style={{ width: sizes.touchTarget, height: sizes.touchTarget, flexShrink: 0,
         borderRadius: variant === 'secondary' ? radius.control : radius.icon,
         backgroundColor: variant === 'secondary' ? rawColors.surfaceSecondary : undefined,
         alignItems: 'center', justifyContent: 'center',

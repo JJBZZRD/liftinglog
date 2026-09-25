@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleShee
 import Animated, { FadeInDown, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { glass, motion, radius, sizes, space } from '@/lib/design-system/tokens';
+import { useResponsiveLayout } from '@/lib/design-system/use-responsive-layout';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import type { BaseModalProps } from './BaseModal';
 import type { ModalBlurTarget } from './frosted-modal-context';
@@ -20,6 +21,7 @@ export function FrostedModal({
 }: Props) {
   const { rawColors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { pageGutter } = useResponsiveLayout();
   const reducedMotion = useReducedMotion();
   const animate = !reducedMotion && animationType !== 'none';
 
@@ -35,15 +37,16 @@ export function FrostedModal({
         <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{
             flex: 1, alignItems: 'center',
-            justifyContent: centerContent ? 'center' : 'flex-start', paddingHorizontal: space[16],
+            justifyContent: centerContent ? 'center' : 'flex-start',
+            paddingLeft: insets.left + space[16], paddingRight: insets.right + space[16],
             paddingTop: insets.top + (centerContent ? space[16] : topOffset), paddingBottom: insets.bottom + space[24]
           }}>
           <Animated.View accessibilityViewIsModal
             entering={animate ? FadeInDown.duration(motion.dialogEnter).reduceMotion(ReduceMotion.System) : undefined}
             style={[{
-              width: '100%', maxWidth, flexShrink: 1, maxHeight: '100%', borderRadius: radius.dialog,
+              width: '100%', maxWidth, minWidth: 0, flexShrink: 1, maxHeight: '100%', borderRadius: radius.dialog,
               borderWidth: 1, borderColor: `${rawColors.border}${glass.borderAlpha}`, backgroundColor: `${rawColors.surface}${glass.surfaceAlpha}`,
-              overflow: 'hidden', padding: space[22]
+              overflow: 'hidden', padding: pageGutter
             }, contentStyle]}>
             <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator={false}
               style={{ flexGrow: 0, flexShrink: 1 }}>

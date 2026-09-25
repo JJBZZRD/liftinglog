@@ -8,6 +8,7 @@ let mockReducedMotion = false;
 jest.mock('react-native', () => ({
   View: 'View', Pressable: 'Pressable', ScrollView: 'ScrollView', KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: 'Modal', Platform: { OS: 'ios' }, StyleSheet: { absoluteFill: { position: 'absolute' }, create: (styles: unknown) => styles },
+  useWindowDimensions: () => ({ width: 448, height: 998, scale: 3, fontScale: 1 }),
 }));
 jest.mock('expo-blur', () => ({ BlurView: 'BlurView' }));
 jest.mock('react-native-reanimated', () => {
