@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { newUid } from "../utils/uid";
 import { db } from "./connection";
 import { exercises, media, pbEvents, programCalendarSets, sets, workoutExercises, workouts, type SetRow, type WorkoutRow } from "./schema";
@@ -91,7 +91,7 @@ function rowsForDay(timestamp: number): WorkoutRow[] {
     .where(and(eq(sets.workoutId, workouts.id), recordedSetCondition, isNull(sets.workoutExerciseId), gte(legacySetDate, start), lt(legacySetDate, end)));
   return db.select().from(workouts)
     .where(or(and(gte(workouts.startedAt, start), lt(workouts.startedAt, end)), exists(dayEntries), exists(dayLegacySets)))
-    .orderBy(asc(workouts.startedAt), asc(workouts.id)).all();
+    .orderBy(desc(workouts.startedAt), desc(workouts.id)).all();
 }
 
 function summarize(rows: WorkoutRow[]): WorkoutSessionSummary[] {

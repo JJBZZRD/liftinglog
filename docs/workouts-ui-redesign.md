@@ -35,6 +35,8 @@ dialogs. Modal action buttons retain the repository's shared class pattern.
 
 The date navigator follows the LiftingLog header directly, with arrows grouped
 around the date and a labeled Calendar button. The session list is titled Workouts.
+Workouts and the workout picker list sessions newest first by start time, then ID;
+default workout names retain their chronological numbering.
 
 Calculators, quick stats, and dialogs in the redesigned workout/exercise flow
 share `expo-blur` and Reanimated presentation. A page-level provider opts existing

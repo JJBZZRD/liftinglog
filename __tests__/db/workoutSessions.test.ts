@@ -20,7 +20,7 @@ describe("named workout sessions on SQLite", () => {
   beforeEach(() => exec("DELETE FROM program_calendar_sets; DELETE FROM program_calendar_exercises; DELETE FROM program_calendar; DELETE FROM psl_programs; DELETE FROM workouts; DELETE FROM exercises;"));
   afterAll(() => mockDatabase.close());
 
-  it("supports multiple same-day sessions, stable names and separate aggregate counts", async () => {
+  it("lists same-day sessions newest first with stable names and separate aggregate counts", async () => {
     const first = await sessions.createWorkoutSession(day(23, 8));
     entry(first);
     await sessions.completeWorkoutSession(first);
@@ -28,8 +28,8 @@ describe("named workout sessions on SQLite", () => {
     await sessions.updateWorkoutSession(second, { name: "  Evening lift  ", note: "  exact note  " });
     const list = await sessions.listWorkoutSessionsForDate(day(23));
     expect(list).toEqual([
-      expect.objectContaining({ id: first, name: "Workout 1 Fri 23 Oct", exerciseCount: 1, setCount: 1, volumeKg: 500, inProgressCount: 0 }),
       expect.objectContaining({ id: second, name: "Evening lift", note: "  exact note  ", exerciseCount: 0, setCount: 0, volumeKg: 0 }),
+      expect.objectContaining({ id: first, name: "Workout 1 Fri 23 Oct", exerciseCount: 1, setCount: 1, volumeKg: 500, inProgressCount: 0 }),
     ]);
     await sessions.updateWorkoutSession(second, { name: "", note: null });
     expect((await sessions.getWorkoutSessionDetail(second))?.name).toBe("Workout 2 Fri 23 Oct");
