@@ -1,0 +1,387 @@
+<title>LiftingLog Palette Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #F4F5F7;
+  --panel: #FFFFFF;
+  --ink: #1D2230;
+  --ink-2: #4F5667;
+  --ink-3: #656C7B;
+  --rule: #DFE2E8;
+  --rule-soft: #ECEEF2;
+  --brand: #292F3D;
+  --ok: #287A5F;
+  --ok-bg: #E3F1EB;
+  --low: #B23A45;
+  --low-bg: #FBE8EA;
+  --chip: #E9EBF0;
+  --chip-on: #292F3D;
+  --chip-on-fg: #FFFFFF;
+  --z: 0.78;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0F1116; --panel: #171A21; --ink: #EEF0F4; --ink-2: #B4BAC6; --ink-3: #8D94A2;
+    --rule: #2A2F3A; --rule-soft: #21252D; --brand: #292F3D;
+    --ok: #6CCBA4; --ok-bg: #16302A; --low: #F58A93; --low-bg: #3A1D22;
+    --chip: #232733; --chip-on: #E8EBF0; --chip-on-fg: #1D2230;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0F1116; --panel: #171A21; --ink: #EEF0F4; --ink-2: #B4BAC6; --ink-3: #8D94A2;
+  --rule: #2A2F3A; --rule-soft: #21252D; --brand: #292F3D;
+  --ok: #6CCBA4; --ok-bg: #16302A; --low: #F58A93; --low-bg: #3A1D22;
+  --chip: #232733; --chip-on: #E8EBF0; --chip-on-fg: #1D2230;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink);
+  font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px; line-height: 1.5;
+  padding-inline: 20px; padding-block: 32px 64px;
+}
+.wrap { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; font-weight: 700; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
+p { margin: 0; max-width: 68ch; color: var(--ink-2); }
+code, .mono { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; }
+
+.intro { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 32px; align-items: end; }
+.intro-text { display: flex; flex-direction: column; gap: 14px; }
+.logo-card { background: var(--panel); border: 1px solid var(--rule); border-radius: 18px; padding: 18px; display: flex; gap: 18px; align-items: center; }
+.logo-card img, .logo-card svg { flex-shrink: 0; }
+.logo-swatches { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.logo-swatches h3 { margin-bottom: 2px; }
+.lsw { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.lsw i { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--rule); flex-shrink: 0; }
+
+.controls { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--page); padding-block: 10px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; border-bottom: 1px solid var(--rule); }
+.controls-label { font-size: 13px; color: var(--ink-3); }
+.seg { display: inline-flex; background: var(--chip); border-radius: 12px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 14px; font-weight: 600; border: 0; background: transparent; color: var(--ink-2); padding: 8px 14px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.jump { display: flex; gap: 14px; flex-wrap: wrap; margin-left: auto; font-size: 14px; }
+.jump a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.jump a:hover { color: var(--ink); border-color: var(--ink); }
+
+.option { display: flex; flex-direction: column; gap: 20px; padding-top: 8px; scroll-margin-top: 80px; }
+.opt-head { display: flex; flex-direction: column; gap: 8px; }
+.opt-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tag { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 10px; border-radius: 999px; background: var(--chip); color: var(--ink-2); }
+.tag.rec { background: var(--chip-on); color: var(--chip-on-fg); }
+.opt-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; align-items: start; }
+.phones { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+.phone-col { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.phone-col span { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.phone { border-radius: 30px; padding: 7px; background: #0A0C10; box-shadow: 0 0 0 1px var(--rule); max-width: 100%; }
+.phone-inner { border-radius: 24px; overflow: hidden; }
+
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 12px; letter-spacing: 0.04em; padding: 0 8px 8px 0; border-bottom: 1px solid var(--rule); }
+td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--rule-soft); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+.sw { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.sw i { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(128,128,128,.35); flex-shrink: 0; }
+.ratio { display: inline-flex; align-items: center; gap: 6px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; font-variant-numeric: tabular-nums; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+.ratio.ok { background: var(--ok-bg); color: var(--ok); }
+.ratio.low { background: var(--low-bg); color: var(--low); font-weight: 500; }
+.need { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.verdict { font-size: 14px; color: var(--ink-2); padding: 12px 14px; border-radius: 12px; background: var(--rule-soft); }
+.verdict b { color: var(--ink); }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.note { background: var(--panel); border: 1px solid var(--rule); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.note h2 { font-size: 17px; }
+.note p { font-size: 14px; }
+
+@media (max-width: 1060px) { .opt-body { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .intro { grid-template-columns: minmax(0, 1fr); } .jump { margin-left: 0; } }
+@media (max-width: 380px) { :root { --z: 0.7; } }
+
+/* ---------- Mockup (sizes in real Android dp, scaled with zoom) ---------- */
+.m { width: 360px; height: 760px; zoom: var(--z); position: relative; overflow: hidden; background: var(--bg); color: var(--fg);
+  font-family: Roboto, "Segoe UI", system-ui, sans-serif; font-size: 16px; line-height: 1.3; }
+.m svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.m-sb { height: 30px; display: flex; justify-content: space-between; align-items: center; padding: 0 22px; font-size: 13px; font-weight: 500; color: var(--fg); }
+.m-page { padding: 6px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+.m-row { display: flex; align-items: center; gap: 12px; }
+.m-sb2 { justify-content: space-between; }
+.m-hdr { display: flex; justify-content: space-between; align-items: center; }
+.m-brand { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 700; letter-spacing: -0.4px; }
+.m-hdr-act { display: flex; gap: 4px; color: var(--fg2); }
+.m-ib { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 14px; color: var(--fg2); }
+.m-ib.sec { background: var(--surface2); border-radius: 12px; }
+.m-date { display: flex; align-items: center; gap: 6px; }
+.m-date-l { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; }
+.m-date-l b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.m-date-l small { font-size: 12px; color: var(--muted); }
+.m-cal { height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 12px; background: var(--surface2); color: var(--fg2); font-size: 14px; font-weight: 600; margin-left: 6px; }
+.m-cal svg { width: 18px; height: 18px; }
+.m-btn { min-height: 50px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 700; }
+.m-btn.primary { background: var(--primary); color: var(--onPrimary); }
+.m-btn.secondary { background: var(--surface2); color: var(--fg2); font-weight: 600; }
+.m-sec { display: flex; justify-content: space-between; align-items: baseline; padding-top: 4px; }
+.m-sec h5 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+.m-sec span, .m-cap { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.m-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.m-ctitle { flex: 1; font-size: 23px; line-height: 29px; font-weight: 600; }
+.m-card .m-row > svg { color: var(--muted); }
+.m-metrics { display: flex; gap: 12px; border-top: 1px solid var(--borderLight); padding-top: 12px; }
+.m-metrics > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.m-metrics b { font-size: 25px; font-weight: 600; letter-spacing: -0.7px; font-variant-numeric: tabular-nums; }
+.m-metrics span { font-size: 11px; letter-spacing: 0.6px; color: var(--fg2); }
+.m-metrics.boxed { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; }
+.m-stat { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.m-stat i { width: 6px; height: 6px; border-radius: 3px; background: currentColor; }
+.m-stat.live { color: var(--primary); }
+.m-stat.done { color: var(--fg2); }
+.m-stat.done i { background: var(--muted); }
+.m-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; background: var(--primary); color: var(--onPrimary); padding: 4px 10px 4px 8px; border-radius: 999px; }
+.m-pill i { width: 6px; height: 6px; border-radius: 3px; background: var(--onPrimary); }
+.m-title { font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.8px; }
+.m-note { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; padding: 4px 2px; }
+.m-note svg { width: 18px; height: 18px; }
+.m-ename { font-size: 19px; font-weight: 600; }
+.m-set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--borderLight); }
+.m-n { width: 26px; height: 26px; border-radius: 8px; background: var(--surface2); color: var(--fg2); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.m-v { font-size: 13px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.m-v b { font-size: 18px; color: var(--fg); font-weight: 600; margin-right: 3px; }
+.m-acc { justify-self: end; }
+.m-best { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; padding: 3px 7px; border-radius: 6px; color: var(--bestFg); background: var(--bestBg); }
+.m-pb { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; padding: 3px 7px; border-radius: 6px; color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, transparent); }
+.m-footer { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px 22px; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 28%); }
+.m-tabs { position: absolute; left: 16px; right: 16px; bottom: 20px; height: 64px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-around; }
+.m-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.m-tab.on { color: var(--primary); font-weight: 700; }
+.m-fade { position: absolute; left: 0; right: 0; bottom: 96px; height: 36px; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg)); pointer-events: none; }
+.m-blur { position: absolute; inset: 0; filter: blur(5px); transform: scale(1.02); }
+.m-scrim { position: absolute; inset: 0; background: var(--scrim); }
+.m-dialog { position: absolute; left: 22px; right: 22px; top: 50%; transform: translateY(-50%); background: color-mix(in srgb, var(--surface) 93%, transparent); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.m-dicon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: var(--destructive); background: color-mix(in srgb, var(--destructive) 15%, transparent); }
+.m-dialog h6 { margin: 4px 0 0; font-size: 20px; font-weight: 700; }
+.m-dialog p { margin: 0; color: var(--fg2); font-size: 15px; line-height: 1.45; max-width: none; }
+.m-dialog p.m-strong { color: var(--fg); font-weight: 500; }
+.m-actions { display: flex; gap: 12px; margin-top: 10px; }
+.m-actions span { flex: 1; padding: 14px; border-radius: 8px; text-align: center; font-size: 16px; font-weight: 600; }
+.m-actions .c { background: var(--surface2); color: var(--fg2); }
+.m-actions .d { background: var(--destructive); color: var(--onDestructive); display: inline-flex; justify-content: center; gap: 8px; align-items: center; }
+.m-actions .d svg { width: 18px; height: 18px; }
+@media (prefers-reduced-motion: no-preference) { .seg button { transition: background .15s, color .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <div class="intro-text">
+      <h3>LiftingLog · UI redesign</h3>
+      <h1>Palette study for the Workouts redesign</h1>
+      <p>Three palettes shown on the same three screens. <b>Ink</b> takes its colours straight from the logo. <b>Steel</b> uses the same slate neutrals with a muted blue accent. <b>Current</b> is what's in <code>lib/design-system/tokens.ts</code> today, shown for reference. Each palette's contrast is calculated in the page against WCAG AA. Anything that fails is flagged in red.</p>
+    </div>
+    <div class="logo-card">
+      <svg width="76" height="76" viewBox="0 0 28 28" aria-label="LiftingLog logo mark" role="img">
+        <rect width="28" height="28" rx="7" fill="#292F3D"/>
+        <g fill="#FFFFFF"><rect x="4.2" y="10" width="2.4" height="8" rx=".8"/><rect x="7.6" y="7" width="3.4" height="13" rx=".8"/><rect x="7.6" y="17" width="5.8" height="3" rx=".8"/><rect x="17" y="7" width="3.4" height="13" rx=".8"/><rect x="14.6" y="17" width="5.8" height="3" rx=".8"/><rect x="21.4" y="10" width="2.4" height="8" rx=".8"/></g>
+        <path d="M11.8 11.6l2.1 2.4 3.4-4.3" stroke="#A3A3A3" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="logo-swatches">
+        <h3>From the logo</h3>
+        <div class="lsw"><i style="background:#292F3D"></i><span class="mono">#292F3D</span> ink (tile, splash)</div>
+        <div class="lsw"><i style="background:#FFFFFF"></i><span class="mono">#FFFFFF</span> glyph</div>
+        <div class="lsw"><i style="background:#A3A3A3"></i><span class="mono">#A3A3A3</span> tick</div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="controls" aria-label="Mockup controls">
+    <span class="controls-label" id="screen-label">Screen</span>
+    <div class="seg" role="group" aria-labelledby="screen-label">
+      <button type="button" id="scr-home" data-screen="home" aria-pressed="true">Workouts</button>
+      <button type="button" id="scr-detail" data-screen="detail" aria-pressed="false">Workout detail</button>
+      <button type="button" id="scr-delete" data-screen="delete" aria-pressed="false">Delete dialog</button>
+    </div>
+    <div class="jump"><a href="#ink">Ink</a><a href="#steel">Steel</a><a href="#current">Current</a><a href="#notes">What changes</a></div>
+  </nav>
+
+  <div id="options" style="display:flex;flex-direction:column;gap:56px"></div>
+
+  <section class="notes" id="notes" style="scroll-margin-top:80px">
+    <div class="note">
+      <h2>What the contrast checks found</h2>
+      <p>The current dark palette puts white text on a light red (the Delete button) and on a light blue (New Workout). Both come out around 2.5:1 and 3.2:1, well under 4.5:1. Whichever option you choose, I'd add an <code>onDestructive</code> text colour so the dark-mode Delete label uses dark ink.</p>
+    </div>
+    <div class="note">
+      <h2>How Ink marks state without colour</h2>
+      <p>With no accent hue, "In progress" becomes a filled ink pill instead of blue text, and the active tab uses a heavier weight as well as the ink colour. The only colours left are gold for PBs and green, amber and red for status. "Best" becomes a quiet slate label.</p>
+    </div>
+    <div class="note">
+      <h2>What changes in code</h2>
+      <p>The new values go in <code>designColors</code> in <code>tokens.ts</code>, plus one new role, <code>onDestructive</code>. NativeWind classes and <code>rawColors</code> pick up the change through <code>DesignSystemProvider</code>, so the Workouts screens need no component edits beyond the status pill.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var ink = {
+    light: { bg:'#F5F6F8', surface:'#FFFFFF', surface2:'#EDEFF3', border:'#DDE1E7', borderLight:'#E9ECF0', fg:'#1D2230', fg2:'#4F5667', muted:'#656C7B',
+      primary:'#292F3D', onPrimary:'#FFFFFF', bestFg:'#292F3D', bestBg:'#E6E8EE', success:'#287A5F', warning:'#A86A1C', destructive:'#C8434F', onDestructive:'#FFFFFF', gold:'#9C6C1E', scrim:'rgba(29,34,48,0.28)' },
+    dark: { bg:'#14171F', surface:'#1C2029', surface2:'#252A35', border:'#343A47', borderLight:'#2A2F3B', fg:'#F2F4F7', fg2:'#B4BAC6', muted:'#8D94A2',
+      primary:'#E8EBF0', onPrimary:'#292F3D', bestFg:'#E8EBF0', bestBg:'#2C3240', success:'#5BBE98', warning:'#DDB06A', destructive:'#F07C86', onDestructive:'#1A1D25', gold:'#E0B45E', scrim:'rgba(6,8,12,0.5)' }
+  };
+  function withAccent(base, a) { var o = {}; for (var k in base) o[k] = base[k]; for (var j in a) o[j] = a[j]; return o; }
+  var PALETTES = [
+    { id:'ink', name:'Ink', tag:'Recommended', rec:true, status:'pill',
+      desc:'Colours taken from the logo: the ink slate is the only "action" colour, with white text on it in light mode, and flips to near-white with ink text in dark mode. Colour is used only to mean something: status, risk and PBs.',
+      light: ink.light, dark: ink.dark },
+    { id:'steel', name:'Steel', tag:'Alternative', status:'dot',
+      desc:'Same slate neutrals and status colours as Ink, with a muted steel blue as the accent. Easier to spot what can be tapped, but it adds a hue the logo does not have.',
+      light: withAccent(ink.light, { primary:'#4C6A92', onPrimary:'#FFFFFF', bestFg:'#3F5B80', bestBg:'#E5EBF3' }),
+      dark: withAccent(ink.dark, { primary:'#8FAAD0', onPrimary:'#14171F', bestFg:'#A9BFDD', bestBg:'#243247' }) },
+    { id:'current', name:'Current', tag:'Today, for reference', status:'dot',
+      desc:'The values in lib/design-system/tokens.ts now: blue-tinted slate neutrals with a saturated blue accent that does not appear in the logo.',
+      light: { bg:'#F4F6F8', surface:'#FFFFFF', surface2:'#EAEFF4', border:'#D8E0E9', borderLight:'#E7EBF0', fg:'#182330', fg2:'#526174', muted:'#69788A',
+        primary:'#285DCE', onPrimary:'#FFFFFF', bestFg:'#285DCE', bestBg:'#E7EDFB', success:'#249B79', warning:'#C88730', destructive:'#DC535F', onDestructive:'#FFFFFF', gold:'#C88730', scrim:'rgba(35,48,66,0.25)' },
+      dark: { bg:'#101720', surface:'#19232F', surface2:'#233040', border:'#354354', borderLight:'#293646', fg:'#F1F5F9', fg2:'#B3C0D0', muted:'#91A0B4',
+        primary:'#568DFA', onPrimary:'#FFFFFF', bestFg:'#568DFA', bestBg:'#203353', success:'#50C5A1', warning:'#E3B166', destructive:'#FF7B85', onDestructive:'#FFFFFF', gold:'#E3B166', scrim:'rgba(7,13,23,0.35)' } }
+  ];
+
+  var I = {
+    calc:'<svg viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M8.5 7h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg>',
+    chart:'<svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>',
+    chevL:'<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>',
+    chevR:'<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>',
+    cal:'<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/></svg>',
+    plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+    arrowUR:'<svg viewBox="0 0 24 24"><path d="M7 17L17 7M8 7h9v9"/></svg>',
+    arrowL:'<svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+    dots:'<svg viewBox="0 0 24 24" style="stroke-width:3"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>',
+    trash:'<svg viewBox="0 0 24 24"><path d="M3.5 6.5h17M9 6.5V4h6v2.5M18.5 6.5l-1 14h-11l-1-14M10 11v5.5M14 11v5.5"/></svg>',
+    check:'<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    pencil:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>',
+    day:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M4 14.5h16"/></svg>',
+    dumbbell:'<svg viewBox="0 0 24 24"><path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/></svg>',
+    book:'<svg viewBox="0 0 24 24"><path d="M5 4.5A1.5 1.5 0 016.5 3H19v15H6.5A1.5 1.5 0 005 19.5zM5 19.5A1.5 1.5 0 006.5 21H19"/></svg>',
+    cog:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.8 12h2.6M18.6 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>'
+  };
+  var LOGO = '<svg viewBox="0 0 28 28" style="width:30px;height:30px;stroke:none"><rect width="28" height="28" rx="7" fill="#292F3D" stroke="rgba(255,255,255,.12)" stroke-width="0.8"/><g fill="#FFFFFF"><rect x="4.2" y="10" width="2.4" height="8" rx=".8"/><rect x="7.6" y="7" width="3.4" height="13" rx=".8"/><rect x="7.6" y="17" width="5.8" height="3" rx=".8"/><rect x="17" y="7" width="3.4" height="13" rx=".8"/><rect x="14.6" y="17" width="5.8" height="3" rx=".8"/><rect x="21.4" y="10" width="2.4" height="8" rx=".8"/></g><path d="M11.8 11.6l2.1 2.4 3.4-4.3" stroke="#A3A3A3" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function status(p, active) {
+    if (!active) return '<span class="m-stat done"><i></i>Completed</span>';
+    return p.status === 'pill' ? '<span class="m-pill"><i></i>In progress</span>' : '<span class="m-stat live"><i></i>In progress</span>';
+  }
+  var SB = '<div class="m-sb"><span>9:41</span><span>82%</span></div>';
+  function metrics(ex, sets, vol, boxed) {
+    return '<div class="m-metrics' + (boxed ? ' boxed' : '') + '"><div><b>' + ex + '</b><span>Exercises</span></div><div><b>' + sets + '</b><span>Sets</span></div><div><b>' + vol + '</b><span>Volume · kg</span></div></div>';
+  }
+  function card(p, active, time, title, ex, sets, vol) {
+    return '<div class="m-card"><div class="m-row m-sb2">' + status(p, active) + '<span class="m-cap">' + time + '</span></div>' +
+      '<div class="m-row"><div class="m-ctitle">' + title + '</div>' + I.arrowUR + '</div>' + metrics(ex, sets, vol) + '</div>';
+  }
+  function tabs() {
+    var t = [['day','Workouts',1],['dumbbell','Exercises'],['book','Programs'],['cog','Settings']];
+    return '<div class="m-tabs">' + t.map(function (x) { return '<div class="m-tab' + (x[2] ? ' on' : '') + '">' + I[x[0]] + '<span>' + x[1] + '</span></div>'; }).join('') + '</div>';
+  }
+  function home(p) {
+    return SB + '<div class="m-page">' +
+      '<div class="m-hdr"><div class="m-brand">' + LOGO + '<span>LiftingLog</span></div><div class="m-hdr-act"><span class="m-ib">' + I.calc + '</span><span class="m-ib">' + I.chart + '</span></div></div>' +
+      '<div class="m-date"><span class="m-ib sec">' + I.chevL + '</span><div class="m-date-l"><b>Fri 26 Sep</b><small>Today</small></div><span class="m-ib sec">' + I.chevR + '</span><span class="m-cal">' + I.cal + 'Calendar</span></div>' +
+      '<div class="m-btn primary">' + I.plus + 'New Workout</div>' +
+      '<div class="m-sec"><h5>Workouts</h5><span>2 workouts</span></div>' +
+      card(p, true, '6:42 PM', 'Push Day', 4, 14, '6.2k') +
+      card(p, false, '7:05 AM', 'Morning Pull', 3, 11, '4.8k') +
+      '</div><div class="m-fade"></div>' + tabs();
+  }
+  function setRow(n, w, r, acc) {
+    return '<div class="m-set"><span class="m-n">' + n + '</span><span class="m-v"><b>' + w + '</b>kg</span><span class="m-v"><b>' + r + '</b>reps</span><span class="m-acc">' + (acc || '') + '</span></div>';
+  }
+  function detail(p) {
+    return SB + '<div class="m-page">' +
+      '<div class="m-row m-sb2"><span class="m-ib">' + I.arrowL + '</span><span class="m-ib" title="Workout actions">' + I.dots + '</span></div>' +
+      '<div class="m-row m-sb2">' + status(p, true) + '<span class="m-cap">Fri 26 Sep · 6:42 PM</span></div>' +
+      '<div class="m-title">Push Day</div>' + metrics(4, 14, '6.2k', true) +
+      '<div class="m-note">' + I.pencil + 'Add a note</div>' +
+      '<div class="m-sec"><h5>Exercises</h5><span>4 exercises</span></div>' +
+      '<div class="m-card"><div class="m-row m-sb2">' + status(p, true) + '<span class="m-cap">6:48 PM</span></div>' +
+      '<div class="m-ename">Bench Press</div><div>' +
+      setRow(1, 100, 5, '<span class="m-best">BEST</span>') + setRow(3, 105, 3, '<span class="m-pb">PB</span>') +
+      '</div><div class="m-cap" style="color:var(--fg2);font-weight:600;font-size:13px">Show all 5 sets</div></div>' +
+      '</div><div class="m-footer"><div class="m-btn primary">' + I.check + 'Complete Workout</div></div>';
+  }
+  function del(p) {
+    return '<div class="m-blur">' + detail(p) + '</div><div class="m-scrim"></div>' +
+      '<div class="m-dialog" role="img" aria-label="Delete workout confirmation"><div class="m-dicon">' + I.trash + '</div><h6>Delete workout?</h6>' +
+      '<p><b style="color:var(--fg)">Push Day</b> has 4 exercises and 14 sets. PBs set in this workout will be recalculated. Videos stay in your gallery.</p>' +
+      '<p class="m-strong">This can’t be undone.</p>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="d">' + I.trash + 'Delete</span></div></div>';
+  }
+  var SCREENS = { home: home, detail: detail, delete: del };
+
+  function varsOf(c) { return Object.keys(c).map(function (k) { return '--' + k + ':' + c[k]; }).join(';'); }
+
+  // WCAG relative luminance and contrast
+  function lum(hex) {
+    var h = hex.replace('#', ''); var rgb = [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16) / 255; });
+    var l = rgb.map(function (v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+  }
+  function contrast(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
+  var ROLES = [['bg','Page background'],['surface','Card surface'],['surface2','Secondary control'],['border','Border'],['fg','Text'],['fg2','Secondary text'],['muted','Timestamps, metadata'],['primary','Primary action'],['onPrimary','Text on primary'],['destructive','Destructive'],['onDestructive','Text on destructive'],['gold','PB gold'],['success','Success']];
+  var PAIRS = [
+    ['Body text on card', 'fg', 'surface', 4.5],
+    ['Secondary text on card', 'fg2', 'surface', 4.5],
+    ['Timestamps on page', 'muted', 'bg', 4.5],
+    ['New Workout / Complete label', 'onPrimary', 'primary', 4.5],
+    ['Accent or active state on card', 'primary', 'surface', 3],
+    ['Delete button label', 'onDestructive', 'destructive', 4.5],
+    ['PB label on card', 'gold', 'surface', 4.5]
+  ];
+  function sw(hex) { return '<span class="sw"><i style="background:' + hex + '"></i><span class="mono">' + hex + '</span></span>'; }
+  function ratio(r, need) { var ok = r >= need; return '<span class="ratio ' + (ok ? 'ok' : 'low') + '">' + r.toFixed(1) + ':1 ' + (ok ? '✓' : '✗') + '</span>'; }
+
+  function optionHTML(p, screen) {
+    var fails = [];
+    var pairRows = PAIRS.map(function (x) {
+      var rl = contrast(p.light[x[1]], p.light[x[2]]), rd = contrast(p.dark[x[1]], p.dark[x[2]]);
+      if (rl < x[3]) fails.push(x[0] + ' (light)');
+      if (rd < x[3]) fails.push(x[0] + ' (dark)');
+      return '<tr><td>' + x[0] + '</td><td>' + ratio(rl, x[3]) + '</td><td>' + ratio(rd, x[3]) + '</td><td class="need">' + x[3] + ':1</td></tr>';
+    }).join('');
+    var verdict = fails.length === 0
+      ? '<div class="verdict"><b>All checked pairs pass</b> in light and dark mode.</div>'
+      : '<div class="verdict"><b>' + fails.length + ' pair' + (fails.length > 1 ? 's' : '') + ' below AA:</b> ' + fails.join(', ') + '.</div>';
+    return '<section class="option" id="' + p.id + '">' +
+      '<div class="opt-head"><div class="opt-title"><h2>' + p.name + '</h2><span class="tag' + (p.rec ? ' rec' : '') + '">' + p.tag + '</span></div><p>' + p.desc + '</p></div>' +
+      '<div class="opt-body"><div class="phones">' +
+        ['light', 'dark'].map(function (mode) {
+          return '<div class="phone-col"><div class="phone"><div class="phone-inner"><div class="m" style="' + varsOf(p[mode]) + '">' + SCREENS[screen](p) + '</div></div></div><span>' + (mode === 'light' ? 'Light' : 'Dark') + '</span></div>';
+        }).join('') +
+      '</div><div class="panel">' + verdict +
+        '<div class="tbl-wrap"><table><thead><tr><th>Contrast check</th><th>Light</th><th>Dark</th><th>Needs</th></tr></thead><tbody>' + pairRows + '</tbody></table></div>' +
+        '<div class="tbl-wrap"><table><thead><tr><th>Role</th><th>Light</th><th>Dark</th></tr></thead><tbody>' +
+          ROLES.map(function (r) { return '<tr><td>' + r[1] + '</td><td>' + sw(p.light[r[0]]) + '</td><td>' + sw(p.dark[r[0]]) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>' +
+      '</div></div></section>';
+  }
+
+  var root = document.getElementById('options');
+  var buttons = document.querySelectorAll('.seg button');
+  function render(screen) {
+    root.innerHTML = PALETTES.map(function (p) { return optionHTML(p, screen); }).join('');
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.screen === screen)); });
+    try { localStorage.setItem('palette-study-screen', screen); } catch (e) {}
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { render(b.dataset.screen); }); });
+  var start = 'home';
+  try { var s = localStorage.getItem('palette-study-screen'); if (s && SCREENS[s]) start = s; } catch (e) {}
+  render(start);
+})();
+</script>
