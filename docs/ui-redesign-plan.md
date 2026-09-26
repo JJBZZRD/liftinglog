@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 6 are done; Phase 7 is next.** This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 6 are done; Phase 7 is next.** A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
