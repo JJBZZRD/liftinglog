@@ -13,13 +13,14 @@ colour, compact information hierarchy, and restrained translucency and motion.
 | Responsibility | Source |
 | --- | --- |
 | Light/dark semantic colors, spacing, type, radii, motion, glass | [`lib/design-system/tokens.ts`](../../lib/design-system/tokens.ts) |
-| Color role type (`RawThemeColors`) and legacy palettes | [`lib/theme/themes.ts`](../../lib/theme/themes.ts) |
+| Color role type (`RawThemeColors`) and NativeWind variables | [`lib/theme/themes.ts`](../../lib/theme/themes.ts) |
 | NativeWind classes for the color roles | [`tailwind.config.js`](../../tailwind.config.js) |
 | WCAG AA contrast checks for the palette | [`__tests__/design-system/contrast.test.ts`](../../__tests__/design-system/contrast.test.ts) |
 | Responsive gutters, card padding, and gaps | [`useResponsiveLayout`](../../lib/design-system/use-responsive-layout.ts), [`getResponsiveLayout`](../../lib/design-system/responsive-layout.ts) |
 | Actual width available to a nested row | [`useContainerWidth`](../../lib/design-system/use-container-width.ts) |
 | Scroll-position-driven edge fades | [`useScrollEdgeFades`](../../lib/design-system/use-scroll-edge-fades.ts) |
-| Slate theme scope, shared by inline styles and NativeWind | [`DesignSystemProvider`](../../components/design-system/design-system-provider.tsx) |
+| App-wide Ink palette and light/dark preference | [`ThemeProvider`](../../lib/theme/ThemeContext.tsx) in `app/_layout.tsx` |
+| Page boundary for redesigned screens | [`DesignSystemProvider`](../../components/design-system/design-system-provider.tsx) |
 | Current scoped colors in a component | `useTheme().rawColors` from [`ThemeContext`](../../lib/theme/ThemeContext.tsx) |
 | Text buttons | [`Button`](../../components/design-system/button.tsx) |
 | Mockup stroke icons and the app mark | [`Icon`](../../components/design-system/icon.tsx), [`BrandMark`](../../components/design-system/brand-mark.tsx) |
@@ -57,8 +58,10 @@ Keep routes small. Put feature screens, components, and state hooks in
 Pure visual constants belong in `lib/design-system/`. UI primitives must not import
 database access, workout controllers, or feature state.
 
-Until the whole application is migrated, wrap a new or redesigned screen in
-`DesignSystemProvider` underneath the app's existing `ThemeProvider`:
+The root `ThemeProvider` applies the Ink palette to the whole app, so every screen
+already gets the right colours from `useTheme()` and the NativeWind classes.
+Redesigned screens also wrap their content in `DesignSystemProvider`, a
+full-height page boundary on the page background:
 
 ```tsx
 import { DesignSystemProvider } from '@/components/design-system/design-system-provider';
@@ -84,10 +87,8 @@ export function FeatureScreen({ onClose }: { onClose: () => void }) {
 }
 ```
 
-Call `useTheme` in a descendant of the provider, not the component returning the
-provider. Use `useDesignSystemTheme` only when a boundary needs the slate values
-before it mounts. The provider preserves the user's light/dark preference and
-does not rewrite their stored legacy color-theme selection.
+Read colours with `useTheme().rawColors`. The only theme setting is the
+light/dark preference (System, Light or Dark in Settings).
 
 NativeWind scans `app`, `components`, and `features`. Use complete, statically
 written class names rather than constructing a color class at runtime. Prefer

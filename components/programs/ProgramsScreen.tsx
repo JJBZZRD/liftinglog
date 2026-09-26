@@ -50,7 +50,7 @@ interface FlatExerciseItem {
 }
 
 export default function ProgramsScreen() {
-  const { rawColors, isDark, colorTheme } = useTheme();
+  const { rawColors, isDark } = useTheme();
   const { unitPreference } = useUnitPreference();
 
   const [selectedDate, setSelectedDate] = useState(getDateIsoToday());
@@ -483,7 +483,7 @@ export default function ProgramsScreen() {
         {/* Full calendar */}
         <Animated.View style={[styles.fullCalendar, calendarContentOpacity]}>
           <Calendar
-            key={`${colorTheme}-${isDark ? "dark" : "light"}`}
+            key={isDark ? "dark" : "light"}
             current={selectedDate}
             onDayPress={handleDayPress}
             onMonthChange={handleMonthChange}

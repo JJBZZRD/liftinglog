@@ -66,7 +66,6 @@ jest.mock("../../lib/programs/psl/pslService", () => ({
 }));
 jest.mock("../../lib/theme/ThemeContext", () => ({
   useTheme: () => ({
-    colorTheme: "blue",
     isDark: false,
     rawColors: mockRawColors,
   }),

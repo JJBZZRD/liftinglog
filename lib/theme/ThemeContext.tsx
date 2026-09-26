@@ -1,34 +1,30 @@
 import { useColorScheme } from "nativewind";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
-import { 
-  getThemePreference, 
-  setThemePreference, 
-  getColorTheme, 
-  setColorTheme as setColorThemeDB,
-  type ThemePreference,
-  type ColorThemeId 
-} from "../db/settings";
-import { themes, getRawThemeColors, createThemeVars, type RawThemeColors, type ColorScheme } from "./themes";
+import { designColors } from "../design-system/tokens";
+import { getThemePreference, setThemePreference, type ThemePreference } from "../db/settings";
+import { createThemeVars, type RawThemeColors, type ColorScheme } from "./themes";
 
 // Re-export types for convenience
-export type { ColorThemeId, ColorScheme, RawThemeColors };
+export type { ColorScheme, RawThemeColors };
+
+/** NativeWind variables for the Ink palette, built once per mode. */
+const themeVars: Record<ColorScheme, ReturnType<typeof createThemeVars>> = {
+  light: createThemeVars(designColors.light),
+  dark: createThemeVars(designColors.dark),
+};
 
 type ThemeContextType = {
   /** Whether dark mode is active */
   isDark: boolean;
   /** Current color scheme ('light' or 'dark') */
   colorScheme: ColorScheme;
-  /** Current color theme ID */
-  colorTheme: ColorThemeId;
   /** User's theme preference ('system', 'light', or 'dark') */
   themePreference: ThemePreference;
   /** Raw color values for non-Tailwind use cases (SVG, charts, etc.) */
   rawColors: RawThemeColors;
   /** Set the light/dark mode preference */
   setThemePreference: (preference: ThemePreference) => void;
-  /** Set the color theme */
-  setColorTheme: (theme: ColorThemeId) => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -36,7 +32,6 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { colorScheme: nativewindColorScheme, setColorScheme } = useColorScheme();
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>("system");
-  const [colorTheme, setColorThemeState] = useState<ColorThemeId>("default");
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Load theme preferences from database on mount
@@ -52,13 +47,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         } else {
           setColorScheme("system");
         }
-        
-        const theme = getColorTheme();
-        setColorThemeState(theme);
       } catch (error) {
         console.error("Error loading theme preferences:", error);
         setThemePreferenceState("system");
-        setColorThemeState("default");
       } finally {
         setIsInitialized(true);
       }
@@ -70,11 +61,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const effectiveColorScheme: ColorScheme = nativewindColorScheme === "dark" ? "dark" : "light";
   const isDark = effectiveColorScheme === "dark";
 
-  // Get theme vars for the current theme and color scheme
-  const themeVars = themes[colorTheme]?.[effectiveColorScheme] ?? themes.default[effectiveColorScheme];
-
-  // Get raw colors for non-Tailwind use cases
-  const rawColors = getRawThemeColors(colorTheme, effectiveColorScheme);
+  // Raw colors for non-Tailwind use cases (SVG, charts, inline styles)
+  const rawColors: RawThemeColors = designColors[effectiveColorScheme];
 
   // Update theme preference (both state and database)
   const updateThemePreference = (preference: ThemePreference) => {
@@ -94,16 +82,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Update color theme (both state and database)
-  const updateColorTheme = (theme: ColorThemeId) => {
-    setColorThemeState(theme);
-    try {
-      setColorThemeDB(theme);
-    } catch (error) {
-      console.error("Error saving color theme:", error);
-    }
-  };
-
   // Don't render until initialized to avoid flash
   if (!isInitialized) {
     return null;
@@ -115,13 +93,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         isDark,
         colorScheme: effectiveColorScheme,
         themePreference,
-        colorTheme,
         rawColors,
         setThemePreference: updateThemePreference,
-        setColorTheme: updateColorTheme,
       }}
     >
-      <View style={themeVars} className="flex-1">
+      <View style={themeVars[effectiveColorScheme]} className="flex-1">
         {children}
       </View>
     </ThemeContext.Provider>
@@ -136,8 +112,10 @@ export function useTheme() {
   return context;
 }
 
-/** Scope a redesigned surface without changing the user's other screens. */
-/** Fills its parent by default; pass `style` (for example `{ flex: 0 }`) to size a scope to its content. */
+/**
+ * Scope a subtree to specific colours, such as the catalog's side-by-side light and dark previews.
+ * Fills its parent by default; pass `style` (for example `{ flex: 0 }`) to size a scope to its content.
+ */
 export function ThemeColorScope({ colors, children, style }: { colors: RawThemeColors; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const parent = useTheme();
   return (

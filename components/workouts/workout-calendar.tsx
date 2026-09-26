@@ -23,7 +23,8 @@ export function WorkoutCalendar({ visible, date, onSelect, onClose }: {
       theme={{ backgroundColor: 'transparent', calendarBackground: 'transparent',
         dayTextColor: rawColors.foreground, monthTextColor: rawColors.foreground,
         textDisabledColor: rawColors.foregroundMuted, textSectionTitleColor: rawColors.foregroundSecondary,
-        todayTextColor: rawColors.primary, arrowColor: rawColors.primary,
+        // Ink's primary matches the day text in dark mode, so today gets a control-coloured disc instead.
+        todayTextColor: rawColors.foreground, todayBackgroundColor: rawColors.control, arrowColor: rawColors.primary,
         selectedDayTextColor: rawColors.primaryForeground, textDayFontSize: 15 }} />}
     <View style={{ flexDirection: 'row', gap: space[12], marginTop: space[16] }}>
       <Button label="Cancel" variant="secondary" onPress={onClose} style={{ flex: 1 }} />

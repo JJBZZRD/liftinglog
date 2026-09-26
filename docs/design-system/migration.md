@@ -6,8 +6,9 @@ redesign, including which screens change next, is in
 
 ## Screen status
 
-"Redesigned" screens are wrapped in `DesignSystemProvider` and follow these pages.
-"Legacy" screens still use the selectable legacy palettes and older layouts.
+"Redesigned" screens follow these pages and their layouts mirror the approved
+mockups. "Legacy" screens keep their older layouts, but since Phase 7 every
+screen uses the Ink palette from the root `ThemeProvider`.
 
 | Screen | Route | Status |
 | --- | --- | --- |
@@ -25,7 +26,7 @@ Update this table when a screen is migrated.
 
 | Area | State |
 | --- | --- |
-| Slate colors and provider | Shared source; previous Workouts exports remain compatibility aliases |
+| Ink colors and provider | The root `ThemeProvider` applies `designColors` app-wide; `DesignSystemProvider` is a page boundary; previous Workouts exports remain compatibility aliases |
 | Icon actions and metric summaries | Shared primitives used by the current Workouts UI |
 | Button, StatusPill, MetricStrip, grouped list, SegmentedControl, ConfirmDialog, press-and-hold | Shared primitives (Phase 3), shown in the dev design catalog. Workouts and workout detail use Button, StatusPill, MetricStrip, ConfirmDialog and press-and-hold (Phase 4); other screens adopt them in Phases 5 to 7 |
 | Frosted dialog shell | Shared, token-driven, opt-in through page scope |
@@ -35,7 +36,7 @@ Update this table when a screen is migrated.
 | Workouts, detail, exercise recording, calculators | Reference direction; some local spacing and typography still await token adoption |
 | Brand header, workout/PB rows | Existing shared/domain components; retain their behavior and optical adjustments |
 | Date navigator | Previous/next `IconButton`s around a date button that opens the calendar, with a relative caption. The calendar sheet holds Today |
-| Legacy screens and selectable color themes | Still supported during phased migration; do not extend these palettes for new features. The seven legacy palettes get the new roles through `withDerivedRoles` and are retired in Phase 7 |
+| Selectable color themes | Retired in Phase 7. Legacy screens render in Ink; their layouts are migrated screen by screen |
 | Component catalog | Dev-only route `liftinglog://dev/design-catalog`; add each new primitive to it |
 | Accessibility audit | Follow-up work; not yet complete. Palette contrast is covered by `__tests__/design-system/contrast.test.ts` |
 

@@ -5,8 +5,11 @@ Written 2026-09-26 for the agent taking over the LiftingLog UI redesign on branc
 
 ## Where things stand
 
-Phases 1 to 6 of [ui-redesign-plan.md](ui-redesign-plan.md) are done, committed and
-pushed. **Phase 7 (Settings and the global theme) is next.**
+Phases 1 to 7 of [ui-redesign-plan.md](ui-redesign-plan.md) are done, committed and
+pushed. Phase 7 redesigned Settings and made Ink the only palette app-wide. The next
+design round is the exercise page redesign (with rest-timer defaults); agree it with
+the owner, with mockups, before building. The Phase 7 file map below is kept for
+reference but is now historical.
 
 | Commit | What |
 | --- | --- |
@@ -16,6 +19,8 @@ pushed. **Phase 7 (Settings and the global theme) is next.**
 | 3cbebaa, da5502a, af0548d | Phase 4: transactional `deleteWorkoutSession`, metric-strip cards, hold-to-delete, date button, fixed Complete footer |
 | c6d0baf | Phase 5: docked tab bar and live-workout strip |
 | a1dd3ef | Phase 6: Exercises redesign, plus a pass that made existing screens mirror the mockups (`Icon`, `BrandMark`, dates, workout detail layout) |
+| 2d1c945 | Phase 7: Settings redesign, `ListRow` small tile, `BaseModal` sheet |
+| the commit after 2d1c945 | Phase 7: Ink app-wide, legacy palettes retired |
 
 ## Read in this order
 
@@ -87,6 +92,7 @@ pushed. **Phase 7 (Settings and the global theme) is next.**
 ## Tests and checks
 
 - `npx tsc --noEmit -p .`, scoped `npx eslint <paths>`, and `npx jest`. There are two projects: `unit` (node, react-native mocked as host strings, react-native-svg mapped to `__tests__/support/react-native-svg-stub.js`) and `router` (jest-expo).
+- **Never `git stash`** in this working tree. The owner's uncommitted `android/` files differ from HEAD only by line endings, and a stash rewrites them with CRLF (breaking `./gradlew` in Git Bash). Compare against a scratch copy instead.
 - **Known failures, not caused by the redesign:** `__tests__/config/fileSha256Native.test.ts` and `restoreNativePlugin.test.ts` fail because of the owner's uncommitted `android/` changes. Everything else passes: 1,317 of 1,319 at `a1dd3ef`.
 - **Screens that use `StatusPill`, `LiveDot` or press-and-hold** need Reanimated hooks (`useReducedMotion`, `useSharedValue`, `useAnimatedStyle`, `withRepeat`, `withTiming`, `withDelay`, `cancelAnimation`, `runOnJS`, `Easing`) and `expo-haptics` in the test mocks. `__tests__/support/workout-native-mocks.ts` and `__tests__/app/exercise-library-screen.test.tsx` have working examples.
 - **NativeWind:** a function `style` on `Pressable` loses its layout, so use a static style plus an `active:` class.
@@ -100,7 +106,6 @@ pushed. **Phase 7 (Settings and the global theme) is next.**
 - **Not yet checked on the emulator with real data** (tests cover them):
   - "In this workout" rows with logged sets;
   - expanded variation rows in the library. None of the owner's exercises have variations; the style was checked in the catalog.
-- **Calendar sheet:** in dark mode it doesn't visually mark today (the date's `todayTextColor` is the same as the day text). Fix it with the global theme.
 - **Legacy dialogs:** the library's sort, action and variation dialogs still use the older dialog pattern.
 - **Floating-bar leftovers:** `ProgramsScreen` (full profile only) still has bottom paddings sized for the old floating bar (100 and 170).
 - **`PinnedExercisesOverlay`:** the source is kept but no longer rendered by the tab layout.

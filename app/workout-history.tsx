@@ -206,7 +206,7 @@ const WorkoutDayCard = React.memo(function WorkoutDayCard({
                 {details.exercises.map((exercise, index) => (
                   <View key={exercise.workoutExerciseId} style={styles.exerciseItem}>
                     <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
-                      <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                      <Text style={[styles.alphabetText, { color: rawColors.primaryForeground }]}>{getAlphabetLetter(index)}</Text>
                     </View>
                     <View style={styles.exerciseDetails}>
                       <View style={styles.exerciseNameRow}>

@@ -24,9 +24,8 @@ passed to Expo Router's `Tabs` as `tabBar`.
   changed after mount.
 - Programs shows a **SOON** badge while `programsExperience` is `coming-soon` (the
   `mvp` profile); its label becomes "Programs, coming soon".
-- The bar always uses the Ink palette (`DesignSystemProvider` with
-  `style={{ flex: 0 }}`, so the scope sizes to the bar instead of taking height
-  from the screens), even over screens that still use a legacy palette.
+- The bar is wrapped in `DesignSystemProvider` with `style={{ flex: 0 }}`, so
+  the boundary sizes to the bar instead of taking height from the screens.
 - It hides while the keyboard is open, like `tabBarHideOnKeyboard`.
 - Tabs have the `tab` role and `selected` state, emit `tabPress` and
   `tabLongPress`, and respect a prevented `tabPress`.

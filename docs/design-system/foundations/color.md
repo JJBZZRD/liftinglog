@@ -73,11 +73,14 @@ translucent surfaces in both modes. Do not solve low contrast by lowering text
 opacity. A full accessibility audit remains follow-up work; see the
 [migration tracker](../migration.md).
 
-## Legacy palettes
+## One palette
 
-The seven legacy palettes in `lib/theme/themes.ts` predate the new roles.
-`withDerivedRoles` fills in `live`, `liveSoft`, `liveInk`, `control`,
-`controlBorder`, and `onDestructive` for them automatically, so shared components
-can use those roles on unmigrated screens. Do not extend these palettes for new
-features. They will be retired in Phase 7 of the
-[UI redesign plan](../../ui-redesign-plan.md).
+Ink is the app's only palette. The root `ThemeProvider` supplies `designColors`
+to `useTheme().rawColors` and to the NativeWind variables for every screen, in
+light and dark. The seven selectable legacy palettes and the colour-theme setting
+were retired in Phase 7 of the [UI redesign plan](../../ui-redesign-plan.md). The
+stored `settings.color_theme` column remains for backup compatibility but is no
+longer read.
+
+`primary` flips from ink to near-white in dark mode, so never put a fixed white
+label or icon on a `primary` fill: use `primaryForeground`.

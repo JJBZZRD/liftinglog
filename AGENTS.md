@@ -31,7 +31,7 @@ The approved mockups in [docs/ui-mockups/](docs/ui-mockups/) are the visual spec
 It defines the LiftingLog slate design system and its current migration scope.
 
 - Use `lib/design-system/tokens.ts` for shared visual values and `components/design-system` for generic primitives.
-- Wrap new or redesigned screens in `DesignSystemProvider` under the existing app theme provider; use `useTheme` in descendants so native styles and NativeWind classes share the same palette.
+- The root `ThemeProvider` applies the Ink palette app-wide; there are no selectable colour themes. Wrap new or redesigned screens in `DesignSystemProvider` as their page boundary, and read colours with `useTheme().rawColors` so native styles and NativeWind classes share the same palette. Never put fixed white text on a `primary` fill; use `primaryForeground`.
 - Reuse `BaseModal` with a page `FrostedModalProvider` for redesigned dialogs. Do not duplicate blur, scrim, keyboard, or animation shells.
 - Preserve light/dark mode, font scaling, safe areas, reduced motion, and accessible action labels.
 - Keep primary values and controls aligned when optional badges, status labels, or actions appear. Reserve consistent accessory space or use shared columns; review both populated and absent states at narrow widths and larger text sizes.

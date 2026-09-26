@@ -305,7 +305,7 @@ export default function WorkoutDayScreen() {
                   >
                     <View style={styles.exerciseHeaderLeft}>
                       <View style={[styles.alphabetCircle, { backgroundColor: rawColors.primary }]}>
-                        <Text style={styles.alphabetText}>{getAlphabetLetter(index)}</Text>
+                        <Text style={[styles.alphabetText, { color: rawColors.primaryForeground }]}>{getAlphabetLetter(index)}</Text>
                       </View>
                       <View style={styles.exerciseTitleBlock}>
                         <View style={styles.exerciseNameRow}>

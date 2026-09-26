@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 6 are done; in Phase 7 the Settings redesign is done and the global theme switch is next.** A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 7 are done.** The next design round is the exercise page (see Deferred). A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -249,8 +249,8 @@ Intended deviations from the mockups:
 ### Phase 7: Settings and the global theme
 
 1. Redesign Settings as mocked. Include the About section. **(Done.)**
-2. Remove the colour-theme selector, and apply the Ink palette app-wide from the root provider so unmigrated screens use it too.
-3. Retire the seven legacy palettes. Check the unmigrated screens visually after the switch.
+2. Remove the colour-theme selector, and apply the Ink palette app-wide from the root provider so unmigrated screens use it too. **(Done.)**
+3. Retire the seven legacy palettes. Check the unmigrated screens visually after the switch. **(Done.)**
 
 Notes from the Settings build:
 
@@ -258,7 +258,16 @@ Notes from the Settings build:
 - `ListRow` gained `tile="small"` (the 32 dp settings tile), `busy` (spinner in place of the chevron) and `disabled`. `BaseModal` gained `sheet`, a bottom-anchored placement for option sheets.
 - Display and weight unit change in one tap through `SegmentedControl`. The formula sheet holds a pending choice and applies it only on "Use …".
 - `ReplacementRestoreDialog` now builds its actions from `Button`; its phases and guards are unchanged.
-- The Color Theme picker is gone from Settings, as mocked. The `colorTheme` state in `ThemeContext` and the stored `settings.color_theme` value are untouched until step 2, so legacy screens keep the last chosen palette for now.
+- The Color Theme picker is gone from Settings, as mocked.
+
+Notes from the global theme switch:
+
+- The owner confirmed the direction: one unified Ink theme, no colour themes.
+- `ThemeProvider` (`lib/theme/ThemeContext.tsx`) now supplies `designColors` for the current mode to `rawColors` and to the NativeWind variables. The `colorTheme` state and `setColorTheme` are gone. `lib/theme/themes.ts` keeps only `RawThemeColors`, `ColorScheme` and `createThemeVars`; the seven palettes and the unused `lib/theme/colors.ts` were deleted.
+- The `settings.color_theme` column and `getColorTheme` / `setColorTheme` in `lib/db/settings.ts` stay, so backups and restores keep their shape, but nothing reads the value.
+- `DesignSystemProvider` and `WorkoutThemeBoundary` are kept as page boundaries (a full-height View on the page background), so no layout moved.
+- Checked on the emulator in light and dark: Programs (MVP placeholder), the exercise page (Record, History, Analytics), calculators, quick stats, workout history, the day workout view and set info. User metrics and the performance guide are not reachable in the `mvp` profile, and the full Programs screens were not checked for the same reason.
+- Fixes found by that check: the A/B/C exercise badges on the day workout and workout history screens used fixed white letters on a `primary` fill, which disappeared in dark mode (now `primaryForeground`); the calendar sheet now marks today with a `control` disc, because Ink's dark `primary` matched the day text.
 
 Intended deviations from the mockups (Settings):
 

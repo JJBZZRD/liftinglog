@@ -230,7 +230,8 @@ describe("actual root replacement restore lifecycle", () => {
       "bootstrap",
       "drizzle",
     ]);
-    expect(mockEvents.filter((event) => event === "settings-query")).toHaveLength(3);
+    // Display mode and weight unit. The stored colour theme is no longer read (Ink is app-wide).
+    expect(mockEvents.filter((event) => event === "settings-query")).toHaveLength(2);
     expect(mockEvents.indexOf("settings-query")).toBeGreaterThan(mockEvents.indexOf("drizzle"));
     expect(connection.sqlite).toBe(mockSqlite);
     expect(connection.db).toBe(mockDb);
