@@ -1,27 +1,30 @@
 import type { TextStyle } from 'react-native';
 import type { ColorScheme, RawThemeColors } from '@/lib/theme/themes';
 
-const sharedColors = {
-  success: '#249B79', warning: '#C88730', destructive: '#DC535F',
-  primaryForeground: '#FFFFFF', shadow: '#000000', pbGold: '#C88730',
-} as const;
-
-/** The Workouts palette, independent of the legacy color-theme selection; light/dark mode still applies. */
+/**
+ * Ink: slate neutrals from the logo (ink #292F3D, white, #A3A3A3 tick). The ink is
+ * the only action colour and flips to near-white in dark mode. Green (`live*`) is
+ * reserved for in-progress state. `__tests__/design-system/contrast.test.ts`
+ * checks WCAG AA for the text/background pairs, so run it after any change here.
+ */
 export const designColors = {
   light: {
-    ...sharedColors, primary: '#285DCE', primaryLight: '#E7EDFB',
-    background: '#F4F6F8', surface: '#FFFFFF', surfaceSecondary: '#EAEFF4',
-    border: '#D8E0E9', borderLight: '#E7EBF0', foreground: '#182330',
-    foregroundSecondary: '#526174', foregroundMuted: '#69788A', pressed: '#E5EBF3',
-    overlay: 'rgba(35, 48, 66, 0.25)', overlayDark: 'rgba(18, 27, 40, 0.45)',
+    background: '#F3F4F7', surface: '#FFFFFF', surfaceSecondary: '#EDEFF3',
+    control: '#E3E6EC', controlBorder: '#D2D7DF', border: '#DDE1E7', borderLight: '#EBEDF1',
+    foreground: '#1D2230', foregroundSecondary: '#4F5667', foregroundMuted: '#626978',
+    primary: '#292F3D', primaryForeground: '#FFFFFF', primaryLight: '#E6E8EE', pressed: '#E4E7EC',
+    live: '#1F9D6B', liveSoft: '#E0F2EA', liveInk: '#16613F',
+    success: '#287A5F', warning: '#9A6216', destructive: '#BF3E4A', onDestructive: '#FFFFFF', pbGold: '#9C6C1E',
+    overlay: 'rgba(29, 34, 48, 0.28)', overlayDark: 'rgba(29, 34, 48, 0.45)', shadow: '#000000',
   },
   dark: {
-    ...sharedColors, primary: '#568DFA', primaryLight: '#203353',
-    background: '#101720', surface: '#19232F', surfaceSecondary: '#233040',
-    border: '#354354', borderLight: '#293646', foreground: '#F1F5F9',
-    foregroundSecondary: '#B3C0D0', foregroundMuted: '#91A0B4', pressed: '#2A3B50',
-    overlay: 'rgba(7, 13, 23, 0.35)', overlayDark: 'rgba(7, 13, 23, 0.6)',
-    success: '#50C5A1', warning: '#E3B166', destructive: '#FF7B85',
+    background: '#12151C', surface: '#1B1F28', surfaceSecondary: '#252A35',
+    control: '#2A2F3A', controlBorder: '#3A4150', border: '#323845', borderLight: '#282D38',
+    foreground: '#F2F4F7', foregroundSecondary: '#B4BAC6', foregroundMuted: '#8D94A2',
+    primary: '#E8EBF0', primaryForeground: '#292F3D', primaryLight: '#2C3240', pressed: '#2C3240',
+    live: '#4FD39B', liveSoft: '#17342A', liveInk: '#9BE3C2',
+    success: '#5BBE98', warning: '#DDB06A', destructive: '#F07C86', onDestructive: '#1A1D25', pbGold: '#E0B45E',
+    overlay: 'rgba(6, 8, 12, 0.5)', overlayDark: 'rgba(6, 8, 12, 0.65)', shadow: '#000000',
   },
 } as const satisfies Record<ColorScheme, RawThemeColors>;
 

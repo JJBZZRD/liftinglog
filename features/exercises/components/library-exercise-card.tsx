@@ -59,7 +59,7 @@ export function LibraryExerciseCard({ item, isExpanded, searchScope, handleNavig
               borderRadius: 10,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isDark ? rawColors.primaryLight : "#EFF4FF",
+              backgroundColor: rawColors.primaryLight,
             }}
           >
             <MaterialCommunityIcons
@@ -103,7 +103,7 @@ export function LibraryExerciseCard({ item, isExpanded, searchScope, handleNavig
                   borderRadius: 8,
                   paddingHorizontal: 8,
                   paddingVertical: 3,
-                  backgroundColor: isDark ? rawColors.primaryLight : "#EEF4FF",
+                  backgroundColor: rawColors.primaryLight,
                 }}
               >
                 <Text

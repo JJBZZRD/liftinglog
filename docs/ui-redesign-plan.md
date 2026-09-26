@@ -1,8 +1,8 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26, not yet implemented.** This file records the design
+Status: **agreed 2026-09-26. Phases 1 and 2 are done; Phase 3 is next.** This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
-items deliberately deferred. Read it together with [design-system.md](design-system.md),
+items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
 change, [database-ground-truth.md](database-ground-truth.md).
 
@@ -39,11 +39,13 @@ the target names. The mockups use shorter names, shown in brackets.
 | liveSoft | `#E0F2EA` | `#17342A` |
 | liveInk (text on liveSoft) | `#16613F` | `#9BE3C2` |
 | success | `#287A5F` | `#5BBE98` |
-| warning | `#A86A1C` | `#DDB06A` |
-| destructive | `#C8434F` | `#F07C86` |
+| warning | `#9A6216` | `#DDB06A` |
+| destructive | `#BF3E4A` | `#F07C86` |
 | onDestructive | `#FFFFFF` | `#1A1D25` |
 | pbGold | `#9C6C1E` | `#E0B45E` |
 | overlay (scrim) | `rgba(29,34,48,0.28)` | `rgba(6,8,12,0.5)` |
+
+Light `warning` and `destructive` are slightly darker than the mockups (`#A86A1C` and `#C8434F`), so both pass 4.5:1 as text on the page background. `__tests__/design-system/contrast.test.ts` now enforces the pairs below, plus a few more.
 
 The palette study checks these pairs against WCAG AA in both modes:
 
@@ -117,9 +119,9 @@ changes.
    - Replace them with one eased multi-stop gradient in the background colour.
    - Extract the offset-to-opacity logic into a shared `useScrollEdgeFades()` hook.
    - Use the hook in the Workouts list and in workout detail. Detail currently mounts its top fade on a boolean and never fades its bottom edge.
-   - Update the fade section of the design-system doc.
+   - Update the fade section of the design-system doc ([scroll fades](design-system/components/scroll-fades.md)).
 
-### Phase 2: tokens and design-system structure
+### Phase 2: tokens and design-system structure (done)
 
 1. **Ink tokens.** Put the Ink values in `designColors`, taken from the mockups. Add these roles:
    - `live`, `liveSoft`, `liveInk`
@@ -135,7 +137,7 @@ changes.
 
 Add these to `components/design-system/`, all on existing dependencies (NativeWind, Reanimated, Gesture Handler, expo-haptics, BaseModal):
 
-- `Button`: primary, secondary, destructive, destructive-outline
+- `Button`: primary, secondary, destructive, destructive-outline. Secondary uses `bg-control` with a `border-control-border` border. When `Button` lands, update the modal action-row rule in `AGENTS.md` and [dialogs-and-glass.md](design-system/components/dialogs-and-glass.md), which still name `bg-surface-secondary`, to point at `Button`.
 - `StatusPill`: live and completed
 - `MetricStrip`
 - `GroupedList`, `ListRow`, `GroupLabel`

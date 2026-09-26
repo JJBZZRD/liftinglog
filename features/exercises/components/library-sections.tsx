@@ -35,7 +35,7 @@ export function LibrarySections({ controller, query }: { controller: LibraryCont
               borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isDark ? rawColors.primaryLight : "#EEF4FF",
+              backgroundColor: rawColors.primaryLight,
             }}
           >
             <MaterialCommunityIcons

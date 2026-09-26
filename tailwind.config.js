@@ -33,6 +33,18 @@ module.exports = {
         // Interactive states
         pressed: "rgb(var(--color-pressed) / <alpha-value>)",
         
+        // Secondary controls (darker fill with a border)
+        control: "rgb(var(--color-control) / <alpha-value>)",
+        "control-border": "rgb(var(--color-control-border) / <alpha-value>)",
+
+        // In-progress highlight, reserved for live state
+        live: "rgb(var(--color-live) / <alpha-value>)",
+        "live-soft": "rgb(var(--color-live-soft) / <alpha-value>)",
+        "live-ink": "rgb(var(--color-live-ink) / <alpha-value>)",
+
+        // Text on a destructive fill
+        "on-destructive": "rgb(var(--color-on-destructive) / <alpha-value>)",
+
         // Special
         "pb-gold": "rgb(var(--color-pb-gold) / <alpha-value>)",
       },

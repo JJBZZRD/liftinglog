@@ -16,7 +16,7 @@ workouts can share a day. The app opens on the current local day.
   actions and dialogs from its route and screen composition.
 - `lib/design-system` and `components/design-system` own shared visual tokens,
   the slate provider, icon actions and metric summaries. See the
-  [design system](design-system.md) before adding or changing UI.
+  [design system](design-system/README.md) before adding or changing UI.
 - `components/workouts` provides the brand header, calendar, frosted tools overlay
   and scroll-edge treatment; its theme exports remain compatibility aliases.
 - `components/modals` owns the reusable frosted presentation and opt-in page scope.

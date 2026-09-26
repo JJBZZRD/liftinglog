@@ -25,7 +25,7 @@ Non-negotiable rules:
 
 ## UI design system
 
-Before adding or changing UI, read [docs/design-system.md](docs/design-system.md).
+Before adding or changing UI, read [docs/design-system/README.md](docs/design-system/README.md).
 It defines the LiftingLog slate design system and its current migration scope.
 
 - Use `lib/design-system/tokens.ts` for shared visual values and `components/design-system` for generic primitives.

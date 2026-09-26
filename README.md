@@ -4,7 +4,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ## UI development
 
-New and redesigned features follow the [LiftingLog design system](docs/design-system.md).
+New and redesigned features follow the [LiftingLog design system](docs/design-system/README.md).
 Its shared tokens and components build on the slate Workouts redesign; adoption
 across legacy screens is still in progress. See [the redesign architecture](docs/workouts-ui-redesign.md)
 for feature boundaries and workflow behavior.

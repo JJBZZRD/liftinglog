@@ -5,7 +5,7 @@ import { useLibraryAppearance } from '../hooks/use-library-appearance';
 import type { LibraryQuery } from '../hooks/use-library-query';
 
 export function LibrarySortDialog({ query }: { query: LibraryQuery }) {
-  const { rawColors, isDark } = useLibraryAppearance();
+  const { rawColors } = useLibraryAppearance();
   const { showSortModal, setShowSortModal, sortOption, setSortOption, sortAscending, setSortAscending, showAllTabBodyPartGrouping, handleShowAllTabBodyPartGroupingChange } = query;
   return (
     <AppModal visible={showSortModal} onClose={() => setShowSortModal(false)} maxWidth={380}>
@@ -139,11 +139,11 @@ export function LibrarySortDialog({ query }: { query: LibraryQuery }) {
             value={showAllTabBodyPartGrouping}
             onValueChange={handleShowAllTabBodyPartGroupingChange}
             trackColor={{
-              false: isDark ? rawColors.border : "#C9D2E2",
+              false: rawColors.controlBorder,
               true: rawColors.primary,
             }}
             thumbColor={rawColors.primaryForeground}
-            ios_backgroundColor={isDark ? rawColors.border : "#C9D2E2"}
+            ios_backgroundColor={rawColors.controlBorder}
           />
         </View>
       </View>

@@ -61,10 +61,37 @@ export interface RawThemeColors {
   overlayDark: string;
   shadow: string;
   pbGold: string;
+  /** In-progress highlight: live dot and pill accents. */
+  live: string;
+  /** Tinted fill behind in-progress pills and strips. */
+  liveSoft: string;
+  /** Text on `liveSoft`. */
+  liveInk: string;
+  /** Secondary button fill, darker than `surfaceSecondary`. */
+  control: string;
+  controlBorder: string;
+  /** Text and icons on a `destructive` fill. */
+  onDestructive: string;
+}
+
+/** Roles the legacy palettes predate; `withDerivedRoles` fills them in. */
+type DerivedRole = "live" | "liveSoft" | "liveInk" | "control" | "controlBorder" | "onDestructive";
+type LegacyThemeColors = Omit<RawThemeColors, DerivedRole>;
+
+function withDerivedRoles(colors: LegacyThemeColors): RawThemeColors {
+  return {
+    ...colors,
+    live: colors.success,
+    liveSoft: colors.surfaceSecondary,
+    liveInk: colors.foreground,
+    control: colors.surfaceSecondary,
+    controlBorder: colors.border,
+    onDestructive: "#FFFFFF",
+  };
 }
 
 // Raw color definitions for each theme (hex values)
-const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
+const rawColors: Record<ColorThemeId, Record<ColorScheme, LegacyThemeColors>> = {
   default: {
     light: {
       primary: "#007AFF",
@@ -380,7 +407,7 @@ const rawColors: Record<ColorThemeId, Record<ColorScheme, RawThemeColors>> = {
 // ============================================================
 
 export function getRawThemeColors(themeId: ColorThemeId, colorScheme: ColorScheme): RawThemeColors {
-  return rawColors[themeId]?.[colorScheme] ?? rawColors.default[colorScheme];
+  return withDerivedRoles(rawColors[themeId]?.[colorScheme] ?? rawColors.default[colorScheme]);
 }
 
 // ============================================================
@@ -417,37 +444,43 @@ export function createThemeVars(colors: RawThemeColors) {
     "--color-overlay-dark": colors.overlayDark,
     "--color-shadow": hexToRgbString(colors.shadow),
     "--color-pb-gold": hexToRgbString(colors.pbGold),
+    "--color-live": hexToRgbString(colors.live),
+    "--color-live-soft": hexToRgbString(colors.liveSoft),
+    "--color-live-ink": hexToRgbString(colors.liveInk),
+    "--color-control": hexToRgbString(colors.control),
+    "--color-control-border": hexToRgbString(colors.controlBorder),
+    "--color-on-destructive": hexToRgbString(colors.onDestructive),
   });
 }
 
 // Generate NativeWind theme vars from raw colors
 export const themes: Record<ColorThemeId, Record<ColorScheme, ReturnType<typeof vars>>> = {
   default: {
-    light: createThemeVars(rawColors.default.light),
-    dark: createThemeVars(rawColors.default.dark),
+    light: createThemeVars(getRawThemeColors("default", "light")),
+    dark: createThemeVars(getRawThemeColors("default", "dark")),
   },
   ocean: {
-    light: createThemeVars(rawColors.ocean.light),
-    dark: createThemeVars(rawColors.ocean.dark),
+    light: createThemeVars(getRawThemeColors("ocean", "light")),
+    dark: createThemeVars(getRawThemeColors("ocean", "dark")),
   },
   forest: {
-    light: createThemeVars(rawColors.forest.light),
-    dark: createThemeVars(rawColors.forest.dark),
+    light: createThemeVars(getRawThemeColors("forest", "light")),
+    dark: createThemeVars(getRawThemeColors("forest", "dark")),
   },
   sunset: {
-    light: createThemeVars(rawColors.sunset.light),
-    dark: createThemeVars(rawColors.sunset.dark),
+    light: createThemeVars(getRawThemeColors("sunset", "light")),
+    dark: createThemeVars(getRawThemeColors("sunset", "dark")),
   },
   rose: {
-    light: createThemeVars(rawColors.rose.light),
-    dark: createThemeVars(rawColors.rose.dark),
+    light: createThemeVars(getRawThemeColors("rose", "light")),
+    dark: createThemeVars(getRawThemeColors("rose", "dark")),
   },
   violet: {
-    light: createThemeVars(rawColors.violet.light),
-    dark: createThemeVars(rawColors.violet.dark),
+    light: createThemeVars(getRawThemeColors("violet", "light")),
+    dark: createThemeVars(getRawThemeColors("violet", "dark")),
   },
   slate: {
-    light: createThemeVars(rawColors.slate.light),
-    dark: createThemeVars(rawColors.slate.dark),
+    light: createThemeVars(getRawThemeColors("slate", "light")),
+    dark: createThemeVars(getRawThemeColors("slate", "dark")),
   },
 };

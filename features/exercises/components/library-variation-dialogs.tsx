@@ -38,7 +38,7 @@ export function LibraryVariationDialogs({ controller }: { controller: LibraryCon
             borderRadius: 14,
             paddingHorizontal: 12,
             paddingVertical: 10,
-            backgroundColor: isDark ? `${rawColors.destructive}20` : "#FFF1F0",
+            backgroundColor: `${rawColors.destructive}${isDark ? "20" : "14"}`,
           }}
         >
           <Text style={{ color: rawColors.destructive, fontSize: 13, fontWeight: "600" }}>
@@ -168,7 +168,7 @@ export function LibraryVariationDialogs({ controller }: { controller: LibraryCon
               borderRadius: 18,
               paddingHorizontal: 14,
               paddingVertical: 14,
-              backgroundColor: isDark ? `${rawColors.destructive}22` : "#FFF1F0",
+              backgroundColor: `${rawColors.destructive}${isDark ? "22" : "14"}`,
               marginTop: 10
             }}
           >
