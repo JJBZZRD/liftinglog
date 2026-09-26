@@ -1,8 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActiveWorkoutConflictError, createWorkoutSession, getWorkoutSessionDetail, listWorkoutSessionsForDate } from '@/lib/db/workoutSessions';
+import { ActiveWorkoutConflictError, createWorkoutSession, deleteWorkoutSession, getWorkoutSessionDetail, listWorkoutSessionsForDate } from '@/lib/db/workoutSessions';
 import { getActiveWorkout } from '@/lib/db/workouts';
-import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
+import { clearSelectedWorkoutIf, setSelectedWorkoutId } from '@/lib/workouts/selection-store';
 import { errorMessage, type WorkoutSummary } from '../workout-types';
 
 export function useWorkoutList(date: Date) {
@@ -15,6 +15,9 @@ export function useWorkoutList(date: Date) {
   const [conflictId, setConflictId] = useState<number | null>(null);
   const request = useRef(0);
   const creatingRef = useRef(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deletingRef = useRef(false);
 
   const reload = useCallback(async () => {
     const current = ++request.current;
@@ -62,5 +65,30 @@ export function useWorkoutList(date: Date) {
     }
   };
 
-  return { workouts, activeElsewhere, loading, creating, error, conflictId, setConflictId, reload, create };
+  /** Resolves true once the workout is deleted and the list reloaded. */
+  const remove = async (id: number) => {
+    if (deletingRef.current) return false;
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteWorkoutSession(id);
+      clearSelectedWorkoutIf(id);
+      setWorkouts((current) => current.filter((workout) => workout.id !== id));
+      setActiveElsewhere((current) => current?.id === id ? null : current);
+      void reload();
+      return true;
+    } catch (cause) {
+      setDeleteError(errorMessage(cause));
+      return false;
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
+    }
+  };
+
+  return {
+    workouts, activeElsewhere, loading, creating, error, conflictId, setConflictId, reload, create,
+    deleting, deleteError, clearDeleteError: () => setDeleteError(null), remove,
+  };
 }

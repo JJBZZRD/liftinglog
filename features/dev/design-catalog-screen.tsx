@@ -36,7 +36,7 @@ function HoldCard({ onHold }: { onHold: () => void }) {
         <StatusPill status="live" />
         <Text style={{ color: rawColors.foregroundMuted, ...typography.caption }}>6:42 PM · taps {taps}</Text>
       </View>
-      <Text style={{ color: rawColors.foreground, fontSize: 20, lineHeight: 25, fontWeight: '600' }}>Push Day</Text>
+      <Text style={{ color: rawColors.foreground, ...typography.cardTitle }}>Push Day</Text>
       <MetricStrip items={[{ value: 4, label: 'exercises' }, { value: 14, label: 'sets' }, { value: '6.2k', label: 'kg' }]} />
       <HoldProgress progress={progress} />
     </Pressable>

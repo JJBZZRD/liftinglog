@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import SetItem from '@/components/lists/SetItem';
-import { WorkoutStatus } from '@/components/workouts/workout-ui';
+import { StatusPill } from '@/components/design-system/status-pill';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
 import type { SetRow } from '@/lib/db/workouts';
 import { motion, radius, space, typography } from '@/lib/design-system/tokens';
@@ -41,7 +41,7 @@ export function WorkoutExerciseEntry({ entry, index, onPress, onSetPress, pbBadg
         className="active:opacity-70" style={{ padding: space[18], gap: space[12] }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[8] }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <WorkoutStatus active={entry.completedAt === null} />
+            <StatusPill status={entry.completedAt === null ? 'live' : 'completed'} />
           </View>
           <Text style={{ ...typography.caption, flex: 1, minWidth: 0, textAlign: 'right', color: rawColors.foregroundMuted }}>
             {entry.performedAt !== null ? dateLabel(new Date(entry.performedAt)) : ''}

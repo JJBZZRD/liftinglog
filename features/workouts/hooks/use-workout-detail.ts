@@ -3,11 +3,12 @@ import { useCallback, useRef, useState } from 'react';
 import {
   ActiveWorkoutConflictError,
   completeWorkoutSession,
+  deleteWorkoutSession,
   getWorkoutSessionDetail,
   resumeWorkoutSession,
   updateWorkoutSession,
 } from '@/lib/db/workoutSessions';
-import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
+import { clearSelectedWorkoutIf, setSelectedWorkoutId } from '@/lib/workouts/selection-store';
 import { errorMessage, type WorkoutDetail, type WorkoutExercise } from '../workout-types';
 
 export function useWorkoutDetail(id: number) {
@@ -92,8 +93,15 @@ export function useWorkoutDetail(id: number) {
     await reload();
   });
 
+  /** Resolves true once the workout is gone; the screen then navigates away. */
+  const remove = async () => run(async () => {
+    await deleteWorkoutSession(id);
+    clearSelectedWorkoutIf(id);
+  });
+
   return {
     workout, loading, busy, error, conflictId, setConflictId, unfinished,
-    cancelComplete: () => setUnfinished(null), reload, save, resume, complete, requestComplete,
+    cancelComplete: () => setUnfinished(null), clearError: () => setError(null),
+    reload, save, resume, complete, requestComplete, remove,
   };
 }

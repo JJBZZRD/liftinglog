@@ -63,7 +63,7 @@ jest.mock("../../components/exercise/VariationExerciseLabel", () => (props: any)
 );
 jest.mock("../../components/calculators/CalculatorsSummaryCard", () => "CalculatorsSummaryCard");
 jest.mock("../../components/lists/SetItem", () => "SetItem");
-jest.mock("../../components/modals/BaseModal", () => "BaseModal");
+jest.mock("../../components/modals/BaseModal", () => ({ __esModule: true, default: "BaseModal", BaseModal: "BaseModal" }));
 jest.mock("../../components/modals/DatePickerModal", () => "DatePickerModal");
 jest.mock("../../lib/config/releaseProfile", () => ({ appCapabilities: { healthMetrics: false } }));
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({

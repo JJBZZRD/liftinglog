@@ -21,7 +21,7 @@ jest.mock('react-native-reanimated', () => {
     default: { View: 'AnimatedView' },
     useReducedMotion: () => mockReducedMotion,
     useSharedValue: (initial: unknown) => {
-      const ref = React.useRef(null);
+      const ref = React.useRef<{ value: unknown } | null>(null);
       if (!ref.current) ref.current = { value: initial };
       return ref.current;
     },

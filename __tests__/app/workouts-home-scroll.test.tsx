@@ -5,7 +5,7 @@ const mockPush = jest.fn();
 const mockReload = jest.fn();
 const mockCapabilities = { healthMetrics: false };
 let mockWindow = { width: 448, height: 998, scale: 3, fontScale: 1 };
-const mockWorkout = (id: number) => ({ id, name: `Session ${id}`, startedAt: new Date(2026, 8, 25).getTime() });
+const mockWorkout = (id: number) => ({ id, name: `Session ${id}`, startedAt: new Date(2026, 8, 25).getTime(), completedAt: 1 as number | null, exerciseCount: 2, setCount: 5 });
 let mockList: {
   workouts: ReturnType<typeof mockWorkout>[];
   activeElsewhere: ReturnType<typeof mockWorkout> | null;
@@ -16,6 +16,10 @@ let mockList: {
   setConflictId: jest.Mock;
   reload: jest.Mock;
   create: jest.Mock;
+  deleting: boolean;
+  deleteError: string | null;
+  clearDeleteError: jest.Mock;
+  remove: jest.Mock;
 };
 
 jest.mock('react-native', () => ({
@@ -52,6 +56,7 @@ jest.mock('../../components/workouts/workout-calendar', () => ({ WorkoutCalendar
 jest.mock('../../components/workouts/workout-overlays', () => ({ WorkoutOverlays: 'WorkoutOverlays' }));
 jest.mock('../../components/workouts/scroll-fade', () => ({ ScrollFade: 'ScrollFade' }));
 jest.mock('../../features/workouts/components/workout-dialogs', () => ({ ActiveWorkoutDialog: 'ActiveWorkoutDialog' }));
+jest.mock('../../components/design-system/confirm-dialog', () => ({ ConfirmDialog: 'ConfirmDialog' }));
 jest.mock('../../features/workouts/components/workout-date-selector', () => ({ WorkoutDateSelector: 'WorkoutDateSelector' }));
 jest.mock('../../features/workouts/components/workout-session-row', () => ({ WorkoutSessionRow: 'WorkoutSessionRow' }));
 jest.mock('../../features/workouts/components/workout-feedback', () => ({ WorkoutEmpty: 'WorkoutEmpty', WorkoutError: 'WorkoutError' }));
@@ -83,6 +88,7 @@ describe('Workouts Home list viewport', () => {
       workouts: [mockWorkout(3), mockWorkout(2), mockWorkout(1)], activeElsewhere: mockWorkout(4),
       loading: false, creating: false, error: null, conflictId: null,
       setConflictId: jest.fn(), reload: mockReload, create: jest.fn(),
+      deleting: false, deleteError: null, clearDeleteError: jest.fn(), remove: jest.fn(async () => true),
     };
   });
 
@@ -210,6 +216,32 @@ describe('Workouts Home list viewport', () => {
     expect(fadeEdges(tree!)).toEqual([]);
   });
 
+  it('asks before deleting a held card and closes only after the delete succeeds', async () => {
+    mockList.workouts[1] = { ...mockList.workouts[1], completedAt: null, exerciseCount: 0, setCount: 0 };
+    await act(async () => { tree = renderer.create(<WorkoutsHomeScreen />); });
+    const dialog = () => find(tree!, 'ConfirmDialog')[0];
+    expect(dialog().props.visible).toBe(false);
+    await act(async () => { find(tree!, 'WorkoutSessionRow')[1].props.onHold(); });
+    expect(mockList.clearDeleteError).toHaveBeenCalledTimes(1);
+    expect(dialog().props).toMatchObject({ visible: true, title: 'Discard workout?', confirmLabel: 'Discard' });
+    expect(mockList.remove).not.toHaveBeenCalled();
+
+    mockList.remove.mockResolvedValueOnce(false);
+    await act(async () => { dialog().props.onConfirm(); });
+    expect(mockList.remove).toHaveBeenCalledWith(2);
+    expect(dialog().props.visible).toBe(true);
+    await act(async () => { dialog().props.onConfirm(); });
+    expect(dialog().props.visible).toBe(false);
+    // The text stays while the dialog fades out.
+    expect(dialog().props.title).toBe('Discard workout?');
+
+    await act(async () => { find(tree!, 'WorkoutSessionRow')[0].props.onHold(); });
+    expect(dialog().props).toMatchObject({ visible: true, title: 'Delete Session 3?', emphasis: 'This can’t be undone.' });
+    await act(async () => { dialog().props.onCancel(); });
+    expect(dialog().props.visible).toBe(false);
+    expect(mockList.remove).toHaveBeenCalledTimes(2);
+  });
+
   it('retains loading, empty, retry, and full-profile health navigation within the list', async () => {
     mockList.workouts = [];
     mockList.activeElsewhere = null;
@@ -232,117 +264,45 @@ describe('Workouts Home list viewport', () => {
   });
 });
 
-describe('Workouts date navigator responsive layout', () => {
+describe('Workouts date navigator', () => {
   let tree: Tree;
-  const pastDate = new Date(2026, 8, 23);
   const onChange = jest.fn();
   const onCalendar = jest.fn();
   const renderSelector = (date: Date) => <WorkoutDateSelector date={date} onChange={onChange} onCalendar={onCalendar} />;
-  const button = (label: string) => tree.root.find((node: TestNode) => node.type === 'Pressable' && node.props.accessibilityLabel === label);
-  const dateText = () => tree.root.find((node: TestNode) => node.type === 'Text' && node.props.accessibilityRole === 'header');
+  const pressables = () => find(tree, 'Pressable');
+  const button = (label: string) => pressables().find((node: TestNode) => node.props.accessibilityLabel === label)!;
+  const texts = (node: TestNode & { findAll: Tree['root']['findAll'] }) => node.findAll((child: TestNode) => child.type === 'Text').map((child: TestNode) => child.props.children);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockWindow = { width: 448, height: 998, scale: 3, fontScale: 1 };
-  });
-  afterEach(async () => { await act(async () => { tree?.unmount(); }); });
+  beforeEach(() => { jest.clearAllMocks(); jest.useFakeTimers(); jest.setSystemTime(new Date(2026, 8, 25, 10)); });
+  afterEach(async () => { await act(async () => { tree?.unmount(); }); jest.useRealTimers(); });
 
-  it('preserves the wide date width, inline controls, and optical return-label adjustment', async () => {
-    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
-    const root = find(tree!, 'View')[0];
-    expect(root.props.style).toMatchObject({ flexDirection: 'row', gap: 4 });
-    expect(dateText().props.style).toMatchObject({ width: 112, flexShrink: 0 });
-    const backLabel = button('Back to today').find((node: TestNode) => node.type === 'Text');
-    expect(backLabel.props.style.transform).toEqual([{ translateX: 2 }]);
-    expect(button('Choose workout date').parent).toBe(root);
-    expect(button('Back to today').parent.props.style).toEqual({ flex: 1, minWidth: 88, minHeight: 44 });
+  it('makes the date the calendar button, with a relative caption and no Today button', async () => {
+    await act(async () => { tree = renderer.create(renderSelector(new Date(2026, 8, 23))); });
+    expect(pressables().map((node: TestNode) => node.props.accessibilityLabel)).toEqual(['Previous day', 'Wed, Sep 23, 2 days ago', 'Next day']);
+    const dateButton = button('Wed, Sep 23, 2 days ago');
+    expect(texts(dateButton as never)).toEqual(['Wed, Sep 23', '2 days ago']);
+    expect(dateButton.props.style).toMatchObject({ flex: 1, minWidth: 0, minHeight: 44, flexWrap: 'wrap' });
+    expect(tree.root.findAll((node: TestNode) => node.props.children === 'Today' || node.props.accessibilityLabel === 'Back to today')).toHaveLength(0);
+    await act(async () => { dateButton.props.onPress(); });
+    expect(onCalendar).toHaveBeenCalledTimes(1);
   });
 
-  it.each([[360, 1], [390, 1], [448, 1.3]])('fits a compact single row at width %s and font scale %s', async (width, fontScale) => {
-    mockWindow = { ...mockWindow, width, fontScale };
-    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
-    const root = find(tree!, 'View')[0];
-    expect(root.props.style.flexDirection).toBe('row');
-    const calendar = button('Choose workout date');
-    const today = button('Back to today');
-    expect(calendar.parent).toBe(root);
-    expect(today.find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
-    expect(calendar.find((node: TestNode) => node.type === 'Text').props.children).toBe('Calendar');
-    expect(dateText().props.style).toMatchObject({ width: 100 * fontScale, fontSize: 15 });
-    const { contentWidth } = jest.requireActual('../../lib/design-system/responsive-layout').getResponsiveLayout(width);
-    const requiredWidth = button('Previous day').props.style.width + dateText().props.style.width
-      + button('Next day').props.style.width + today.parent.props.style.minWidth
-      + calendar.props.style.width + root.props.style.gap;
-    expect(requiredWidth).toBeLessThanOrEqual(contentWidth);
-    expect(button('Previous day').props.style.width).toBe(44);
-    expect(button('Next day').props.style.width).toBe(44);
-    expect(calendar.props.style.minHeight).toBe(44);
-    const reservedWidth = dateText().props.style.width;
-    await act(async () => { tree.update(renderSelector(new Date(2026, 10, 11))); });
-    expect(dateText().props.style.width).toBe(reservedWidth);
-    expect(button('Choose workout date')).toBe(calendar);
-    await act(async () => { tree.update(renderSelector(new Date())); });
-    expect(button('Back to today')).toBe(today);
-    expect(today.props.style.opacity).toBe(0);
-    expect(today.props.disabled).toBe(true);
-    expect(today.props.accessibilityElementsHidden).toBe(true);
+  it('keeps the same three controls whatever the date', async () => {
+    await act(async () => { tree = renderer.create(renderSelector(new Date(2026, 8, 25))); });
+    const [previous, , next] = pressables();
+    expect(button('Fri, Sep 25, Today')).toBeDefined();
+    await act(async () => { tree.update(renderSelector(new Date(2026, 5, 1))); });
+    // A distant date in the same year has no caption; the controls stay mounted.
+    expect(button('Mon, Jun 1')).toBeDefined();
+    expect(pressables()[0]).toBe(previous);
+    expect(pressables()[2]).toBe(next);
   });
 
-  it.each([[320, 1.3], [360, 1.3], [448, 2]])('uses stable two-row controls at width %s and font scale %s', async (width, fontScale) => {
-    mockWindow = { ...mockWindow, width, fontScale };
-    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
-    const root = find(tree!, 'View')[0];
-    const dateRow = dateText().parent.parent;
-    const actionsRow = button('Choose workout date').parent;
-    const todaySlot = button('Back to today').parent;
-    expect(root.props.style).toMatchObject({ gap: 8 });
-    expect(dateRow.props.style).toEqual({ alignItems: 'center' });
-    expect(dateText().props.style).toMatchObject({ width: 112 * fontScale, flexShrink: 0 });
-    expect(dateText().props.numberOfLines).toBeUndefined();
-    expect(dateText().props.allowFontScaling).not.toBe(false);
-    expect(actionsRow).not.toBe(dateRow);
-    expect(todaySlot.parent).toBe(actionsRow);
-    expect(button('Back to today').props.style.alignItems).toBe('flex-start');
-    const slotStyle = todaySlot.props.style;
-    await act(async () => { tree!.update(renderSelector(new Date())); });
-    expect(dateText().parent.parent).toBe(dateRow);
-    expect(button('Choose workout date').parent).toBe(actionsRow);
-    expect(todaySlot.props.style).toEqual(slotStyle);
-    expect(button('Back to today').parent).toBe(todaySlot);
-    expect(button('Back to today').props.style.opacity).toBe(0);
-    expect(button('Back to today').props.disabled).toBe(true);
-    expect(button('Back to today').props.pointerEvents).toBe('none');
-    expect(button('Back to today').props.accessibilityElementsHidden).toBe(true);
-    expect(button('Back to today').props.importantForAccessibility).toBe('no-hide-descendants');
-  });
-
-  it('uses its measured container and recalculates presentation after resizing', async () => {
-    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
-    let root = find(tree!, 'View')[0];
-    await act(async () => { root.props.onLayout({ nativeEvent: { layout: { width: 328 } } }); });
-    expect(button('Back to today').find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
-    await act(async () => { root.props.onLayout({ nativeEvent: { layout: { width: 280 } } }); });
-    root = find(tree!, 'View')[0];
-    expect(root.props.style.flexDirection).toBeUndefined();
-    mockWindow = { ...mockWindow, width: 390 };
-    await act(async () => { tree.update(renderSelector(pastDate)); });
-    expect(find(tree!, 'View')[0].props.style.flexDirection).toBe('row');
-    expect(button('Back to today').find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
-  });
-
-  it('bounds very large type within both arrow targets and retains date actions', async () => {
-    mockWindow = { ...mockWindow, width: 320, fontScale: 2 };
-    await act(async () => { tree = renderer.create(renderSelector(pastDate)); });
-    expect(dateText().props.style).toMatchObject({ width: 200, flexShrink: 0 });
-    const calendarWidth = button('Choose workout date').props.style.width;
-    expect(calendarWidth).toBeGreaterThanOrEqual(44);
-    expect(calendarWidth + button('Back to today').parent.props.style.minWidth + 4).toBeLessThanOrEqual(288);
-    expect(button('Back to today').find((node: TestNode) => node.type === 'Text').props.children).toBe('Today');
+  it('moves one day at a time', async () => {
+    await act(async () => { tree = renderer.create(renderSelector(new Date(2026, 8, 23))); });
     await act(async () => { button('Previous day').props.onPress(); });
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 22));
     await act(async () => { button('Next day').props.onPress(); });
     expect(onChange).toHaveBeenLastCalledWith(new Date(2026, 8, 24));
-    await act(async () => { button('Choose workout date').props.onPress(); });
-    expect(onCalendar).toHaveBeenCalledTimes(1);
   });
 });

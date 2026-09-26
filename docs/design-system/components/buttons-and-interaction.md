@@ -25,8 +25,9 @@ Part of the [LiftingLog design system](../README.md).
 
 - Use `IconButton` for a single icon action. It provides a 44 dp target, an
   accessibility label, disabled semantics, and press feedback. Use
-  `variant="secondary"` for a visible slate button surface with the same 12 dp
-  corners and secondary foreground as Calendar; the default stays plain.
+  `variant="secondary"` for a visible control surface (`control` fill, 1 dp
+  `controlBorder` border, 12 dp corners, secondary foreground), as on the date
+  navigator; the default stays plain.
 - Use `Metric` for a value with a short supporting label. Keep workout-specific
   status and PB components in their feature/domain folders.
 - Reuse `SetItem` for logged sets; see [Set rows](set-rows.md).

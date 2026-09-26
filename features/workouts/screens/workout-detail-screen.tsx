@@ -5,9 +5,13 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/design-system/button';
+import { ConfirmDialog } from '@/components/design-system/confirm-dialog';
+import { MetricStrip } from '@/components/design-system/metric-strip';
+import { StatusPill } from '@/components/design-system/status-pill';
 import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
 import { WorkoutThemeBoundary } from '@/components/workouts/workout-theme';
-import { IconButton, Metric, WorkoutStatus } from '@/components/workouts/workout-ui';
+import { IconButton } from '@/components/workouts/workout-ui';
 import { ScrollFade } from '@/components/workouts/scroll-fade';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
 import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
@@ -22,7 +26,7 @@ import { WorkoutEmpty, WorkoutError } from '../components/workout-feedback';
 import { WorkoutMetadataEditor } from '../components/workout-metadata-editor';
 import { useWorkoutDetail } from '../hooks/use-workout-detail';
 import { useWorkoutPBBadges } from '../hooks/use-workout-pb-badges';
-import { dateLabel, workoutTitle } from '../workout-types';
+import { dateLabel, deleteWorkoutCopy, workoutTitle } from '../workout-types';
 
 function WorkoutDetailContent() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -33,6 +37,7 @@ function WorkoutDetailContent() {
   const { pageWidth, pageGutter, cardPadding, itemGap } = useResponsiveLayout();
   const blurTarget = useRef<View>(null);
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { topOpacity, bottomOpacity, scrollProps } = useScrollEdgeFades();
   const detail = useWorkoutDetail(id);
   const { workout, loading, busy, error } = detail;
@@ -46,6 +51,12 @@ function WorkoutDetailContent() {
     if (!active && !await detail.resume()) return;
     setSelectedWorkoutId(id);
     router.dismissTo({ pathname: '/(tabs)/exercises', params: { workoutId: String(id) } });
+  };
+  const askDelete = () => { detail.clearError(); setConfirmingDelete(true); };
+  const confirmDelete = async () => {
+    if (!await detail.remove()) return;
+    setConfirmingDelete(false);
+    back();
   };
 
   return (
@@ -62,10 +73,10 @@ function WorkoutDetailContent() {
               <IconButton icon="arrow-left" label="Go back" onPress={back} />
               <Text style={{ flexShrink: 1, color: rawColors.foregroundSecondary, fontSize: 15, fontWeight: '600' }}>Workouts</Text>
             </View>
-            {workout && <WorkoutStatus active={active} />}
+            {workout && <StatusPill status={active ? 'live' : 'completed'} />}
           </View>
           {loading && !workout && <ActivityIndicator color={rawColors.primary} style={{ paddingVertical: 60 }} />}
-          {error && !editing && <WorkoutError message={error} onRetry={() => void detail.reload()} />}
+          {error && !editing && !confirmingDelete && <WorkoutError message={error} onRetry={() => void detail.reload()} />}
           {!loading && !workout && !error && <WorkoutEmpty title="Workout unavailable" description="This workout may have been deleted. Return to Workouts to choose another session." />}
           {workout && <>
             <View style={{ gap: space[12] }}>
@@ -77,11 +88,11 @@ function WorkoutDetailContent() {
                 <MaterialCommunityIcons name="pencil-outline" size={20} color={rawColors.foregroundMuted} style={{ flexShrink: 0, marginTop: 11 }} />
               </Pressable>
             </View>
-            <View style={{ flexDirection: 'row', gap: itemGap, paddingVertical: cardPadding, borderTopWidth: 1, borderBottomWidth: 1, borderColor: rawColors.border }}>
-              <Metric label="Exercises" value={workout.exerciseCount} />
-              <Metric label="Sets" value={workout.setCount} />
-              <Metric label={`Volume · ${getWeightUnitLabel(unitPreference)}`} value={formatVolumeFromKg(workout.volumeKg, unitPreference, { abbreviate: true })} />
-            </View>
+            <MetricStrip items={[
+              { value: workout.exerciseCount, label: workout.exerciseCount === 1 ? 'exercise' : 'exercises' },
+              { value: workout.setCount, label: workout.setCount === 1 ? 'set' : 'sets' },
+              { value: formatVolumeFromKg(workout.volumeKg, unitPreference, { abbreviate: true }), label: getWeightUnitLabel(unitPreference) },
+            ]} />
             <Pressable onPress={() => setEditing(true)} disabled={busy} accessibilityRole="button" accessibilityLabel="Edit workout note"
               style={{ padding: cardPadding, borderWidth: 1, borderColor: rawColors.border, borderRadius: radius.action, backgroundColor: rawColors.surface, gap: space[12] }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[8] }}>
@@ -109,22 +120,19 @@ function WorkoutDetailContent() {
                   <WorkoutSetRow set={set} index={index} pbBadge={pbBadges.get(set.id)} onPress={() => openSet(set.id)} />
                 </View>)}
               </View>}
-              <Pressable onPress={() => void addExercise()} disabled={busy} accessibilityRole="button" accessibilityState={{ disabled: busy }}
-                className="active:opacity-70" style={{ minHeight: sizes.touchTarget, borderWidth: 1, borderColor: rawColors.border, borderRadius: radius.action, padding: cardPadding, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[8], backgroundColor: rawColors.surface }}>
-                <MaterialCommunityIcons name="plus" size={21} color={rawColors.primary} style={{ flexShrink: 0 }} />
-                <Text style={{ flexShrink: 1, minWidth: 0, textAlign: 'center', color: rawColors.primary, ...typography.body, fontWeight: '600' }}>Add Exercise</Text>
-              </Pressable>
+              <Button label="Add Exercise" icon="plus" variant="secondary" disabled={busy} onPress={() => void addExercise()} />
             </View>
-            <Pressable disabled={busy} onPress={() => void (active ? detail.requestComplete() : detail.resume())} accessibilityRole="button" accessibilityState={{ disabled: busy }}
-              className="active:opacity-70" style={{ minHeight: sizes.touchTarget, backgroundColor: rawColors.primary, opacity: busy ? 0.8 : 1, borderRadius: radius.action, padding: cardPadding, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[12] }}>
-              {busy ? <ActivityIndicator color={rawColors.primaryForeground} /> : <MaterialCommunityIcons name={active ? 'check' : 'play-outline'} size={22} color={rawColors.primaryForeground} />}
-              <Text style={{ flexShrink: 1, minWidth: 0, textAlign: 'center', color: rawColors.primaryForeground, ...typography.body, fontWeight: '700' }}>{active ? 'Complete Workout' : 'Resume Workout'}</Text>
-            </Pressable>
+            <Button label={active ? 'Complete Workout' : 'Resume Workout'} icon={active ? 'check' : 'play-outline'} size="large"
+              busy={busy && !confirmingDelete} disabled={busy} onPress={() => void (active ? detail.requestComplete() : detail.resume())} />
+            <Button label="Delete workout" icon="trash-can-outline" variant="destructive-outline" disabled={busy} onPress={askDelete}
+              style={{ marginTop: space[8] }} />
           </>}
         </Animated.ScrollView>
       </BlurTargetView>
       <ScrollFade edge="top" solidExtent={insets.top} opacity={topOpacity} />
       <ScrollFade edge="bottom" solidExtent={insets.bottom} opacity={bottomOpacity} />
+      {workout && <ConfirmDialog visible={confirmingDelete} {...deleteWorkoutCopy(workout)} busy={busy} error={error}
+        onConfirm={() => void confirmDelete()} onCancel={() => setConfirmingDelete(false)} />}
       <CompleteWorkoutDialog entries={detail.unfinished} busy={busy} error={error} onClose={detail.cancelComplete} onComplete={() => void detail.complete()} />
       <ActiveWorkoutDialog visible={detail.conflictId !== null} onClose={() => detail.setConflictId(null)} onOpen={() => {
         if (detail.conflictId === null) return;

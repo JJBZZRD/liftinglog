@@ -20,7 +20,12 @@ jest.mock('react-native', () => ({
 jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'Icon' }));
 jest.mock('react-native-reanimated', () => {
   const animation = { duration: () => animation, delay: () => animation, reduceMotion: () => animation };
-  return { __esModule: true, default: { View: 'View' }, FadeInDown: animation, LinearTransition: animation, ReduceMotion: { System: 'system' } };
+  return {
+    __esModule: true, default: { View: 'View' }, FadeInDown: animation, LinearTransition: animation, ReduceMotion: { System: 'system' },
+    useReducedMotion: () => false, useSharedValue: (value: unknown) => ({ value }), useAnimatedStyle: (style: () => unknown) => style(),
+    withTiming: (value: unknown) => value, withDelay: (_delay: number, value: unknown) => value, withRepeat: (value: unknown) => value,
+    cancelAnimation: () => undefined, runOnJS: (fn: unknown) => fn, Easing: { linear: 'linear', quad: 'quad', out: (value: unknown) => value },
+  };
 });
 jest.mock('@/lib/contexts/UnitPreferenceContext', () => ({ useUnitPreference: () => ({ unitPreference: mockUnitPreference }) }));
 jest.mock('@/lib/theme/ThemeContext', () => ({ useTheme: () => ({ rawColors: {

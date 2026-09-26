@@ -1,7 +1,9 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { useReducedMotion } from 'react-native-reanimated';
+import { Button } from '@/components/design-system/button';
 import { BaseModal } from '@/components/modals/BaseModal';
+import { space } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
 
 export function localDayKey(date: Date) {
@@ -23,13 +25,9 @@ export function WorkoutCalendar({ visible, date, onSelect, onClose }: {
         textDisabledColor: rawColors.foregroundMuted, textSectionTitleColor: rawColors.foregroundSecondary,
         todayTextColor: rawColors.primary, arrowColor: rawColors.primary,
         selectedDayTextColor: rawColors.primaryForeground, textDayFontSize: 15 }} />}
-    <View className="flex-row gap-3 mt-4">
-      <Pressable accessibilityRole="button" onPress={onClose} className="flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary">
-        <Text className="text-base font-semibold text-foreground-secondary">Cancel</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" onPress={() => { onSelect(new Date()); onClose(); }} className="flex-1 items-center justify-center p-3.5 rounded-lg bg-primary">
-        <Text className="text-base font-semibold text-primary-foreground">Today</Text>
-      </Pressable>
+    <View style={{ flexDirection: 'row', gap: space[12], marginTop: space[16] }}>
+      <Button label="Cancel" variant="secondary" onPress={onClose} style={{ flex: 1 }} />
+      <Button label="Today" icon="calendar-today" onPress={() => { onSelect(new Date()); onClose(); }} style={{ flex: 1 }} />
     </View>
   </BaseModal>;
 }

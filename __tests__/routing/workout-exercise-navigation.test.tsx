@@ -47,9 +47,9 @@ jest.mock('../../components/modals/frosted-modal-context', () => ({
 jest.mock('../../components/workouts/workout-theme', () => ({
   WorkoutThemeBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../../components/workouts/workout-ui', () => ({
-  IconButton: () => null, Metric: () => null, WorkoutStatus: () => null,
-}));
+jest.mock('../../components/workouts/workout-ui', () => ({ IconButton: () => null }));
+jest.mock('../../components/design-system/status-pill', () => ({ StatusPill: () => null }));
+jest.mock('../../components/design-system/confirm-dialog', () => ({ ConfirmDialog: () => null }));
 jest.mock('../../components/workouts/scroll-fade', () => ({ ScrollFade: () => null }));
 jest.mock('../../features/workouts/components/workout-exercise-entry', () => ({
   WorkoutExerciseEntry: () => null, WorkoutSetRow: () => null,

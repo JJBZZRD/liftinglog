@@ -40,7 +40,8 @@ export const radius = {
 /** Existing text roles; omitted properties continue to inherit React Native defaults. */
 export const typography = {
   title: { fontSize: 32, lineHeight: 39, fontWeight: '700', letterSpacing: -0.8 },
-  cardTitle: { fontSize: 23, lineHeight: 29, fontWeight: '600' },
+  /** Workout-card title (metric-strip card). */
+  cardTitle: { fontSize: 20, lineHeight: 25, fontWeight: '600' },
   section: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3 },
   body: { fontSize: 16 },
   label: { fontSize: 14 },

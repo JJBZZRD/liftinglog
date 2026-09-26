@@ -2,7 +2,7 @@ import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { useWorkoutDetail } from '@/features/workouts/hooks/use-workout-detail';
 import { useWorkoutList } from '@/features/workouts/hooks/use-workout-list';
-import { ActiveWorkoutConflictError, completeWorkoutSession, createWorkoutSession, getWorkoutSessionDetail, listWorkoutSessionsForDate, resumeWorkoutSession, updateWorkoutSession } from '@/lib/db/workoutSessions';
+import { ActiveWorkoutConflictError, completeWorkoutSession, createWorkoutSession, deleteWorkoutSession, getWorkoutSessionDetail, listWorkoutSessionsForDate, resumeWorkoutSession, updateWorkoutSession } from '@/lib/db/workoutSessions';
 import { getSelectedWorkoutId, setSelectedWorkoutId } from '@/lib/workouts/selection-store';
 import type { WorkoutDetail, WorkoutSummary } from '@/features/workouts/workout-types';
 import { getActiveWorkout } from '@/lib/db/workouts';
@@ -20,7 +20,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@/lib/db/workoutSessions', () => ({
   getWorkoutSessionDetail: jest.fn(), listWorkoutSessionsForDate: jest.fn(),
   completeWorkoutSession: jest.fn(), createWorkoutSession: jest.fn(),
-  resumeWorkoutSession: jest.fn(), updateWorkoutSession: jest.fn(),
+  resumeWorkoutSession: jest.fn(), updateWorkoutSession: jest.fn(), deleteWorkoutSession: jest.fn(),
   ActiveWorkoutConflictError: class extends Error {
     activeWorkoutId: number;
     constructor(id: number) { super('Another workout is active.'); this.activeWorkoutId = id; }
@@ -149,6 +149,48 @@ describe('workout screen controllers', () => {
     jest.mocked(listWorkoutSessionsForDate).mockResolvedValue([summary(7)]);
     await act(async () => { await listController.reload(); });
     expect(listController.activeElsewhere).toBeNull();
+  });
+
+  it('deletes from detail, clears a matching selection and reports failures without deleting twice', async () => {
+    setSelectedWorkoutId(1);
+    await act(async () => { tree = renderer.create(<DetailHarness />); });
+    let finish!: () => void;
+    jest.mocked(deleteWorkoutSession).mockReturnValueOnce(new Promise<void>((resolve) => { finish = resolve; }));
+    let first!: Promise<boolean>;
+    await act(async () => { first = controller.remove(); });
+    expect(controller.busy).toBe(true);
+    await act(async () => { expect(await controller.remove()).toBe(false); });
+    await act(async () => { finish(); expect(await first).toBe(true); });
+    expect(deleteWorkoutSession).toHaveBeenCalledTimes(1);
+    expect(deleteWorkoutSession).toHaveBeenCalledWith(1);
+    expect(getSelectedWorkoutId()).toBeNull();
+
+    setSelectedWorkoutId(4);
+    jest.mocked(deleteWorkoutSession).mockRejectedValueOnce(new Error('Could not delete'));
+    await act(async () => { expect(await controller.remove()).toBe(false); });
+    expect(controller.error).toBe('Could not delete');
+    expect(getSelectedWorkoutId()).toBe(4);
+    await act(async () => { controller.clearError(); });
+    expect(controller.error).toBeNull();
+  });
+
+  it('deletes from the list, drops the card at once and keeps other selections', async () => {
+    setSelectedWorkoutId(9);
+    jest.mocked(listWorkoutSessionsForDate).mockResolvedValue([summary(1), summary(2)]);
+    await act(async () => { tree = renderer.create(<ListHarness day={100} />); });
+    jest.mocked(listWorkoutSessionsForDate).mockResolvedValue([summary(1)]);
+    await act(async () => { expect(await listController.remove(2)).toBe(true); });
+    expect(deleteWorkoutSession).toHaveBeenCalledWith(2);
+    expect(listController.workouts.map((workout) => workout.id)).toEqual([1]);
+    expect(getSelectedWorkoutId()).toBe(9);
+    expect(listController.deleting).toBe(false);
+
+    jest.mocked(deleteWorkoutSession).mockRejectedValueOnce(new Error('Could not delete'));
+    await act(async () => { expect(await listController.remove(1)).toBe(false); });
+    expect(listController.deleteError).toBe('Could not delete');
+    expect(listController.workouts.map((workout) => workout.id)).toEqual([1]);
+    await act(async () => { listController.clearDeleteError(); });
+    expect(listController.deleteError).toBeNull();
   });
 
   it('follows today over midnight but preserves a deliberately selected historical day', async () => {

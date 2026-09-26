@@ -16,12 +16,14 @@ type WorkoutSessionListProps = {
   error: string | null;
   onRefresh: () => void;
   onOpen: (id: number) => void;
+  /** Press and hold on a card: ask to delete that workout. */
+  onDelete: (workout: WorkoutSummary) => void;
   showHealthMetrics: boolean;
   onHealthMetrics: () => void;
 };
 
 /** Key this viewport by the selected day to reset native scroll position and fades together. */
-export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, onRefresh, onOpen, showHealthMetrics, onHealthMetrics }: WorkoutSessionListProps) {
+export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, onRefresh, onOpen, onDelete, showHealthMetrics, onHealthMetrics }: WorkoutSessionListProps) {
   const { rawColors } = useTheme();
   const { topOpacity, bottomOpacity, scrollProps } = useScrollEdgeFades();
 
@@ -45,7 +47,7 @@ export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, 
           </Pressable>}
           {error && <WorkoutError message={error} onRetry={onRefresh} />}
           {loading && workouts.length === 0 ? <ActivityIndicator style={{ padding: space[20] * 2 }} color={rawColors.primary} />
-            : workouts.map((workout, index) => <WorkoutSessionRow key={workout.id} workout={workout} index={index} onPress={() => onOpen(workout.id)} />)}
+            : workouts.map((workout, index) => <WorkoutSessionRow key={workout.id} workout={workout} index={index} onPress={() => onOpen(workout.id)} onHold={() => onDelete(workout)} />)}
           {!loading && !error && workouts.length === 0 && <WorkoutEmpty title="A fresh page" description="No workouts on this day yet. Start a session and build your next personal best." />}
           {showHealthMetrics && <View style={{ borderTopWidth: 1, borderColor: rawColors.borderLight, paddingTop: space[16], gap: space[4] }}>
             <Pressable accessibilityRole="button" onPress={onHealthMetrics} style={{ flexDirection: 'row', alignItems: 'center', gap: space[12], paddingVertical: space[16] }}>

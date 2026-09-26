@@ -1,16 +1,17 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
 import { router, Stack } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/design-system/button';
+import { ConfirmDialog } from '@/components/design-system/confirm-dialog';
 import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
 import { WorkoutCalendar } from '@/components/workouts/workout-calendar';
 import { WorkoutHeader } from '@/components/workouts/workout-header';
 import { WorkoutOverlays } from '@/components/workouts/workout-overlays';
 import { WorkoutThemeBoundary } from '@/components/workouts/workout-theme';
 import { appCapabilities } from '@/lib/config/releaseProfile';
-import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
+import { space, typography } from '@/lib/design-system/tokens';
 import { useResponsiveLayout } from '@/lib/design-system/use-responsive-layout';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
@@ -19,6 +20,7 @@ import { WorkoutDateSelector } from '../components/workout-date-selector';
 import { WorkoutSessionList } from '../components/workout-session-list';
 import { useWorkoutList } from '../hooks/use-workout-list';
 import { useWorkoutDate } from '../hooks/use-workout-date';
+import { deleteWorkoutCopy, type WorkoutSummary } from '../workout-types';
 
 // Keep the list viewport above the floating tab bar in app/(tabs)/_layout.tsx.
 const floatingTabBarHeight = 64;
@@ -32,9 +34,16 @@ function WorkoutsHomeContent() {
   const { date, setDate } = useWorkoutDate();
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [overlay, setOverlay] = useState<'calculators' | 'stats' | null>(null);
-  const { workouts, activeElsewhere, loading, creating, error, conflictId, setConflictId, reload, create } = useWorkoutList(date);
+  // Keep the target after closing so the dialog's text stays put while it fades out.
+  const [deleteTarget, setDeleteTarget] = useState<WorkoutSummary | null>(null);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const list = useWorkoutList(date);
+  const { workouts, activeElsewhere, loading, creating, error, conflictId, setConflictId, reload, create } = list;
   const open = (id: number) => router.push({ pathname: '/workout-session/[id]', params: { id: String(id) } });
   const newWorkout = async () => { const id = await create(); if (id !== null) open(id); };
+  const askDelete = (workout: WorkoutSummary) => { list.clearDeleteError(); setDeleteTarget(workout); setDeleteVisible(true); };
+  const confirmDelete = async () => { if (deleteTarget && await list.remove(deleteTarget.id)) setDeleteVisible(false); };
+  const deleteCopy = deleteTarget ? deleteWorkoutCopy(deleteTarget) : null;
   return (
     <FrostedModalProvider blurTarget={blurTarget}>
       <View style={{ flex: 1, backgroundColor: rawColors.background }}>
@@ -48,23 +57,22 @@ function WorkoutsHomeContent() {
             <View style={{ flexShrink: 0, gap: itemGap, paddingBottom: space[16] }}>
               <WorkoutHeader onCalculators={() => setOverlay('calculators')} onStats={() => setOverlay('stats')} />
               <WorkoutDateSelector date={date} onChange={setDate} onCalendar={() => setCalendarVisible(true)} />
-              <Pressable onPress={() => void newWorkout()} disabled={creating} accessibilityRole="button" accessibilityState={{ disabled: creating }}
-                className="active:opacity-70" style={{ minHeight: sizes.touchTarget, backgroundColor: rawColors.primary, opacity: creating ? 0.8 : 1, borderRadius: radius.action, paddingVertical: itemGap, paddingHorizontal: pageGutter, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[12] }}>
-                {creating ? <ActivityIndicator color={rawColors.primaryForeground} /> : <MaterialCommunityIcons name="plus" size={sizes.icon} color={rawColors.primaryForeground} />}
-                <Text style={{ flexShrink: 1, minWidth: 0, textAlign: 'center', color: rawColors.primaryForeground, ...typography.body, fontWeight: '700' }}>{creating ? 'Creating workout…' : 'New Workout'}</Text>
-              </Pressable>
+              <Button label={creating ? 'Creating workout…' : 'New Workout'} icon="plus" size="large" busy={creating} onPress={() => void newWorkout()} />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[8], alignItems: 'center', justifyContent: 'space-between', paddingTop: space[6] }}>
                 <Text accessibilityRole="header" style={{ flexShrink: 1, color: rawColors.foreground, ...typography.section }}>Workouts</Text>
                 <Text style={{ flexShrink: 1, color: rawColors.foregroundMuted, ...typography.caption, fontVariant: ['tabular-nums'] }}>{workouts.length} {workouts.length === 1 ? 'workout' : 'workouts'}</Text>
               </View>
             </View>
             <WorkoutSessionList key={date.toDateString()} workouts={workouts} activeElsewhere={activeElsewhere}
-              loading={loading} error={error} onRefresh={() => void reload()} onOpen={open}
+              loading={loading} error={error} onRefresh={() => void reload()} onOpen={open} onDelete={askDelete}
               showHealthMetrics={appCapabilities.healthMetrics} onHealthMetrics={() => router.push('/user-metrics')} />
           </View>
         </BlurTargetView>
         <WorkoutOverlays active={overlay} onClose={() => setOverlay(null)} blurTarget={blurTarget} />
         <WorkoutCalendar visible={calendarVisible} date={date} onSelect={(next) => { setDate(next); setCalendarVisible(false); }} onClose={() => setCalendarVisible(false)} />
+        <ConfirmDialog visible={deleteVisible} title={deleteCopy?.title ?? ''} message={deleteCopy?.message ?? ''}
+          emphasis={deleteCopy?.emphasis} confirmLabel={deleteCopy?.confirmLabel ?? 'Delete'} busy={list.deleting} error={list.deleteError}
+          onConfirm={() => void confirmDelete()} onCancel={() => setDeleteVisible(false)} />
         <ActiveWorkoutDialog visible={conflictId !== null} onClose={() => setConflictId(null)} onOpen={() => {
           if (conflictId === null) return;
           setSelectedWorkoutId(conflictId); open(conflictId); setConflictId(null);

@@ -16,7 +16,8 @@ export function IconButton({ icon, label, onPress, disabled = false, variant = '
       className="active:opacity-60"
       style={{ width: sizes.touchTarget, height: sizes.touchTarget, flexShrink: 0,
         borderRadius: variant === 'secondary' ? radius.control : radius.icon,
-        backgroundColor: variant === 'secondary' ? rawColors.surfaceSecondary : undefined,
+        backgroundColor: variant === 'secondary' ? rawColors.control : undefined,
+        borderWidth: variant === 'secondary' ? 1 : 0, borderColor: rawColors.controlBorder,
         alignItems: 'center', justifyContent: 'center',
         opacity: disabled ? opacity.disabled : 1 }}>
       <MaterialCommunityIcons name={icon} size={sizes.icon}

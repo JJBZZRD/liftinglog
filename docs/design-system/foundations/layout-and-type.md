@@ -90,22 +90,12 @@ actual text and button bounds on a physical device as well as the emulator.
 ## Alignment is visual as well as geometric
 
 Align visible glyphs and borders, not only touch rectangles. The Workouts date
-navigator reserves its date and return-to-today slots so actions do not shift
-when the date changes. Its small, documented optical offset includes half the
-outer row gap to center the return label between the arrow button and Calendar
-button edges. Preserve that correction when refactoring; do not turn this
-feature-specific offset into a general token.
-
-The date controls use a full single row when space allows. On narrower phones,
-use a compact single row with `Today`, a 15 dp date label, and the Calendar label;
-the return action's accessibility label remains `Back to today`. Keep both arrows
-at 44 dp and reserve the return slot on today too. If even the compact row cannot
-fit the measured width and font scale, put the complete arrow/date group on a
-centered first row, with Today and Calendar on a second row. Budget both actions
-explicitly rather than restricting Calendar to half the row, which can split its
-label at larger font scales. Choose that
-layout independently of the selected date. Constrain the date slot so large text
-can wrap without disappearing or forcing controls outside the page.
+navigator keeps the same three controls for every date: 44 dp previous and next
+arrows around a flexible date button that opens the calendar. Nothing appears or
+disappears as the date changes (Today lives in the calendar sheet), so the arrows
+never move. The date button's label and relative caption ("Yesterday",
+"3 days ago") wrap onto a second line at narrow widths or large font scales
+instead of truncating; the button grows with them.
 
 Optional content must not decide where a row's primary values or actions sit.
 Reserve an accessory column for conditional PB badges or trailing controls, and

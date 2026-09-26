@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 3 are done; Phase 4 is next.** This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 4 are done; Phase 5 is next.** This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -147,7 +147,7 @@ Add these to `components/design-system/`, all on existing dependencies (NativeWi
 
 Also add a dev-only `/dev/design-catalog` route that renders every primitive in both modes. It is gated on `__DEV__` rather than a `full`-only capability, because dev builds now default to `mvp` and the catalog should show in them; release bundles never include it. Open it with `liftinglog://dev/design-catalog`.
 
-### Phase 4: Workouts
+### Phase 4: Workouts (done)
 
 1. Date navigator: the date button opens the calendar, and the calendar sheet gets a Today action.
 2. Metric strip cards and the live status pill.
@@ -161,6 +161,13 @@ Also add a dev-only `/dev/design-catalog` route that renders every primitive in 
    - Route the existing `deleteWorkout` (`lib/db/workouts.ts`) through it. It currently skips the program-link cleanup that the database ground-truth doc requires.
    - Add DB tests covering: sets present, no sets, active workout, completed workout, and a workout with program links.
 4. Hold-to-delete on list cards, and the Delete workout button on the detail page, both opening `ConfirmDialog`.
+
+Notes from the build:
+
+- The calendar sheet already had a Today action; it now uses `Button`.
+- `IconButton variant="secondary"` now uses the `control` fill with a `controlBorder` border, like the date button beside it.
+- `typography.cardTitle` is now the 20/25 sp card title from the mockups.
+- Complete Workout stays in the page flow rather than a sticky footer, with Delete workout after it.
 
 #### Phase 4 file map (checked 2026-09-26)
 
