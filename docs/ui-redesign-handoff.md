@@ -7,8 +7,9 @@ Written 2026-09-26 for the agent taking over the LiftingLog UI redesign on branc
 
 Phases 1 to 7 of [ui-redesign-plan.md](ui-redesign-plan.md) are done, committed and
 pushed. Phase 7 redesigned Settings and made Ink the only palette app-wide. The next
-design round is the exercise page redesign (with rest-timer defaults); agree it with
-the owner, with mockups, before building. The Phase 7 file map below is kept for
+design round covers every MVP screen and modal not yet redesigned, starting with the
+exercise page and rest-timer defaults. **Start it from [ui-design-round-2.md](ui-design-round-2.md)**,
+which has the inventory, the process and a handoff prompt. The Phase 7 file map below is kept for
 reference but is now historical.
 
 | Commit | What |

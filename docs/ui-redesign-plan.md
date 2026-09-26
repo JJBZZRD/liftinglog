@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 7 are done.** The next design round is the exercise page (see Deferred). A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 7 are done.** The next design round is scoped in [ui-design-round-2.md](ui-design-round-2.md). A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -278,5 +278,5 @@ Intended deviations from the mockups (Settings):
 ## Deferred
 
 - **Rest-timer defaults in Settings (MVP).** Wanted for MVP. Design and build them with the exercise page redesign, which will also cover the timer selector, so both use one control.
-- **Exercise page redesign.** This is the next design round after this plan.
+- **Exercise page redesign.** This is the next design round after this plan. [ui-design-round-2.md](ui-design-round-2.md) scopes it to every MVP screen and modal not yet redesigned (the exercise page and its modals, Set Info, edit workout, the calculators and Quick stats, the library dialogs, and the remaining legacy dialogs and system screens).
 - **Accessibility audit and component catalog screenshots.** Run these as a separate pass once Phases 2 and 3 land.
