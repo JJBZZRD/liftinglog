@@ -162,6 +162,46 @@ Also add a dev-only `/dev/design-catalog` route that renders every primitive in 
    - Add DB tests covering: sets present, no sets, active workout, completed workout, and a workout with program links.
 4. Hold-to-delete on list cards, and the Delete workout button on the detail page, both opening `ConfirmDialog`.
 
+#### Phase 4 file map (checked 2026-09-26)
+
+**Delete, data layer:**
+- **Model to follow:** `deleteWorkoutExercise` (`lib/db/workouts.ts:201`). Its order is:
+  1. collect the linked set IDs;
+  2. collect the affected program IDs with `getProgramIdsForWorkoutSetIds` and `getProgramIdsForWorkoutExerciseIds`;
+  3. run `clearLinkedProgramSetsByWorkoutSetIds` and `clearLinkedProgramExercisesByWorkoutExerciseIds` (`lib/db/programCalendar.ts:998` and `:1037`);
+  4. delete;
+  5. call `rebuildPBEventsForExercise` (`lib/db/pbEvents.ts:60`) for each exercise;
+  6. call `refreshUpcomingCalendarForPrograms` (imported in `workouts.ts:18` from `lib/programs/psl/programRuntime`).
+- **The gap:** `deleteWorkout` (`workouts.ts:184`) only does the PB rebuild and relies on FK cascades.
+- **Where the new function goes:** put `deleteWorkoutSession(id)` in `lib/db/workoutSessions.ts`, beside `moveWorkoutExerciseToWorkout` (`:223`), and make `deleteWorkout` delegate to it.
+- **Existing tests to extend:** `__tests__/db/workoutSessions.test.ts`, `programCalendarSessionCompletion.test.ts` and `pbDerivation.test.ts`.
+
+**Delete, UI:**
+- Add `remove()` to `features/workouts/hooks/use-workout-detail.ts`, through its busy-guarded `run()`, and a delete to `use-workout-list.ts`.
+- Clear `lib/workouts/selection-store` when it points at the deleted workout.
+- After deleting from the detail page, navigate back.
+
+**Cards:**
+- `features/workouts/components/workout-session-row.tsx` becomes the metric-strip card: `StatusPill`, `MetricStrip` and `usePressAndHold` with `HoldProgress`.
+- `WorkoutStatus` in `components/workouts/workout-ui.tsx` is replaced by `StatusPill`.
+
+**Date navigator:**
+- Remove the Today button from `features/workouts/components/workout-date-selector.tsx`.
+- The date becomes the calendar button, with a relative caption.
+- Give the calendar sheet, `components/workouts/workout-calendar.tsx`, a Today action.
+- The home screen is `features/workouts/screens/workouts-home-screen.tsx`.
+
+**Detail page** (`features/workouts/screens/workout-detail-screen.tsx`):
+- Add exercise becomes a `Button variant="secondary"`.
+- Complete/Resume becomes a `Button size="large"`.
+- Add `Button variant="destructive-outline"` "Delete workout" last.
+- Confirm with `ConfirmDialog`. Use "Discard workout?" when the workout is in progress and has no sets.
+
+**Tests that mock these screens:**
+- `__tests__/app/workouts-home-scroll.test.tsx` mocks `WorkoutSessionRow` and the date selector.
+- `__tests__/support/workout-native-mocks.ts` is shared by `history-status`, `calculators-ui` and `capability-entry-points`.
+- `__tests__/routing/workout-exercise-navigation.test.tsx` renders the detail screen.
+
 ### Phase 5: navigation
 
 1. Build a custom docked `tabBar` for the Expo Router `Tabs`, with the live strip on Programs and Settings and the "Soon" badge in `mvp`.
