@@ -320,13 +320,36 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
 .m-video .dur { position: absolute; right: 10px; bottom: 10px; font-size: 12px; font-weight: 600; color: #fff; background: rgba(0,0,0,.5); border-radius: 6px; padding: 2px 6px; }
 .m-err { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--destructive); background: color-mix(in srgb, var(--destructive) 8%, transparent); border-radius: 12px; padding: 10px 12px; }
 .m-err svg { width: 18px; height: 18px; }
+
+/* ---------- feedback panels ---------- */
+.fb { background: var(--panel); border: 1px solid var(--rule); border-radius: 18px; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.fb h3 { font-size: 16px; }
+.fb-q { display: flex; flex-direction: column; gap: 8px; }
+.fb-q > span { font-size: 14px; font-weight: 600; color: var(--ink); }
+.fb-q > small { font-size: 13px; color: var(--ink-3); margin-top: -4px; }
+.picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.picks button { font: inherit; font-size: 14px; font-weight: 600; border: 1px solid var(--rule); background: var(--page); color: var(--ink-2); padding: 8px 14px; border-radius: 10px; cursor: pointer; text-align: left; }
+.picks button:hover { border-color: var(--ink-3); }
+.picks button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); }
+.picks button:focus-visible, .fb textarea:focus-visible, .fb-actions button:focus-visible, .fb input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.picks .rec { font-weight: 500; opacity: .75; margin-left: 4px; }
+.fb label { font-size: 14px; font-weight: 600; color: var(--ink); display: flex; flex-direction: column; gap: 8px; }
+.fb textarea { font: inherit; font-size: 14.5px; font-weight: 400; color: var(--ink); background: var(--page); border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; min-height: 76px; resize: vertical; width: 100%; line-height: 1.45; }
+.fb .check { flex-direction: row; align-items: center; gap: 10px; font-weight: 600; }
+.fb .check input { width: 18px; height: 18px; accent-color: var(--chip-on); }
+.fb-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.fb-actions button { font: inherit; font-size: 14px; font-weight: 600; border: 1px solid var(--rule); background: var(--page); color: var(--ink); padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+.fb-note { font-size: 13px; color: var(--ink-3); }
+.fb-status { font-size: 13px; color: var(--ink-3); }
+.fb-status.ok { color: var(--ink-2); }
+.fb-copy { width: 100%; min-height: 120px; }
 </style>
 
 <div class="wrap">
   <header class="intro">
     <span class="eyebrow">LiftingLog · UI redesign · round 2 · page A</span>
     <h1>The exercise page</h1>
-    <p>This is the first of two mockup pages for round 2. It covers the exercise page (Record, History and Analytics), the rest timer and its new Settings defaults, and the two pages the exercise page opens: Set Info and Edit entry. Where a section has a real choice, the options are labelled A, B or C, and one is marked Recommended. Dialogs that only need converting to the existing design system are shown once, converted. Every screen is drawn at real Android dp and then scaled down. Example data is a Bench Press on the Push Day workout, as in round 1.</p>
+    <p>This is the first of two mockup pages for round 2. It covers the exercise page (Record, History and Analytics), the rest timer and its new Settings defaults, and the two pages the exercise page opens: Set Info and Edit entry. Where a section has a real choice, the options are labelled A, B or C, and one is marked Recommended. Dialogs that only need converting to the existing design system are shown once, converted. Every screen is drawn at real Android dp and then scaled down. Example data is a Bench Press on the Push Day workout, as in round 1. Under each section, pick the options you want and add any comments. Your answers save as you go, and Claude can read them, so you only need to say "done" in the chat.</p>
     <div class="why">
       <div><b>Page A: the exercise page (this page)</b>Sections 1 to 8: the page shell, Record and its dialogs, the rest timer (including the Settings defaults), History, Analytics, Set Info and Edit entry. These hold the biggest structural decisions.</div>
       <div><b>Page B: tools, library dialogs and the rest</b>Next, once page A is approved: the Calculators and Quick stats panels and the five calculators, the Exercises library dialogs, the three remaining legacy workout dialogs, Programs "Coming Soon", the restore screens, which native alerts become in-app dialogs, and the icons that replace Material Community Icons.</div>
@@ -340,6 +363,7 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
         <button type="button" id="mode-light" data-mode="light" aria-pressed="true">Light</button>
         <button type="button" id="mode-dark" data-mode="dark" aria-pressed="false">Dark</button>
       </div></div>
+    <span class="fb-status" id="fb-status" role="status" aria-live="polite">Your answers save automatically.</span>
     <div class="jump"><a href="#shell">1 Shell</a><a href="#record">2 Record</a><a href="#dialogs">3 Dialogs</a><a href="#timer">4 Rest timer</a><a href="#history">5 History</a><a href="#analytics">6 Analytics</a><a href="#setinfo">7 Set Info</a><a href="#edit">8 Edit entry</a><a href="#decide">Decisions</a></div>
   </nav>
 
@@ -347,6 +371,7 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
     <div class="sec-head"><span class="eyebrow">1 · Page shell</span><h2>Header and the Record, History and Analytics switch</h2>
       <p>Today the page has a native header and a swipeable tab bar. Back from History or Analytics first jumps to Record, and only then leaves the page. Both options below make Back always leave, which matches every other page. The pin button stays at the top right.</p></div>
     <div class="gallery" id="shell-grid"></div>
+    <div class="fb" data-sec="shell"></div>
   </section>
 
   <section class="section" id="record">
@@ -354,12 +379,14 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
       <p>The workout chooser becomes a single row showing whether that workout is in progress. The set form gets steppers (2.5 kg and 1 rep) around large values, and the rest timer moves into the same row as Add set. Recorded sets use workout detail's set rows, with BEST and PB badges. Tap a row to open Set Info, or the pencil to edit it. Delete moves into the Edit set sheet, so each row has one action instead of two.</p></div>
     <div class="gallery" id="record-grid"></div>
     <div class="gallery" id="record-states"></div>
+    <div class="fb" data-sec="record"></div>
   </section>
 
   <section class="section" id="dialogs">
     <div class="sec-head"><span class="eyebrow">3 · Record dialogs</span><h2>Choose workout, edit, delete and clear</h2>
       <p>These are conversions to the shared sheet and confirmation dialog. There is one behaviour change. Today, tapping a workout in the chooser moves the entry and its sets at once. The sheet now waits for "Use Push Day", like the 1RM formula sheet. The time field in Edit set keeps the Android system time picker.</p></div>
     <div class="gallery" id="dialog-grid"></div>
+    <div class="fb" data-sec="dialogs"></div>
   </section>
 
   <section class="section" id="timer">
@@ -367,12 +394,14 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
       <p>Each exercise remembers its own rest time, and exercises without one use 1:30. The same duration control sets an exercise's rest time in the Rest timer sheet (long-press the timer button, or tap it while it runs) and the default in Settings. While the timer runs, the button turns green, because green means "happening now".</p></div>
     <div class="compare" id="timer-states"></div>
     <div class="gallery" id="timer-grid"></div>
+    <div class="fb" data-sec="timer"></div>
   </section>
 
   <section class="section" id="history">
     <div class="sec-head"><span class="eyebrow">5 · History</span><h2>Past sessions of this exercise</h2>
       <p>Each session gets the Workouts metric-strip treatment. Its three round icon buttons (view, edit, delete) go into a ⋯ menu. The filters move out of the collapsible panel: search stays on the page, and everything else goes in a sheet behind the filter button, whose badge counts the active filters.</p></div>
     <div class="gallery" id="history-grid"></div>
+    <div class="fb" data-sec="history"></div>
   </section>
 
   <section class="section" id="analytics">
@@ -380,18 +409,21 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
       <p>The chart is drawn in Ink: a 2 dp ink line and dots, gold rings for PBs, and a dashed grey trend. Tapping or releasing a scrub on a point opens the session details as a bottom sheet in portrait. In landscape fullscreen, they open as a side panel so the chart stays visible.</p></div>
     <div class="gallery" id="analytics-grid"></div>
     <div class="gallery" id="analytics-more"></div>
+    <div class="fb" data-sec="analytics"></div>
   </section>
 
   <section class="section" id="setinfo">
     <div class="sec-head"><span class="eyebrow">7 · Set Info</span><h2>One set: its note and video</h2>
       <p>Set Info opens from set rows on workout detail, Record, History and the session sheet. In the MVP build it is fully reachable, including linking a video from the gallery. Its "Video options" native alert becomes a sheet.</p></div>
     <div class="gallery" id="setinfo-grid"></div>
+    <div class="fb" data-sec="setinfo"></div>
   </section>
 
   <section class="section" id="edit">
     <div class="sec-head"><span class="eyebrow">8 · Edit entry</span><h2>Editing a past entry</h2>
       <p>This opens from History and the session sheet. The date, set changes and new sets are drafts, saved together by Save changes. Notes save straight away from their own sheet, as they do today. The page fixes two gaps. Leaving with unsaved set changes now asks before discarding them, where today only note drafts are guarded. A failed save now shows a message, where today it fails silently.</p></div>
     <div class="gallery" id="edit-grid"></div>
+    <div class="fb" data-sec="edit"></div>
   </section>
 
   <section class="decide" id="decide" style="scroll-margin-top:80px">
@@ -407,6 +439,13 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
       <li><b>Set Info (7):</b> A, a full page, or B, a sheet.</li>
       <li><b>Edit entry (8):</b> the notes move into their own sheets, "Add set" becomes a button that opens the set sheet, and the unsaved-changes guard now covers sets. OK?</li>
     </ol>
+    <div class="fb" style="padding:0;border:0">
+      <label for="fb-general">Anything else about page A
+        <textarea id="fb-general" placeholder="General comments, or anything not covered above"></textarea></label>
+      <label class="check" for="fb-approve"><input type="checkbox" id="fb-approve">Approve page A for full implementation</label>
+      <div class="fb-actions"><button type="button" id="fb-copy">Copy my answers as text</button><span class="fb-note">Only needed if saving isn’t working: paste the text into the chat.</span></div>
+      <textarea id="fb-copy-out" class="fb-copy" readonly hidden aria-label="Your answers as text"></textarea>
+    </div>
   </section>
 </div>
 
@@ -937,5 +976,142 @@ code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-si
   }
   document.querySelectorAll('[data-mode]').forEach(function (b) { b.addEventListener('click', function () { state.mode = b.dataset.mode; render(); }); });
   render();
+})();
+</script>
+
+<script>
+(function () {
+  var Q = [
+    { id: 'shell', sec: 'shell', q: 'Page shell', opts: ['A · Large title and segmented control', 'B · Compact header and underline tabs'], rec: 0 },
+    { id: 'pins', sec: 'shell', q: 'Pins', hint: 'Pinning has no visible effect in the MVP today.', opts: ['Remove the pin button', 'Add a Pinned group to the Exercises library'] },
+    { id: 'record', sec: 'record', q: 'Record layout', opts: ['A · Form first', 'B · Sets first, docked entry'], rec: 0 },
+    { id: 'steppers', sec: 'record', q: '± steppers on weight and reps', opts: ['Keep them', 'Plain fields, as today'] },
+    { id: 'chooser', sec: 'dialogs', q: 'Choose workout', hint: 'Today, tapping a workout moves the entry at once.', opts: ['Wait for “Use …” (as mocked)', 'Keep moving it on tap'], rec: 0 },
+    { id: 'duration', sec: 'timer', q: 'Duration control', opts: ['A · Stepper and presets', 'B · Minute and second wheels'], rec: 0 },
+    { id: 'autostart', sec: 'timer', q: '“Start after each set” in Settings', hint: 'New behaviour, off by default.', opts: ['Include it', 'Leave it out'] },
+    { id: 'history', sec: 'history', q: 'History sessions', opts: ['A · Session cards', 'B · Compact rows'], rec: 0 },
+    { id: 'analytics', sec: 'analytics', q: 'Analytics layout', opts: ['A · Chart first', 'B · Controls list'], rec: 0 },
+    { id: 'setinfo', sec: 'setinfo', q: 'Set Info', opts: ['A · Full page', 'B · Sheet'], rec: 0 },
+    { id: 'edit', sec: 'edit', q: 'Edit entry as mocked', opts: ['Approve', 'Needs changes (see comment)'] }
+  ];
+  var SECS = { shell: '1 · Page shell', record: '2 · Record', dialogs: '3 · Record dialogs', timer: '4 · Rest timer', history: '5 · History', analytics: '6 · Analytics', setinfo: '7 · Set Info', edit: '8 · Edit entry' };
+  var KEY = 'll-r2a-feedback';
+  var DOC = 'feedback/page-a';
+  var fb = { choices: {}, comments: {}, general: '', approved: false };
+  var db = null, dbState = 'pending', dirty = false, saving = false, again = false, timer = null;
+
+  function merge(d) {
+    if (!d || typeof d !== 'object') return;
+    if (d.choices && typeof d.choices === 'object') fb.choices = Object.assign({}, d.choices);
+    if (d.comments && typeof d.comments === 'object') fb.comments = Object.assign({}, d.comments);
+    if (typeof d.general === 'string') fb.general = d.general;
+    fb.approved = !!d.approved;
+  }
+  try { merge(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch (e) {}
+
+  var statusEl = document.getElementById('fb-status');
+  function status(text, ok) { statusEl.textContent = text; statusEl.className = 'fb-status' + (ok ? ' ok' : ''); }
+
+  function build() {
+    document.querySelectorAll('.fb[data-sec]').forEach(function (box) {
+      var sec = box.getAttribute('data-sec');
+      var h = document.createElement('h3'); h.textContent = 'Your choices · ' + SECS[sec]; box.appendChild(h);
+      Q.filter(function (q) { return q.sec === sec; }).forEach(function (q) {
+        var wrap = document.createElement('div'); wrap.className = 'fb-q';
+        var t = document.createElement('span'); t.id = 'q-' + q.id; t.textContent = q.q; wrap.appendChild(t);
+        if (q.hint) { var sm = document.createElement('small'); sm.textContent = q.hint; wrap.appendChild(sm); }
+        var picks = document.createElement('div'); picks.className = 'picks'; picks.setAttribute('role', 'group'); picks.setAttribute('aria-labelledby', 'q-' + q.id);
+        q.opts.forEach(function (o, i) {
+          var b = document.createElement('button'); b.type = 'button'; b.id = 'pick-' + q.id + '-' + i;
+          b.setAttribute('data-q', q.id); b.setAttribute('data-v', o); b.textContent = o;
+          if (q.rec === i) { var r = document.createElement('span'); r.className = 'rec'; r.textContent = '(recommended)'; b.appendChild(r); }
+          b.addEventListener('click', function () {
+            if (fb.choices[q.id] === o) delete fb.choices[q.id]; else fb.choices[q.id] = o;
+            paint(); changed();
+          });
+          picks.appendChild(b);
+        });
+        wrap.appendChild(picks); box.appendChild(wrap);
+      });
+      var lab = document.createElement('label'); lab.setAttribute('for', 'c-' + sec); lab.textContent = 'Comments on this section';
+      var ta = document.createElement('textarea'); ta.id = 'c-' + sec; ta.placeholder = 'Changes you want, questions, or anything you like or dislike';
+      ta.addEventListener('input', function () { if (ta.value) fb.comments[sec] = ta.value; else delete fb.comments[sec]; changed(); });
+      lab.appendChild(ta); box.appendChild(lab);
+    });
+    var g = document.getElementById('fb-general');
+    g.addEventListener('input', function () { fb.general = g.value; changed(); });
+    var a = document.getElementById('fb-approve');
+    a.addEventListener('change', function () { fb.approved = a.checked; changed(); });
+    document.getElementById('fb-copy').addEventListener('click', copyText);
+  }
+  function paint() {
+    document.querySelectorAll('.picks button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(fb.choices[b.getAttribute('data-q')] === b.getAttribute('data-v')));
+    });
+  }
+  function fill() {
+    paint();
+    Object.keys(SECS).forEach(function (sec) { var ta = document.getElementById('c-' + sec); if (ta) ta.value = fb.comments[sec] || ''; });
+    document.getElementById('fb-general').value = fb.general || '';
+    document.getElementById('fb-approve').checked = !!fb.approved;
+  }
+
+  function changed() {
+    dirty = true;
+    try { localStorage.setItem(KEY, JSON.stringify(fb)); } catch (e) {}
+    clearTimeout(timer);
+    if (db) { status('Saving…'); timer = setTimeout(flush, 800); }
+    else if (dbState === 'none') status('Saved in this browser only. Use “Copy my answers as text” at the end.');
+    else status('Saved in this browser. Connecting…');
+  }
+  function flush() {
+    if (!db) return;
+    if (saving) { again = true; return; }
+    saving = true;
+    var body = JSON.parse(JSON.stringify(fb)); body.updatedAt = new Date().toISOString();
+    db.doc(DOC).set(body).then(function () {
+      status('Saved. Claude can read your answers.', true);
+    }, function (e) {
+      var code = e && e.code;
+      if (code === 'unavailable') { again = true; status('Saving… (retrying)'); }
+      else status('Couldn’t save (' + (code || 'error') + '). Your answers are kept in this browser; use “Copy my answers as text”.');
+    }).then(function () {
+      saving = false;
+      if (again) { again = false; setTimeout(flush, 600 + Math.random() * 600); }
+    });
+  }
+
+  function summary() {
+    var lines = ['LiftingLog round 2 · page A answers', ''];
+    Object.keys(SECS).forEach(function (sec) {
+      lines.push(SECS[sec]);
+      Q.filter(function (q) { return q.sec === sec; }).forEach(function (q) { lines.push('- ' + q.q + ': ' + (fb.choices[q.id] || 'no choice')); });
+      if (fb.comments[sec]) lines.push('- Comments: ' + fb.comments[sec]);
+      lines.push('');
+    });
+    if (fb.general) lines.push('Anything else: ' + fb.general);
+    lines.push('Approve page A for full implementation: ' + (fb.approved ? 'yes' : 'not yet'));
+    return lines.join('\n');
+  }
+  function copyText() {
+    var text = summary(), out = document.getElementById('fb-copy-out');
+    function show() { out.hidden = false; out.value = text; out.focus(); out.select(); }
+    try {
+      navigator.clipboard.writeText(text).then(function () { status('Copied. Paste it into the chat.', true); }, function () { show(); status('Select the text below and copy it.'); });
+    } catch (e) { show(); status('Select the text below and copy it.'); }
+  }
+
+  build(); fill();
+  var use = window.claude && window.claude.use;
+  if (!use) { dbState = 'none'; status('Saving to Claude isn’t available here. Answers stay in this browser; use “Copy my answers as text”.'); return; }
+  Promise.resolve(window.claude.use('db')).then(function (d) {
+    if (!d) { dbState = 'none'; status('Saving to Claude isn’t available here. Answers stay in this browser; use “Copy my answers as text”.'); return; }
+    return d.doc(DOC).get().then(function (snap) {
+      db = d; dbState = 'ready';
+      if (dirty) { flush(); return; }
+      if (snap.exists) { merge(snap.data()); fill(); status('Loaded your saved answers.', true); }
+      else status('Your answers save automatically.', true);
+    }, function () { db = d; dbState = 'ready'; status('Couldn’t load saved answers yet. New answers will still save.'); });
+  }, function () { dbState = 'none'; status('Saving to Claude isn’t available here. Answers stay in this browser.'); });
 })();
 </script>
