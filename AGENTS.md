@@ -38,11 +38,8 @@ It defines the LiftingLog slate design system and its current migration scope.
 
 UI consistency rule (modals and action buttons):
 
-- For modal action rows, reuse the same class-based button styling pattern used in `components/AddExerciseModal.tsx`.
-- Use `Pressable` className-based styles (not ad-hoc inline color/spacing tweaks) so light/dark theme tokens apply consistently.
-- Preferred button classes:
-  - Secondary: `flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary`
-  - Primary: `flex-1 items-center justify-center p-3.5 rounded-lg bg-primary`
-- Preferred button text classes:
-  - Secondary text: `text-base font-semibold text-foreground-secondary`
-  - Primary text: `text-base font-semibold text-primary-foreground`
+- Build buttons from `Button` in `components/design-system/button.tsx` (`primary`, `secondary`, `destructive`, `destructive-outline`). Do not hand-style new button `Pressable`s.
+- For modal action rows, place a `secondary` `Button` and a `primary` (or `destructive`) `Button` in a row, each with `style={{ flex: 1 }}`.
+- For "are you sure?" confirmations, use `ConfirmDialog` from `components/design-system/confirm-dialog.tsx`.
+- Older dialogs still use the class pattern (`bg-surface-secondary` / `bg-primary` Pressables). Migrate them to `Button` when you touch them; do not copy that pattern into new code.
+- Add each new shared primitive to the dev design catalog (`features/dev/design-catalog-screen.tsx`).

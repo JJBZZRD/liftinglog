@@ -27,13 +27,15 @@ Update this table when a screen is migrated.
 | --- | --- |
 | Slate colors and provider | Shared source; previous Workouts exports remain compatibility aliases |
 | Icon actions and metric summaries | Shared primitives used by the current Workouts UI |
+| Button, StatusPill, MetricStrip, grouped list, SegmentedControl, ConfirmDialog, press-and-hold | Shared primitives (Phase 3), shown in the dev design catalog. Screens adopt them in Phases 4 to 7 |
 | Frosted dialog shell | Shared, token-driven, opt-in through page scope |
 | Workout set rows | Reuse the exercise-history `SetItem` with a slate variant and reserved accessory space |
 | Exercise library search and active-workout shortcut | Shared slate theme, inline Add action, frosted return shortcut above the tab bar |
 | Workouts, detail, exercise recording, calculators | Reference direction; some local spacing and typography still await token adoption |
 | Brand header, date navigator, workout/PB rows | Existing shared/domain components; retain their behavior and optical adjustments |
 | Legacy screens and selectable color themes | Still supported during phased migration; do not extend these palettes for new features. The seven legacy palettes get the new roles through `withDerivedRoles` and are retired in Phase 7 |
-| Component catalog and accessibility audit | Follow-up work; not yet complete. Palette contrast is covered by `__tests__/design-system/contrast.test.ts` |
+| Component catalog | Dev-only route `liftinglog://dev/design-catalog`; add each new primitive to it |
+| Accessibility audit | Follow-up work; not yet complete. Palette contrast is covered by `__tests__/design-system/contrast.test.ts` |
 
 Adopt this system when adding or redesigning a feature. Migrate the surrounding
 screen deliberately instead of mixing two palettes on the same surface. Do not

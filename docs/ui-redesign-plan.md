@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 and 2 are done; Phase 3 is next.** This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 3 are done; Phase 4 is next.** This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -133,7 +133,7 @@ changes.
 3. **Restructure the docs.** Split `design-system.md` into a `docs/design-system/` folder: `README`, `foundations/`, `components/`, `patterns/`, and a migration tracker. Keep `AGENTS.md` as the entry point, and add a one-line `CLAUDE.md` that imports it.
 4. **Lint rule.** Reject hex colour literals in `features/**` and `components/design-system/**`.
 
-### Phase 3: shared primitives
+### Phase 3: shared primitives (done)
 
 Add these to `components/design-system/`, all on existing dependencies (NativeWind, Reanimated, Gesture Handler, expo-haptics, BaseModal):
 
@@ -145,7 +145,7 @@ Add these to `components/design-system/`, all on existing dependencies (NativeWi
 - `ConfirmDialog`, built on `BaseModal`
 - `usePressAndHold`: long-press progress, scale and haptic
 
-Also add a dev-only `/dev/design-catalog` route, gated by a new capability that is enabled only in `full`. It renders every primitive in both modes.
+Also add a dev-only `/dev/design-catalog` route that renders every primitive in both modes. It is gated on `__DEV__` rather than a `full`-only capability, because dev builds now default to `mvp` and the catalog should show in them; release bundles never include it. Open it with `liftinglog://dev/design-catalog`.
 
 ### Phase 4: Workouts
 

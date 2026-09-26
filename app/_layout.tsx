@@ -80,6 +80,9 @@ function RootLayoutContent() {
           options={{ presentation: "card" }}
         />
         <Stack.Screen name="workout-session/[id]" options={{ headerShown: false, animation: "slide_from_right" }} />
+        <Stack.Protected guard={__DEV__}>
+          <Stack.Screen name="dev/design-catalog" options={{ headerShown: false }} />
+        </Stack.Protected>
         <Stack.Protected guard={isCapabilityEnabled("healthMetrics", appCapabilities)}>
           <Stack.Screen
             name="user-metrics"

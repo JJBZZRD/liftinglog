@@ -2,6 +2,27 @@
 
 Part of the [LiftingLog design system](../README.md).
 
+## Button
+
+[`Button`](../../../components/design-system/button.tsx) is the shared text button.
+
+| Variant | Look | Use |
+| --- | --- | --- |
+| `primary` | Ink fill (near-white in dark mode), `primaryForeground` label | The one main action on a screen or in a dialog |
+| `secondary` | `control` fill, 1 dp `controlBorder` border, `foregroundSecondary` label | Cancel, back-out and supporting actions |
+| `destructive` | `destructive` fill, `onDestructive` label | Confirming a deletion inside a dialog |
+| `destructive-outline` | 1 dp `destructive` border and label, no fill | A page-level entry to a destructive flow, such as **Delete workout** at the end of workout detail |
+
+- `size="large"` (48 dp, 16 dp corners, bold) is for a page's main call to action.
+  The default `medium` (44 dp, 12 dp corners) suits everything else.
+- Pass `style={{ flex: 1 }}` for equal-width buttons in a row.
+- `busy` swaps the icon for a spinner and blocks presses; `disabled` dims the button.
+  Both are exposed through `accessibilityState`.
+- The label wraps instead of truncating at large text sizes, and the button grows
+  with it (`minHeight`, not `height`).
+
+## Other controls
+
 - Use `IconButton` for a single icon action. It provides a 44 dp target, an
   accessibility label, disabled semantics, and press feedback. Use
   `variant="secondary"` for a visible slate button surface with the same 12 dp
@@ -23,5 +44,6 @@ Part of the [LiftingLog design system](../README.md).
 - Icon-only actions need labels; headings need heading semantics. Disabled and
   selected states must be exposed to assistive technology.
 
-For modal action rows (Cancel / Save), use the class-based pattern in
-[Dialogs and glass](dialogs-and-glass.md#modal-action-rows).
+For modal action rows (Cancel / Save), see
+[Dialogs and glass](dialogs-and-glass.md#modal-action-rows). For choosing between a
+few options, see [Segmented control](segmented-control.md).

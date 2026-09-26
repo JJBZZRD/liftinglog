@@ -34,7 +34,7 @@ export const space = {
 } as const;
 
 export const radius = {
-  badge: 6, button: 8, control: 12, icon: 14, action: 16, card: 18, dialog: 24,
+  badge: 6, button: 8, chip: 10, control: 12, icon: 14, action: 16, card: 18, dialog: 24, pill: 999,
 } as const;
 
 /** Existing text roles; omitted properties continue to inherit React Native defaults. */
@@ -47,11 +47,28 @@ export const typography = {
   caption: { fontSize: 12 },
   metricValue: { fontSize: 25, fontWeight: '600', fontVariant: ['tabular-nums'], letterSpacing: -0.7 },
   metricLabel: { fontSize: 11, letterSpacing: 0.6 },
+  /** Uppercase heading above a grouped list. */
+  groupLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+  rowTitle: { fontSize: 16, fontWeight: '600' },
+  rowSubtitle: { fontSize: 13 },
+  /** Value inside a metric-strip chip. */
+  chipValue: { fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  /** Status pills, segmented-control labels, and other small emphasised text. */
+  pill: { fontSize: 12, fontWeight: '600' },
 } satisfies Record<string, TextStyle>;
 
-export const motion = { layout: 180, listEnter: 240, dialogEnter: 260, stagger: 40 } as const;
+export const motion = {
+  layout: 180, listEnter: 240, dialogEnter: 260, stagger: 40,
+  /** Press-and-hold: delay before feedback starts (so scrolls don't flash it), then the fill duration. */
+  holdDelay: 120, hold: 500, holdRelease: 160,
+  /** One cycle of the live-dot pulse. */
+  livePulse: 2200,
+} as const;
 
-export const sizes = { touchTarget: 44, icon: 23, pageMaxWidth: 700, dialogMaxWidth: 420, scrollFade: 36 } as const;
+export const sizes = {
+  touchTarget: 44, icon: 23, pageMaxWidth: 700, dialogMaxWidth: 420, scrollFade: 36,
+  liveDot: 7, listLeading: 36, listRowMinHeight: 60, buttonLarge: 48, holdBar: 3,
+} as const;
 
 export const glass = { blurIntensity: 42, borderAlpha: 'B3', surfaceAlpha: 'EB' } as const;
 

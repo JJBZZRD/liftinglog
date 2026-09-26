@@ -21,7 +21,14 @@ colour, compact information hierarchy, and restrained translucency and motion.
 | Scroll-position-driven edge fades | [`useScrollEdgeFades`](../../lib/design-system/use-scroll-edge-fades.ts) |
 | Slate theme scope, shared by inline styles and NativeWind | [`DesignSystemProvider`](../../components/design-system/design-system-provider.tsx) |
 | Current scoped colors in a component | `useTheme().rawColors` from [`ThemeContext`](../../lib/theme/ThemeContext.tsx) |
+| Text buttons | [`Button`](../../components/design-system/button.tsx) |
 | Generic icon action | [`IconButton`](../../components/design-system/icon-button.tsx) |
+| In-progress and completed status | [`StatusPill`, `LiveDot`](../../components/design-system/status-pill.tsx) |
+| Card metric chips | [`MetricStrip`](../../components/design-system/metric-strip.tsx) |
+| Grouped lists | [`GroupedList`, `ListRow`, `GroupLabel`](../../components/design-system/grouped-list.tsx) |
+| Inline option picker | [`SegmentedControl`](../../components/design-system/segmented-control.tsx) |
+| Confirmation dialog | [`ConfirmDialog`](../../components/design-system/confirm-dialog.tsx) |
+| Hold-to-act on a card | [`usePressAndHold`, `HoldProgress`](../../components/design-system/press-and-hold.tsx) |
 | Numeric summary | [`Metric`](../../components/design-system/metric.tsx) |
 | Logged set presentation | [`SetItem`](../../components/lists/SetItem.tsx); `workout` variant for redesigned workout detail |
 | Dialog presentation | [`BaseModal`](../../components/modals/BaseModal.tsx), [`FrostedModal`](../../components/modals/frosted-modal.tsx) |
@@ -35,8 +42,12 @@ a shared rule. Do not copy a palette or modal shell into another feature.
 
 The installed NativeWind, Expo Blur, Reanimated, Expo Image, safe-area, icon, and
 calendar libraries already support this system. Reuse them before introducing
-another UI framework. There is no separate Figma library or interactive component
-catalog maintained by this repository yet.
+another UI framework. There is no separate Figma library. The dev-only
+[design catalog](../../features/dev/design-catalog-screen.tsx) renders every
+shared primitive in light and dark mode. In a dev build, open
+`liftinglog://dev/design-catalog`, for example with
+`adb shell am start -a android.intent.action.VIEW -d "liftinglog://dev/design-catalog"`.
+Add each new primitive to it.
 
 ## Using the system in a new feature
 
@@ -96,9 +107,13 @@ Foundations
 
 Components
 
-- [Buttons and interaction](components/buttons-and-interaction.md): `IconButton`, `Metric`, actions, pressed/pending states, and accessibility
+- [Buttons and interaction](components/buttons-and-interaction.md): `Button`, `IconButton`, `Metric`, pressed/pending states, and accessibility
+- [Status pills and metric strips](components/status-and-metrics.md): `StatusPill`, `LiveDot`, `MetricStrip`
+- [Grouped lists](components/grouped-list.md): `GroupedList`, `ListRow`, `GroupLabel`
+- [Segmented control](components/segmented-control.md): `SegmentedControl`
+- [Press and hold](components/press-and-hold.md): `usePressAndHold`, `HoldProgress`
 - [Set rows](components/set-rows.md): `SetItem` and its `workout` variant
-- [Dialogs and glass](components/dialogs-and-glass.md): `BaseModal`, `FrostedModal`, blur targets, and modal action rows
+- [Dialogs and glass](components/dialogs-and-glass.md): `BaseModal`, `FrostedModal`, `ConfirmDialog`, blur targets, and modal action rows
 - [Scroll fades](components/scroll-fades.md): `ScrollFade` and `useScrollEdgeFades()`
 - [Active-workout shortcut](components/active-workout-shortcut.md): the Exercises return action
 
