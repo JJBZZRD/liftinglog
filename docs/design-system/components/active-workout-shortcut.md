@@ -2,8 +2,9 @@
 
 Part of the [LiftingLog design system](../README.md).
 
-The Exercises library keeps a floating return action above the tab bar while a
-workout is active. Use the shared slate surface, border, primary (ink) accent,
+The Exercises library keeps a floating return action just above the docked tab
+bar while a workout is active. (Phase 6 of the redesign replaces it with the
+"In this workout" group and return pill.) Use the shared slate surface, border, primary (ink) accent,
 action radius and glass tokens in both light and dark modes. The workout name and
 explicit active status sit on the left; the return label and arrow sit on the
 right. Long names may truncate because the full name is available at the

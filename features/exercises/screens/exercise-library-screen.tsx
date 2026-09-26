@@ -1,7 +1,6 @@
 import { Keyboard, ScrollView, View } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { BlurTargetView } from 'expo-blur';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AddExerciseModal from '@/components/AddExerciseModal';
 import { DesignSystemProvider } from '@/components/design-system/design-system-provider';
 import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
@@ -20,7 +19,6 @@ import { useLibraryQuery } from '../hooks/use-library-query';
 
 function ExerciseLibraryContent() {
   const { screenBackground } = useLibraryAppearance();
-  const insets = useSafeAreaInsets();
   const controller = useLibraryController();
   const query = useLibraryQuery(controller.items);
   const blurTarget = useRef<View>(null);
@@ -28,8 +26,8 @@ function ExerciseLibraryContent() {
   const { workout, openWorkout } = useActiveWorkoutShortcut();
   const [shortcutHeight, setShortcutHeight] = useState(72);
   const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
-  // Keep the shortcut above the existing 64 dp floating tab bar and safe area.
-  const shortcutBottom = space[24] + 64 + Math.max(insets.bottom, space[16]);
+  // The docked tab bar sits below this screen, so the shortcut only needs a gap above it.
+  const shortcutBottom = space[16];
   const listBottom = shortcutBottom + (workout ? shortcutHeight + space[16] : space[16]);
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));

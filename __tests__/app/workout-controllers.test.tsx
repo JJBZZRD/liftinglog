@@ -7,6 +7,7 @@ import { getSelectedWorkoutId, setSelectedWorkoutId } from '@/lib/workouts/selec
 import type { WorkoutDetail, WorkoutSummary } from '@/features/workouts/workout-types';
 import { getActiveWorkout } from '@/lib/db/workouts';
 import { useWorkoutDate } from '@/features/workouts/hooks/use-workout-date';
+import { useLiveWorkout } from '@/features/workouts/hooks/use-live-workout';
 
 let mockAppStateListener: (state: string) => void;
 jest.mock('react-native', () => ({ AppState: {
@@ -44,6 +45,8 @@ let tree: ReturnType<typeof renderer.create>;
 function DetailHarness({ id = 1 }: { id?: number }) { controller = useWorkoutDetail(id); return null; }
 function ListHarness({ day }: { day: number }) { listController = useWorkoutList(new Date(day)); return null; }
 function DateHarness() { dateController = useWorkoutDate(); return null; }
+let liveWorkout: WorkoutSummary | null;
+function LiveHarness({ enabled }: { enabled: boolean }) { liveWorkout = useLiveWorkout(enabled); return null; }
 
 describe('workout screen controllers', () => {
   beforeEach(() => {
@@ -191,6 +194,32 @@ describe('workout screen controllers', () => {
     expect(listController.workouts.map((workout) => workout.id)).toEqual([1]);
     await act(async () => { listController.clearDeleteError(); });
     expect(listController.deleteError).toBeNull();
+  });
+
+  it('reads the live workout only while enabled and drops it when completed or unreadable', async () => {
+    jest.mocked(getActiveWorkout).mockResolvedValue({ id: 7, uid: 'active', name: null, note: null, startedAt: 100, completedAt: null });
+    jest.mocked(getWorkoutSessionDetail).mockResolvedValue(detail(7));
+    await act(async () => { tree = renderer.create(<LiveHarness enabled={false} />); });
+    expect(liveWorkout).toBeNull();
+    expect(getActiveWorkout).not.toHaveBeenCalled();
+
+    await act(async () => { tree.update(<LiveHarness enabled />); });
+    expect(liveWorkout?.id).toBe(7);
+
+    // The app returning to the foreground re-reads: the workout was completed elsewhere.
+    jest.mocked(getActiveWorkout).mockResolvedValue(null);
+    await act(async () => { mockAppStateListener('active'); });
+    expect(liveWorkout).toBeNull();
+
+    jest.mocked(getActiveWorkout).mockRejectedValue(new Error('locked'));
+    await act(async () => { mockAppStateListener('active'); });
+    expect(liveWorkout).toBeNull();
+
+    jest.mocked(getActiveWorkout).mockResolvedValue({ id: 7, uid: 'active', name: null, note: null, startedAt: 100, completedAt: null });
+    await act(async () => { mockAppStateListener('active'); });
+    expect(liveWorkout?.id).toBe(7);
+    await act(async () => { tree.update(<LiveHarness enabled={false} />); });
+    expect(liveWorkout).toBeNull();
   });
 
   it('follows today over midnight but preserves a deliberately selected historical day', async () => {

@@ -9,8 +9,8 @@ space. Keep its refresh control, empty/error content, active-workout banner, and
 optional footer in the scrolling area. Changing the date resets the list position.
 
 Scroll fades belong to the list viewport. They are plain gradients, so they need
-no blur target. The full page remains the blur target for frosted dialogs. Keep
-the final list item reachable above the floating tab bar. A smaller screen must
+no blur target. The full page remains the blur target for frosted dialogs. The docked tab bar
+sits below the screen, so the list's own bottom padding is all it needs. A smaller screen must
 reduce the viewport height, not turn the fixed controls into scroll content.
 
 Related pages:

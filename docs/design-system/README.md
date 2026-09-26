@@ -115,6 +115,7 @@ Components
 - [Set rows](components/set-rows.md): `SetItem` and its `workout` variant
 - [Dialogs and glass](components/dialogs-and-glass.md): `BaseModal`, `FrostedModal`, `ConfirmDialog`, blur targets, and modal action rows
 - [Scroll fades](components/scroll-fades.md): `ScrollFade` and `useScrollEdgeFades()`
+- [Navigation bar and live strip](components/navigation.md): `DockedTabBar`, `LiveWorkoutStrip`
 - [Active-workout shortcut](components/active-workout-shortcut.md): the Exercises return action
 
 Patterns

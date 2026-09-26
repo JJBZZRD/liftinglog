@@ -94,9 +94,9 @@ it('floats outside scrolling, measures bottom clearance, and hides for keyboard/
   const targets = find('BlurTargetView');
   expect(shortcut.props.blurTarget).toBe(targets[1].props.ref);
   expect(targets[1].findAllByType(ActiveWorkoutShortcut)).toHaveLength(0);
-  expect(shortcut.parent?.parent?.props.style).toMatchObject({ position: 'absolute', bottom: 104 });
+  expect(shortcut.parent?.parent?.props.style).toMatchObject({ position: 'absolute', bottom: 16 });  // just above the docked tab bar
   await act(async () => { shortcut.props.onLayout({ nativeEvent: { layout: { height: 90 } } }); });
-  expect(scroll.props.contentContainerStyle.paddingBottom).toBe(104 + 90 + 16);
+  expect(scroll.props.contentContainerStyle.paddingBottom).toBe(16 + 90 + 16);
   find('LibraryHeader')[0].props.onAdd();
   expect(mockAdd).toHaveBeenCalledWith(true);
   await act(async () => { mockKeyboardListeners.get('keyboardDidShow')!(); });
@@ -107,5 +107,5 @@ it('floats outside scrolling, measures bottom clearance, and hides for keyboard/
   await act(async () => { tree.update(<ExerciseLibraryScreen />); });
   expect(tree.root.findAllByType(ActiveWorkoutShortcut)).toHaveLength(0);
   expect(find('ScrollView')[0]).toBe(scroll);
-  expect(scroll.props.contentContainerStyle.paddingBottom).toBe(120);
+  expect(scroll.props.contentContainerStyle.paddingBottom).toBe(16 + 16);
 });

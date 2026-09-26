@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 4 are done; Phase 5 is next.** This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 5 are done; Phase 6 is next.** This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -210,11 +210,18 @@ Notes from the build:
 - `__tests__/support/workout-native-mocks.ts` is shared by `history-status`, `calculators-ui` and `capability-entry-points`.
 - `__tests__/routing/workout-exercise-navigation.test.tsx` renders the detail screen.
 
-### Phase 5: navigation
+### Phase 5: navigation (done)
 
 1. Build a custom docked `tabBar` for the Expo Router `Tabs`, with the live strip on Programs and Settings and the "Soon" badge in `mvp`.
 2. Remove `PinnedExercisesOverlay` from the tab layout, keeping its source.
 3. Export the bar and strip heights from one shared hook. This replaces the hard-coded 64 dp / 24 dp offsets in the Workouts and Exercises screens.
+
+Notes from the build:
+
+- The bar sits below the screens in normal layout rather than floating, so the Workouts and Exercises screens simply dropped their 64/24 dp offsets. Heights live in tokens (`sizes.dockBar`, `dockPill`, `liveStrip`), and the bar reports its measured height to `useBottomTabBarHeight()` for any screen that needs it. See [navigation](design-system/components/navigation.md).
+- `PinnedExercisesOverlay` is no longer rendered by the tab layout; its source is kept.
+- The live strip reads through the new `useLiveWorkout(enabled)` hook.
+- `ThemeColorScope` and `DesignSystemProvider` accept a `style`, so a scope can size to its content (`{ flex: 0 }`).
 
 ### Phase 6: Exercises
 

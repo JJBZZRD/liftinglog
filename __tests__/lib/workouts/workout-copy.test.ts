@@ -1,4 +1,4 @@
-import { deleteWorkoutCopy, relativeDayLabel } from '@/features/workouts/workout-types';
+import { deleteWorkoutCopy, elapsedLabel, relativeDayLabel } from '@/features/workouts/workout-types';
 
 describe('relativeDayLabel', () => {
   const today = new Date(2026, 8, 26, 9, 30);
@@ -45,5 +45,18 @@ describe('deleteWorkoutCopy', () => {
     expect(deleteWorkoutCopy({ ...workout, name: '', setCount: 0, exerciseCount: 0 })).toMatchObject({
       title: 'Delete Workout?', message: 'This workout has no logged sets. It will be removed from your history.',
     });
+  });
+});
+
+describe('elapsedLabel', () => {
+  const start = new Date(2026, 8, 25, 13, 8).getTime();
+  const after = (minutes: number) => start + minutes * 60_000;
+  it.each([
+    [0.5, 'just started'], [1, '1 min'], [42, '42 min'], [60, '1 h'], [72, '1 h 12 min'], [23 * 60 + 59, '23 h 59 min'], [24 * 60, 'since Fri, Sep 25'],
+  ])('labels %s minutes as %s', (minutes, label) => {
+    expect(elapsedLabel(start, after(minutes))).toBe(label);
+  });
+  it('never goes negative when the clock is behind the start', () => {
+    expect(elapsedLabel(start, start - 60_000)).toBe('just started');
   });
 });

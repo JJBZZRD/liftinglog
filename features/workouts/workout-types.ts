@@ -50,3 +50,12 @@ export function deleteWorkoutCopy(workout: Pick<WorkoutSummary, 'name' | 'comple
     confirmLabel: 'Delete',
   };
 }
+
+/** How long a workout has been running: “just started”, “12 min”, “1 h 5 min”, or its start day once it passes a day. */
+export function elapsedLabel(startedAt: number, now = Date.now()) {
+  const minutes = Math.max(0, Math.floor((now - startedAt) / 60000));
+  if (minutes < 1) return 'just started';
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
+  return `since ${dateLabel(new Date(startedAt))}`;
+}

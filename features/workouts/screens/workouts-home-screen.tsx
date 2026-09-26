@@ -22,10 +22,6 @@ import { useWorkoutList } from '../hooks/use-workout-list';
 import { useWorkoutDate } from '../hooks/use-workout-date';
 import { deleteWorkoutCopy, type WorkoutSummary } from '../workout-types';
 
-// Keep the list viewport above the floating tab bar in app/(tabs)/_layout.tsx.
-const floatingTabBarHeight = 64;
-const floatingTabBarBottom = space[24];
-
 function WorkoutsHomeContent() {
   const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -51,8 +47,8 @@ function WorkoutsHomeContent() {
         <BlurTargetView ref={blurTarget} style={{ flex: 1, minHeight: 0, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: rawColors.background }}>
           <View style={{
             flex: 1, minHeight: 0, minWidth: 0, width: '100%', maxWidth: pageWidth, alignSelf: 'center',
+            // The docked tab bar sits below this screen and handles the bottom safe area.
             paddingHorizontal: pageGutter, paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, space[16]) + floatingTabBarBottom + floatingTabBarHeight,
           }}>
             <View style={{ flexShrink: 0, gap: itemGap, paddingBottom: space[16] }}>
               <WorkoutHeader onCalculators={() => setOverlay('calculators')} onStats={() => setOverlay('stats')} />

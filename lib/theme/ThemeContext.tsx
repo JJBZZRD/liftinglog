@@ -1,6 +1,6 @@
 import { useColorScheme } from "nativewind";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { View } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 import { 
   getThemePreference, 
   setThemePreference, 
@@ -137,11 +137,12 @@ export function useTheme() {
 }
 
 /** Scope a redesigned surface without changing the user's other screens. */
-export function ThemeColorScope({ colors, children }: { colors: RawThemeColors; children: ReactNode }) {
+/** Fills its parent by default; pass `style` (for example `{ flex: 0 }`) to size a scope to its content. */
+export function ThemeColorScope({ colors, children, style }: { colors: RawThemeColors; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const parent = useTheme();
   return (
     <ThemeContext.Provider value={{ ...parent, rawColors: colors }}>
-      <View style={[{ flex: 1, backgroundColor: colors.background }, createThemeVars(colors)]}>
+      <View style={[{ flex: 1, backgroundColor: colors.background }, createThemeVars(colors), style]}>
         {children}
       </View>
     </ThemeContext.Provider>

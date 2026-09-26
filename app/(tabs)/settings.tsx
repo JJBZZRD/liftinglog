@@ -221,7 +221,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}>
         {/* Header */}
         <View className="mb-6 pt-3">
           <Text className="text-[32px] leading-[38px] font-bold text-foreground">Settings</Text>

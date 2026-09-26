@@ -31,6 +31,7 @@ Update this table when a screen is migrated.
 | Frosted dialog shell | Shared, token-driven, opt-in through page scope |
 | Workout set rows | Reuse the exercise-history `SetItem` with a slate variant and reserved accessory space |
 | Exercise library search and active-workout shortcut | Shared slate theme, inline Add action, frosted return shortcut above the tab bar |
+| Tab bar | Docked Ink bar with a live strip on Programs and Settings (Phase 5); see [Navigation](components/navigation.md) |
 | Workouts, detail, exercise recording, calculators | Reference direction; some local spacing and typography still await token adoption |
 | Brand header, workout/PB rows | Existing shared/domain components; retain their behavior and optical adjustments |
 | Date navigator | Previous/next `IconButton`s around a date button that opens the calendar, with a relative caption. The calendar sheet holds Today |
