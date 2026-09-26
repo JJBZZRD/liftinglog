@@ -38,6 +38,8 @@ function WorkoutDetailContent() {
   const blurTarget = useRef<View>(null);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // The fixed footer's measured height pads the scroll content and sizes its fade.
+  const [footerHeight, setFooterHeight] = useState(0);
   const { topOpacity, bottomOpacity, scrollProps } = useScrollEdgeFades();
   const detail = useWorkoutDetail(id);
   const { workout, loading, busy, error } = detail;
@@ -67,7 +69,7 @@ function WorkoutDetailContent() {
         <Animated.ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}
           style={{ backgroundColor: rawColors.background }}
           {...scrollProps}
-          contentContainerStyle={{ paddingTop: insets.top + space[8], paddingHorizontal: pageGutter, paddingBottom: Math.max(insets.bottom, space[20]) + 30, gap: itemGap + space[8], maxWidth: pageWidth, minWidth: 0, width: '100%', alignSelf: 'center' }}>
+          contentContainerStyle={{ paddingTop: insets.top + space[8], paddingHorizontal: pageGutter, paddingBottom: workout ? footerHeight + space[20] : Math.max(insets.bottom, space[20]) + 30, gap: itemGap + space[8], maxWidth: pageWidth, minWidth: 0, width: '100%', alignSelf: 'center' }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: space[8], marginLeft: -10 }}>
             <View style={{ flexDirection: 'row', minWidth: 0, flexShrink: 1, alignItems: 'center', gap: space[8] }}>
               <IconButton icon="arrow-left" label="Go back" onPress={back} />
@@ -122,15 +124,22 @@ function WorkoutDetailContent() {
               </View>}
               <Button label="Add Exercise" icon="plus" variant="secondary" disabled={busy} onPress={() => void addExercise()} />
             </View>
-            <Button label={active ? 'Complete Workout' : 'Resume Workout'} icon={active ? 'check' : 'play-outline'} size="large"
-              busy={busy && !confirmingDelete} disabled={busy} onPress={() => void (active ? detail.requestComplete() : detail.resume())} />
-            <Button label="Delete workout" icon="trash-can-outline" variant="destructive-outline" disabled={busy} onPress={askDelete}
-              style={{ marginTop: space[8] }} />
+            <Button label="Delete workout" icon="trash-can-outline" variant="destructive-outline" disabled={busy} onPress={askDelete} />
           </>}
         </Animated.ScrollView>
       </BlurTargetView>
       <ScrollFade edge="top" solidExtent={insets.top} opacity={topOpacity} />
-      <ScrollFade edge="bottom" solidExtent={insets.bottom} opacity={bottomOpacity} />
+      {workout ? <>
+        {/* The main action stays fixed at the bottom; a permanent fade lets content scroll under it. */}
+        <ScrollFade edge="bottom" solidExtent={footerHeight} />
+        <View onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingLeft: insets.left, paddingRight: insets.right }}>
+          <View style={{ width: '100%', maxWidth: pageWidth, alignSelf: 'center', paddingHorizontal: pageGutter, paddingTop: space[12], paddingBottom: Math.max(insets.bottom, space[20]) }}>
+            <Button label={active ? 'Complete Workout' : 'Resume Workout'} icon={active ? 'check' : 'play-outline'} size="large"
+              busy={busy && !confirmingDelete} disabled={busy} onPress={() => void (active ? detail.requestComplete() : detail.resume())} />
+          </View>
+        </View>
+      </> : <ScrollFade edge="bottom" solidExtent={insets.bottom} opacity={bottomOpacity} />}
       {workout && <ConfirmDialog visible={confirmingDelete} {...deleteWorkoutCopy(workout)} busy={busy} error={error}
         onConfirm={() => void confirmDelete()} onCancel={() => setConfirmingDelete(false)} />}
       <CompleteWorkoutDialog entries={detail.unfinished} busy={busy} error={error} onClose={detail.cancelComplete} onComplete={() => void detail.complete()} />

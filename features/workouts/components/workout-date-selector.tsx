@@ -30,7 +30,8 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
         style={{
           flex: 1, minWidth: 0, minHeight: sizes.touchTarget, borderRadius: radius.control, borderWidth: 1,
           borderColor: rawColors.controlBorder, backgroundColor: rawColors.control,
-          flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
+          // A wrapping row packs its lines at the top unless alignContent centres them.
+          flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', justifyContent: 'center',
           columnGap: space[8], rowGap: 0, paddingHorizontal: space[8], paddingVertical: space[4],
         }}>
         <MaterialCommunityIcons name="calendar-blank-outline" size={18} color={rawColors.foregroundSecondary} />

@@ -167,7 +167,8 @@ Notes from the build:
 - The calendar sheet already had a Today action; it now uses `Button`.
 - `IconButton variant="secondary"` now uses the `control` fill with a `controlBorder` border, like the date button beside it.
 - `typography.cardTitle` is now the 20/25 sp card title from the mockups.
-- Complete Workout stays in the page flow rather than a sticky footer, with Delete workout after it.
+- Complete/Resume Workout sits in a fixed footer at the bottom of workout detail, over a permanent bottom fade, as in the mockup. Delete workout follows Add Exercise at the end of the scrolling content.
+- The date button's wrapping row needs `alignContent: 'center'`, or its text sits at the top of the button.
 
 #### Phase 4 file map (checked 2026-09-26)
 
