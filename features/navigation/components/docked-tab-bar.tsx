@@ -1,9 +1,9 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { BottomTabBarHeightCallbackContext, type BottomTabBarProps } from 'expo-router/js-tabs';
-import { useContext, useEffect, useState, type ComponentProps } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Keyboard, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon, type IconName } from '@/components/design-system/icon';
 import { DesignSystemProvider } from '@/components/design-system/design-system-provider';
 import { appCapabilities } from '@/lib/config/releaseProfile';
 import { radius, sizes, space } from '@/lib/design-system/tokens';
@@ -12,10 +12,8 @@ import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
 import { LiveWorkoutStrip } from '@/features/workouts/components/live-workout-strip';
 import { useLiveWorkout } from '@/features/workouts/hooks/use-live-workout';
 
-type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
-
 const tabIcons: Record<string, IconName> = {
-  index: 'view-day-outline', exercises: 'dumbbell', programs: 'book', settings: 'cog',
+  index: 'day', exercises: 'dumbbell', programs: 'book', settings: 'cog',
 };
 
 /**
@@ -80,7 +78,7 @@ function DockedTabBarContent({ state, descriptors, navigation }: BottomTabBarPro
                     Android drew the pill square when its background changed after mount. */}
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: sizes.dockPill / 2,
                   backgroundColor: rawColors.primary, opacity: focused ? 1 : 0 }} />
-                <MaterialCommunityIcons name={tabIcons[route.name] ?? 'circle-outline'} size={22}
+                <Icon name={tabIcons[route.name] ?? 'day'} size={22}
                   color={focused ? rawColors.primaryForeground : rawColors.foregroundSecondary} />
               </View>
               <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: focused ? '700' : '500', color: focused ? rawColors.foreground : rawColors.foregroundSecondary }}>{label}</Text>

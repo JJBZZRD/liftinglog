@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 5 are done; Phase 6 is next.** This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 6 are done; Phase 7 is next.** This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -14,6 +14,8 @@ Reference mockups: the source is saved in this repo, so any agent can open it in
 
 The mockups draw at real Android dp, so their sizes and radii can be copied directly.
 Where the mockups and this document disagree, this document wins.
+
+**The owner has approved the mockups for full implementation: the MVP UI must mirror them** (layout, the placement of dates, times and status, type sizes, spacing, icons and the brand mark). Deviations must be listed in this document with a reason. To compare, render a single mockup screen at 360 dp (for example with headless Edge on a copy of the HTML that exposes the screen functions) and put it beside an emulator screenshot.
 
 ## Ink token values
 
@@ -223,11 +225,26 @@ Notes from the build:
 - The live strip reads through the new `useLiveWorkout(enabled)` hook.
 - `ThemeColorScope` and `DesignSystemProvider` accept a `style`, so a scope can size to its content (`{ flex: 0 }`).
 
-### Phase 6: Exercises
+### Phase 6: Exercises (done)
 
 1. Grouped-list redesign with chip filters and sort beside them.
 2. The "In this workout" group, fed by the existing `listInProgressExercises(workoutId)`, with the return pill in its heading.
 3. Remove `ActiveWorkoutShortcut` from Exercises.
+
+Mockup alignment pass (with Phase 6):
+
+- New `Icon` (the mockups' own stroke icons) replaces Material Community Icons on redesigned screens, and `BrandMark` replaces the supplied logo image in the Workouts header.
+- Dates read "Wed 24 Sep" everywhere on redesigned screens (`dateLabel`), matching the mockups and default workout names.
+- Workout detail follows the mockup: back arrow left with "Fri 26 Sep · 6:42 PM" right; the status pill on its own row; the title with no pencil (tap it to edit); a plain "Add a note" row; an "Exercises" heading with a count; exercise cards with status and time, then the name, then set rows (number badge, bold value with small unit, BEST/PB badge, no chevron). "Add exercise" is sentence case. The destructive-outline button has the mockup's 7% red tint.
+- Workouts: the continue-active-workout banner uses the live-strip design; list and control gaps are 12 dp.
+
+Intended deviations from the mockups:
+
+- PB badges show the rep-max label (for example "6RM") rather than the literal "PB", in the mockup's gold style, because the rep count is the information.
+- Page gutters follow `useResponsiveLayout`, so wider phones get more than the mockups' 16 dp.
+- The "Show all N sets" toggle stays on exercise cards (the mockup shows only the highlighted sets).
+- "In this workout" shows a "Nothing logged yet" row when the active workout has no logged sets, and an ungrouped All list gets an "All exercises" heading, so the library never reads as part of the workout.
+- The sort, exercise-action and variation dialogs keep their current content and older styling; the mockups do not cover them.
 
 ### Phase 7: Settings and the global theme
 

@@ -2,7 +2,6 @@
 jest.mock('expo-image', () => ({ Image: 'Image' }));
 jest.mock('../../assets/branding/liftinglog-logo.svg', () => 1);
 jest.mock('expo-blur', () => ({ BlurTargetView: 'BlurTargetView', BlurView: 'BlurView' }));
-jest.mock('react-native-svg', () => ({ __esModule: true, default: 'Svg', Path: 'Path', Rect: 'Rect' }));
 jest.mock('react-native-reanimated', () => {
   const animation = { duration: () => animation, delay: () => animation, reduceMotion: () => animation };
   return {

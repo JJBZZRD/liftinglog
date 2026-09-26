@@ -11,7 +11,7 @@ Part of the [LiftingLog design system](../README.md).
 | `primary` | Ink fill (near-white in dark mode), `primaryForeground` label | The one main action on a screen or in a dialog |
 | `secondary` | `control` fill, 1 dp `controlBorder` border, `foregroundSecondary` label | Cancel, back-out and supporting actions |
 | `destructive` | `destructive` fill, `onDestructive` label | Confirming a deletion inside a dialog |
-| `destructive-outline` | 1 dp `destructive` border and label, no fill | A page-level entry to a destructive flow, such as **Delete workout** at the end of workout detail |
+| `destructive-outline` | `destructive` label on a 7% destructive tint, with a 40% destructive 1 dp border | A page-level entry to a destructive flow, such as **Delete workout** at the end of workout detail |
 
 - `size="large"` (48 dp, 16 dp corners, bold) is for a page's main call to action.
   The default `medium` (44 dp, 12 dp corners) suits everything else.
@@ -24,7 +24,8 @@ Part of the [LiftingLog design system](../README.md).
 ## Other controls
 
 - Use `IconButton` for a single icon action. It provides a 44 dp target, an
-  accessibility label, disabled semantics, and press feedback. Use
+  accessibility label, disabled semantics, and press feedback. Its 22 dp `Icon`
+  is `foregroundSecondary`, as in the mockups. Use
   `variant="secondary"` for a visible control surface (`control` fill, 1 dp
   `controlBorder` border, 12 dp corners, secondary foreground), as on the date
   navigator; the default stays plain.

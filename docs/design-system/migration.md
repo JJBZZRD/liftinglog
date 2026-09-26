@@ -13,7 +13,7 @@ redesign, including which screens change next, is in
 | --- | --- | --- |
 | Workouts list | `app/(tabs)/index.tsx` | Redesigned |
 | Workout detail | `app/workout-session/[id].tsx` | Redesigned |
-| Exercises | `app/(tabs)/exercises.tsx` | Legacy (search row and active-workout shortcut already use the slate theme) |
+| Exercises | `app/(tabs)/exercises.tsx` | Redesigned (Phase 6): grouped list, chip filters, "In this workout" group |
 | Settings | `app/(tabs)/settings.tsx` | Legacy |
 | Programs | `app/(tabs)/programs.tsx`, `app/programs/**` | Legacy |
 | Exercise page (record, history, analytics) | `app/exercise/**` | Legacy |
@@ -30,7 +30,7 @@ Update this table when a screen is migrated.
 | Button, StatusPill, MetricStrip, grouped list, SegmentedControl, ConfirmDialog, press-and-hold | Shared primitives (Phase 3), shown in the dev design catalog. Workouts and workout detail use Button, StatusPill, MetricStrip, ConfirmDialog and press-and-hold (Phase 4); other screens adopt them in Phases 5 to 7 |
 | Frosted dialog shell | Shared, token-driven, opt-in through page scope |
 | Workout set rows | Reuse the exercise-history `SetItem` with a slate variant and reserved accessory space |
-| Exercise library search and active-workout shortcut | Shared slate theme, inline Add action, frosted return shortcut above the tab bar |
+| Exercise library | Grouped lists with chip filters and sort; the "In this workout" group and return pill replaced the floating shortcut (Phase 6). The sort, action and variation dialogs still use the older dialog pattern |
 | Tab bar | Docked Ink bar with a live strip on Programs and Settings (Phase 5); see [Navigation](components/navigation.md) |
 | Workouts, detail, exercise recording, calculators | Reference direction; some local spacing and typography still await token adoption |
 | Brand header, workout/PB rows | Existing shared/domain components; retain their behavior and optical adjustments |

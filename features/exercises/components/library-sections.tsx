@@ -1,123 +1,96 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
+import { Button } from '@/components/design-system/button';
+import { GroupedList, GroupLabel, ListRow } from '@/components/design-system/grouped-list';
+import { Icon } from '@/components/design-system/icon';
+import type { ExerciseLibraryGroup } from '@/lib/db/exercises';
+import { space, typography } from '@/lib/design-system/tokens';
+import { useTheme } from '@/lib/theme/ThemeContext';
 import type { LibraryController } from '../hooks/use-library-controller';
 import type { LibraryQuery } from '../hooks/use-library-query';
-import { useLibraryAppearance } from '../hooks/use-library-appearance';
-import { LibraryExerciseCard } from './library-exercise-card';
+import { formatMuscleGroupTitle, getEquipmentBadgeLabel, titleCaseWords, type SearchScope } from '../library-model';
+
+/** "Barbell · 3 variations"; in the Equipment scope the muscle group replaces the equipment. */
+export function exerciseSubtitle(item: ExerciseLibraryGroup, scope: SearchScope) {
+  const kind = scope === 'equipment' ? formatMuscleGroupTitle(item.exercise.muscleGroup) : titleCaseWords(getEquipmentBadgeLabel(item.exercise));
+  const count = item.variations.length;
+  return count ? `${kind} · ${count} ${count === 1 ? 'variation' : 'variations'}` : kind;
+}
+
+/** Count badge and expand chevron. The whole slot toggles; the row itself opens the exercise. */
+function VariationToggle({ item, expanded, onToggle }: { item: ExerciseLibraryGroup; expanded: boolean; onToggle: () => void }) {
+  const { rawColors } = useTheme();
+  return (
+    <Pressable onPress={onToggle} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }} accessible={false} importantForAccessibility="no"
+      className="active:opacity-70" style={{ flexDirection: 'row', alignItems: 'center', gap: space[6], minHeight: 36 }}>
+      <Text style={{ ...typography.pill, color: rawColors.foregroundSecondary, backgroundColor: rawColors.surfaceSecondary, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden', fontVariant: ['tabular-nums'] }}>
+        {item.variations.length}
+      </Text>
+      <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={rawColors.foregroundMuted} />
+    </Pressable>
+  );
+}
+
+/** Rows for one exercise: the parent, then its variations when expanded. Returned flat for `GroupedList`. */
+function exerciseRows(item: ExerciseLibraryGroup, scope: SearchScope, controller: LibraryController) {
+  const { expandedExerciseId, handleNavigateToExercise, handleOpenActions, handleToggleExpanded } = controller;
+  const hasVariations = item.variations.length > 0;
+  const expanded = hasVariations && expandedExerciseId === item.exercise.id;
+  const subtitle = exerciseSubtitle(item, scope);
+  const toggle = () => handleToggleExpanded(item.exercise.id);
+  const rows = [
+    <ListRow key={`exercise-${item.exercise.id}`} title={item.exercise.name} subtitle={subtitle}
+      onPress={() => handleNavigateToExercise(item.exercise)} onLongPress={() => handleOpenActions(item)}
+      accessibilityHint="Hold for exercise actions"
+      accessibilityActions={[
+        { name: 'longpress', label: 'Exercise actions' },
+        ...(hasVariations ? [{ name: 'expand', label: expanded ? 'Hide variations' : 'Show variations' }] : []),
+      ]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') handleOpenActions(item);
+        if (event.nativeEvent.actionName === 'expand') toggle();
+      }}
+      trailing={hasVariations ? <VariationToggle item={item} expanded={expanded} onToggle={toggle} /> : undefined}
+      chevron={!hasVariations} />,
+  ];
+  if (expanded) {
+    for (const variation of item.variations) {
+      rows.push(<ListRow key={`variation-${variation.id}`} indent title={variation.name} chevron
+        accessibilityLabel={`${variation.name}, variation of ${item.exercise.name}`}
+        onPress={() => handleNavigateToExercise(variation)} />);
+    }
+  }
+  return rows;
+}
+
+function EmptyLibrary({ hasExercises, onAdd }: { hasExercises: boolean; onAdd: () => void }) {
+  const { rawColors } = useTheme();
+  return (
+    <View style={{ alignItems: 'center', gap: space[8], paddingVertical: space[24], paddingHorizontal: space[16] }}>
+      <Text accessibilityRole="header" style={{ ...typography.section, color: rawColors.foreground, textAlign: 'center' }}>
+        {hasExercises ? 'No matches found' : 'No exercises yet'}
+      </Text>
+      <Text style={{ ...typography.label, lineHeight: 20, color: rawColors.foregroundSecondary, textAlign: 'center' }}>
+        {hasExercises ? 'Try another search or filter.' : 'Create your first exercise to start building your library.'}
+      </Text>
+      {!hasExercises && <Button label="Add exercise" icon="plus" onPress={onAdd} style={{ marginTop: space[8] }} />}
+    </View>
+  );
+}
 
 export function LibrarySections({ controller, query }: { controller: LibraryController; query: LibraryQuery }) {
-  const { rawColors, isDark, raisedSurface, subtleBorder, lightShadowColor, sectionLabelColor } = useLibraryAppearance();
   const { sections, searchScope } = query;
-  const { items, expandedExerciseId, setAddModalVisible, handleNavigateToExercise, handleOpenActions, handleToggleExpanded } = controller;
+  if (sections.length === 0) {
+    return <EmptyLibrary hasExercises={controller.items.length > 0} onAdd={() => controller.setAddModalVisible(true)} />;
+  }
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 24 }}>
-      {sections.length === 0 ? (
-        <View
-          style={{
-            borderRadius: 26,
-            paddingHorizontal: 24,
-            paddingVertical: 28,
-            alignItems: "center",
-            backgroundColor: raisedSurface,
-            borderWidth: 1,
-            borderColor: subtleBorder,
-            shadowColor: lightShadowColor,
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: isDark ? 0.14 : 0.1,
-            shadowRadius: 24,
-            elevation: 3,
-          }}
-        >
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 18,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: rawColors.primaryLight,
-            }}
-          >
-            <MaterialCommunityIcons
-              name="dumbbell"
-              size={24}
-              color={rawColors.primary}
-            />
-          </View>
-          <Text
-            style={{
-              marginTop: 16,
-              color: rawColors.foreground,
-              fontSize: 18,
-              fontWeight: "700",
-            }}
-          >
-            {items.length === 0 ? "No exercises yet" : "No matches found"}
-          </Text>
-          <Text
-            style={{
-              marginTop: 8,
-              textAlign: "center",
-              color: rawColors.foregroundSecondary,
-              fontSize: 14,
-              lineHeight: 20,
-            }}
-          >
-            {items.length === 0
-              ? "Create your first exercise to start building out the library."
-              : "Try adjusting the search scope or clearing your current query."}
-          </Text>
-          {items.length === 0 ? (
-            <Pressable
-              onPress={() => setAddModalVisible(true)}
-              className="active:opacity-80"
-              style={{
-                marginTop: 18,
-                paddingHorizontal: 18,
-                paddingVertical: 12,
-                borderRadius: 16,
-                backgroundColor: rawColors.primary
-              }}
-            >
-              <Text
-                style={{
-                  color: rawColors.primaryForeground,
-                  fontSize: 14,
-                  fontWeight: "700",
-                }}
-              >
-                Add Exercise
-              </Text>
-            </Pressable>
-          ) : null}
+    <View style={{ gap: space[12] }}>
+      {sections.map((section) => (
+        <View key={section.key} style={{ gap: space[8] }}>
+          {/* The ungrouped All list still gets a heading, so it never reads as part of the group above. */}
+          <GroupLabel title={section.title || 'All exercises'} detail={String(section.items.length)} />
+          <GroupedList>{section.items.flatMap((item) => exerciseRows(item, searchScope, controller))}</GroupedList>
         </View>
-      ) : (
-        sections.map((section) => (
-          <View key={section.key} style={{ gap: 12 }}>
-            {section.title ? (
-              <Text
-                style={{
-                  color: sectionLabelColor,
-                  fontSize: 11,
-                  fontWeight: "700",
-                  letterSpacing: 2.2,
-                  textTransform: "uppercase",
-                }}
-              >
-                {section.title}
-              </Text>
-            ) : null}
-
-            <View style={{ gap: 14 }}>
-              {section.items.map((item) => <LibraryExerciseCard key={item.exercise.id}
-                item={item} isExpanded={expandedExerciseId === item.exercise.id} searchScope={searchScope}
-                handleNavigateToExercise={handleNavigateToExercise} handleOpenActions={handleOpenActions}
-                handleToggleExpanded={handleToggleExpanded} />)}
-            </View>
-          </View>
-        ))
-      )}
+      ))}
     </View>
-
   );
 }

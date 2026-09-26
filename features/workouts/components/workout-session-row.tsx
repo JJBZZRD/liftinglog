@@ -1,14 +1,14 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { MetricStrip } from '@/components/design-system/metric-strip';
+import { Icon } from '@/components/design-system/icon';
 import { HoldProgress, usePressAndHold } from '@/components/design-system/press-and-hold';
 import { StatusPill } from '@/components/design-system/status-pill';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
 import { radius, space, typography } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { formatVolumeFromKg, getWeightUnitLabel } from '@/lib/utils/units';
-import { workoutTitle, type WorkoutSummary } from '../workout-types';
+import { timeLabel, workoutTitle, type WorkoutSummary } from '../workout-types';
 
 /** The metric-strip workout card. Tap opens the workout; press and hold asks to delete it. */
 export function WorkoutSessionRow({ workout, index, onPress, onHold }: {
@@ -19,7 +19,7 @@ export function WorkoutSessionRow({ workout, index, onPress, onHold }: {
   const active = workout.completedAt === null;
   const { progress, holdStyle, pressableProps } = usePressAndHold({ onHold, onPress, holdLabel: 'Delete workout' });
   const title = workoutTitle(workout);
-  const time = new Date(workout.startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const time = timeLabel(workout.startedAt);
   // Android wrapped text can report its final height after a layout transition
   // captures the row. Keep native height updates immediate to avoid overlapping cards.
   return (
@@ -32,11 +32,11 @@ export function WorkoutSessionRow({ workout, index, onPress, onHold }: {
           <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ gap: 10 }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space[12], rowGap: space[4] }}>
               <StatusPill status={active ? 'live' : 'completed'} />
-              <Text style={{ marginLeft: 'auto', color: rawColors.foregroundMuted, ...typography.rowSubtitle, fontVariant: ['tabular-nums'] }}>{time}</Text>
+              <Text style={{ marginLeft: 'auto', color: rawColors.foregroundMuted, ...typography.caption, fontVariant: ['tabular-nums'] }}>{time}</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[12] }}>
               <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, color: rawColors.foreground, ...typography.cardTitle }}>{title}</Text>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={rawColors.foregroundMuted} style={{ flexShrink: 0 }} />
+              <Icon name="chevron-right" size={22} color={rawColors.foregroundMuted} />
             </View>
             <MetricStrip items={[
               { value: workout.exerciseCount, label: workout.exerciseCount === 1 ? 'exercise' : 'exercises' },

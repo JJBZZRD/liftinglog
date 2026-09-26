@@ -4,10 +4,12 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BrandMark } from '@/components/design-system/brand-mark';
 import { Button } from '@/components/design-system/button';
 import { ConfirmDialog } from '@/components/design-system/confirm-dialog';
 import { DesignSystemProvider } from '@/components/design-system/design-system-provider';
 import { GroupedList, GroupLabel, ListRow } from '@/components/design-system/grouped-list';
+import { Icon, type IconName } from '@/components/design-system/icon';
 import { IconButton } from '@/components/design-system/icon-button';
 import { MetricStrip } from '@/components/design-system/metric-strip';
 import { HoldProgress, usePressAndHold } from '@/components/design-system/press-and-hold';
@@ -61,12 +63,23 @@ function Catalog({ scheme }: { scheme: 'light' | 'dark' }) {
         <Button label="Save" onPress={noop} style={{ flex: 1 }} />
       </View>
       <View style={{ flexDirection: 'row', gap: space[12] }}>
-        <Button label="Delete" icon="trash-can-outline" variant="destructive" onPress={noop} style={{ flex: 1 }} />
-        <Button label="Delete workout" icon="trash-can-outline" variant="destructive-outline" onPress={noop} style={{ flex: 1 }} />
+        <Button label="Delete" icon="trash" variant="destructive" onPress={noop} style={{ flex: 1 }} />
+        <Button label="Delete workout" icon="trash" variant="destructive-outline" onPress={noop} style={{ flex: 1 }} />
       </View>
       <View style={{ flexDirection: 'row', gap: space[12] }}>
         <Button label="Disabled" variant="secondary" disabled onPress={noop} style={{ flex: 1 }} />
         <Button label="Saving" busy onPress={noop} style={{ flex: 1 }} />
+      </View>
+    </Section>
+
+    <Section title="Brand and icons">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[12] }}>
+        <BrandMark />
+        <Text style={{ color: rawColors.foreground, fontSize: 21, fontWeight: '700', letterSpacing: -0.4 }}>LiftingLog</Text>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[12] }}>
+        {(['calculator', 'chart', 'calendar', 'plus', 'check', 'search', 'sort', 'day', 'dumbbell', 'book', 'cog', 'pencil', 'trash', 'arrow-left', 'arrow-right', 'chevron-right', 'moon', 'scale', 'formula', 'download', 'table', 'restore', 'info', 'play', 'close'] as IconName[])
+          .map((name) => <Icon key={name} name={name} color={rawColors.foregroundSecondary} />)}
       </View>
     </Section>
 
@@ -95,8 +108,15 @@ function Catalog({ scheme }: { scheme: 'light' | 'dark' }) {
         <Text style={{ color: rawColors.liveInk, ...typography.pill, fontSize: 13 }}>Push Day →</Text>
       </View>} />
       <GroupedList>
-        <ListRow icon="weight-lifter" live title="Bench Press" subtitle="3 sets · best 105 kg × 3" trailing="6:48 PM" onPress={noop} />
-        <ListRow icon="weight-lifter" title="Overhead Press" subtitle="Barbell" chevron onPress={noop} />
+        <ListRow icon="dumbbell" live title="Bench Press" subtitle="3 sets · best 105 kg × 3" trailing="6:48 PM" onPress={noop} />
+        <ListRow icon="dumbbell" title="Overhead Press" subtitle="Barbell" chevron onPress={noop} />
+      </GroupedList>
+      <GroupLabel title="Chest" detail="6" />
+      <GroupedList>
+        <ListRow title="Bench Press" subtitle="Barbell · 3 variations" trailing={<Icon name="chevron-up" size={18} color={rawColors.foregroundMuted} />} onPress={noop} />
+        <ListRow indent title="Close-Grip Bench" chevron onPress={noop} />
+        <ListRow indent title="Paused Bench" chevron onPress={noop} />
+        <ListRow title="Cable Fly" subtitle="Cable" chevron onPress={noop} />
       </GroupedList>
       <GroupLabel title="Data" detail="3 items" />
       <GroupedList>

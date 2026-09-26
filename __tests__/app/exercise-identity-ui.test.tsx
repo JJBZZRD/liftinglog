@@ -53,6 +53,27 @@ jest.mock("expo-router", () => {
   };
 });
 
+jest.mock("react-native-reanimated", () => {
+  const React = require("react");
+  return {
+    __esModule: true,
+    default: { View: "AnimatedView", ScrollView: "ScrollView" },
+    useReducedMotion: () => true,
+    useSharedValue: (value: unknown) => React.useRef({ value }).current,
+    useAnimatedStyle: (style: () => unknown) => style(),
+    withRepeat: (value: unknown) => value,
+    withTiming: (value: unknown) => value,
+    cancelAnimation: () => undefined,
+    Easing: { out: (value: unknown) => value, quad: "quad" },
+  };
+});
+jest.mock("../../lib/design-system/use-scroll-edge-fades", () => ({
+  useScrollEdgeFades: () => ({ topOpacity: { value: 0 }, bottomOpacity: { value: 0 }, scrollProps: {} }),
+}));
+jest.mock("../../components/workouts/scroll-fade", () => ({ ScrollFade: "ScrollFade" }));
+jest.mock("../../features/workouts/hooks/use-active-workout-shortcut", () => ({
+  useActiveWorkoutShortcut: () => ({ workout: null, openWorkout: jest.fn() }),
+}));
 jest.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
 jest.mock("expo-blur", () => ({ BlurView: "BlurView", BlurTargetView: "BlurTargetView" }));
 jest.mock("@expo/vector-icons", () => ({ MaterialCommunityIcons: "MaterialCommunityIcons" }));
@@ -118,6 +139,7 @@ jest.mock("../../app/exercise/tabs/HistoryTab", () => () => null);
 jest.mock("../../app/exercise/tabs/AnalyticsTab", () => () => null);
 
 import AddExerciseModal from "../../components/AddExerciseModal";
+import { ListRow } from "../../components/design-system/grouped-list";
 import PinnedExercisesOverlay from "../../components/PinnedExercisesOverlay";
 import ExercisesScreen from "../../app/(tabs)/exercises";
 import ExerciseModalScreen from "../../app/exercise/[id]";
@@ -139,6 +161,11 @@ function pressablesWithText(tree: RenderTree, label: string): TestNode[] {
       node.type === "Pressable" &&
       node.findAll((child: TestNode) => child.type === "Text" && child.props.children === label).length > 0
   );
+}
+
+/** Library rows are design-system `ListRow`s; exercise actions open on long press. */
+function libraryRows(tree: RenderTree, title: string): TestNode[] {
+  return tree.root.findAllByType(ListRow).filter((row: TestNode) => row.props.title === title);
 }
 
 function exercise(id: number) {
@@ -222,18 +249,16 @@ describe("duplicate exercise identity UI", () => {
       expect(consoleError.mock.calls.some((call) => String(call[0]).includes("same key"))).toBe(false);
 
       await act(async () => {
-        await pressablesWithText(tree!, "Bench Press")[1].props.onPress();
+        await libraryRows(tree!, "Bench Press")[1].props.onPress();
       });
       expect(mockRouterPush).toHaveBeenLastCalledWith({
         pathname: "/exercise/[id]",
         params: { id: "42", name: "Bench Press" },
       });
 
-      const actionButtons = tree!.root.findAll(
-        (node: TestNode) => node.type === "Pressable" && node.props.accessibilityLabel === "Open actions for Bench Press"
-      );
+      expect(libraryRows(tree!, "Bench Press")).toHaveLength(2);
       await act(async () => {
-        actionButtons[1].props.onPress();
+        libraryRows(tree!, "Bench Press")[1].props.onLongPress();
       });
       await act(async () => {
         pressablesWithText(tree!, "Edit Details")[0].props.onPress();
@@ -248,9 +273,7 @@ describe("duplicate exercise identity UI", () => {
       expect(mockUpdateExercise).toHaveBeenCalledWith(42, expect.objectContaining({ name: "Bench Press Updated" }));
 
       await act(async () => {
-        tree!.root.findAll(
-          (node: TestNode) => node.type === "Pressable" && node.props.accessibilityLabel === "Open actions for Bench Press"
-        )[1].props.onPress();
+        libraryRows(tree!, "Bench Press")[1].props.onLongPress();
       });
       await act(async () => {
         pressablesWithText(tree!, "Delete")[0].props.onPress();
@@ -261,9 +284,7 @@ describe("duplicate exercise identity UI", () => {
       expect(mockDeleteExercise).toHaveBeenCalledWith(42);
 
       await act(async () => {
-        tree!.root.findAll(
-          (node: TestNode) => node.type === "Pressable" && node.props.accessibilityLabel === "Open actions for Bench Press"
-        )[1].props.onPress();
+        libraryRows(tree!, "Bench Press")[1].props.onLongPress();
       });
       await act(async () => {
         pressablesWithText(tree!, "Variations")[0].props.onPress();

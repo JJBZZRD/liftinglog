@@ -1,6 +1,6 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Icon } from '@/components/design-system/icon';
 import { LiveDot } from '@/components/design-system/status-pill';
 import { sizes, space, typography } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
@@ -37,7 +37,7 @@ export function LiveWorkoutStrip({ workout, onPress }: { workout: WorkoutSummary
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[4], flexShrink: 0 }}>
         <Text style={{ color: rawColors.foreground, fontSize: 14, fontWeight: '700' }}>Return</Text>
-        <MaterialCommunityIcons name="chevron-right" size={18} color={rawColors.foreground} />
+        <Icon name="chevron-right" size={18} color={rawColors.foreground} />
       </View>
     </Pressable>
   );

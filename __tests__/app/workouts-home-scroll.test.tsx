@@ -57,6 +57,7 @@ jest.mock('../../components/workouts/workout-overlays', () => ({ WorkoutOverlays
 jest.mock('../../components/workouts/scroll-fade', () => ({ ScrollFade: 'ScrollFade' }));
 jest.mock('../../features/workouts/components/workout-dialogs', () => ({ ActiveWorkoutDialog: 'ActiveWorkoutDialog' }));
 jest.mock('../../components/design-system/confirm-dialog', () => ({ ConfirmDialog: 'ConfirmDialog' }));
+jest.mock('../../components/design-system/status-pill', () => ({ LiveDot: 'LiveDot', StatusPill: 'StatusPill' }));
 jest.mock('../../features/workouts/components/workout-date-selector', () => ({ WorkoutDateSelector: 'WorkoutDateSelector' }));
 jest.mock('../../features/workouts/components/workout-session-row', () => ({ WorkoutSessionRow: 'WorkoutSessionRow' }));
 jest.mock('../../features/workouts/components/workout-feedback', () => ({ WorkoutEmpty: 'WorkoutEmpty', WorkoutError: 'WorkoutError' }));
@@ -69,6 +70,7 @@ jest.mock('../../features/workouts/hooks/use-workout-date', () => ({
 }));
 
 const WorkoutsHomeScreen = jest.requireActual('../../features/workouts/screens/workouts-home-screen').default;
+const { Icon } = jest.requireActual('../../components/design-system/icon');
 const WorkoutDateSelector = jest.requireActual('../../features/workouts/components/workout-date-selector').WorkoutDateSelector;
 type Tree = ReturnType<typeof renderer.create>;
 type TestNode = { type: unknown; props: Record<string, any> };
@@ -100,7 +102,9 @@ describe('Workouts Home list viewport', () => {
     const list = getList(tree!);
     expect(list.findAll((node: TestNode) => node.type === 'WorkoutHeader' || node.type === 'WorkoutDateSelector')).toHaveLength(0);
     expect(list.findAll((node: TestNode) => node.props.children === 'New Workout' || node.props.children === 'Workouts')).toHaveLength(0);
-    expect(list.findAll((node: TestNode) => node.props.accessibilityLabel === 'Continue active workout')).toHaveLength(1);
+    const banner = list.findAll((node: TestNode) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Continue active workout, Session 4, in progress since Fri 25 Sep');
+    expect(banner).toHaveLength(1);
+    expect(banner[0].findAll((node: TestNode) => node.type === 'LiveDot')).toHaveLength(1);
     expect(list.findAll((node: TestNode) => node.type === 'WorkoutSessionRow').map((node: TestNode) => node.props.workout.id)).toEqual([3, 2, 1]);
     expect(list.props.style).toMatchObject({ flex: 1, minHeight: 0 });
     expect(list.props.contentInsetAdjustmentBehavior).toBe('never');
@@ -278,9 +282,10 @@ describe('Workouts date navigator', () => {
 
   it('makes the date the calendar button, with a relative caption and no Today button', async () => {
     await act(async () => { tree = renderer.create(renderSelector(new Date(2026, 8, 23))); });
-    expect(pressables().map((node: TestNode) => node.props.accessibilityLabel)).toEqual(['Previous day', 'Wed, Sep 23, 2 days ago', 'Next day']);
-    const dateButton = button('Wed, Sep 23, 2 days ago');
-    expect(texts(dateButton as never)).toEqual(['Wed, Sep 23', '2 days ago']);
+    expect(pressables().map((node: TestNode) => node.props.accessibilityLabel)).toEqual(['Previous day', 'Wed 23 Sep, 2 days ago', 'Next day']);
+    const dateButton = button('Wed 23 Sep, 2 days ago');
+    expect(texts(dateButton as never)).toEqual(['Wed 23 Sep', '2 days ago']);
+    expect(dateButton.findAll((node: TestNode) => node.type === Icon).map((node: TestNode) => node.props.name)).toEqual(['calendar']);
     expect(dateButton.props.style).toMatchObject({ flex: 1, minWidth: 0, minHeight: 44, flexWrap: 'wrap' });
     expect(tree.root.findAll((node: TestNode) => node.props.children === 'Today' || node.props.accessibilityLabel === 'Back to today')).toHaveLength(0);
     await act(async () => { dateButton.props.onPress(); });
@@ -290,10 +295,10 @@ describe('Workouts date navigator', () => {
   it('keeps the same three controls whatever the date', async () => {
     await act(async () => { tree = renderer.create(renderSelector(new Date(2026, 8, 25))); });
     const [previous, , next] = pressables();
-    expect(button('Fri, Sep 25, Today')).toBeDefined();
+    expect(button('Fri 25 Sep, Today')).toBeDefined();
     await act(async () => { tree.update(renderSelector(new Date(2026, 5, 1))); });
     // A distant date in the same year has no caption; the controls stay mounted.
-    expect(button('Mon, Jun 1')).toBeDefined();
+    expect(button('Mon 1 Jun')).toBeDefined();
     expect(pressables()[0]).toBe(previous);
     expect(pressables()[2]).toBe(next);
   });

@@ -30,6 +30,12 @@ card of rows with inset separators.
   - `trailing` takes a string (muted text, such as a time) or any element, such
     as a `SegmentedControl`. `chevron` adds a disclosure arrow.
   - `destructive` colours the title for dangerous rows. Keep these last in a group.
+  - `indent` makes a nested row, such as an exercise variation: 30 dp left
+    padding, 48 dp tall, a 15 sp medium title, on a band tinted with the page
+    colour at 50%.
+  - A control inside a row (such as the variations toggle) is hidden from screen
+    readers; expose it through `accessibilityActions` and
+    `onAccessibilityAction` on the row instead.
   - Title and subtitle are one line each. With `onPress` or `onLongPress` the row
     is a button labelled "title, subtitle" (unless you pass a label) and shows
     the `pressed` fill while held. Without them it is a plain row.

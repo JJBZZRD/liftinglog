@@ -27,7 +27,7 @@ export function WorkoutCalendar({ visible, date, onSelect, onClose }: {
         selectedDayTextColor: rawColors.primaryForeground, textDayFontSize: 15 }} />}
     <View style={{ flexDirection: 'row', gap: space[12], marginTop: space[16] }}>
       <Button label="Cancel" variant="secondary" onPress={onClose} style={{ flex: 1 }} />
-      <Button label="Today" icon="calendar-today" onPress={() => { onSelect(new Date()); onClose(); }} style={{ flex: 1 }} />
+      <Button label="Today" icon="calendar" onPress={() => { onSelect(new Date()); onClose(); }} style={{ flex: 1 }} />
     </View>
   </BaseModal>;
 }

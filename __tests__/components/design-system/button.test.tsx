@@ -1,12 +1,12 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { Button, type ButtonVariant } from '@/components/design-system/button';
+import { Icon } from '@/components/design-system/icon';
 
 jest.mock('react-native', () => ({
   View: 'View', Pressable: 'Pressable', Text: 'Text', ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
 }));
-jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'MaterialCommunityIcons' }));
 jest.mock('@/lib/theme/ThemeContext', () => ({
   useTheme: () => ({
     isDark: false,
@@ -31,11 +31,24 @@ describe('Button', () => {
     ['primary', 'bg-primary', 'text-primary-foreground'],
     ['secondary', 'bg-control border border-control-border', 'text-foreground-secondary'],
     ['destructive', 'bg-destructive', 'text-on-destructive'],
-    ['destructive-outline', 'border border-destructive', 'text-destructive'],
+    ['destructive-outline', 'border', 'text-destructive'],
   ])('applies the %s colour classes', async (variant, container, text) => {
     await render(<Button label="Save" variant={variant} onPress={() => { }} />);
     expect(pressable().props.className).toBe(`${container} active:opacity-70`);
     expect(label().props.className).toBe(text);
+  });
+
+  it('draws the destructive-outline border and tint inline from the destructive colour', async () => {
+    await render(<Button label="Delete" variant="destructive-outline" style={{ flex: 1 }} onPress={() => { }} />);
+    const [base, extra] = pressable().props.style;
+    expect(base).toMatchObject({ borderColor: '#DE000066', backgroundColor: '#DE000012' });
+    expect(extra).toEqual({ flex: 1 });
+  });
+
+  it.each<ButtonVariant>(['primary', 'secondary', 'destructive'])('does not add the destructive tint to %s', async (variant) => {
+    await render(<Button label="Save" variant={variant} onPress={() => { }} />);
+    expect(pressable().props.style[0].borderColor).toBeUndefined();
+    expect(pressable().props.style[0].backgroundColor).toBeUndefined();
   });
 
   it('defaults to the primary variant', async () => {
@@ -61,19 +74,19 @@ describe('Button', () => {
   });
 
   it('blocks presses, reports busy and shows a spinner instead of the icon when busy', async () => {
-    await render(<Button label="Delete" variant="destructive" icon="trash-can-outline" busy onPress={() => { }} />);
+    await render(<Button label="Delete" variant="destructive" icon="trash" busy onPress={() => { }} />);
     expect(pressable().props.disabled).toBe(true);
     expect(pressable().props.accessibilityState).toEqual({ disabled: true, busy: true });
     const spinner = tree.root.findByType('ActivityIndicator' as never);
     expect(spinner.props.color).toBe('#123456');
-    expect(tree.root.findAllByType('MaterialCommunityIcons' as never)).toHaveLength(0);
+    expect(tree.root.findAllByType(Icon)).toHaveLength(0);
     expect(label().props.children).toBe('Delete');
   });
 
   it('shows the icon in the variant foreground colour when not busy', async () => {
-    await render(<Button label="Delete" variant="destructive-outline" icon="trash-can-outline" onPress={() => { }} />);
-    const icon = tree.root.findByType('MaterialCommunityIcons' as never);
-    expect(icon.props.name).toBe('trash-can-outline');
+    await render(<Button label="Delete" variant="destructive-outline" icon="trash" onPress={() => { }} />);
+    const icon = tree.root.findByType(Icon);
+    expect(icon.props.name).toBe('trash');
     expect(icon.props.color).toBe('#DE0000');
   });
 

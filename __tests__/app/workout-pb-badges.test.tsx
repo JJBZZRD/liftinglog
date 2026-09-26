@@ -1,11 +1,12 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { useWindowDimensions } from 'react-native';
+import { Icon as DesignIcon } from '@/components/design-system/icon';
 import SetItem from '@/components/lists/SetItem';
 import { WorkoutExerciseEntry, WorkoutSetRow } from '@/features/workouts/components/workout-exercise-entry';
 import { useWorkoutPBBadges } from '@/features/workouts/hooks/use-workout-pb-badges';
 import { loadWorkoutPBBadges } from '@/features/workouts/workout-pb-badges';
-import type { WorkoutDetail, WorkoutExercise } from '@/features/workouts/workout-types';
+import { dateLabel, timeLabel, type WorkoutDetail, type WorkoutExercise } from '@/features/workouts/workout-types';
 import { getPBEventsBySetIds, type PBEvent } from '@/lib/db/pbEvents';
 import type { SetRow } from '@/lib/db/workouts';
 
@@ -153,7 +154,7 @@ describe('workout PB indicators', () => {
     expect(visible()).toEqual([3, 6, 9, 12]);
     expect(tree.root.findAllByType(WorkoutSetRow).map((row: any) => row.props.index)).toEqual([2, 5, 8, 11]);
     expect(tree.root.findAll((node: TestNode) => node.type === 'Text' && node.props.children === '5RM')).toHaveLength(3);
-    expect(tree.root.findAll((node: TestNode) => node.type === 'Text' && node.props.children === 'Best')).toHaveLength(1);
+    expect(tree.root.findAll((node: TestNode) => node.type === 'Text' && node.props.children === 'BEST')).toHaveLength(1);
     const toggle = tree.root.find((node: TestNode) => node.props.accessibilityLabel === 'Show all 12 sets for Exercise 1');
     expect(toggle.props.accessibilityState).toEqual({ expanded: false });
     await act(async () => { toggle.props.onPress(); });
@@ -186,29 +187,46 @@ describe('workout PB indicators', () => {
         onPress={() => {}} onSetPress={onSetPress} pbBadges={new Map([[11, '5RM'], [99, '8RM']])} />,
     ); });
     const buttons = tree.root.findAll((node: TestNode) => node.type === 'Pressable');
-    expect(buttons[0].props.accessibilityLabel).toBe('Open Exercise 1, 1 personal best set achieved');
+    expect(buttons[0].props.accessibilityLabel).toBe('Open Exercise 1, completed, 1 personal best set achieved');
     expect(buttons[1].props.accessibilityLabel).not.toContain('personal best');
     expect(buttons[2].props.accessibilityLabel).toContain('personal best achieved, 5RM');
     await act(async () => { buttons[2].props.onPress(); });
     expect(onSetPress).toHaveBeenCalledWith(11);
     const pbText = tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '5RM');
-    expect(pbText.props.style.color).toBe('#14202C');
+    expect(pbText.props.style.color).toBe('#C88730');
+    expect(pbText.parent.props.style.backgroundColor).toBe('#C8873029');
     expect(pbText.props.numberOfLines).toBeUndefined();
     expect(pbText.props.allowFontScaling).not.toBe(false);
     for (const button of buttons) {
       expect(typeof button.props.style).not.toBe('function');
       expect(button.props.className).toContain('active:opacity-70');
     }
-    expect(tree.root.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(1);
-    const matchingWeight = buttons[2].find((node: TestNode) => node.type === 'Text' && node.props.children === '120 kg');
+    // Set rows carry no trophy or chevron: the badge alone marks the PB.
+    for (const button of buttons.slice(1)) {
+      expect(button.findAllByType(DesignIcon)).toHaveLength(0);
+      expect(button.findAll((node: TestNode) => node.type === 'Icon')).toHaveLength(0);
+    }
+    // Values are a bold number followed by a small unit.
+    const matchingWeight = buttons[2].find((node: TestNode) => node.type === 'Text' && node.props.children === '120');
+    expect(matchingWeight.parent.props.children[1]).toBe(' kg');
+    const matchingReps = buttons[2].find((node: TestNode) => node.type === 'Text' && node.props.children === 5);
+    expect(matchingReps.parent.props.children[1]).toBe(' reps');
     expect(pbText.parent.parent.parent).toBe(matchingWeight.parent.parent);
   });
 
-  it('supports legacy rows without showing a trophy on ordinary recorded sets', async () => {
+  it('supports legacy rows without showing a badge on ordinary recorded sets', async () => {
     await act(async () => { tree = renderer.create(<WorkoutSetRow set={set(81, 8)} index={0} onPress={() => {}} />); });
-    expect(tree.root.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(0);
+    const texts = () => tree.root.findAll((node: TestNode) => node.type === 'Text').map((node: TestNode) => node.props.children);
+    expect(texts()).not.toContain('BEST');
+    expect(tree.root.findAllByType(DesignIcon)).toHaveLength(0);
+    // The badge column is reserved even when empty so values never shift.
+    const weight = tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '120');
+    const badgeColumn = weight.parent.parent.children[3];
+    expect(badgeColumn.props.style.width).toBe(52);
+    expect(badgeColumn.children).toHaveLength(0);
     await act(async () => { tree.update(<WorkoutSetRow set={set(81, 8)} index={0} onPress={() => {}} pbBadge="10RM" />); });
     expect(tree.root.find((node: TestNode) => node.type === 'Pressable').props.accessibilityLabel).toContain('personal best achieved, 10RM');
+    expect(tree.root.find((node: TestNode) => node.type === 'Text' && node.props.children === '10RM')).toBeDefined();
   });
 
   it('displays missing measurements as em dashes without reporting zero reps', async () => {
@@ -225,10 +243,29 @@ describe('workout PB indicators', () => {
     const header = tree.root.findAll((node: TestNode) => node.type === 'Pressable')[0];
     expect(header.children[0].find((node: TestNode) => node.type === 'Text' && node.props.children === 'In progress')).toBeDefined();
     expect(header.children[1].find((node: TestNode) => node.type === 'Text' && node.props.children === 'Exercise 1')).toBeDefined();
-    expect(header.findAll((node: TestNode) => node.type === 'Icon' && node.props.name === 'trophy-outline')).toHaveLength(0);
+    expect(header.props.accessibilityLabel).toBe('Open Exercise 1, in progress, 1 personal best set achieved');
+    // No index number or arrow beside the name.
+    expect(header.findAllByType(DesignIcon)).toHaveLength(0);
+    expect(header.findAll((node: TestNode) => node.type === 'Icon')).toHaveLength(0);
+    expect(header.findAll((node: TestNode) => node.type === 'Text' && (node.props.children === 1 || node.props.children === '1'))).toHaveLength(0);
     await act(async () => { tree.update(<WorkoutExerciseEntry entry={{ ...exercise, completedAt: 123 }} index={0}
       onPress={() => {}} onSetPress={() => {}} />); });
     expect(header.children[0].find((node: TestNode) => node.type === 'Text' && node.props.children === 'Completed')).toBeDefined();
+    expect(header.props.accessibilityLabel).toBe('Open Exercise 1, completed');
+  });
+
+  it('captions the header with the time, or the day when logged on another day than the workout', async () => {
+    const performedAt = new Date(2026, 8, 25, 18, 42).getTime();
+    const exercise = { ...entry(1, [set(11, 1)]), performedAt };
+    const caption = () => tree.root.findAll((node: TestNode) => node.type === 'Pressable')[0].children[0]
+      .findAll((node: TestNode) => node.type === 'Text').map((node: TestNode) => node.props.children);
+    await act(async () => { tree = renderer.create(<WorkoutExerciseEntry entry={exercise} index={0}
+      workoutStartedAt={new Date(2026, 8, 25, 17).getTime()} onPress={() => {}} onSetPress={() => {}} />); });
+    expect(caption()).toEqual(['Completed', timeLabel(performedAt)]);
+    await act(async () => { tree.update(<WorkoutExerciseEntry entry={exercise} index={0}
+      workoutStartedAt={new Date(2026, 8, 24, 17).getTime()} onPress={() => {}} onSetPress={() => {}} />); });
+    expect(caption()).toEqual(['Completed', dateLabel(new Date(performedAt))]);
+    expect(caption()[1]).toBe('Fri 25 Sep');
   });
 
   it('keeps inline PB and value columns stable with warm-ups, notes and larger narrow-screen text', async () => {

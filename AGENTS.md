@@ -26,6 +26,8 @@ Non-negotiable rules:
 ## UI design system
 
 Before adding or changing UI, read [docs/design-system/README.md](docs/design-system/README.md).
+
+The approved mockups in [docs/ui-mockups/](docs/ui-mockups/) are the visual spec for redesigned screens. The built UI must mirror them: layout, placement of dates, times and status, typography, spacing, icons (use `Icon` from `components/design-system/icon.tsx`) and the brand mark. Compare a rendered mockup screen with an emulator screenshot before calling a screen done, and record any intended deviation in [docs/ui-redesign-plan.md](docs/ui-redesign-plan.md).
 It defines the LiftingLog slate design system and its current migration scope.
 
 - Use `lib/design-system/tokens.ts` for shared visual values and `components/design-system` for generic primitives.

@@ -52,7 +52,7 @@ describe('elapsedLabel', () => {
   const start = new Date(2026, 8, 25, 13, 8).getTime();
   const after = (minutes: number) => start + minutes * 60_000;
   it.each([
-    [0.5, 'just started'], [1, '1 min'], [42, '42 min'], [60, '1 h'], [72, '1 h 12 min'], [23 * 60 + 59, '23 h 59 min'], [24 * 60, 'since Fri, Sep 25'],
+    [0.5, 'just started'], [1, '1 min'], [42, '42 min'], [60, '1 h'], [72, '1 h 12 min'], [23 * 60 + 59, '23 h 59 min'], [24 * 60, 'since Fri 25 Sep'],
   ])('labels %s minutes as %s', (minutes, label) => {
     expect(elapsedLabel(start, after(minutes))).toBe(label);
   });

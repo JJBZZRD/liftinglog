@@ -40,6 +40,10 @@ export const radius = {
 /** Existing text roles; omitted properties continue to inherit React Native defaults. */
 export const typography = {
   title: { fontSize: 32, lineHeight: 39, fontWeight: '700', letterSpacing: -0.8 },
+  /** A tab's page title, such as Exercises or Settings. */
+  screenTitle: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.6 },
+  /** The workout name on workout detail. */
+  detailTitle: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.8 },
   /** Workout-card title (metric-strip card). */
   cardTitle: { fontSize: 20, lineHeight: 25, fontWeight: '600' },
   section: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3 },
@@ -74,6 +78,9 @@ export const sizes = {
   /** The in-progress workout strip docked above the tab bar. */
   liveStrip: 58,
 } as const;
+
+/** The LiftingLog mark: a fixed ink tile in both modes, as drawn in the mockups. */
+export const brandColors = { tile: '#292F3D', tileEdge: 'rgba(255,255,255,0.14)', glyph: '#FFFFFF', check: '#A3A3A3' } as const;
 
 export const glass = { blurIntensity: 42, borderAlpha: 'B3', surfaceAlpha: 'EB' } as const;
 

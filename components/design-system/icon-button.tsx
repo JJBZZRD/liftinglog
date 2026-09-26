@@ -1,11 +1,10 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
 import { Pressable } from 'react-native';
 import { opacity, radius, sizes } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
+import { Icon, type IconName } from './icon';
 
 export function IconButton({ icon, label, onPress, disabled = false, variant = 'plain' }: {
-  icon: ComponentProps<typeof MaterialCommunityIcons>['name'];
+  icon: IconName;
   label: string; onPress: () => void; disabled?: boolean;
   variant?: 'plain' | 'secondary';
 }) {
@@ -20,8 +19,7 @@ export function IconButton({ icon, label, onPress, disabled = false, variant = '
         borderWidth: variant === 'secondary' ? 1 : 0, borderColor: rawColors.controlBorder,
         alignItems: 'center', justifyContent: 'center',
         opacity: disabled ? opacity.disabled : 1 }}>
-      <MaterialCommunityIcons name={icon} size={sizes.icon}
-        color={variant === 'secondary' ? rawColors.foregroundSecondary : rawColors.foreground} />
+      <Icon name={icon} size={22} color={rawColors.foregroundSecondary} />
     </Pressable>
   );
 }

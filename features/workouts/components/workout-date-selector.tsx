@@ -1,5 +1,5 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
+import { Icon } from '@/components/design-system/icon';
 import { IconButton } from '@/components/workouts/workout-ui';
 import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
@@ -34,7 +34,7 @@ export function WorkoutDateSelector({ date, onChange, onCalendar }: {
           flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', justifyContent: 'center',
           columnGap: space[8], rowGap: 0, paddingHorizontal: space[8], paddingVertical: space[4],
         }}>
-        <MaterialCommunityIcons name="calendar-blank-outline" size={18} color={rawColors.foregroundSecondary} />
+        <Icon name="calendar" size={18} color={rawColors.foregroundSecondary} />
         <Text style={{ color: rawColors.foreground, ...typography.rowTitle, fontVariant: ['tabular-nums'] }}>{label}</Text>
         {caption && <Text style={{ color: rawColors.foregroundMuted, ...typography.caption, fontWeight: '500' }}>{caption}</Text>}
       </Pressable>

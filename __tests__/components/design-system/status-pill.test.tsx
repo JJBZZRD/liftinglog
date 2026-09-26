@@ -1,5 +1,6 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
+import { Icon } from '@/components/design-system/icon';
 import { LiveDot, StatusPill } from '@/components/design-system/status-pill';
 
 let mockReducedMotion = false;
@@ -30,7 +31,6 @@ jest.mock('react-native-reanimated', () => {
     Easing: { out: easing, quad: 'quad', linear: 'linear' },
   };
 });
-jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'MaterialCommunityIcons' }));
 jest.mock('@/lib/theme/ThemeContext', () => ({
   useTheme: () => ({ isDark: false, rawColors: new Proxy({}, { get: () => '#123456' }) }),
 }));
@@ -60,7 +60,7 @@ describe('StatusPill', () => {
   it('shows "Completed" with a check for the completed status', async () => {
     await render(<StatusPill status="completed" />);
     expect(textContent()).toEqual(['Completed']);
-    expect(tree.root.findByType('MaterialCommunityIcons' as never).props.name).toBe('check');
+    expect(tree.root.findByType(Icon).props.name).toBe('check');
     expect(tree.root.findAllByType(LiveDot)).toHaveLength(0);
   });
 

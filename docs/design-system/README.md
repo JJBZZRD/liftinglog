@@ -22,6 +22,7 @@ colour, compact information hierarchy, and restrained translucency and motion.
 | Slate theme scope, shared by inline styles and NativeWind | [`DesignSystemProvider`](../../components/design-system/design-system-provider.tsx) |
 | Current scoped colors in a component | `useTheme().rawColors` from [`ThemeContext`](../../lib/theme/ThemeContext.tsx) |
 | Text buttons | [`Button`](../../components/design-system/button.tsx) |
+| Mockup stroke icons and the app mark | [`Icon`](../../components/design-system/icon.tsx), [`BrandMark`](../../components/design-system/brand-mark.tsx) |
 | Generic icon action | [`IconButton`](../../components/design-system/icon-button.tsx) |
 | In-progress and completed status | [`StatusPill`, `LiveDot`](../../components/design-system/status-pill.tsx) |
 | Card metric chips | [`MetricStrip`](../../components/design-system/metric-strip.tsx) |
@@ -116,7 +117,7 @@ Components
 - [Dialogs and glass](components/dialogs-and-glass.md): `BaseModal`, `FrostedModal`, `ConfirmDialog`, blur targets, and modal action rows
 - [Scroll fades](components/scroll-fades.md): `ScrollFade` and `useScrollEdgeFades()`
 - [Navigation bar and live strip](components/navigation.md): `DockedTabBar`, `LiveWorkoutStrip`
-- [Active-workout shortcut](components/active-workout-shortcut.md): the Exercises return action
+- [Icons and brand mark](components/icons-and-brand.md): `Icon`, `BrandMark`
 
 Patterns
 

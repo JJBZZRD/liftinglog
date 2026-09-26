@@ -1,19 +1,17 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { opacity, radius, sizes, space } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
+import { Icon, type IconName } from './icon';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'destructive-outline';
-
-type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 // Colour classes keep NativeWind and the scoped theme in step (see AGENTS.md).
 const containerClass: Record<ButtonVariant, string> = {
   primary: 'bg-primary',
   secondary: 'bg-control border border-control-border',
   destructive: 'bg-destructive',
-  'destructive-outline': 'border border-destructive',
+  // Border and tint are translucent destructive, applied inline below.
+  'destructive-outline': 'border',
 };
 const labelClass: Record<ButtonVariant, string> = {
   primary: 'text-primary-foreground',
@@ -62,9 +60,11 @@ export function Button({
         paddingHorizontal: space[16], paddingVertical: space[12],
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[8],
         opacity: disabled ? opacity.disabled : 1,
+        // As in the mockups: a 40% destructive border over a 7% destructive tint.
+        ...(variant === 'destructive-outline' && { borderColor: `${rawColors.destructive}66`, backgroundColor: `${rawColors.destructive}12` }),
       }, style]}>
       {busy ? <ActivityIndicator size="small" color={foreground} />
-        : icon && <MaterialCommunityIcons name={icon} size={large ? 22 : 18} color={foreground} style={{ flexShrink: 0 }} />}
+        : icon && <Icon name={icon} size={large ? 22 : 18} color={foreground} />}
       <Text className={labelClass[variant]}
         style={{ flexShrink: 1, minWidth: 0, textAlign: 'center', fontSize: large ? 16 : 15, fontWeight: large ? '700' : '600' }}>
         {label}

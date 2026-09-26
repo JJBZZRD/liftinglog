@@ -25,7 +25,7 @@ import { deleteWorkoutCopy, type WorkoutSummary } from '../workout-types';
 function WorkoutsHomeContent() {
   const { rawColors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { pageWidth, pageGutter, itemGap } = useResponsiveLayout();
+  const { pageWidth, pageGutter } = useResponsiveLayout();
   const blurTarget = useRef<View>(null);
   const { date, setDate } = useWorkoutDate();
   const [calendarVisible, setCalendarVisible] = useState(false);
@@ -48,13 +48,13 @@ function WorkoutsHomeContent() {
           <View style={{
             flex: 1, minHeight: 0, minWidth: 0, width: '100%', maxWidth: pageWidth, alignSelf: 'center',
             // The docked tab bar sits below this screen and handles the bottom safe area.
-            paddingHorizontal: pageGutter, paddingTop: insets.top,
+            paddingHorizontal: pageGutter, paddingTop: insets.top + space[4],
           }}>
-            <View style={{ flexShrink: 0, gap: itemGap, paddingBottom: space[16] }}>
+            <View style={{ flexShrink: 0, gap: space[12], paddingBottom: space[12] }}>
               <WorkoutHeader onCalculators={() => setOverlay('calculators')} onStats={() => setOverlay('stats')} />
               <WorkoutDateSelector date={date} onChange={setDate} onCalendar={() => setCalendarVisible(true)} />
               <Button label={creating ? 'Creating workout…' : 'New Workout'} icon="plus" size="large" busy={creating} onPress={() => void newWorkout()} />
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[8], alignItems: 'center', justifyContent: 'space-between', paddingTop: space[6] }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[8], alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 2 }}>
                 <Text accessibilityRole="header" style={{ flexShrink: 1, color: rawColors.foreground, ...typography.section }}>Workouts</Text>
                 <Text style={{ flexShrink: 1, color: rawColors.foregroundMuted, ...typography.caption, fontVariant: ['tabular-nums'] }}>{workouts.length} {workouts.length === 1 ? 'workout' : 'workouts'}</Text>
               </View>

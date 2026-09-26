@@ -4,11 +4,11 @@ import { AppState } from 'react-native';
 import { getWorkoutSessionDetail } from '@/lib/db/workoutSessions';
 import { getActiveWorkout } from '@/lib/db/workouts';
 import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
-import type { WorkoutSummary } from '../workout-types';
+import type { WorkoutDetail } from '../workout-types';
 
-/** The library shortcut follows the active container, not the logging selection. */
+/** The active workout for the Exercises library. It follows the active container, not the logging selection. */
 export function useActiveWorkoutShortcut() {
-  const [workout, setWorkout] = useState<WorkoutSummary | null>(null);
+  const [workout, setWorkout] = useState<WorkoutDetail | null>(null);
   const focused = useRef(false);
   const foreground = useRef(true);
   const request = useRef(0);

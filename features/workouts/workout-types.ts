@@ -8,8 +8,17 @@ export function workoutTitle(workout: Pick<WorkoutSummary, 'name'>) {
   return workout.name?.trim() || 'Workout';
 }
 
+const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** “Wed 24 Sep”, as in the mockups and default workout names. */
 export function dateLabel(date: Date) {
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${weekdays[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
+}
+
+/** “6:42 PM”. */
+export function timeLabel(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 export function errorMessage(error: unknown) {

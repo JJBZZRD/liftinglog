@@ -1,12 +1,9 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
 import { Text, View } from 'react-native';
 import { BaseModal } from '@/components/modals/BaseModal';
 import { radius, space } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { Button } from './button';
-
-type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+import { Icon, type IconName } from './icon';
 
 /**
  * A confirmation built on `BaseModal`, so it is frosted inside a `FrostedModalProvider`.
@@ -34,14 +31,14 @@ export function ConfirmDialog({
 }) {
   const { rawColors } = useTheme();
   const destructive = tone === 'destructive';
-  const iconName = icon === undefined ? (destructive ? 'trash-can-outline' : null) : icon;
+  const iconName = icon === undefined ? (destructive ? 'trash' : null) : icon;
   const accent = destructive ? rawColors.destructive : rawColors.primary;
 
   return (
     <BaseModal visible={visible} onClose={busy ? () => {} : onCancel}>
       <View style={{ gap: 10 }}>
         {iconName && <View style={{ width: 44, height: 44, borderRadius: radius.icon, alignItems: 'center', justifyContent: 'center', backgroundColor: `${accent}24` }}>
-          <MaterialCommunityIcons name={iconName} size={22} color={accent} />
+          <Icon name={iconName} size={22} color={accent} />
         </View>}
         <Text accessibilityRole="header" style={{ marginTop: 4, color: rawColors.foreground, fontSize: 20, fontWeight: '700' }}>{title}</Text>
         <Text style={{ color: rawColors.foregroundSecondary, fontSize: 15, lineHeight: 22 }}>{message}</Text>
@@ -50,7 +47,7 @@ export function ConfirmDialog({
         <View style={{ flexDirection: 'row', gap: space[12], marginTop: space[8] }}>
           <Button label={cancelLabel} variant="secondary" onPress={onCancel} disabled={busy} style={{ flex: 1 }} />
           <Button label={confirmLabel} variant={destructive ? 'destructive' : 'primary'} onPress={onConfirm} busy={busy}
-            icon={destructive ? 'trash-can-outline' : undefined} style={{ flex: 1 }} />
+            icon={destructive ? 'trash' : undefined} style={{ flex: 1 }} />
         </View>
       </View>
     </BaseModal>

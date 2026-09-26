@@ -1,58 +1,64 @@
-import { Keyboard, ScrollView, View } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
 import { BlurTargetView } from 'expo-blur';
+import { router } from 'expo-router';
+import { useRef } from 'react';
+import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AddExerciseModal from '@/components/AddExerciseModal';
 import { DesignSystemProvider } from '@/components/design-system/design-system-provider';
 import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
-import { ActiveWorkoutShortcut } from '@/features/workouts/components/active-workout-shortcut';
+import { ScrollFade } from '@/components/workouts/scroll-fade';
 import { useActiveWorkoutShortcut } from '@/features/workouts/hooks/use-active-workout-shortcut';
-import { sizes, space } from '@/lib/design-system/tokens';
+import type { WorkoutExercise } from '@/features/workouts/workout-types';
+import { space } from '@/lib/design-system/tokens';
+import { useResponsiveLayout } from '@/lib/design-system/use-responsive-layout';
+import { useScrollEdgeFades } from '@/lib/design-system/use-scroll-edge-fades';
+import { useTheme } from '@/lib/theme/ThemeContext';
+import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
 import { LibraryHeader } from '../components/library-header';
 import { LibrarySections } from '../components/library-sections';
 import { LibrarySortDialog } from '../components/library-sort-dialog';
 import { LibraryExerciseDialogs } from '../components/library-exercise-dialogs';
 import { LibraryVariationManager } from '../components/library-variation-manager';
 import { LibraryVariationDialogs } from '../components/library-variation-dialogs';
-import { useLibraryAppearance } from '../hooks/use-library-appearance';
+import { LibraryWorkoutGroup } from '../components/library-workout-group';
 import { useLibraryController } from '../hooks/use-library-controller';
 import { useLibraryQuery } from '../hooks/use-library-query';
 
 function ExerciseLibraryContent() {
-  const { screenBackground } = useLibraryAppearance();
+  const { rawColors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { pageWidth, pageGutter } = useResponsiveLayout();
   const controller = useLibraryController();
   const query = useLibraryQuery(controller.items);
   const blurTarget = useRef<View>(null);
-  const listTarget = useRef<View>(null);
   const { workout, openWorkout } = useActiveWorkoutShortcut();
-  const [shortcutHeight, setShortcutHeight] = useState(72);
-  const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
-  // The docked tab bar sits below this screen, so the shortcut only needs a gap above it.
-  const shortcutBottom = space[16];
-  const listBottom = shortcutBottom + (workout ? shortcutHeight + space[16] : space[16]);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
+  const { topOpacity, bottomOpacity, scrollProps } = useScrollEdgeFades();
+  const openEntry = (entry: WorkoutExercise) => {
+    if (!workout) return;
+    setSelectedWorkoutId(workout.id);
+    router.push({ pathname: '/exercise/[id]', params: { id: String(entry.exerciseId), name: entry.exerciseName, weId: String(entry.id), workoutId: String(workout.id) } });
+  };
   return (
     <FrostedModalProvider blurTarget={blurTarget}>
-      <View style={{ flex: 1, backgroundColor: screenBackground }}>
-        <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
-          <BlurTargetView ref={listTarget} style={{ flex: 1 }}>
-            <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: listBottom }}>
+      <View style={{ flex: 1, backgroundColor: rawColors.background }}>
+        <BlurTargetView ref={blurTarget} style={{ flex: 1, minHeight: 0, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: rawColors.background }}>
+          {/* The docked tab bar sits below this screen and handles the bottom safe area. */}
+          <View style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: pageWidth, alignSelf: 'center', paddingHorizontal: pageGutter, paddingTop: insets.top + space[4] }}>
+            <View style={{ flexShrink: 0, paddingBottom: space[12] }}>
               <LibraryHeader query={query} onAdd={() => controller.setAddModalVisible(true)} />
-              <LibrarySections controller={controller} query={query} />
-            </ScrollView>
-          </BlurTargetView>
-          {workout && !keyboardVisible && <View pointerEvents="box-none" style={{
-            position: 'absolute', left: 0, right: 0, bottom: shortcutBottom, alignItems: 'center', paddingHorizontal: space[20],
-          }}>
-            <View style={{ width: '100%', maxWidth: sizes.pageMaxWidth }}>
-              <ActiveWorkoutShortcut workout={workout} blurTarget={listTarget} onPress={openWorkout}
-                onLayout={(event) => setShortcutHeight(event.nativeEvent.layout.height)} />
             </View>
-          </View>}
+            <View style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <Animated.ScrollView accessibilityLabel="Exercise library" showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="never" style={{ flex: 1, minHeight: 0 }}
+                {...scrollProps} contentContainerStyle={{ gap: space[12], paddingBottom: space[16] }}>
+                {workout && <LibraryWorkoutGroup workout={workout} onReturn={openWorkout} onOpenEntry={openEntry} />}
+                <LibrarySections controller={controller} query={query} />
+              </Animated.ScrollView>
+              <ScrollFade edge="top" opacity={topOpacity} />
+              <ScrollFade edge="bottom" opacity={bottomOpacity} />
+            </View>
+          </View>
         </BlurTargetView>
         <AddExerciseModal visible={controller.isAddModalVisible} onDismiss={controller.closeAddExerciseModal} onSaved={controller.reloadExercises} />
         <LibrarySortDialog query={query} />

@@ -30,6 +30,8 @@ const unitProject = {
   testMatch: ['**/__tests__/**/*.test.{ts,tsx}'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    // Node-environment tests can't load the native SVG module.
+    '^react-native-svg$': '<rootDir>/__tests__/support/react-native-svg-stub.js',
   },
 };
 

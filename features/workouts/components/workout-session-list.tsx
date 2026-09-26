@@ -1,8 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
+import { Icon } from '@/components/design-system/icon';
+import { LiveDot } from '@/components/design-system/status-pill';
 import { ScrollFade } from '@/components/workouts/scroll-fade';
-import { radius, space, typography } from '@/lib/design-system/tokens';
+import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
 import { useScrollEdgeFades } from '@/lib/design-system/use-scroll-edge-fades';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { dateLabel, workoutTitle, type WorkoutSummary } from '../workout-types';
@@ -35,15 +37,23 @@ export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, 
           style={{ flex: 1, minHeight: 0 }}
           {...scrollProps}
           refreshControl={<RefreshControl refreshing={loading && workouts.length > 0} onRefresh={onRefresh} tintColor={rawColors.primary} />}
-          contentContainerStyle={{ gap: space[16], paddingBottom: space[16] }}>
-          {activeElsewhere && <Pressable accessibilityRole="button" accessibilityLabel="Continue active workout" onPress={() => onOpen(activeElsewhere.id)}
-            className="active:opacity-70" style={{ flexDirection: 'row', gap: space[12], alignItems: 'center', borderWidth: 1, borderColor: rawColors.border, padding: space[16], borderRadius: radius.action, backgroundColor: rawColors.surface }}>
-            <MaterialCommunityIcons name="play-outline" color={rawColors.primary} size={25} />
-            <View style={{ flex: 1, gap: space[4] }}>
-              <Text style={{ color: rawColors.primary, ...typography.caption, fontWeight: '600' }}>Continue workout · {dateLabel(new Date(activeElsewhere.startedAt))}</Text>
+          contentContainerStyle={{ gap: space[12], paddingBottom: space[16] }}>
+          {activeElsewhere && <Pressable accessibilityRole="button" onPress={() => onOpen(activeElsewhere.id)}
+            accessibilityLabel={`Continue active workout, ${workoutTitle(activeElsewhere)}, in progress since ${dateLabel(new Date(activeElsewhere.startedAt))}`}
+            className="active:opacity-70" style={{
+              flexDirection: 'row', gap: space[12], alignItems: 'center', minHeight: sizes.liveStrip,
+              paddingHorizontal: space[16], paddingVertical: 10, borderWidth: 1, borderColor: rawColors.border,
+              borderRadius: radius.card, backgroundColor: rawColors.surface,
+            }}>
+            <LiveDot />
+            <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
               <Text numberOfLines={1} style={{ color: rawColors.foreground, fontSize: 15, fontWeight: '600' }}>{workoutTitle(activeElsewhere)}</Text>
+              <Text numberOfLines={1} style={{ color: rawColors.liveInk, ...typography.pill }}>In progress · {dateLabel(new Date(activeElsewhere.startedAt))}</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" color={rawColors.foregroundMuted} size={20} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[4], flexShrink: 0 }}>
+              <Text style={{ color: rawColors.foreground, fontSize: 14, fontWeight: '700' }}>Return</Text>
+              <Icon name="chevron-right" size={18} color={rawColors.foreground} />
+            </View>
           </Pressable>}
           {error && <WorkoutError message={error} onRetry={onRefresh} />}
           {loading && workouts.length === 0 ? <ActivityIndicator style={{ padding: space[20] * 2 }} color={rawColors.primary} />

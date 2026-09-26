@@ -1,12 +1,12 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { GroupedList, GroupLabel, ListRow } from '@/components/design-system/grouped-list';
+import { Icon } from '@/components/design-system/icon';
 
 jest.mock('react-native', () => ({
   View: 'View', Pressable: 'Pressable', Text: 'Text',
   StyleSheet: { create: (styles: unknown) => styles },
 }));
-jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'MaterialCommunityIcons' }));
 jest.mock('@/lib/theme/ThemeContext', () => ({
   useTheme: () => ({
     isDark: false,
@@ -93,7 +93,7 @@ describe('GroupedList and ListRow', () => {
   it('renders string trailing content as text and a chevron when asked', async () => {
     await render(<ListRow title="Units" trailing="kg" chevron />);
     expect(tree.root.findAllByType('Text' as never).map((text: Node) => text.props.children)).toEqual(['Units', 'kg']);
-    expect(tree.root.findByType('MaterialCommunityIcons' as never).props.name).toBe('chevron-right');
+    expect(tree.root.findByType(Icon).props.name).toBe('chevron-right');
   });
 });
 

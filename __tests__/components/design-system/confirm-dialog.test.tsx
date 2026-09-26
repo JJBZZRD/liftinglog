@@ -2,6 +2,7 @@ import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { Button } from '@/components/design-system/button';
 import { ConfirmDialog } from '@/components/design-system/confirm-dialog';
+import { Icon } from '@/components/design-system/icon';
 
 jest.mock('react-native', () => ({
   View: 'View', Pressable: 'Pressable', Text: 'Text', ActivityIndicator: 'ActivityIndicator',
@@ -18,7 +19,6 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 12, left: 0, right: 0 }) }));
-jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'MaterialCommunityIcons' }));
 jest.mock('@/lib/theme/ThemeContext', () => ({
   useTheme: () => ({
     isDark: false,
@@ -114,8 +114,8 @@ describe('ConfirmDialog', () => {
     expect(button('Delete').props.variant).toBe('destructive');
     expect(hostPressable(button('Delete')).props.className).toContain('bg-destructive');
     expect(button('Cancel').props.variant).toBe('secondary');
-    const icons = tree.root.findAllByType('MaterialCommunityIcons' as never);
-    expect(icons.map((icon: Node) => icon.props.name)).toEqual(['trash-can-outline', 'trash-can-outline']);
+    const icons = tree.root.findAllByType(Icon);
+    expect(icons.map((icon: Node) => icon.props.name)).toEqual(['trash', 'trash']);
     expect(icons[0].props.color).toBe('#DE0000');
   });
 
@@ -123,6 +123,6 @@ describe('ConfirmDialog', () => {
     await render({ tone: 'primary', confirmLabel: 'Finish' });
     expect(button('Finish').props.variant).toBe('primary');
     expect(hostPressable(button('Finish')).props.className).toContain('bg-primary');
-    expect(tree.root.findAllByType('MaterialCommunityIcons' as never)).toHaveLength(0);
+    expect(tree.root.findAllByType(Icon)).toHaveLength(0);
   });
 });

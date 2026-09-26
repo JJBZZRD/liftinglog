@@ -9,7 +9,7 @@
  */
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
-import { Pressable, Text, View, useWindowDimensions, type TextStyle, type ViewStyle } from "react-native";
+import { Pressable, Text, View, useWindowDimensions, type ViewStyle } from "react-native";
 import { useUnitPreference } from "../../lib/contexts/UnitPreferenceContext";
 import { radius, space, typography } from "../../lib/design-system/tokens";
 import { useTheme } from "../../lib/theme/ThemeContext";
@@ -44,54 +44,44 @@ interface SetItemProps {
   accessibilityLabel?: string;
 }
 
-/** History's set anatomy on a grouped slate surface, with stable optional slots. */
+/**
+ * A set row inside a workout-detail exercise card, as drawn in the mockups: a number
+ * badge, weight and reps as a bold value with a small unit, and a BEST or PB badge in
+ * a reserved accessory column. The card supplies the horizontal padding.
+ */
 function WorkoutSetContent({
   index, weightLabel, reps, note, pbBadge, isWarmup, isBestSet, rightActions,
 }: Pick<SetItemProps, "index" | "reps" | "note" | "pbBadge" | "isWarmup" | "isBestSet" | "rightActions"> & { weightLabel: string }) {
   const { rawColors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
-  const compact = width / fontScale < 380;
-  const columnGap = compact ? space[4] : space[8];
-  const indexWidth = compact ? 24 : 28;
-  // The badge slot scales with text and exists even on ordinary sets. Narrow
-  // rows wrap units inside their value column instead of moving a PB below it.
-  const badgeWidth = 22 + 32 * fontScale;
+  const { fontScale } = useWindowDimensions();
+  // The badge slot scales with text and exists even on ordinary sets, so values never shift.
+  const badgeWidth = 52 * Math.max(1, fontScale);
   const [weight, unit] = weightLabel.split(' ');
-  const valueStyle: TextStyle = { ...typography.body, color: rawColors.foreground, fontWeight: '600', fontVariant: ['tabular-nums'] };
+  const value = (amount: string | number, label?: string) => (
+    <Text selectable style={{ flex: 1, minWidth: 0, fontSize: 13, color: rawColors.foregroundSecondary, fontVariant: ['tabular-nums'] }}>
+      <Text style={{ fontSize: 17, fontWeight: '600', color: rawColors.foreground }}>{amount}</Text>{label ? ` ${label}` : ''}
+    </Text>
+  );
+  const badge = (text: string, gold: boolean) => (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+      style={{ maxWidth: '100%', paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.badge, backgroundColor: gold ? `${rawColors.pbGold}29` : rawColors.surfaceSecondary }}>
+      <Text style={{ flexShrink: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.4, color: gold ? rawColors.pbGold : rawColors.foreground }}>{text.toUpperCase()}</Text>
+    </View>
+  );
   return (
-    <View style={{ paddingHorizontal: space[12], paddingVertical: space[12], borderTopWidth: 1, borderColor: rawColors.borderLight, gap: space[6] }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: columnGap }}>
-        <View style={{ width: indexWidth, minHeight: indexWidth, borderRadius: radius.button, backgroundColor: rawColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ ...typography.caption, color: rawColors.foregroundSecondary, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{index}</Text>
+    <View style={{ paddingVertical: space[8], borderTopWidth: 1, borderColor: rawColors.borderLight, gap: space[6] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 26, minHeight: 26, borderRadius: radius.button, backgroundColor: rawColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: rawColors.foregroundSecondary, fontVariant: ['tabular-nums'] }}>{index}</Text>
         </View>
-        <View style={{ flex: 3, minWidth: 0 }}>
-          <Text selectable style={valueStyle}>{compact ? weight : weightLabel}</Text>
-          {compact && unit && <Text style={{ ...typography.caption, color: rawColors.foregroundMuted }}>{unit}</Text>}
-        </View>
-        <View style={{ flex: 2, minWidth: 0 }}>
-          <Text selectable style={valueStyle}>{compact ? reps ?? '\u2014' : `${reps ?? '\u2014'} reps`}</Text>
-          {compact && <Text style={{ ...typography.caption, color: rawColors.foregroundMuted }}>reps</Text>}
-        </View>
+        {value(weight, unit)}
+        {value(reps ?? '—', 'reps')}
         <View style={{ width: badgeWidth, alignItems: 'flex-end' }}>
-          {pbBadge ? (
-            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
-              style={{ flexDirection: 'row', alignItems: 'center', maxWidth: '100%', gap: space[4], paddingHorizontal: space[4], paddingVertical: space[4], borderRadius: radius.badge, backgroundColor: `${rawColors.pbGold}18`, borderWidth: 1, borderColor: `${rawColors.pbGold}55` }}>
-              <MaterialCommunityIcons name="trophy-outline" size={14} color={rawColors.pbGold} />
-              <Text style={{ color: rawColors.foreground, fontSize: 11, fontWeight: '600', flexShrink: 1 }}>{pbBadge}</Text>
-            </View>
-          ) : isBestSet ? (
-            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
-              style={{ maxWidth: '100%', paddingHorizontal: space[6], paddingVertical: space[4], borderRadius: radius.badge, backgroundColor: rawColors.primaryLight }}>
-              <Text style={{ color: rawColors.primary, fontSize: 11, fontWeight: '600' }}>Best</Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={{ width: 16, alignItems: 'center' }}>
-          <MaterialCommunityIcons name="chevron-right" size={16} color={rawColors.foregroundMuted} />
+          {pbBadge ? badge(pbBadge, true) : isBestSet ? badge('Best', false) : null}
         </View>
       </View>
       {(isWarmup || !!note?.trim()) && (
-        <View style={{ paddingLeft: indexWidth + columnGap, gap: space[4] }}>
+        <View style={{ paddingLeft: 26 + 10, gap: space[4] }}>
           {isWarmup && <Text style={{ ...typography.caption, color: rawColors.foregroundMuted }}>Warm-up</Text>}
           {!!note?.trim() && <Text selectable style={{ ...typography.label, lineHeight: 20, color: rawColors.foregroundSecondary }}>{note}</Text>}
         </View>

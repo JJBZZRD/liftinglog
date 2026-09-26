@@ -101,7 +101,7 @@ function renderWorkoutNavigation(initialUrl = '/') {
 
 async function openWorkout(result: ReturnType<typeof renderWorkoutNavigation>) {
   act(() => router.push('/workout-session/42'));
-  await result.findByText('Add Exercise');
+  await result.findByText('Add exercise');
 }
 
 function appStackState(result: ReturnType<typeof renderWorkoutNavigation>) {
@@ -129,7 +129,7 @@ describe('workout detail to exercise library navigation', () => {
       if (visit === 0) tabsKey = appStackState(result).routes[0].key;
       expect(tabsKey).toEqual(expect.any(String));
       const homeFocusCount = result.onHomeFocus.mock.calls.length;
-      fireEvent.press(result.getByText('Add Exercise'));
+      fireEvent.press(result.getByText('Add exercise'));
 
       await waitFor(() => expect(result.getPathname()).toBe('/exercises'));
       expect(result.getByTestId('exercises-workout').props.children).toBe('42');
@@ -147,7 +147,7 @@ describe('workout detail to exercise library navigation', () => {
     mockResumeWorkoutSession.mockImplementation(() => new Promise<void>((resolve) => { finishResume = resolve; }));
     const result = renderWorkoutNavigation();
     await openWorkout(result);
-    fireEvent.press(result.getByText('Add Exercise'));
+    fireEvent.press(result.getByText('Add exercise'));
 
     expect(mockResumeWorkoutSession).toHaveBeenCalledWith(42);
     expect(result.getPathname()).toBe('/workout-session/42');
@@ -163,7 +163,7 @@ describe('workout detail to exercise library navigation', () => {
     setSelectedWorkoutId(7);
     const result = renderWorkoutNavigation();
     await openWorkout(result);
-    fireEvent.press(result.getByText('Add Exercise'));
+    fireEvent.press(result.getByText('Add exercise'));
 
     await result.findByTestId('active-workout-conflict');
     expect(result.getPathname()).toBe('/workout-session/42');
@@ -172,7 +172,7 @@ describe('workout detail to exercise library navigation', () => {
 
   it('opens Exercises from a directly linked workout without requiring an existing tabs route', async () => {
     const result = renderWorkoutNavigation('/workout-session/42');
-    fireEvent.press(await result.findByText('Add Exercise'));
+    fireEvent.press(await result.findByText('Add exercise'));
 
     await waitFor(() => expect(result.getPathname()).toBe('/exercises'));
     expect(appStackState(result).routes.map(({ name }) => name)).toEqual(['(tabs)']);

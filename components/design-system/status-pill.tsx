@@ -1,4 +1,3 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import Animated, {
@@ -6,6 +5,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { motion, radius, sizes, space, typography } from '@/lib/design-system/tokens';
 import { useTheme } from '@/lib/theme/ThemeContext';
+import { Icon } from './icon';
 
 /** The live dot. Its ring pulses outward; under reduced motion it is a still dot. */
 export function LiveDot({ pulse = true }: { pulse?: boolean }) {
@@ -40,7 +40,7 @@ export function StatusPill({ status, label }: { status: 'live' | 'completed'; la
   if (status === 'completed') {
     return <View accessible accessibilityLabel={text}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-      <MaterialCommunityIcons name="check" size={14} color={rawColors.foregroundMuted} />
+      <Icon name="check" size={14} strokeWidth={2.4} color={rawColors.foregroundMuted} />
       <Text style={{ color: rawColors.foregroundSecondary, ...typography.pill }}>{text}</Text>
     </View>;
   }
