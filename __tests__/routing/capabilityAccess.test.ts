@@ -29,7 +29,7 @@ describe("isCapabilityEnabled", () => {
     ["thirdPartyImport", "full", true],
     ["thirdPartyImport", "mvp", false],
     ["multipleWorkoutSessions", "full", true],
-    ["multipleWorkoutSessions", "mvp", false],
+    ["multipleWorkoutSessions", "mvp", true],
   ] as const)("reports %s for %s", (capability, profile, expected) => {
     expect(isCapabilityEnabled(capability, getCapabilities(profile))).toBe(expected);
   });

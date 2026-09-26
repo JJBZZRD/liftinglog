@@ -118,7 +118,7 @@ describe('Workouts Home list viewport', () => {
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/workout-session/[id]', params: { id: '3' } });
   });
 
-  it('shows fades only at overflowing edges and targets the list without including its fades', async () => {
+  it('shows fades only at overflowing edges and keeps both mounted', async () => {
     await act(async () => { tree = renderer.create(<WorkoutsHomeScreen />); });
     const list = getList(tree!);
     const fades = find(tree!, 'ScrollFade');
@@ -132,11 +132,9 @@ describe('Workouts Home list viewport', () => {
     await act(async () => { list.props.onScroll({ nativeEvent: { contentOffset: { y: 100 } } }); });
     expect(fadeEdges(tree!)).toEqual(['top', 'bottom']);
     expect(find(tree!, 'ScrollFade')).toEqual(fades);
-    const targets = find(tree!, 'BlurTargetView');
-    expect(targets).toHaveLength(2);
-    expect(targets[1].findAll((node: TestNode) => node.type === 'ScrollFade')).toHaveLength(0);
-    expect(find(tree!, 'ScrollFade')[0].props.blurTarget).toBe(targets[1].props.ref);
-    expect(find(tree!, 'ScrollFade')[0].props.blurTarget).not.toBe(find(tree!, 'WorkoutOverlays')[0].props.blurTarget);
+    // Fades are plain gradients: the only blur target is the page one used by dialogs.
+    expect(find(tree!, 'BlurTargetView')).toHaveLength(1);
+    expect(find(tree!, 'ScrollFade')[0].props.blurTarget).toBeUndefined();
 
     await act(async () => { list.props.onScroll({ nativeEvent: { contentOffset: { y: 600 } } }); });
     expect(fadeEdges(tree!)).toEqual(['top']);

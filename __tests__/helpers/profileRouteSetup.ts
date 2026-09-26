@@ -34,6 +34,9 @@ jest.mock('expo-screen-orientation', () => ({
   lockAsync: mockLockAsync,
 }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+// expo-router's testing library mocks Reanimated with `react-native-reanimated/mock`,
+// which needs the worklets runtime. Without this it silently falls back to `{}`.
+jest.mock('react-native-worklets', () => jest.requireActual('react-native-worklets/src/mock'));
 jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,
 }));

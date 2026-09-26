@@ -21,17 +21,18 @@ const capabilitiesByProfile: Readonly<Record<ReleaseProfile, Readonly<AppCapabil
     healthMetrics: false,
     videoRecording: false,
     thirdPartyImport: false,
-    multipleWorkoutSessions: false,
+    multipleWorkoutSessions: true,
   }),
 });
 
 export function parseReleaseProfile(value: string | undefined): ReleaseProfile {
-  if (value === undefined || value === 'full') {
-    return 'full';
+  // Unset means a local build (`npx expo run:*`), which targets the MVP surface.
+  if (value === undefined || value === 'mvp') {
+    return 'mvp';
   }
 
-  if (value === 'mvp') {
-    return 'mvp';
+  if (value === 'full') {
+    return 'full';
   }
 
   throw new Error(`Invalid release profile: ${JSON.stringify(value)}`);

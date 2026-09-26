@@ -89,11 +89,11 @@ their sets remain editable and deletable.
 - The user may choose another calendar date and log an exercise against that date.
 - An exercise that is already in progress at midnight stays attached to the date on
   which it began.
-- The MVP does not need UI for naming or selecting several distinct workouts on the
-  same day.
+- The MVP allows several distinct workouts on the same day. The Workouts tab lists
+  every workout on the selected date, and each can be opened, completed, or deleted
+  on its own (decided 2026-09-26, see [ui-redesign-plan.md](ui-redesign-plan.md)).
 - The data model and new queries must not assume that a date uniquely identifies a
-  workout. A later release must be able to create, select, and display multiple
-  `workouts` on one date.
+  workout.
 
 ## 5. History, Analytics, and Personal Bests
 
@@ -205,6 +205,7 @@ sufficient boundary.
 - Existing calculators
 - Gallery video attachment and playback
 - Database backup and replacement restore
+- Multiple workouts on the same day
 - Settings required by those features
 
 ### Visible placeholder
@@ -220,7 +221,6 @@ sufficient boundary.
 - Health metrics and user check-ins
 - In-app video recording
 - Imports from third-party fitness applications
-- Multiple named or selectable workouts on the same day
 - Additional set types such as duration and distance
 - Sending calculator results into a workout
 
@@ -241,7 +241,7 @@ targeted source reads on 2026-09-19.
 | Immediate PB calculation | `addSet()`, `updateSet()`, and `deleteSet()` rebuild PB events. `rebuildPBEventsForExercise()` reads sets without requiring a completed parent entry. | Aligned |
 | Notes storage | The schema has `note` columns on `workouts`, `workout_exercises`, and `sets`; update functions exist for exercise-entry and set notes. | Storage aligned; UX must be acceptance-tested |
 | Multiple workouts per date | `workouts` uses an ID and has no unique date constraint. | Data model aligned |
-| Current active workout | `getOrCreateActiveWorkout()` reuses one globally active unfinished workout. | Acceptable for MVP; later UI/service change needed for multiple same-day workouts |
+| Current active workout | `getOrCreateActiveWorkout()` reuses one globally active unfinished workout. | Multiple same-day workouts are now in the MVP (§4). The Workouts tab lists each session through `lib/db/workoutSessions.ts`; one workout is active at a time |
 | Duplicate exercise names | `exercises.name` is currently declared `.unique()`. `createExercise()` creates a unique row ID but does not provide duplicate-name identity semantics. | Required schema and UX change |
 | Calculators | `CALCULATORS` contains the five calculators listed in section 8 and the calculator screen renders the catalog. | Aligned |
 | Gallery video selection | `SetInfoScreen` uses a video-only gallery picker with multiple selection disabled and updates an existing media row when replacing a video. | Aligned |

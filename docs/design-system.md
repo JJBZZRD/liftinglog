@@ -182,20 +182,29 @@ flex ancestors, with `flex: 1` and `minHeight: 0` where it must consume remainin
 space. Keep its refresh control, empty/error content, active-workout banner, and
 optional footer in the scrolling area. Changing the date resets the list position.
 
-Scroll fades belong to the list viewport and must sample a target that excludes
-the fades themselves. The full page remains the separate target for frosted
-dialogs. Keep the final list item reachable above the floating tab bar. A smaller
+Scroll fades belong to the list viewport. They are plain gradients, so they need
+no blur target. The full page remains the blur target for frosted dialogs. Keep the final list item reachable above the floating tab bar. A smaller
 screen must reduce the viewport height, not turn the fixed controls into scroll
 content.
 
 ### Scrollable list edge fades
 
 When a scrollable list uses edge fades, reuse `ScrollFade` and keep the overlays
-mounted. Drive their `opacity` shared value directly from the distance scrolled
-away from the corresponding boundary: `clamp(distance / sizes.scrollFade, 0, 1)`.
-The ramp spans the fade's height (currently 36 dp). Update it on the UI thread
-using Reanimated's scroll handler, so slow drags, fast swipes, momentum, and
-direction changes all track the content without delay.
+mounted. Use `useScrollEdgeFades()` from `lib/design-system/use-scroll-edge-fades.ts`:
+spread its `scrollProps` onto an `Animated.ScrollView` and pass `topOpacity` and
+`bottomOpacity` to the two fades. The hook drives each opacity directly from the
+distance scrolled away from the corresponding boundary:
+`clamp(distance / sizes.scrollFade, 0, 1)`. The ramp spans the fade's height
+(currently 36 dp). It updates on the UI thread using Reanimated's scroll handler,
+so slow drags, fast swipes, momentum, and direction changes all track the content
+without delay.
+
+`ScrollFade` is a single `LinearGradient` in the page background colour with
+eased ("scrim") stops, so it has no visible start or end line. Do not stack blur
+layers or several gradients to build a fade: each layer's edge shows as a hard
+line once opacity rises, and Android blur at partial opacity is unreliable. When
+a screen scrolls under a system bar, pass `solidExtent` (for example
+`insets.top`) to add an opaque band behind that bar before the gradient starts.
 
 Scrolling speed therefore controls how quickly the fade changes: a faster swipe
 traverses the opacity ramp faster, while a slower drag reveals it gradually. At
@@ -212,7 +221,8 @@ Hide the corresponding fade at the start or end of the list, and hide both when
 the content fits without scrolling. Keep fades inside the list viewport, outside
 their blur target, and non-interactive. They must not shift content or obscure
 the final item when the user reaches it. The Workouts list is the reference
-implementation; apply this behaviour to new or redesigned scrollable lists.
+implementation, and workout detail uses the same hook; apply this behaviour to
+new or redesigned scrollable lists.
 
 ### Active-workout shortcut
 

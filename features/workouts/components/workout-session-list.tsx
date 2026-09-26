@@ -1,10 +1,9 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurTargetView } from 'expo-blur';
-import { useRef } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
-import Animated, { useAnimatedScrollHandler, useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { ScrollFade } from '@/components/workouts/scroll-fade';
-import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
+import { radius, space, typography } from '@/lib/design-system/tokens';
+import { useScrollEdgeFades } from '@/lib/design-system/use-scroll-edge-fades';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { dateLabel, workoutTitle, type WorkoutSummary } from '../workout-types';
 import { WorkoutEmpty, WorkoutError } from './workout-feedback';
@@ -24,36 +23,15 @@ type WorkoutSessionListProps = {
 /** Key this viewport by the selected day to reset native scroll position and fades together. */
 export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, onRefresh, onOpen, showHealthMetrics, onHealthMetrics }: WorkoutSessionListProps) {
   const { rawColors } = useTheme();
-  const blurTarget = useRef<View>(null);
-  const offset = useSharedValue(0);
-  const contentHeight = useSharedValue(0);
-  const viewportHeight = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    offset.value = event.contentOffset.y;
-  });
-  // Opacity follows distance on the UI thread. No threshold, timer, or JS render
-  // can leave the glass catching up after a fast swipe or a direction change.
-  const topOpacity = useDerivedValue(() => {
-    const overflow = Math.max(0, contentHeight.value - viewportHeight.value);
-    const distance = Math.max(0, Math.min(offset.value, overflow));
-    return viewportHeight.value > 0 ? Math.min(1, distance / sizes.scrollFade) : 0;
-  });
-  const bottomOpacity = useDerivedValue(() => {
-    const overflow = Math.max(0, contentHeight.value - viewportHeight.value);
-    const distance = Math.max(0, overflow - Math.max(0, offset.value));
-    return viewportHeight.value > 0 ? Math.min(1, distance / sizes.scrollFade) : 0;
-  });
+  const { topOpacity, bottomOpacity, scrollProps } = useScrollEdgeFades();
 
   return (
     <View style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-      <BlurTargetView ref={blurTarget} style={{ flex: 1, minHeight: 0, backgroundColor: rawColors.background }}>
+      <View style={{ flex: 1, minHeight: 0, backgroundColor: rawColors.background }}>
         <Animated.ScrollView accessibilityLabel="Workouts list" contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false} showsVerticalScrollIndicator={false}
           style={{ flex: 1, minHeight: 0 }}
-          onLayout={(event) => { viewportHeight.value = event.nativeEvent.layout.height; }}
-          onContentSizeChange={(_, height) => { contentHeight.value = height; }}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
+          {...scrollProps}
           refreshControl={<RefreshControl refreshing={loading && workouts.length > 0} onRefresh={onRefresh} tintColor={rawColors.primary} />}
           contentContainerStyle={{ gap: space[16], paddingBottom: space[16] }}>
           {activeElsewhere && <Pressable accessibilityRole="button" accessibilityLabel="Continue active workout" onPress={() => onOpen(activeElsewhere.id)}
@@ -77,9 +55,9 @@ export function WorkoutSessionList({ workouts, activeElsewhere, loading, error, 
             </Pressable>
           </View>}
         </Animated.ScrollView>
-      </BlurTargetView>
-      <ScrollFade edge="top" blurTarget={blurTarget} opacity={topOpacity} />
-      <ScrollFade edge="bottom" blurTarget={blurTarget} opacity={bottomOpacity} />
+      </View>
+      <ScrollFade edge="top" opacity={topOpacity} />
+      <ScrollFade edge="bottom" opacity={bottomOpacity} />
     </View>
   );
 }

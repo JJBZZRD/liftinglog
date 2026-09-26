@@ -105,7 +105,7 @@ rendered check on the Android emulator in light and dark mode. Commit each phase
 separately. Do not include the unrelated `android/` and `.gitignore` working-tree
 changes.
 
-### Phase 1: quick fixes
+### Phase 1: quick fixes (done)
 
 1. **Release profile.**
    - Change `parseReleaseProfile(undefined)` to return `mvp`.

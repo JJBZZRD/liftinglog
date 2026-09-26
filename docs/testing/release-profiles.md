@@ -1,23 +1,20 @@
 # Release profiles
 
-The local default remains the `full` capability profile. To run the local MVP
-surface, set the public profile for the Metro process before starting Expo:
-
-```powershell
-$env:EXPO_PUBLIC_RELEASE_PROFILE = 'mvp'
-npm.cmd start -- --localhost
-```
-
-Clear the variable or set it to `full` to return to the full local surface:
+The local default is the `mvp` capability profile, so `npx expo run:android` and
+`npm start` show only the MVP surface. To see deferred features locally, set the
+public profile for the Metro process before starting Expo:
 
 ```powershell
 $env:EXPO_PUBLIC_RELEASE_PROFILE = 'full'
 npm.cmd start -- --localhost
 ```
 
+Or add `EXPO_PUBLIC_RELEASE_PROFILE=full` to the ignored `.env.local`. Clear the
+variable or set it to `mvp` to return to the MVP surface.
+
 `EXPO_PUBLIC_RELEASE_PROFILE` is an Expo public environment variable. EAS
-includes the value in the JavaScript bundle at build time, so the development
-profile uses `full` while preview and production use `mvp`.
+includes the value in the JavaScript bundle at build time. The development,
+preview and production profiles all use `mvp`.
 
 For a development client connected to Metro, restart Metro after changing the
 value and perform a full reload. The newly served JavaScript bundle selects the
@@ -30,7 +27,7 @@ This follows Expo's documented [build-profile environment configuration](https:/
 and [public environment variable bundling](https://docs.expo.dev/guides/environment-variables/).
 
 The repository's `.env.local` remains the local source for the ignored
-localhost hostname and is not modified by the release-profile setup.
+localhost hostname. The release-profile setup does not modify it.
 
 ## CI coverage
 

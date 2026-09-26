@@ -20,7 +20,7 @@ function readEasConfig(): EasConfig {
 
 describe('EAS build capability profiles', () => {
   it.each([
-    ['development', 'full'],
+    ['development', 'mvp'],
     ['preview', 'mvp'],
     ['production', 'mvp'],
   ] as const)('sets the %s build profile to %s', (buildProfile, expectedProfile) => {

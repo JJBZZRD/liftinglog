@@ -33,10 +33,10 @@ function loadReleaseProfile(value: string | undefined): ReleaseProfileExports {
 }
 
 describe('release profiles', () => {
-  it('defaults an undefined value to the full profile', () => {
+  it('defaults an undefined value to the mvp profile', () => {
     const { parseReleaseProfile } = loadReleaseProfile(undefined);
 
-    expect(parseReleaseProfile(undefined)).toBe('full');
+    expect(parseReleaseProfile(undefined)).toBe('mvp');
   });
 
   it('accepts the exact full and mvp profile values', () => {
@@ -79,13 +79,13 @@ describe('release profiles', () => {
       healthMetrics: false,
       videoRecording: false,
       thirdPartyImport: false,
-      multipleWorkoutSessions: false,
+      multipleWorkoutSessions: true,
     });
     expect(Object.isFrozen(capabilities)).toBe(true);
   });
 
   it.each([
-    [undefined, 'full'],
+    [undefined, 'mvp'],
     ['full', 'full'],
     ['mvp', 'mvp'],
   ] as const)('selects %s for EXPO_PUBLIC_RELEASE_PROFILE=%p', (value, profile) => {

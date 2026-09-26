@@ -2,7 +2,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FrostedModalProvider } from '@/components/modals/frosted-modal-context';
 import { WorkoutThemeBoundary } from '@/components/workouts/workout-theme';
@@ -11,6 +12,7 @@ import { ScrollFade } from '@/components/workouts/scroll-fade';
 import { useUnitPreference } from '@/lib/contexts/UnitPreferenceContext';
 import { radius, sizes, space, typography } from '@/lib/design-system/tokens';
 import { useResponsiveLayout } from '@/lib/design-system/use-responsive-layout';
+import { useScrollEdgeFades } from '@/lib/design-system/use-scroll-edge-fades';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { formatVolumeFromKg, getWeightUnitLabel } from '@/lib/utils/units';
 import { setSelectedWorkoutId } from '@/lib/workouts/selection-store';
@@ -31,7 +33,7 @@ function WorkoutDetailContent() {
   const { pageWidth, pageGutter, cardPadding, itemGap } = useResponsiveLayout();
   const blurTarget = useRef<View>(null);
   const [editing, setEditing] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const { topOpacity, bottomOpacity, scrollProps } = useScrollEdgeFades();
   const detail = useWorkoutDetail(id);
   const { workout, loading, busy, error } = detail;
   const { pbBadges, pbError } = useWorkoutPBBadges(workout);
@@ -51,9 +53,9 @@ function WorkoutDetailContent() {
     <View style={{ flex: 1, backgroundColor: rawColors.background }}>
       <Stack.Screen options={{ title: workout ? workoutTitle(workout) : 'Workout', headerShown: false }} />
       <BlurTargetView ref={blurTarget} style={{ flex: 1, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: rawColors.background }}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}
+        <Animated.ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}
           style={{ backgroundColor: rawColors.background }}
-          onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 8)} scrollEventThrottle={16}
+          {...scrollProps}
           contentContainerStyle={{ paddingTop: insets.top + space[8], paddingHorizontal: pageGutter, paddingBottom: Math.max(insets.bottom, space[20]) + 30, gap: itemGap + space[8], maxWidth: pageWidth, minWidth: 0, width: '100%', alignSelf: 'center' }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: space[8], marginLeft: -10 }}>
             <View style={{ flexDirection: 'row', minWidth: 0, flexShrink: 1, alignItems: 'center', gap: space[8] }}>
@@ -119,10 +121,10 @@ function WorkoutDetailContent() {
               <Text style={{ flexShrink: 1, minWidth: 0, textAlign: 'center', color: rawColors.primaryForeground, ...typography.body, fontWeight: '700' }}>{active ? 'Complete Workout' : 'Resume Workout'}</Text>
             </Pressable>
           </>}
-        </ScrollView>
+        </Animated.ScrollView>
       </BlurTargetView>
-      {scrolled && <ScrollFade edge="top" blurTarget={blurTarget} />}
-      <ScrollFade edge="bottom" blurTarget={blurTarget} />
+      <ScrollFade edge="top" solidExtent={insets.top} opacity={topOpacity} />
+      <ScrollFade edge="bottom" solidExtent={insets.bottom} opacity={bottomOpacity} />
       <CompleteWorkoutDialog entries={detail.unfinished} busy={busy} error={error} onClose={detail.cancelComplete} onComplete={() => void detail.complete()} />
       <ActiveWorkoutDialog visible={detail.conflictId !== null} onClose={() => detail.setConflictId(null)} onOpen={() => {
         if (detail.conflictId === null) return;

@@ -8,7 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_RELEASE_PROFILE": "full"
+        "EXPO_PUBLIC_RELEASE_PROFILE": "mvp"
       }
     },
     "preview": {
