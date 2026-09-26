@@ -5,6 +5,12 @@ branch `UI-redesign`. Round 1 (Phases 1 to 7 of [ui-redesign-plan.md](ui-redesig
 is built and pushed. This round is **design first**: produce mockups, get the owner's
 choices, record the decisions, and only then build.
 
+## Progress
+
+- **Proposed split (awaiting the owner):** page A (the exercise page, sections 1 to 8) first, then page B (sections 9 to 13).
+- **Page A mockups, round 1 of choices:** [ui-mockups/liftinglog-round2-mockups.html](ui-mockups/liftinglog-round2-mockups.html), hosted (private to the owner) at https://claude.ai/artifact/XiFe95KAfAHTev5ajxqmif. Awaiting the owner's choices.
+- **Found while preparing page A:** pinning has no visible effect in the MVP since the pinned-exercises overlay was removed (decision on page A). The edit-entry page doesn't guard unsaved set changes, and a failed Save Edits is silent (fixes shown on page A).
+
 ## Goal
 
 Mock up every screen, modal, sheet and dialog a user can reach in the `mvp` release

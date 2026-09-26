@@ -1,0 +1,941 @@
+<title>LiftingLog Round 2 Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #F4F5F7; --panel: #FFFFFF; --ink: #1D2230; --ink-2: #4F5667; --ink-3: #656C7B;
+  --rule: #DFE2E8; --rule-soft: #ECEEF2; --chip: #E7E9EE; --chip-on: #292F3D; --chip-on-fg: #FFFFFF;
+  --z: 0.74;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark;
+    --page: #0F1116; --panel: #171A21; --ink: #EEF0F4; --ink-2: #B4BAC6; --ink-3: #8D94A2;
+    --rule: #2A2F3A; --rule-soft: #21252D; --chip: #232733; --chip-on: #E8EBF0; --chip-on-fg: #1D2230; }
+}
+:root[data-theme="dark"] { color-scheme: dark;
+  --page: #0F1116; --panel: #171A21; --ink: #EEF0F4; --ink-2: #B4BAC6; --ink-3: #8D94A2;
+  --rule: #2A2F3A; --rule-soft: #21252D; --chip: #232733; --chip-on: #E8EBF0; --chip-on-fg: #1D2230; }
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px; line-height: 1.5; padding-inline: 20px; padding-block: 32px 72px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; }
+h2 { font-size: 26px; }
+.eyebrow { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
+p { margin: 0; max-width: 72ch; color: var(--ink-2); }
+code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; }
+.intro { display: flex; flex-direction: column; gap: 12px; }
+
+.controls { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--page); padding-block: 10px; border-bottom: 1px solid var(--rule);
+  display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
+.ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ctl > span { font-size: 13px; color: var(--ink-3); }
+.seg { display: inline-flex; background: var(--chip); border-radius: 12px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 14px; font-weight: 600; border: 0; background: transparent; color: var(--ink-2); padding: 7px 13px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.seg button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.jump { display: flex; gap: 14px; flex-wrap: wrap; margin-left: auto; font-size: 14px; }
+.jump a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.jump a:hover { color: var(--ink); border-color: var(--ink); }
+
+.section { display: flex; flex-direction: column; gap: 22px; scroll-margin-top: 80px; }
+.sec-head { display: flex; flex-direction: column; gap: 8px; }
+.gallery { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+.shot { display: flex; flex-direction: column; gap: 10px; width: calc(360px * var(--z) + 14px); max-width: 100%; }
+.shot.wide { width: calc(760px * var(--z) + 14px); }
+.shot.wide .phone { overflow-x: auto; }
+.shot-cap { display: flex; flex-direction: column; gap: 3px; }
+.shot-cap b { font-size: 15px; }
+.shot-cap small { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.tag { align-self: flex-start; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 9px; border-radius: 999px; background: var(--chip); color: var(--ink-2); }
+.tag.rec { background: var(--chip-on); color: var(--chip-on-fg); }
+.phone { border-radius: 28px; padding: 7px; background: #0A0C10; box-shadow: 0 0 0 1px var(--rule); width: fit-content; max-width: 100%; }
+.phone-inner { border-radius: 22px; overflow: hidden; }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
+.cmp { background: var(--panel); border: 1px solid var(--rule); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cmp h3 { font-size: 16px; }
+.cmp-row { display: flex; flex-direction: column; gap: 6px; }
+.cmp-row > span { font-size: 12px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
+.frame { border-radius: 14px; overflow: hidden; border: 1px solid var(--rule); width: fit-content; max-width: 100%; }
+.why { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.why div { background: var(--panel); border: 1px solid var(--rule); border-radius: 16px; padding: 14px 16px; font-size: 14px; color: var(--ink-2); }
+.why b { color: var(--ink); display: block; margin-bottom: 4px; font-size: 14.5px; }
+.why ul { margin: 6px 0 0; padding-left: 18px; }
+.decide { background: var(--panel); border: 1px solid var(--rule); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.decide ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; color: var(--ink-2); max-width: 90ch; }
+.decide li b { color: var(--ink); }
+@media (max-width: 720px) { .jump { margin-left: 0; } }
+@media (max-width: 400px) { :root { --z: 0.68; } }
+
+/* ---------- Mockups: real Android dp, scaled with zoom ---------- */
+.m { width: 360px; height: 760px; zoom: var(--z); position: relative; overflow: hidden; background: var(--bg); color: var(--fg);
+  font-family: Roboto, "Segoe UI", system-ui, sans-serif; font-size: 16px; line-height: 1.3; }
+.m.crop { height: 330px; }
+.m.mid { height: 600px; }
+.m.land { width: 760px; height: 360px; }
+.m-strip { width: 360px; zoom: var(--z); background: var(--bg); color: var(--fg); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  font-family: Roboto, "Segoe UI", system-ui, sans-serif; font-size: 16px; line-height: 1.3; }
+.m svg, .m-strip svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.m-sb { height: 30px; display: flex; justify-content: space-between; align-items: center; padding: 0 22px; font-size: 13px; font-weight: 500; }
+.m-page { padding: 4px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+.m-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.m-between { justify-content: space-between; }
+.m-ptitle { font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.6px; }
+.m-psub { font-size: 13px; color: var(--muted); }
+.m-ib { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 14px; color: var(--fg2); flex-shrink: 0; position: relative; }
+.m-ib.sec { background: var(--ctl); border: 1px solid var(--ctlBorder); border-radius: 12px; }
+.m-ib.pri { background: var(--primary); color: var(--onPrimary); border-radius: 12px; }
+.m-ib.on { color: var(--fg); }
+.m-ib .n { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: var(--onPrimary); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.m-btn { min-height: 48px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 700; }
+.m-btn svg { width: 20px; height: 20px; }
+.m-btn.primary { background: var(--primary); color: var(--onPrimary); }
+.m-btn.secondary { background: var(--ctl); border: 1px solid var(--ctlBorder); color: var(--fg2); font-weight: 600; min-height: 44px; border-radius: 12px; font-size: 15px; }
+.m-btn.big2 { background: var(--ctl); border: 1px solid var(--ctlBorder); color: var(--fg); }
+.m-btn.dis { opacity: 0.45; }
+.m-sec { display: flex; justify-content: space-between; align-items: baseline; padding-top: 2px; }
+.m-sec h5, .m-h { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+.m-cap { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.m-link { font-size: 14px; font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.m-link.danger { color: var(--destructive); }
+.m-glabel { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); padding: 6px 4px 0; display: flex; justify-content: space-between; }
+.m-glabel span { letter-spacing: 0; font-weight: 500; text-transform: none; }
+.m-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.m-card h6 { margin: 0; font-size: 18px; font-weight: 600; }
+.m-card p { margin: 0; font-size: 14px; color: var(--fg2); max-width: none; line-height: 1.45; }
+.m-chev { color: var(--muted); }
+/* status */
+.m-live { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--liveSoft); color: var(--liveInk); font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.m-live i, .m-livedot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); flex-shrink: 0; }
+.m-done { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--fg2); white-space: nowrap; flex-shrink: 0; }
+.m-done svg { width: 14px; height: 14px; color: var(--muted); stroke-width: 2.4; }
+@media (prefers-reduced-motion: no-preference) {
+  .m-live i, .m-livedot { animation: m-pulse 2.2s ease-out infinite; }
+  @keyframes m-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--live) 0%, transparent); } }
+}
+.m-meta { font-size: 13px; color: var(--fg2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cB { padding: 14px 16px; gap: 10px; }
+.cB .t { flex: 1; min-width: 0; font-size: 20px; line-height: 25px; font-weight: 600; }
+.cB .strip, .m-strip3 { display: flex; gap: 8px; }
+.cB .strip div, .m-strip3 div { flex: 1; display: flex; align-items: baseline; gap: 5px; background: var(--surface2); border-radius: 10px; padding: 6px 10px; }
+.cB .strip b, .m-strip3 b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cB .strip span, .m-strip3 span { font-size: 12px; color: var(--fg2); }
+.m-group { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+.m-li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 60px; position: relative; }
+.m-li + .m-li::before { content: ""; position: absolute; top: 0; right: 0; left: 62px; border-top: 1px solid var(--borderLight); }
+.m-li.flat + .m-li.flat::before { left: 16px; }
+.m-li .lead { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--surface2); color: var(--muted); }
+.m-li .lead.live { background: var(--liveSoft); }
+.m-li .lead svg { width: 18px; height: 18px; stroke-width: 2.4; }
+.m-li .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-li .body b { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-li .body small { font-size: 13px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-li .trail { display: flex; align-items: center; gap: 6px; color: var(--muted); flex-shrink: 0; font-size: 13px; }
+.m-li .trail svg { width: 18px; height: 18px; }
+.m-li .trail .v { color: var(--fg); font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
+.m-li.danger .body b { color: var(--destructive); }
+.m-li .icn { width: 32px; height: 32px; border-radius: 10px; background: var(--surface2); color: var(--fg2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.m-li .icn svg { width: 18px; height: 18px; }
+.m-li .icn.danger { color: var(--destructive); background: color-mix(in srgb, var(--destructive) 12%, transparent); }
+.liveink { color: var(--liveInk); font-weight: 600; }
+.m-count { font-size: 12px; font-weight: 600; color: var(--fg2); background: var(--surface2); border-radius: 8px; padding: 2px 7px; white-space: nowrap; }
+.m-search { flex: 1; min-width: 0; height: 44px; border-radius: 12px; background: var(--surface); border: 1px solid var(--ctlBorder); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--muted); font-size: 15px; white-space: nowrap; overflow: hidden; }
+.m-search svg { width: 18px; height: 18px; }
+.m-chips { display: flex; gap: 8px; align-items: center; }
+.m-chips.wr { flex-wrap: wrap; }
+.m-chip { height: 34px; padding: 0 13px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--fg2); background: var(--ctl); border: 1px solid var(--ctlBorder); white-space: nowrap; }
+.m-chip svg { width: 16px; height: 16px; }
+.m-chip.on { background: var(--primary); color: var(--onPrimary); border-color: var(--primary); }
+.m-chip.dim { opacity: 0.45; }
+.m-sort { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.m-sort svg { width: 16px; height: 16px; }
+.m-segc { display: flex; background: var(--ctl); border: 1px solid var(--ctlBorder); border-radius: 10px; padding: 3px; gap: 2px; flex-shrink: 0; }
+.m-segc span { padding: 6px 11px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.m-segc span.on { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.m-segc.stretch span { flex: 1; text-align: center; padding: 7px 0; font-size: 14px; }
+.m-segc.stretch.sm span { font-size: 13px; padding: 6px 0; }
+/* exercise page */
+.m-back { display: flex; align-items: center; justify-content: space-between; }
+.m-title { font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.8px; }
+.m-ctitle { font-size: 20px; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-utabs { display: flex; border-bottom: 1px solid var(--border); margin: -8px -16px 0; }
+.m-utabs span { flex: 1; text-align: center; padding: 12px 0 10px; font-size: 15px; font-weight: 600; color: var(--fg2); border-bottom: 2px solid transparent; }
+.m-utabs span.on { color: var(--fg); border-color: var(--primary); }
+.m-note { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; }
+.m-note svg { width: 18px; height: 18px; }
+.m-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.m-field { background: var(--surface2); border-radius: 14px; padding: 9px 8px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.m-field .lab { font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--fg2); }
+.m-field .val { display: flex; align-items: center; gap: 6px; }
+.m-field .val b { flex: 1; font-size: 28px; font-weight: 700; letter-spacing: -0.6px; font-variant-numeric: tabular-nums; }
+.m-field.compact .val b { font-size: 22px; }
+.m-stp { width: 34px; height: 34px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; color: var(--fg2); flex-shrink: 0; }
+.m-stp svg { width: 16px; height: 16px; }
+.m-timer { width: 104px; min-height: 48px; border-radius: 16px; background: var(--ctl); border: 1px solid var(--ctlBorder); display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--fg2); position: relative; overflow: hidden; flex-shrink: 0; }
+.m-timer b { font-size: 16px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+.m-timer svg { width: 18px; height: 18px; }
+.m-timer.run { background: var(--liveSoft); border-color: color-mix(in srgb, var(--live) 35%, transparent); color: var(--liveInk); }
+.m-timer.run b { color: var(--liveInk); }
+.m-timer .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--live); }
+.m-timer.paused { border-style: dashed; }
+.m-set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--borderLight); }
+.m-set.r { grid-template-columns: 28px 1fr 1fr 44px 20px; }
+.m-set.first { border-top: 0; }
+.m-set .ed { color: var(--muted); display: flex; }
+.m-set .ed svg { width: 18px; height: 18px; }
+.m-set .sn { grid-column: 2 / -1; font-size: 13px; color: var(--fg2); margin-top: -6px; }
+.m-n { width: 26px; height: 26px; border-radius: 8px; background: var(--surface2); color: var(--fg2); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.m-v { font-size: 13px; color: var(--fg2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.m-v b { font-size: 17px; color: var(--fg); font-weight: 600; margin-right: 3px; }
+.m-acc { justify-self: end; }
+.m-best { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; padding: 3px 7px; border-radius: 6px; color: var(--fg); background: var(--surface2); }
+.m-pb { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; padding: 3px 7px; border-radius: 6px; color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, transparent); white-space: nowrap; }
+.m-more { font-size: 13px; font-weight: 600; color: var(--fg2); padding-top: 2px; }
+.m-danger-btn { min-height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600;
+  color: var(--destructive); border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent); background: color-mix(in srgb, var(--destructive) 7%, transparent); }
+.m-danger-btn svg { width: 18px; height: 18px; }
+.m-footer { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 20px; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 30%); }
+.m-fade { position: absolute; left: 0; right: 0; height: 40px; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), color-mix(in srgb, var(--bg) 60%, transparent) 50%, var(--bg)); pointer-events: none; }
+.m-dockpanel { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); border-radius: 22px 22px 0 0; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 -6px 20px rgba(10,14,22,.08); }
+/* dialogs and sheets */
+.m-blur { position: absolute; inset: 0; filter: blur(5px); transform: scale(1.02); }
+.m-scrim { position: absolute; inset: 0; background: var(--scrim); }
+.m-sheet { position: absolute; left: 12px; right: 12px; bottom: 16px; background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 24px; padding: 20px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+.m-sheet h6 { margin: 0 4px; font-size: 20px; font-weight: 700; }
+.m-sheet p { margin: 0 4px 6px; font-size: 14px; color: var(--fg2); max-width: none; line-height: 1.4; }
+.m-sheet .m-glabel { padding: 8px 4px 2px; }
+.m-opt { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px; }
+.m-opt.on { background: var(--surface2); }
+.m-opt .radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.m-opt.on .radio { border-color: var(--primary); }
+.m-opt.on .radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); }
+.m-opt .box { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--onPrimary); }
+.m-opt .box svg { width: 14px; height: 14px; stroke-width: 3; }
+.m-opt.chk .box { background: var(--primary); border-color: var(--primary); }
+.m-opt.off { opacity: 0.5; }
+.m-opt .body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.m-opt b { font-size: 15px; font-weight: 600; }
+.m-opt small { font-size: 12.5px; color: var(--fg2); }
+.m-opt .trail { color: var(--muted); font-size: 12px; }
+.m-actions { display: flex; gap: 12px; margin-top: 8px; }
+.m-actions span { flex: 1; padding: 13px 8px; border-radius: 12px; text-align: center; font-size: 16px; font-weight: 600; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+.m-actions span svg { width: 18px; height: 18px; }
+.m-actions .c { background: var(--ctl); border: 1px solid var(--ctlBorder); color: var(--fg2); }
+.m-actions .p { background: var(--primary); color: var(--onPrimary); }
+.m-actions .d { background: var(--destructive); color: var(--onDestructive); }
+.m-dialog { position: absolute; left: 22px; right: 22px; top: 50%; transform: translateY(-50%); background: color-mix(in srgb, var(--surface) 93%, transparent); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.m-dicon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: var(--destructive); background: color-mix(in srgb, var(--destructive) 14%, transparent); flex-shrink: 0; }
+.m-dicon.n { color: var(--fg2); background: var(--surface2); }
+.m-dialog h6 { margin: 4px 0 0; font-size: 20px; font-weight: 700; }
+.m-dialog p { margin: 0; color: var(--fg2); font-size: 15px; line-height: 1.45; max-width: none; }
+.m-dialog p.strong { color: var(--fg); font-weight: 500; }
+.m-checkrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface2); font-size: 15px; }
+.m-checkrow .box { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--muted); flex-shrink: 0; }
+/* inputs */
+.m-input { min-height: 48px; border-radius: 12px; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; font-size: 16px; color: var(--fg); gap: 8px; font-variant-numeric: tabular-nums; }
+.m-input.ph { color: var(--muted); }
+.m-input.area { min-height: 64px; align-items: flex-start; padding-top: 12px; }
+.m-input .u { margin-left: auto; color: var(--muted); font-size: 14px; }
+.m-input svg { width: 18px; height: 18px; color: var(--muted); }
+.m-flabel { font-size: 13px; font-weight: 600; color: var(--fg2); margin: 4px 4px 0; }
+.m-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.m-fieldset { display: flex; flex-direction: column; gap: 6px; }
+.m-hint { font-size: 12.5px; color: var(--warning); margin: 0 4px; }
+/* calendar */
+.m-calh { display: flex; align-items: center; justify-content: space-between; }
+.m-calh b { font-size: 15px; font-weight: 600; }
+.m-calh .m-ib { width: 36px; height: 36px; }
+.m-calh svg { width: 18px; height: 18px; }
+.m-calg { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+.m-calg .wd { font-size: 11px; color: var(--muted); font-weight: 600; padding: 2px 0 4px; }
+.m-calg span { height: 32px; display: flex; align-items: center; justify-content: center; position: relative; }
+.m-calg span.o { color: var(--muted); }
+.m-calg span.d::after { content: ""; position: absolute; bottom: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--fg2); }
+.m-calg span.l::after { background: var(--live); }
+.m-calg i { font-style: normal; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: var(--onPrimary); display: flex; align-items: center; justify-content: center; font-weight: 600; }
+/* rest timer */
+.m-dur { display: flex; align-items: center; gap: 12px; background: var(--surface2); border-radius: 16px; padding: 10px; }
+.m-rnd { width: 48px; height: 48px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--fg); flex-shrink: 0; }
+.m-rnd svg { width: 20px; height: 20px; }
+.m-dur .v { flex: 1; text-align: center; display: flex; flex-direction: column; }
+.m-dur .v b { font-size: 36px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.m-dur .v small { font-size: 12px; color: var(--muted); }
+.m-chip.sm { height: 32px; padding: 0 11px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.m-wheel { display: flex; justify-content: center; gap: 6px; background: var(--surface2); border-radius: 16px; padding: 6px 0; position: relative; }
+.m-wheel .col { display: flex; flex-direction: column; align-items: center; width: 90px; }
+.m-wheel .col span { height: 34px; display: flex; align-items: center; font-size: 17px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.m-wheel .col span.on { font-size: 26px; font-weight: 700; color: var(--fg); }
+.m-wheel .col small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; font-weight: 600; }
+.m-wheel .band { position: absolute; left: 14px; right: 14px; top: 76px; height: 38px; border-radius: 12px; border: 1px solid var(--ctlBorder); pointer-events: none; }
+.m-wheel .sep { align-self: center; font-size: 24px; font-weight: 700; margin-top: 16px; }
+.m-status { background: var(--liveSoft); color: var(--liveInk); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.m-status .top { display: flex; align-items: baseline; justify-content: space-between; }
+.m-status b { font-size: 34px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1; }
+.m-status small { font-size: 13px; font-weight: 600; }
+.m-status .track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--live) 22%, transparent); overflow: hidden; }
+.m-status .track i { display: block; height: 100%; background: var(--live); }
+.m-minis { display: flex; gap: 8px; }
+.m-mini { flex: 1; min-height: 40px; border-radius: 12px; background: var(--ctl); border: 1px solid var(--ctlBorder); color: var(--fg2); font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.m-mini svg { width: 16px; height: 16px; }
+.m-mini.danger { color: var(--destructive); border-color: color-mix(in srgb, var(--destructive) 40%, transparent); background: color-mix(in srgb, var(--destructive) 7%, transparent); }
+.m-tog { width: 44px; height: 26px; border-radius: 13px; background: var(--ctlBorder); position: relative; flex-shrink: 0; }
+.m-tog::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.m-tog.on { background: var(--primary); }
+.m-tog.on::after { left: 21px; background: var(--onPrimary); }
+.m-new { font-size: 10px; font-weight: 700; letter-spacing: .4px; padding: 1px 6px; border-radius: 6px; background: var(--surface2); color: var(--fg2); margin-left: 6px; vertical-align: 2px; }
+/* analytics */
+.m-trig { display: inline-flex; align-items: center; gap: 4px; font-size: 20px; font-weight: 600; white-space: nowrap; }
+.m-trig svg { width: 18px; height: 18px; color: var(--fg2); }
+.m-legend { display: flex; gap: 14px; font-size: 12px; color: var(--fg2); align-items: center; flex-wrap: wrap; }
+.m-legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--fg); margin-right: 5px; vertical-align: middle; }
+.m-legend i.tr { border-top: 2px dashed var(--muted); }
+.m-legend i.pb { width: 9px; height: 9px; border: 2px solid var(--gold); border-radius: 50%; }
+.m-plot { border-radius: 12px; overflow: hidden; }
+.m-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.m-tiles div { background: var(--surface2); border-radius: 10px; padding: 7px 10px; display: flex; flex-direction: column; }
+.m-tiles b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.m-tiles span { font-size: 12px; color: var(--fg2); }
+.m-tiles div.hl { background: color-mix(in srgb, var(--gold) 14%, transparent); }
+.m-tiles div.hl span { color: var(--gold); font-weight: 600; }
+.m-carousel { display: flex; gap: 12px; margin-right: -16px; overflow: hidden; }
+.m-carousel > .m-card { width: 312px; flex-shrink: 0; }
+.m-dots { display: flex; gap: 6px; justify-content: center; align-items: center; }
+.m-dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--ctlBorder); }
+.m-dots i.on { width: 18px; background: var(--primary); }
+.m-pill2 { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface2); color: var(--fg2); white-space: nowrap; }
+.m-pill2 svg { width: 14px; height: 14px; }
+.m-pill2.up { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.m-meter { display: flex; flex-direction: column; gap: 4px; }
+.m-meter .l { display: flex; justify-content: space-between; font-size: 13px; color: var(--fg2); }
+.m-meter .l b { color: var(--fg); font-weight: 600; }
+.m-meter .t { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; }
+.m-meter .t i { display: block; height: 100%; background: var(--primary); border-radius: 3px; }
+/* set info */
+.m-video { height: 184px; border-radius: 14px; background: #0B0D12; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.m-video::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 90% at 30% 20%, #3A4150 0%, #14171E 60%); }
+.m-video .pl { position: relative; width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.92); color: #1D2230; display: flex; align-items: center; justify-content: center; }
+.m-video .pl svg { width: 22px; height: 22px; margin-left: 3px; fill: currentColor; }
+.m-video .dur { position: absolute; right: 10px; bottom: 10px; font-size: 12px; font-weight: 600; color: #fff; background: rgba(0,0,0,.5); border-radius: 6px; padding: 2px 6px; }
+.m-err { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--destructive); background: color-mix(in srgb, var(--destructive) 8%, transparent); border-radius: 12px; padding: 10px 12px; }
+.m-err svg { width: 18px; height: 18px; }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">LiftingLog · UI redesign · round 2 · page A</span>
+    <h1>The exercise page</h1>
+    <p>This is the first of two mockup pages for round 2. It covers the exercise page (Record, History and Analytics), the rest timer and its new Settings defaults, and the two pages the exercise page opens: Set Info and Edit entry. Where a section has a real choice, the options are labelled A, B or C, and one is marked Recommended. Dialogs that only need converting to the existing design system are shown once, converted. Every screen is drawn at real Android dp and then scaled down. Example data is a Bench Press on the Push Day workout, as in round 1.</p>
+    <div class="why">
+      <div><b>Page A: the exercise page (this page)</b>Sections 1 to 8: the page shell, Record and its dialogs, the rest timer (including the Settings defaults), History, Analytics, Set Info and Edit entry. These hold the biggest structural decisions.</div>
+      <div><b>Page B: tools, library dialogs and the rest</b>Next, once page A is approved: the Calculators and Quick stats panels and the five calculators, the Exercises library dialogs, the three remaining legacy workout dialogs, Programs "Coming Soon", the restore screens, which native alerts become in-app dialogs, and the icons that replace Material Community Icons.</div>
+      <div><b>Left out</b>Anything hidden in the MVP build: user metrics, video recording, the Programs screens, and four deep-link-only screens (Workout history, the day workout view, Add exercise, the calculators index). Page B will ask whether to delete those four.</div>
+    </div>
+  </header>
+
+  <nav class="controls" aria-label="Mockup controls">
+    <div class="ctl"><span id="lbl-mode">Mode</span>
+      <div class="seg" role="group" aria-labelledby="lbl-mode">
+        <button type="button" id="mode-light" data-mode="light" aria-pressed="true">Light</button>
+        <button type="button" id="mode-dark" data-mode="dark" aria-pressed="false">Dark</button>
+      </div></div>
+    <div class="jump"><a href="#shell">1 Shell</a><a href="#record">2 Record</a><a href="#dialogs">3 Dialogs</a><a href="#timer">4 Rest timer</a><a href="#history">5 History</a><a href="#analytics">6 Analytics</a><a href="#setinfo">7 Set Info</a><a href="#edit">8 Edit entry</a><a href="#decide">Decisions</a></div>
+  </nav>
+
+  <section class="section" id="shell">
+    <div class="sec-head"><span class="eyebrow">1 · Page shell</span><h2>Header and the Record, History and Analytics switch</h2>
+      <p>Today the page has a native header and a swipeable tab bar. Back from History or Analytics first jumps to Record, and only then leaves the page. Both options below make Back always leave, which matches every other page. The pin button stays at the top right.</p></div>
+    <div class="gallery" id="shell-grid"></div>
+  </section>
+
+  <section class="section" id="record">
+    <div class="sec-head"><span class="eyebrow">2 · Record</span><h2>Logging a set</h2>
+      <p>The workout chooser becomes a single row showing whether that workout is in progress. The set form gets steppers (2.5 kg and 1 rep) around large values, and the rest timer moves into the same row as Add set. Recorded sets use workout detail's set rows, with BEST and PB badges. Tap a row to open Set Info, or the pencil to edit it. Delete moves into the Edit set sheet, so each row has one action instead of two.</p></div>
+    <div class="gallery" id="record-grid"></div>
+    <div class="gallery" id="record-states"></div>
+  </section>
+
+  <section class="section" id="dialogs">
+    <div class="sec-head"><span class="eyebrow">3 · Record dialogs</span><h2>Choose workout, edit, delete and clear</h2>
+      <p>These are conversions to the shared sheet and confirmation dialog. There is one behaviour change. Today, tapping a workout in the chooser moves the entry and its sets at once. The sheet now waits for "Use Push Day", like the 1RM formula sheet. The time field in Edit set keeps the Android system time picker.</p></div>
+    <div class="gallery" id="dialog-grid"></div>
+  </section>
+
+  <section class="section" id="timer">
+    <div class="sec-head"><span class="eyebrow">4 · Rest timer</span><h2>One duration control, used in two places</h2>
+      <p>Each exercise remembers its own rest time, and exercises without one use 1:30. The same duration control sets an exercise's rest time in the Rest timer sheet (long-press the timer button, or tap it while it runs) and the default in Settings. While the timer runs, the button turns green, because green means "happening now".</p></div>
+    <div class="compare" id="timer-states"></div>
+    <div class="gallery" id="timer-grid"></div>
+  </section>
+
+  <section class="section" id="history">
+    <div class="sec-head"><span class="eyebrow">5 · History</span><h2>Past sessions of this exercise</h2>
+      <p>Each session gets the Workouts metric-strip treatment. Its three round icon buttons (view, edit, delete) go into a ⋯ menu. The filters move out of the collapsible panel: search stays on the page, and everything else goes in a sheet behind the filter button, whose badge counts the active filters.</p></div>
+    <div class="gallery" id="history-grid"></div>
+  </section>
+
+  <section class="section" id="analytics">
+    <div class="sec-head"><span class="eyebrow">6 · Analytics</span><h2>Chart, controls and session details</h2>
+      <p>The chart is drawn in Ink: a 2 dp ink line and dots, gold rings for PBs, and a dashed grey trend. Tapping or releasing a scrub on a point opens the session details as a bottom sheet in portrait. In landscape fullscreen, they open as a side panel so the chart stays visible.</p></div>
+    <div class="gallery" id="analytics-grid"></div>
+    <div class="gallery" id="analytics-more"></div>
+  </section>
+
+  <section class="section" id="setinfo">
+    <div class="sec-head"><span class="eyebrow">7 · Set Info</span><h2>One set: its note and video</h2>
+      <p>Set Info opens from set rows on workout detail, Record, History and the session sheet. In the MVP build it is fully reachable, including linking a video from the gallery. Its "Video options" native alert becomes a sheet.</p></div>
+    <div class="gallery" id="setinfo-grid"></div>
+  </section>
+
+  <section class="section" id="edit">
+    <div class="sec-head"><span class="eyebrow">8 · Edit entry</span><h2>Editing a past entry</h2>
+      <p>This opens from History and the session sheet. The date, set changes and new sets are drafts, saved together by Save changes. Notes save straight away from their own sheet, as they do today. The page fixes two gaps. Leaving with unsaved set changes now asks before discarding them, where today only note drafts are guarded. A failed save now shows a message, where today it fails silently.</p></div>
+    <div class="gallery" id="edit-grid"></div>
+  </section>
+
+  <section class="decide" id="decide" style="scroll-margin-top:80px">
+    <span class="eyebrow">Decisions for you</span>
+    <ol>
+      <li><b>Page shell (1):</b> A, the segmented control under a large title, or B, the compact header with underline tabs.</li>
+      <li><b>Pins (1):</b> since the pinned-exercises overlay was removed in round 1, pinning has no visible effect anywhere in the MVP. Remove the pin button, or show pinned exercises as a group at the top of the Exercises library (page B would mock it)?</li>
+      <li><b>Record layout (2):</b> A, the form above the recorded sets, or B, the sets above an entry panel docked at the bottom. Also: keep the ± steppers, or plain fields as today?</li>
+      <li><b>Choose workout (3):</b> is it OK that choosing a workout now waits for "Use …" instead of moving the entry immediately?</li>
+      <li><b>Rest timer (4):</b> A, the stepper with presets, or B, the minute and second wheels. The Settings default is part of this round. "Start after each set" would be new behaviour. Include it, or leave it out?</li>
+      <li><b>History (5):</b> A, the metric-strip session cards, or B, compact rows that open the session sheet. The filters go in a sheet either way.</li>
+      <li><b>Analytics (6):</b> A, the chart first with its controls in the card, or B, a controls list above the chart. The session details become a bottom sheet (a side panel in landscape) either way.</li>
+      <li><b>Set Info (7):</b> A, a full page, or B, a sheet.</li>
+      <li><b>Edit entry (8):</b> the notes move into their own sheets, "Add set" becomes a button that opens the set sheet, and the unsaved-changes guard now covers sets. OK?</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(function () {
+  var BASE = {
+    light: { bg:'#F3F4F7', surface:'#FFFFFF', surface2:'#EDEFF3', subBg:'#F7F8FA', ctl:'#E3E6EC', ctlBorder:'#D2D7DF', border:'#DDE1E7', borderLight:'#EBEDF1',
+      fg:'#1D2230', fg2:'#4F5667', muted:'#626978', primary:'#292F3D', onPrimary:'#FFFFFF', destructive:'#BF3E4A', onDestructive:'#FFFFFF', gold:'#9C6C1E',
+      success:'#287A5F', warning:'#9A6216', scrim:'rgba(29,34,48,0.28)', live:'#1F9D6B', liveSoft:'#E0F2EA', liveInk:'#16613F' },
+    dark: { bg:'#12151C', surface:'#1B1F28', surface2:'#252A35', subBg:'#171B23', ctl:'#2A2F3A', ctlBorder:'#3A4150', border:'#323845', borderLight:'#282D38',
+      fg:'#F2F4F7', fg2:'#B4BAC6', muted:'#8D94A2', primary:'#E8EBF0', onPrimary:'#292F3D', destructive:'#F07C86', onDestructive:'#1A1D25', gold:'#E0B45E',
+      success:'#5BBE98', warning:'#DDB06A', scrim:'rgba(6,8,12,0.5)', live:'#4FD39B', liveSoft:'#17342A', liveInk:'#9BE3C2' }
+  };
+  var state = { mode: 'light' };
+  try { var saved = JSON.parse(localStorage.getItem('ll-mockups-r2') || '{}'); if (saved.mode === 'dark' || saved.mode === 'light') state.mode = saved.mode; } catch (e) {}
+
+  function colors(extra) { var o = {}, k, b = BASE[state.mode]; for (k in b) o[k] = b[k]; if (extra) for (k in extra) o[k] = extra[k]; return o; }
+  function vars(c) { return Object.keys(c).map(function (k) { return '--' + k + ':' + c[k]; }).join(';'); }
+
+  function sv(d) { return '<svg viewBox="0 0 24 24">' + d + '</svg>'; }
+  var I = {
+    calc: sv('<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M8.5 7h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/>'),
+    chart: sv('<path d="M5 20V11M12 20V5M19 20v-6"/>'),
+    chevL: sv('<path d="M15 18l-6-6 6-6"/>'), chevR: sv('<path d="M9 18l6-6-6-6"/>'),
+    chevD: sv('<path d="M6 9l6 6 6-6"/>'), chevU: sv('<path d="M6 15l6-6 6 6"/>'),
+    cal: sv('<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/>'),
+    plus: sv('<path d="M12 5v14M5 12h14"/>'), minus: sv('<path d="M5 12h14"/>'),
+    arrowUR: sv('<path d="M7 17L17 7M8 7h9v9"/>'), check: sv('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+    search: sv('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
+    sort: sv('<path d="M7 4v16M3.5 16.5L7 20l3.5-3.5M17 20V4M13.5 7.5L17 4l3.5 3.5"/>'),
+    day: sv('<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M4 14.5h16"/>'),
+    dumbbell: sv('<path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/>'),
+    book: sv('<path d="M5 4.5A1.5 1.5 0 016.5 3H19v15H6.5A1.5 1.5 0 005 19.5zM5 19.5A1.5 1.5 0 006.5 21H19"/>'),
+    cog: sv('<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.8 12h2.6M18.6 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/>'),
+    play: sv('<path d="M8 5.5v13l10.5-6.5z"/>'), pause: sv('<path d="M9 5.5v13M15 5.5v13"/>'),
+    moon: sv('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'),
+    scale: sv('<path d="M5 20h14M12 4v16M5 8h14M5 8l-2.5 6h5zM19 8l-2.5 6h5z"/>'),
+    fn: sv('<path d="M14 4h-2a3 3 0 00-3 3v13M6 11h7M15 13l5 6M20 13l-5 6"/>'),
+    down: sv('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+    table: sv('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 10h17M3.5 15h17M10 4.5v15"/>'),
+    restore: sv('<path d="M4 12a8 8 0 108-8 8 8 0 00-6 2.7M4 4v4h4"/>'),
+    arrowR: sv('<path d="M5 12h14M13 6l6 6-6 6"/>'), arrowL: sv('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
+    trash: sv('<path d="M3.5 6.5h17M9 6.5V4h6v2.5M18.5 6.5l-1 14h-11l-1-14M10 11v5.5M14 11v5.5"/>'),
+    pencil: sv('<path d="M4 20h4L19 9l-4-4L4 16v4z"/>'),
+    info: sv('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
+    /* new in round 2 */
+    pin: sv('<path d="M9 3.5h6M10 3.5l-.8 6L6 13h12l-3.2-3.5-.8-6M12 13v7.5"/>'),
+    timer: sv('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M9.5 2.5h5M18.5 6l1.5-1.5"/>'),
+    note: sv('<path d="M6.5 3.5h8l4 4v13h-12z"/><path d="M14.5 3.5v4h4M9 12.5h6M9 16.5h4"/>'),
+    video: sv('<rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/>'),
+    eye: sv('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>'),
+    sliders: sv('<path d="M4 7h8M16 7h4M4 17h4M12 17h8"/><circle cx="14" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'),
+    clock: sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+    expand: sv('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+    close: sv('<path d="M6 6l12 12M18 6L6 18"/>'),
+    dots: sv('<path d="M5.5 12h.01M12 12h.01M18.5 12h.01" stroke-width="3"/>'),
+    layers: sv('<path d="M12 3.5l8.5 4.5-8.5 4.5L3.5 8z"/><path d="M3.5 12.5l8.5 4.5 8.5-4.5"/>'),
+    alert: sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 16h.01"/>'),
+    link: sv('<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>'),
+    trend: sv('<path d="M3.5 17l6-6 4 4 7-7M15 8h5.5v5.5"/>'),
+    swap: sv('<path d="M7 4v16M3.5 7.5L7 4l3.5 3.5M17 20V4M13.5 16.5L17 20l3.5-3.5"/>')
+  };
+  var SB = '<div class="m-sb"><span>9:41</span><span>82%</span></div>';
+  var SBL = '<div class="m-sb" style="height:22px"><span>9:41</span><span>82%</span></div>';
+
+  function live(label) { return '<span class="m-live"><i></i>' + (label || 'In progress') + '</span>'; }
+  function done(label) { return '<span class="m-done">' + I.check + (label || 'Completed') + '</span>'; }
+
+  /* ---------- 1 · shell ---------- */
+  function exHead(kind, tab) {
+    var tabs = ['Record', 'History', 'Analytics'];
+    if (kind === 'tabs') {
+      return '<div class="m-back"><div class="m-row" style="gap:4px;flex:1;min-width:0"><span class="m-ib">' + I.arrowL + '</span><span class="m-ctitle">Bench Press</span></div><span class="m-ib">' + I.pin + '</span></div>' +
+        '<div class="m-utabs">' + tabs.map(function (t) { return '<span' + (t === tab ? ' class="on"' : '') + '>' + t + '</span>'; }).join('') + '</div>';
+    }
+    return '<div class="m-back"><span class="m-ib">' + I.arrowL + '</span><span class="m-ib">' + I.pin + '</span></div>' +
+      '<div style="margin-top:-6px"><div class="m-title">Bench Press</div><div class="m-psub">Barbell · Chest</div></div>' +
+      '<div class="m-segc stretch">' + tabs.map(function (t) { return '<span' + (t === tab ? ' class="on"' : '') + '>' + t + '</span>'; }).join('') + '</div>';
+  }
+  function unavailable() {
+    return SB + '<div class="m-page">' + '<div class="m-back"><span class="m-ib">' + I.arrowL + '</span></div>' +
+      '<div class="m-card" style="margin-top:120px;align-items:flex-start"><span class="m-dicon n">' + I.alert + '</span>' +
+      '<h6>We couldn’t load this exercise</h6><p>Check that it still exists, then try again.</p>' +
+      '<div class="m-actions" style="align-self:stretch;margin-top:4px"><span class="c">Go back</span><span class="p">Retry</span></div></div>' +
+      '<p style="font-size:13px;color:var(--muted);margin:0 4px">A deleted exercise shows "This exercise is no longer available" with Go back only. A broken link shows "This exercise link is invalid".</p></div>';
+  }
+  function pinLimit() {
+    return '<div class="m-blur">' + recordA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-dialog"><div class="m-dicon n">' + I.pin + '</div><h6>Pin limit reached</h6>' +
+      '<p>You can pin up to 5 exercises. Unpin one on its exercise page, then pin this one.</p>' +
+      '<div class="m-actions"><span class="p">Got it</span></div></div>';
+  }
+
+  /* ---------- 2 · record ---------- */
+  function workoutRow(done_) {
+    if (done_) return '<div class="m-group"><div class="m-li"><span class="lead">' + I.check + '</span><div class="body"><b>Push Day</b><small>Completed · Today 6:42 PM</small></div><div class="trail">Change' + I.chevR + '</div></div></div>';
+    return '<div class="m-group"><div class="m-li"><span class="lead live"><span class="m-livedot"></span></span><div class="body"><b>Push Day</b><small><span class="liveink">In progress</span> · Today 6:42 PM</small></div><div class="trail">Change' + I.chevR + '</div></div></div>';
+  }
+  function field(label, val, compact) {
+    return '<div class="m-field' + (compact ? ' compact' : '') + '"><span class="lab">' + label + '</span><div class="val"><b>' + val + '</b><span class="m-stp">' + I.minus + '</span><span class="m-stp">' + I.plus + '</span></div></div>';
+  }
+  function timerBtn(st) {
+    if (st === 'run') return '<div class="m-timer run">' + I.pause + '<b>0:47</b><span class="bar" style="width:48%"></span></div>';
+    if (st === 'paused') return '<div class="m-timer run paused">' + I.play + '<b>0:47</b><span class="bar" style="width:48%"></span></div>';
+    return '<div class="m-timer">' + I.timer + '<b>1:30</b></div>';
+  }
+  function nextSet(st) {
+    return '<div class="m-card" style="gap:12px"><div class="m-row m-between"><h5 class="m-h">Next set</h5><span class="m-count">Set 5</span></div>' +
+      '<div class="m-fields">' + field('Weight · kg', '105') + field('Reps', '3') + '</div>' +
+      '<div class="m-note">' + I.note + 'Add a note</div>' +
+      '<div class="m-row" style="gap:10px">' + timerBtn(st) + '<div class="m-btn primary" style="flex:1">' + I.plus + 'Add set</div></div></div>';
+  }
+  function setR(n, w, r, acc, note, first) {
+    return '<div class="m-set r' + (first ? ' first' : '') + '"><span class="m-n">' + n + '</span><span class="m-v"><b>' + w + '</b>kg</span><span class="m-v"><b>' + r + '</b>reps</span><span class="m-acc">' + (acc || '') + '</span><span class="ed">' + I.pencil + '</span>' +
+      (note ? '<span class="sn">' + note + '</span>' : '') + '</div>';
+  }
+  function recordedSets() {
+    return '<div class="m-sec"><h5>Recorded sets</h5><span class="m-link">Clear</span></div>' +
+      '<div class="m-card" style="gap:0;padding-block:6px">' + setR(1, 60, 8, '', '', true) + setR(2, 80, 5) + setR(3, 100, 5, '<span class="m-best">BEST</span>', 'Paused first rep') + setR(4, 105, 3, '<span class="m-pb">3RM</span>') + '</div>';
+  }
+  function recordA(st) {
+    return SB + '<div class="m-page">' + exHead('seg', 'Record') + workoutRow() + nextSet(st) + recordedSets() + '</div>' +
+      '<div class="m-footer"><div class="m-btn big2">' + I.check + 'Complete exercise</div></div>';
+  }
+  function recordB() {
+    return SB + '<div class="m-page">' + exHead('seg', 'Record') + workoutRow() +
+      '<div class="m-sec"><h5>Recorded sets</h5><span class="m-link">Complete' + '</span></div>' +
+      '<div class="m-card" style="gap:0;padding-block:6px">' + setR(1, 60, 8, '', '', true) + setR(2, 80, 5) + setR(3, 100, 5, '<span class="m-best">BEST</span>') + setR(4, 105, 3, '<span class="m-pb">3RM</span>') + '</div></div>' +
+      '<div class="m-dockpanel"><div class="m-row m-between"><b style="font-size:15px">Set 5</b><span class="m-note" style="font-size:14px">' + I.note + 'Add a note</span></div>' +
+      '<div class="m-fields">' + field('Weight · kg', '105', true) + field('Reps', '3', true) + '</div>' +
+      '<div class="m-row" style="gap:10px">' + timerBtn() + '<div class="m-btn primary" style="flex:1">' + I.plus + 'Add set</div></div></div>';
+  }
+  function stateCard(icon, title, text, btn, second) {
+    return '<div class="m-card" style="align-items:flex-start"><span class="m-dicon n">' + icon + '</span><h6>' + title + '</h6><p>' + text + '</p>' +
+      '<div class="m-btn ' + (second ? 'secondary' : 'primary') + '" style="align-self:stretch;margin-top:2px' + (second ? '' : ';min-height:44px;border-radius:12px;font-size:15px') + '">' + btn + '</div></div>';
+  }
+  function recState(kind) {
+    var head = SB + '<div class="m-page">' + exHead('seg', 'Record');
+    if (kind === 'none') return head + '<div class="m-group"><div class="m-li"><span class="lead">' + I.day + '</span><div class="body"><b>No workout chosen</b><small>Choose one to log sets</small></div><div class="trail">Choose' + I.chevR + '</div></div></div>' +
+      stateCard(I.day, 'Start with a workout', 'Create or pick a workout in Workouts, then record your sets here.', 'Open Workouts') + '</div>';
+    if (kind === 'entry') return head + workoutRow() +
+      stateCard(I.check, 'Exercise complete', 'Your sets are saved. Add another entry to do this exercise again in the same workout.', I.plus + 'Add another entry', true) +
+      '<div class="m-glabel">Entry note</div><div class="m-card" style="padding-block:12px"><p style="color:var(--fg)">Bar path drifted forward on the last set.</p></div></div>';
+    return head + workoutRow(true) + stateCard(I.check, 'This workout is complete', 'Resume it before adding more sets.', 'Open workout', true) + '</div>';
+  }
+
+  /* ---------- 3 · dialogs ---------- */
+  function calendar() {
+    var days = [['30','o'],['31','o'],['1'],['2','d'],['3'],['4','d'],['5'],['6'],['7','d'],['8'],['9','d'],['10'],['11','d'],['12'],['13'],['14','d'],['15'],['16','d'],['17'],['18','d'],['19'],['20'],['21','d'],['22'],['23','d'],['24','d'],['25','d'],['26','sel'],['27'],['28'],['29'],['30'],['1','o'],['2','o'],['3','o']];
+    return '<div class="m-calh"><span class="m-ib">' + I.chevL + '</span><b>September 2026</b><span class="m-ib">' + I.chevR + '</span></div>' +
+      '<div class="m-calg">' + ['S','M','T','W','T','F','S'].map(function (d) { return '<span class="wd" style="height:auto">' + d + '</span>'; }).join('') +
+      days.map(function (d) { return d[1] === 'sel' ? '<span><i>' + d[0] + '</i></span>' : '<span' + (d[1] ? ' class="' + d[1] + '"' : '') + '>' + d[0] + '</span>'; }).join('') + '</div>';
+  }
+  function chooseSheet() {
+    return '<div class="m-blur">' + recordA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Choose workout</h6><p>Pick a day, then the workout this exercise belongs to. Its 4 sets move with it.</p>' + calendar() +
+      '<div class="m-glabel">Sat 26 Sep<span>2 workouts</span></div>' +
+      '<div class="m-opt on"><span class="radio"></span><div class="body"><b>Push Day</b><small style="font-family:inherit">6:42 PM · 1 exercise · <span class="liveink">In progress</span></small></div></div>' +
+      '<div class="m-opt"><span class="radio"></span><div class="body"><b>Morning Pull</b><small style="font-family:inherit">7:05 AM · 3 exercises · Completed</small></div></div>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="p">Use Push Day</span></div>' +
+      '<div style="text-align:center;padding-top:6px"><span class="m-link">Open Workouts</span></div></div>';
+  }
+  function editSetSheet() {
+    return '<div class="m-blur">' + recordA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Edit set 3</h6>' +
+      '<div class="m-grid2"><div class="m-fieldset"><span class="m-flabel">Weight</span><div class="m-input">100<span class="u">kg</span></div></div><div class="m-fieldset"><span class="m-flabel">Reps</span><div class="m-input">5</div></div></div>' +
+      '<div class="m-fieldset"><span class="m-flabel">Note</span><div class="m-input area">Paused first rep</div></div>' +
+      '<div class="m-fieldset"><span class="m-flabel">Time</span><div class="m-input">' + I.clock + '6:51 PM<span class="u">' + I.chevR + '</span></div></div>' +
+      '<div class="m-danger-btn" style="margin-top:8px">' + I.trash + 'Delete set</div>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="p">Save</span></div></div>';
+  }
+  function deleteSet(withVideo) {
+    return '<div class="m-blur">' + recordA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-dialog"><div class="m-dicon">' + I.trash + '</div><h6>Delete set 3?</h6>' +
+      '<p>100 kg × 5 reps will be deleted from Bench Press. PBs are recalculated.</p>' +
+      (withVideo ? '<div class="m-checkrow"><span class="box"></span>Also delete the linked video</div>' : '') +
+      '<p class="strong">This can’t be undone.</p>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="d">' + I.trash + 'Delete</span></div></div>';
+  }
+  function clearSets() {
+    return '<div class="m-blur">' + recordA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-dialog"><div class="m-dicon">' + I.trash + '</div><h6>Clear 4 sets?</h6>' +
+      '<p>Every set in this Bench Press entry will be deleted. The workout stays, and PBs are recalculated.</p>' +
+      '<p class="strong">This can’t be undone.</p>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="d">' + I.trash + 'Clear</span></div></div>';
+  }
+
+  /* ---------- 4 · rest timer ---------- */
+  function presets(on) { return '<div class="m-chips wr" style="justify-content:center">' + ['0:30','1:00','1:30','2:00','2:30','3:00'].map(function (p) { return '<span class="m-chip sm' + (p === on ? ' on' : '') + '">' + p + '</span>'; }).join('') + '</div>'; }
+  function durA(v) { v = v || '1:30'; return '<div class="m-dur"><span class="m-rnd">' + I.minus + '</span><div class="v"><b>' + v + '</b><small>min : sec · 15 s steps</small></div><span class="m-rnd">' + I.plus + '</span></div>' + presets(v); }
+  function durB() {
+    function col(vals, on, lab) { return '<div class="col"><small>' + lab + '</small>' + vals.map(function (x) { return '<span' + (x === on ? ' class="on"' : '') + '>' + x + '</span>'; }).join('') + '</div>'; }
+    return '<div class="m-wheel"><span class="band"></span>' + col(['0','1','2','3','4'], '1', 'min') + '<span class="sep">:</span>' + col(['00','15','30','45','00'].slice(0,5).map(function (x, i) { return ['00','15','30','45','00'][i]; }), '30', 'sec') + '</div>' +
+      '<p style="margin:2px 4px 0;font-size:12.5px;color:var(--muted)">Seconds move in 5 s steps. Presets sit below the wheels, as in A.</p>';
+  }
+  function timerSheet(kind, running) {
+    var status = running ? '<div class="m-status"><div class="top"><b>0:47</b><small>Running · ends 7:14 PM</small></div><div class="track"><i style="width:48%"></i></div></div>' +
+      '<div class="m-minis"><span class="m-mini">' + I.pause + 'Pause</span><span class="m-mini">' + I.restore + 'Restart</span><span class="m-mini danger">' + I.close + 'Stop</span></div>' : '';
+    return '<div class="m-blur">' + recordA(running ? 'run' : '') + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Rest timer</h6><p>Bench Press remembers this time. Other exercises keep their own.</p>' + status +
+      '<div class="m-glabel">Rest time</div>' + (kind === 'B' ? durB() : durA()) +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="p">' + (running ? 'Update to 1:30' : I.play + 'Start 1:30') + '</span></div></div>';
+  }
+  function setRow(icon, title, sub, trail, cls) {
+    return '<div class="m-li' + (cls || '') + '"><span class="icn">' + I[icon] + '</span><div class="body"><b>' + title + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div><div class="trail">' + trail + '</div></div>';
+  }
+  function dock(active) {
+    var tabs = [['workouts','day','Workouts'],['exercises','dumbbell','Exercises'],['programs','book','Programs'],['settings','cog','Settings']];
+    return '<div class="m-fade" style="bottom:' + (80 + 58) + 'px"></div>' +
+      '<div class="m-livebar" style="position:absolute;left:0;right:0;bottom:80px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:10px 16px"><span class="m-livedot"></span><div style="flex:1;display:flex;flex-direction:column;gap:1px"><b style="font-size:15px;font-weight:600">Push Day</b><small style="font-size:12px;color:var(--liveInk);font-weight:600">In progress · 42 min · 4 exercises</small></div><span style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:700">Return' + I.chevR.replace('<svg', '<svg style="width:18px;height:18px"') + '</span></div>' +
+      '<div style="position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 6px 0">' + tabs.map(function (t) {
+        var on = t[0] === active;
+        return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;width:78px;position:relative;color:' + (on ? 'var(--fg);font-weight:700' : 'var(--fg2);font-weight:500') + '"><span style="width:58px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;' + (on ? 'background:var(--primary);color:var(--onPrimary)' : '') + '">' + I[t[1]] + '</span><span>' + t[2] + '</span>' +
+          (t[0] === 'programs' ? '<span style="position:absolute;top:-3px;right:2px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--surface2);color:var(--fg2)">SOON</span>' : '') + '</div>';
+      }).join('') + '</div>';
+  }
+  function settingsScreen() {
+    return SB + '<div class="m-page">' +
+      '<div class="m-ptitle" style="padding-bottom:2px">Settings</div>' +
+      '<div class="m-glabel">Appearance</div><div class="m-group">' +
+        setRow('moon', 'Display', null, '<div class="m-segc"><span>System</span><span class="on">Light</span><span>Dark</span></div>') + '</div>' +
+      '<div class="m-glabel">Units &amp; calculations</div><div class="m-group">' +
+        setRow('scale', 'Weight unit', null, '<div class="m-segc"><span class="on">kg</span><span>lb</span></div>') +
+        setRow('fn', 'Estimated 1RM formula', 'Used in charts and the 1RM toolkit', '<span class="v">Epley</span>' + I.chevR) + '</div>' +
+      '<div class="m-glabel">Rest timer</div><div class="m-group">' +
+        setRow('timer', 'Default rest time', 'For exercises without their own', '<span class="v">1:30</span>' + I.chevR) +
+        setRow('play', 'Start after each set<span class="m-new">NEW</span>', 'Adding a set starts the rest timer', '<span class="m-tog"></span>') + '</div>' +
+      '<div class="m-glabel">Data</div><div class="m-group">' +
+        setRow('down', 'Export backup', 'Full copy of your data as a .db file', I.chevR) +
+        setRow('table', 'Export CSV', 'Workouts and sets for spreadsheets', I.chevR) + '</div>' +
+      '</div>' + dock('settings');
+  }
+  function defaultSheet() {
+    return '<div class="m-blur">' + settingsScreen() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Default rest time</h6><p>Used for exercises you haven’t set a rest time for. Changing it doesn’t change exercises that already have one.</p>' +
+      durA('2:00') + '<div class="m-actions"><span class="c">Cancel</span><span class="p">Use 2:00</span></div></div>';
+  }
+  function timerStrip(st, caption) {
+    return '<div class="m-row" style="gap:10px">' + timerBtn(st) + '<div class="m-btn primary" style="flex:1">' + I.plus + 'Add set</div></div>' +
+      '<div style="font-size:13px;color:var(--fg2)">' + caption + '</div>';
+  }
+
+  /* ---------- 5 · history ---------- */
+  function sesCard(o) {
+    return '<div class="m-card cB" style="gap:8px"><div class="m-row">' + (o.live ? live() : '<span class="m-meta">' + o.w + '</span>') + '<span class="m-cap" style="margin-left:auto">' + o.time + '</span></div>' +
+      '<div class="m-row"><span class="t">' + o.date + '</span><span class="m-ib" style="width:36px;height:32px;margin-right:-8px">' + I.dots + '</span></div>' +
+      '<div class="strip"><div><b>' + o.sets + '</b><span>sets</span></div><div><b>' + o.reps + '</b><span>reps</span></div><div><b>' + o.vol + '</b><span>kg</span></div></div>' +
+      '<div>' + o.rows + '</div>' + (o.more ? '<div class="m-more">' + o.more + '</div>' : '') + '</div>';
+  }
+  function hSet(n, w, r, acc, first) { return '<div class="m-set' + (first ? ' first' : '') + '"><span class="m-n">' + n + '</span><span class="m-v"><b>' + w + '</b>kg</span><span class="m-v"><b>' + r + '</b>reps</span><span class="m-acc">' + (acc || '') + '</span></div>'; }
+  function historyA() {
+    return SB + '<div class="m-page">' + exHead('seg', 'History') +
+      '<div class="m-row"><div class="m-search">' + I.search + 'Search notes, 100kg, 8 reps</div><span class="m-ib sec">' + I.sliders + '<span class="n">1</span></span></div>' +
+      '<div class="m-row m-between"><span class="m-cap" style="font-size:13px">12 sessions · last 3 months</span><span class="m-sort">' + I.sort + 'Newest</span></div>' +
+      sesCard({ live: true, time: '6:42 PM', date: 'Today', sets: 4, reps: 21, vol: '1.4k', rows: hSet(3, 100, 5, '<span class="m-best">BEST</span>', true) + hSet(4, 105, 3, '<span class="m-pb">3RM</span>'), more: 'Show all 4 sets' }) +
+      sesCard({ w: 'Push Day', time: '6:00 PM', date: 'Wed 23 Sep', sets: 5, reps: 28, vol: '2.5k', rows: hSet(5, 117.5, 8, '<span class="m-pb">8RM</span>', true), more: 'Show all 5 sets' }) +
+      '</div>';
+  }
+  function historyB() {
+    function row(date, sub, trail, isLive) {
+      return '<div class="m-li"><span class="lead' + (isLive ? ' live' : '') + '">' + (isLive ? '<span class="m-livedot"></span>' : I.check) + '</span><div class="body"><b>' + date + '</b><small>' + sub + '</small></div><div class="trail">' + trail + I.chevR + '</div></div>';
+    }
+    return SB + '<div class="m-page">' + exHead('seg', 'History') +
+      '<div class="m-row"><div class="m-search">' + I.search + 'Search notes, 100kg, 8 reps</div><span class="m-ib sec">' + I.sliders + '<span class="n">1</span></span></div>' +
+      '<div class="m-glabel">September<span>7 sessions</span></div><div class="m-group">' +
+      row('Today', '<span class="liveink">In progress</span> · 4 sets · best 100 × 5', '', true) +
+      row('Wed 23 Sep', '5 sets · best 117.5 × 8', '<span class="m-pb">8RM</span>') +
+      row('Mon 21 Sep', '5 sets · best 112.5 × 6', '') +
+      row('Fri 18 Sep', '5 sets · best 110 × 8', '<span class="m-pb">5RM</span>') +
+      row('Wed 16 Sep', '4 sets · best 107.5 × 5', '') +
+      row('Mon 14 Sep', '5 sets · best 105 × 8', '') + '</div>' +
+      '<div class="m-glabel">August<span>9 sessions</span></div><div class="m-group">' + row('Sat 29 Aug', '5 sets · best 102.5 × 8', '') + '</div></div>';
+  }
+  function filterSheet() {
+    return '<div class="m-blur">' + historyA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Filter history</h6>' +
+      '<div class="m-glabel">Date range</div><div class="m-segc stretch sm"><span>1W</span><span>1M</span><span class="on">3M</span><span>6M</span><span>1Y</span><span>All</span></div>' +
+      '<div class="m-opt" style="padding:8px 4px"><span style="color:var(--fg2);display:flex">' + I.cal + '</span><div class="body"><b style="font-weight:500">Custom range</b></div><span class="trail" style="display:flex">' + I.chevR + '</span></div>' +
+      '<div class="m-glabel">Sort</div><div class="m-grid2"><div class="m-input" style="font-weight:600">Date<span class="u">' + I.chevD + '</span></div><div class="m-segc stretch sm" style="align-self:center"><span class="on">Newest</span><span>Oldest</span></div></div>' +
+      '<div class="m-glabel">Weight · kg</div><div class="m-grid2"><div class="m-input ph">Min</div><div class="m-input ph">Max</div></div>' +
+      '<div class="m-glabel">Reps</div><div class="m-grid2"><div class="m-input ph">Min</div><div class="m-input ph">Max</div></div>' +
+      '<div class="m-actions"><span class="c">Clear all</span><span class="p">Show 12</span></div></div>';
+  }
+  function sesMenu() {
+    return '<div class="m-blur">' + historyA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Wed 23 Sep</h6><p>Bench Press · Push Day · 5 sets</p>' +
+      '<div class="m-group" style="margin-top:4px">' + setRow('arrowUR', 'Open workout', 'Push Day', I.chevR) + setRow('pencil', 'Edit entry', 'Date, notes and sets', I.chevR) +
+      '<div class="m-li danger"><span class="icn danger">' + I.trash + '</span><div class="body"><b>Delete entry</b><small>Removes these 5 sets</small></div></div></div>' +
+      '<div class="m-actions"><span class="c">Cancel</span></div></div>';
+  }
+  function deleteEntry() {
+    return '<div class="m-blur">' + historyA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-dialog"><div class="m-dicon">' + I.trash + '</div><h6>Delete Bench Press from Wed 23 Sep?</h6>' +
+      '<p>Its 5 sets will be deleted. The Push Day workout stays, and PBs are recalculated.</p><p class="strong">This can’t be undone.</p>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="d">' + I.trash + 'Delete</span></div></div>';
+  }
+
+  /* ---------- 6 · analytics ---------- */
+  var SERIES = [92.5,92.5,95,95,97.5,97.5,100,100,80,80,80,97.5,100,100,102.5,102.5,105,105,85,85,85,100,102.5,105,105,107.5,107.5,110,110,87.5,87.5,87.5,102.5,105,107.5,110,110,112.5,112.5];
+  function chart(w, h, sel) {
+    var padL = 30, padR = 8, padT = 10, padB = 22, lo = 75, hi = 115, n = SERIES.length;
+    function x(i) { return padL + (w - padL - padR) * i / (n - 1); }
+    function y(v) { return padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo)); }
+    var out = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:' + w + 'px;height:' + h + 'px;display:block;stroke:none">';
+    [80, 90, 100, 110].forEach(function (g) { out += '<line x1="' + padL + '" x2="' + (w - padR) + '" y1="' + y(g) + '" y2="' + y(g) + '" stroke="var(--borderLight)" stroke-width="1" stroke-dasharray="3 4"/><text x="' + (padL - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end" font-size="10" fill="var(--muted)" stroke="none">' + g + '</text>'; });
+    ['Jun 29', 'Jul 21', 'Aug 12', 'Sep 3', 'Sep 25'].forEach(function (l, i) { out += '<text x="' + (padL + (w - padL - padR) * i / 4) + '" y="' + (h - 5) + '" text-anchor="' + (i === 0 ? 'start' : i === 4 ? 'end' : 'middle') + '" font-size="10" fill="var(--muted)" stroke="none">' + l + '</text>'; });
+    var tr = SERIES.map(function (v, i) { var s = 0, c = 0; for (var j = Math.max(0, i - 4); j <= i; j++) { s += SERIES[j]; c++; } return [x(i), y(s / c)]; });
+    out += '<polyline points="' + tr.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ') + '" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="4 4"/>';
+    var pts = SERIES.map(function (v, i) { return x(i).toFixed(1) + ',' + y(v).toFixed(1); });
+    out += '<polygon points="' + x(0) + ',' + y(lo) + ' ' + pts.join(' ') + ' ' + x(n - 1) + ',' + y(lo) + '" fill="var(--fg)" fill-opacity="0.05" stroke="none"/>';
+    out += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--fg)" stroke-width="2" stroke-linejoin="round"/>';
+    var best = 0;
+    SERIES.forEach(function (v, i) {
+      var pb = i > 0 && v > best; if (v > best) best = v;
+      out += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="2.6" fill="var(--fg)" stroke="var(--surface)" stroke-width="1.2"/>';
+      if (pb) out += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="6" fill="none" stroke="var(--gold)" stroke-width="2"/>';
+    });
+    if (sel != null) out += '<line x1="' + x(sel) + '" x2="' + x(sel) + '" y1="' + padT + '" y2="' + (h - padB) + '" stroke="var(--fg2)" stroke-width="1"/><circle cx="' + x(sel) + '" cy="' + y(SERIES[sel]) + '" r="6" fill="var(--surface)" stroke="var(--fg)" stroke-width="2.4"/>';
+    return out + '</svg>';
+  }
+  function chartCard(opts) {
+    opts = opts || {};
+    return '<div class="m-card" style="gap:10px;padding:14px 14px 12px">' +
+      (opts.head !== false ? '<div class="m-row m-between"><span class="m-trig">Max weight' + I.chevD + '</span><span class="m-count">39 sessions</span></div>' +
+      '<div class="m-psub" style="margin-top:-8px">Heaviest set in each session · kg</div>' : '') +
+      (opts.range !== false ? '<div class="m-row" style="gap:8px"><div class="m-segc stretch sm" style="flex:1"><span>1W</span><span>1M</span><span class="on">3M</span><span>6M</span><span>1Y</span><span>All</span></div><span class="m-ib sec" style="width:36px;height:36px;border-radius:10px">' + I.cal.replace('<svg', '<svg style="width:18px;height:18px"') + '</span></div>' : '') +
+      '<div class="m-plot">' + chart(304, 170, opts.sel) + '</div>' +
+      '<div class="m-legend"><span><i></i>Max weight</span><span><i class="tr"></i>Trend</span><span><i class="pb"></i>PB</span><span style="margin-left:auto;display:flex;color:var(--fg2)">' + I.expand.replace('<svg', '<svg style="width:18px;height:18px"') + '</span></div>' +
+      (opts.controls !== false ? '<div class="m-row" style="gap:8px;border-top:1px solid var(--borderLight);padding-top:10px"><div class="m-segc stretch sm" style="flex:1"><span class="on">All sets</span><span>Work sets</span></div><span class="m-chip" style="height:32px">' + I.layers + 'Overlays · 2</span></div>' : '') +
+      '</div>';
+  }
+  function insightRM() {
+    return '<div class="m-card" style="gap:10px"><div class="m-row m-between"><h5 class="m-h">Estimated rep maxes</h5><span class="m-pill2">Epley</span></div>' +
+      '<p style="margin-top:-6px">From your best set in range: 110 kg × 8 on Fri 18 Sep.</p>' +
+      '<div class="m-tiles"><div class="hl"><b>139</b><span>1RM</span></div><div><b>131</b><span>2RM</span></div><div><b>127</b><span>3RM</span></div><div><b>119</b><span>5RM</span></div><div><b>110</b><span>8RM</span></div><div><b>104</b><span>10RM</span></div></div></div>';
+  }
+  function insightProgress() {
+    return '<div class="m-card" style="gap:10px"><div class="m-row m-between"><h5 class="m-h">Progress</h5><span class="m-pill2 up">' + I.trend + 'Improving</span></div>' +
+      '<div class="m-tiles"><div><b>+12.5</b><span>kg in range</span></div><div><b>6 d</b><span>since a gain</span></div><div><b>High</b><span>comparable</span></div></div>' +
+      '<div class="m-meter"><div class="l"><span>Momentum</span><b>Strong</b></div><div class="t"><i style="width:78%"></i></div></div>' +
+      '<div class="m-meter"><div class="l"><span>Plateau risk</span><b>Low</b></div><div class="t"><i style="width:22%"></i></div></div></div>';
+  }
+  function analyticsA() {
+    return SB + '<div class="m-page">' + exHead('seg', 'Analytics') + chartCard() +
+      '<div class="m-sec"><h5>Insights</h5><span class="m-cap">1 of 7</span></div>' +
+      '<div class="m-carousel">' + insightRM() + insightProgress() + '</div></div>';
+  }
+  function analyticsInsights() {
+    return SB + '<div class="m-page" style="margin-top:-6px">' +
+      '<div class="m-sec"><h5>Insights</h5><span class="m-cap">2 of 7</span></div>' +
+      '<div class="m-carousel">' + insightProgress() + insightRM() + '</div>' +
+      '<div class="m-dots"><i></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>' +
+      '<p style="font-size:13px;color:var(--muted);margin:4px 4px 0;max-width:none">The seven cards keep their content: Estimated rep maxes, Progress, Snapshot, Metric trend, PBs, Consistency and Rep profile. Each is restyled with metric tiles and meters, and swipes one card at a time with the next card peeking in.</p></div>';
+  }
+  function analyticsB() {
+    return SB + '<div class="m-page">' + exHead('seg', 'Analytics') +
+      '<div class="m-group">' + setRow('chart', 'Metric', null, '<span class="v">Max weight</span>' + I.chevR) +
+      setRow('layers', 'Overlays', null, '<span class="v" style="font-weight:500;color:var(--fg2)">Trend, PBs</span>' + I.chevR) +
+      '<div class="m-li"><span class="icn">' + I.dumbbell + '</span><div class="body"><b>Sets</b></div><div class="m-segc"><span class="on">All</span><span>Work</span></div></div></div>' +
+      '<div class="m-segc stretch sm"><span>1W</span><span>1M</span><span class="on">3M</span><span>6M</span><span>1Y</span><span>All</span></div>' +
+      chartCard({ range: false, controls: false }) + '</div>';
+  }
+  function metricSheet() {
+    var o = [['Max weight', 'Heaviest set in each session', 1], ['Estimated 1RM', 'Best Epley estimate in each session'], ['Total volume', 'Weight × reps across all sets'], ['Max reps', 'Most reps in one set'], ['Number of sets', 'Sets logged in each session']];
+    return '<div class="m-blur">' + analyticsA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Chart metric</h6>' + o.map(function (x) { return '<div class="m-opt' + (x[2] ? ' on' : '') + '"><span class="radio"></span><div class="body"><b>' + x[0] + '</b><small style="font-family:inherit">' + x[1] + '</small></div></div>'; }).join('') +
+      '<p style="margin-top:6px;font-size:13px;color:var(--muted)">Tap a metric to show it.</p></div>';
+  }
+  function overlaySheet() {
+    var o = [['Trend', 'Dashed rolling average', 1], ['PB markers', 'Gold rings on new records', 1], ['EWMA', 'Smoothed momentum line'], ['Robust trend', 'Trend that ignores outliers'], ['Weekly band', 'Weekly range and midpoint'], ['Plateau zones', 'Needs 6 sessions in range', 0, 1], ['Outliers', 'Unusually high or low sessions'], ['Rep buckets', 'Marks 1–3, 4–6, 7–9, 10+ reps']];
+    return '<div class="m-blur">' + analyticsA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet" style="gap:2px"><h6>Overlays</h6><p>Up to 3 at a time.</p>' + o.map(function (x) { return '<div class="m-opt' + (x[2] ? ' chk' : '') + (x[3] ? ' off' : '') + '" style="padding:8px 12px"><span class="box">' + (x[2] ? I.check : '') + '</span><div class="body"><b>' + x[0] + '</b><small style="font-family:inherit">' + x[1] + '</small></div></div>'; }).join('') +
+      '<div class="m-actions"><span class="p">Done</span></div></div>';
+  }
+  function rangeSheet() {
+    return '<div class="m-blur">' + analyticsA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Date range</h6><p>Show sessions between two dates.</p>' +
+      '<div class="m-group">' + setRow('cal', 'From', null, '<span class="v">Mon 29 Jun</span>' + I.chevR) + setRow('cal', 'To', null, '<span class="v">Sat 26 Sep</span>' + I.chevR) + '</div>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="p">Apply</span></div></div>';
+  }
+  function sessionBody(compact) {
+    return '<div class="m-strip3"><div><b>2,528</b><span>kg</span></div><div><b>28</b><span>reps</span></div><div><b>149</b><span>e1RM</span></div></div>' +
+      '<div class="m-glabel" style="padding-top:8px">Sets<span>5</span></div>' +
+      '<div>' + hSet(1, 55, 5, '', true) + hSet(2, 70, 5) + hSet(3, 90, 5) + (compact ? '' : hSet(4, 102.5, 5)) + hSet(5, 117.5, 8, '<span class="m-pb">8RM</span>') + '</div>';
+  }
+  function sessionSheet() {
+    return '<div class="m-blur">' + analyticsA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet" style="gap:8px"><div class="m-row m-between" style="align-items:flex-start"><div><h6>Wed 23 Sep</h6><p style="margin-bottom:0">Push Day · 6:00 PM</p></div>' + done() + '</div>' + sessionBody() +
+      '<div class="m-actions"><span class="c">' + I.arrowUR + 'Workout</span><span class="c">' + I.pencil + 'Edit</span><span class="c" style="flex:0 0 50px;color:var(--destructive)">' + I.trash + '</span></div></div>';
+  }
+  function landscape() {
+    return SBL + '<div style="display:flex;height:338px">' +
+      '<div style="flex:1;padding:4px 12px 0 16px;display:flex;flex-direction:column;gap:6px;min-width:0">' +
+      '<div class="m-row m-between"><div class="m-row" style="gap:10px"><span class="m-trig" style="font-size:17px">Bench Press · Max weight' + I.chevD + '</span></div><span class="m-count">3M</span></div>' +
+      '<div style="flex:1">' + chart(440, 262, 32) + '</div></div>' +
+      '<div style="width:288px;border-left:1px solid var(--border);background:var(--surface);padding:10px 16px;display:flex;flex-direction:column;gap:8px">' +
+      '<div class="m-row m-between"><div><b style="font-size:17px">Wed 23 Sep</b><div class="m-psub">Push Day · 6:00 PM</div></div><span class="m-ib" style="width:36px;height:36px;margin-right:-8px">' + I.close + '</span></div>' +
+      sessionBody(true) + '</div></div>';
+  }
+
+  /* ---------- 7 · set info ---------- */
+  function setInfoA(video) {
+    return SB + '<div class="m-page">' +
+      '<div class="m-back"><span class="m-ib">' + I.arrowL + '</span><span class="m-cap">Wed 23 Sep · 6:18 PM</span></div>' +
+      '<div style="margin-top:-6px"><div class="m-psub" style="font-size:14px;font-weight:600;color:var(--fg2)">Bench Press · Set 5</div><div class="m-title">117.5 kg × 8</div></div>' +
+      '<div class="m-row" style="gap:8px"><span class="m-pb" style="font-size:12px;padding:4px 9px">8RM PB</span><span class="m-pill2">e1RM 149 kg</span><span class="m-pill2">Push Day</span></div>' +
+      '<div class="m-glabel">Note</div><div class="m-group">' + setRow('note', 'Moved well, last rep slow', 'Tap to edit', I.pencil) + '</div>' +
+      '<div class="m-glabel">Video</div>' + (video ?
+        '<div class="m-card" style="padding:10px;gap:10px"><div class="m-video"><span class="pl">' + I.play + '</span><span class="dur">0:24</span></div><div class="m-row m-between" style="padding:0 4px"><span class="m-cap" style="font-size:13px">Linked Wed 23 Sep · tap to play full screen</span><span class="m-ib" style="width:36px;height:36px;margin-right:-6px">' + I.dots + '</span></div></div>' :
+        '<div class="m-group">' + setRow('video', 'Link a video', 'Pick one from your gallery', I.plus) + '</div>') +
+      '</div>';
+  }
+  function setInfoB() {
+    return '<div class="m-blur">' + historyA() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet" style="gap:8px"><div class="m-row m-between" style="align-items:flex-start"><div><p style="margin:0 4px;font-weight:600">Bench Press · Set 5</p><h6 style="font-size:24px">117.5 kg × 8</h6></div><span class="m-pb" style="font-size:12px;padding:4px 9px;margin-top:4px">8RM PB</span></div>' +
+      '<p>Wed 23 Sep · 6:18 PM · Push Day</p>' +
+      '<div class="m-group">' + setRow('note', 'Moved well, last rep slow', 'Note', I.pencil) + '</div>' +
+      '<div class="m-video" style="height:160px"><span class="pl">' + I.play + '</span><span class="dur">0:24</span></div>' +
+      '<div class="m-actions"><span class="c">Video options</span><span class="p">Done</span></div></div>';
+  }
+  function videoOptions() {
+    return '<div class="m-blur">' + setInfoA(true) + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Video options</h6><p>Unlinking removes the video from this set. The file stays in your gallery.</p>' +
+      '<div class="m-group">' + setRow('video', 'Change video', 'Pick another from your gallery', I.chevR) +
+      '<div class="m-li danger"><span class="icn danger">' + I.link + '</span><div class="body"><b>Unlink video</b><small>Keeps the file</small></div></div></div>' +
+      '<div class="m-actions"><span class="c">Cancel</span></div></div>';
+  }
+  function noteSheet() {
+    return '<div class="m-blur">' + setInfoA(true) + '</div><div class="m-scrim"></div>' +
+      '<div class="m-sheet"><h6>Set note</h6><div class="m-input area" style="min-height:96px">Moved well, last rep slow</div>' +
+      '<div class="m-row m-between" style="padding:0 4px"><span class="m-link danger">Clear note</span><span class="m-cap">Saves straight away</span></div>' +
+      '<div class="m-actions"><span class="c">Cancel</span><span class="p">Save note</span></div></div>';
+  }
+
+  /* ---------- 8 · edit entry ---------- */
+  function editEntry(err) {
+    return SB + '<div class="m-page">' +
+      '<div class="m-back"><span class="m-ib">' + I.close + '</span><span class="m-cap">Editing entry</span></div>' +
+      '<div style="margin-top:-6px"><div class="m-title">Bench Press</div><div class="m-psub">Push Day</div></div>' +
+      '<div class="m-group">' + setRow('cal', 'Date', 'Moves all sets', '<span class="v">Wed 23 Sep</span>' + I.chevR) +
+      setRow('note', 'Workout note', 'Add a note', I.chevR) + setRow('note', 'Entry note', 'Felt strong today', I.chevR) + '</div>' +
+      '<div class="m-sec"><h5>Sets</h5><span class="m-cap">5 sets · 1 unsaved</span></div>' +
+      '<div class="m-card" style="gap:0;padding-block:6px">' + setR(1, 55, 5, '', '', true) + setR(2, 70, 5) + setR(3, 90, 5) + setR(4, 117.5, 8, '<span class="m-pb">8RM</span>') + setR(5, 90, 10, '<span class="m-best" style="background:var(--liveSoft);color:var(--liveInk)">NEW</span>') + '</div>' +
+      '<div class="m-btn secondary">' + I.plus + 'Add set</div>' +
+      '</div><div class="m-footer" style="display:flex;flex-direction:column;gap:10px">' + (err ? '<div class="m-err">' + I.alert + '<span>Couldn’t save your changes. Nothing was changed. Try again.</span></div>' : '') + '<div class="m-btn primary">' + I.check + 'Save changes</div></div>';
+  }
+  function discard() {
+    return '<div class="m-blur">' + editEntry() + '</div><div class="m-scrim"></div>' +
+      '<div class="m-dialog"><div class="m-dicon n">' + I.alert + '</div><h6>Discard your changes?</h6>' +
+      '<p>1 new set and a date change haven’t been saved.</p>' +
+      '<div class="m-actions"><span class="c">Keep editing</span><span class="d">Discard</span></div></div>';
+  }
+
+  function phone(html, cls, extra) { return '<div class="phone"><div class="phone-inner"><div class="m' + (cls ? ' ' + cls : '') + '" style="' + vars(colors(extra)) + '">' + html + '</div></div></div>'; }
+  function shot(title, desc, html, opts) {
+    opts = opts || {};
+    return '<div class="shot' + (opts.wide ? ' wide' : '') + '">' + (opts.tag ? '<span class="tag' + (opts.rec ? ' rec' : '') + '">' + opts.tag + '</span>' : '') + phone(html, opts.cls) +
+      '<div class="shot-cap"><b>' + title + '</b><small>' + desc + '</small></div></div>';
+  }
+  function strip(html, extra) { return '<div class="frame"><div class="m-strip" style="' + vars(colors(extra)) + '">' + html + '</div></div>'; }
+
+  function render() {
+    document.getElementById('shell-grid').innerHTML =
+      shot('A · Large title and segmented control', 'The name sits large under Back and the pin, with the equipment and muscle group under it. The switch is the same segmented control as Settings. It uses about 70 dp more height than B, so the title could shrink into the header as you scroll.', recordA(), { tag: 'Recommended', rec: true }) +
+      shot('B · Compact header, underline tabs', 'A 20 sp name next to Back, then full-width text tabs with an ink underline. This is closest to today’s layout and leaves the most room for content. Swiping between tabs stays.', SB + '<div class="m-page">' + exHead('tabs', 'Record') + workoutRow() + nextSet() + recordedSets() + '</div><div class="m-footer"><div class="m-btn big2">' + I.check + 'Complete exercise</div></div>', { tag: 'Option' }) +
+      shot('Could not load', 'The load-error state as a card, with Retry. Deleted exercises and broken links use the same card with Go back only.', unavailable(), { tag: 'Converted' }) +
+      shot('Pin limit reached', 'A one-button dialog on the shared shell. The message now says how to free a pin. Only needed if pins stay: see decision 1.', pinLimit(), { tag: 'Converted' });
+
+    document.getElementById('record-grid').innerHTML =
+      shot('A · Form first', 'The workout row, then the set form with the timer beside Add set, then the recorded sets. Complete exercise stays in a fixed footer, as on workout detail. The large values and steppers make one-thumb changes easy between sets.', recordA(), { tag: 'Recommended', rec: true }) +
+      shot('B · Sets first, docked entry', 'The recorded sets read top to bottom like a log, and a panel docked at the bottom holds the next set, so Add set is always under your thumb. Complete moves up beside the Recorded sets heading. The panel covers about 200 dp of the list.', recordB(), { tag: 'Option' });
+    document.getElementById('record-states').innerHTML =
+      shot('No workout chosen', 'Replaces "Start with a workout". The workout row says what’s missing, and the card leads to Workouts.', recState('none'), { tag: 'Converted', cls: 'mid' }) +
+      shot('Exercise complete', 'After Complete exercise, when you come back to the exercise. An entry note from an older version shows under the card as a plain note.', recState('entry'), { tag: 'Converted', cls: 'mid' }) +
+      shot('Workout complete', 'When the chosen workout is finished. Open workout leads to its detail page, where it can be resumed.', recState('workout'), { tag: 'Converted', cls: 'mid' });
+
+    document.getElementById('dialog-grid').innerHTML =
+      shot('Choose workout', 'The calendar and the day’s workouts in one sheet. Days with workouts have a dot. Pick one, then confirm with Use Push Day. "Open Workouts" leaves the page, as today’s Workouts button does.', chooseSheet(), { tag: 'Converted' }) +
+      shot('Edit set', 'Weight, reps, note and time, then Delete set in red outline. The time row opens the Android time picker.', editSetSheet(), { tag: 'Converted' }) +
+      shot('Delete set', 'The shared confirmation. The video checkbox only appears when the set has a linked video.', deleteSet(true), { tag: 'Converted' }) +
+      shot('Clear sets', 'Opened from Clear beside Recorded sets.', clearSets(), { tag: 'Converted' });
+
+    var tstrip = function (st, cap) { return strip(timerStrip(st, cap)); };
+    document.getElementById('timer-states').innerHTML =
+      '<div class="cmp"><h3>The timer button</h3>' +
+        '<div class="cmp-row"><span>Ready</span>' + tstrip('', 'Shows this exercise’s rest time. Tap to start, long-press for the sheet.') + '</div>' +
+        '<div class="cmp-row"><span>Running</span>' + tstrip('run', 'Green, counting down, with a bar that empties. Tap to pause.') + '</div>' +
+        '<div class="cmp-row"><span>Paused</span>' + tstrip('paused', 'Keeps the green with a dashed edge and a play icon. Tap to resume.') + '</div>' +
+        '<p style="font-size:13.5px">The button keeps one width in every state, so Add set never moves. When the timer finishes, the notification fires and the button returns to Ready.</p></div>';
+    document.getElementById('timer-grid').innerHTML =
+      shot('A · Rest timer sheet, stepper', 'While the timer runs, the sheet shows it counting down, with Pause, Restart and Stop. Under that, the shared control: ± in 15-second steps, with the six presets. Start saves the time for this exercise.', timerSheet('A', true), { tag: 'Recommended', rec: true }) +
+      shot('B · Rest timer sheet, wheels', 'The same sheet with minute and second wheels in place of the stepper. It is precise, but slower to change by a small amount between sets.', timerSheet('B', false), { tag: 'Option' }) +
+      shot('Settings with rest defaults', 'A new Rest timer group. Default rest time replaces the hard-coded 1:30. "Start after each set" is new behaviour, so it is off by default and marked NEW. Leave it out if you’d rather not add it.', settingsScreen(), { tag: 'New' }) +
+      shot('Default rest time sheet', 'The same duration control as the exercise’s sheet. Existing per-exercise times are kept.', defaultSheet(), { tag: 'New' });
+
+    document.getElementById('history-grid').innerHTML =
+      shot('A · Session cards', 'Each session shows its workout name and time, the date as its title, the metric strip, then its BEST and PB sets, as on workout detail. "Show all" expands it. Tap a set for Set Info. The in-progress session has the live pill.', historyA(), { tag: 'Recommended', rec: true }) +
+      shot('B · Compact rows', 'One row per session, grouped by month, with the best set and any PB badge. Tapping a row opens the same session sheet as a chart point (section 6). It is denser, but you can’t see all the sets at a glance.', historyB(), { tag: 'Option' }) +
+      shot('Filter sheet', 'Date range, sort and the weight and reps ranges move into one sheet. Search stays on the page, and typing "100kg" or "8 reps" still filters.', filterSheet(), { tag: 'Converted' }) +
+      shot('Session menu', 'From ⋯ on a card: Open workout, Edit entry, or Delete entry. An in-progress session shows only Open workout, as today.', sesMenu(), { tag: 'Converted' }) +
+      shot('Delete entry', 'Named by exercise and date, and says the workout itself stays.', deleteEntry(), { tag: 'Converted' });
+
+    document.getElementById('analytics-grid').innerHTML =
+      shot('A · Chart first', 'The chart title is the metric picker. The range sits above the plot, and set scope and overlays sit under it, all inside one card. Insights follow as a carousel.', analyticsA(), { tag: 'Recommended', rec: true }) +
+      shot('B · Controls list', 'Today’s structure restyled: metric, overlays and set scope as settings-style rows, the range under them, then the chart. Clear, but the chart starts about 200 dp lower.', analyticsB(), { tag: 'Option' }) +
+      shot('Insights, scrolled', 'The carousel with its page dots.', analyticsInsights(), { tag: 'Converted', cls: 'mid' });
+    document.getElementById('analytics-more').innerHTML =
+      shot('Session details', 'Opened by tapping a point, or releasing a scrub. It is a bottom sheet with the metric strip and the sets, and actions to open the workout, edit the entry or delete it. Delete confirms with the shared dialog, not a native alert.', sessionSheet(), { tag: 'Converted' }) +
+      shot('Chart metric', 'The five metrics, each with a line saying what it plots. Tapping one applies it.', metricSheet(), { tag: 'Converted' }) +
+      shot('Overlays', 'Replaces the expanding chip panel. An overlay that isn’t available says why.', overlaySheet(), { tag: 'Converted' }) +
+      shot('Date range', 'Two date rows that open the system date picker. A start after the end is swapped automatically, as today.', rangeSheet(), { tag: 'Converted' }) +
+      shot('Fullscreen, landscape', 'Fullscreen still turns the phone to landscape. Tapping a point there opens the session as a side panel, so the chart stays in view.', landscape(), { tag: 'Converted', cls: 'land', wide: true });
+
+    document.getElementById('setinfo-grid').innerHTML =
+      shot('A · Set Info page', 'Laid out like workout detail: Back and the date and time, then the set as the title with its PB and e1RM. The note and video follow as grouped rows.', setInfoA(false), { tag: 'Recommended', rec: true }) +
+      shot('With a video', 'The linked video plays muted in the card. ⋯ opens Video options.', setInfoA(true), { tag: 'Recommended', rec: true }) +
+      shot('B · Set Info as a sheet', 'Opens over the list it came from, so you don’t lose your place. The video gets less room, and a sheet over a sheet happens when it opens from the session sheet.', setInfoB(), { tag: 'Option' }) +
+      shot('Note sheet', 'Replaces the inline editor. Clear note empties the draft; nothing is saved until Save note.', noteSheet(), { tag: 'Converted' }) +
+      shot('Video options', 'Replaces the native alert with Change video and Unlink video.', videoOptions(), { tag: 'Converted' });
+
+    document.getElementById('edit-grid').innerHTML =
+      shot('Edit entry', 'The date and both notes become rows at the top. The sets use the same rows as Record, and "Add set" opens the set sheet from section 3. New and changed sets are marked until you save.', editEntry(false), { tag: 'Recommended', rec: true }) +
+      shot('Save failed', 'Today a failed save only logs to the console. Now the page says so and keeps your changes.', editEntry(true), { tag: 'Fix' }) +
+      shot('Discard changes', 'Shown on Close or Back whenever anything is unsaved, not only notes. It lists what would be lost.', discard(), { tag: 'Fix' });
+
+    document.querySelectorAll('[data-mode]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)); });
+    try { localStorage.setItem('ll-mockups-r2', JSON.stringify(state)); } catch (e) {}
+  }
+  document.querySelectorAll('[data-mode]').forEach(function (b) { b.addEventListener('click', function () { state.mode = b.dataset.mode; render(); }); });
+  render();
+})();
+</script>
