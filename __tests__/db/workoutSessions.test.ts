@@ -157,6 +157,106 @@ describe("named workout sessions on SQLite", () => {
     expect((await workouts.getActiveWorkout())?.id).toBe(source);
   });
 
+  describe("deleteWorkoutSession", () => {
+    function programLinkedTo(workoutId: number, exerciseId: number) {
+      exec(`INSERT INTO psl_programs(id, name, psl_source) VALUES (1, 'Plan', '');
+        INSERT INTO program_calendar(id, program_id, psl_session_id, session_name, date_iso, sequence, status) VALUES (1, 1, 'one', 'Session', '2026-10-23', 1, 'complete');
+        INSERT INTO program_calendar_exercises(id, calendar_id, exercise_name, exercise_id, order_index, prescribed_sets_json, workout_exercise_id, status) VALUES (1, 1, 'Lift', ${exerciseId}, 1, '[]', ${workoutId}, 'complete');
+        INSERT INTO program_calendar_sets(id, calendar_exercise_id, set_index, set_id, is_logged, logged_at, actual_weight, actual_reps, actual_rpe) VALUES (1, 1, 1, ${workoutId}, 1, ${day(23, 11)}, 100, 5, 8);`);
+    }
+
+    it("deletes a completed workout's entries, sets, media and PB events, keeping other workouts' history", async () => {
+      const kept = await sessions.createWorkoutSession(day(22));
+      const exerciseId = entry(kept);
+      exec(`UPDATE sets SET weight_kg = 90, performed_at = ${day(22, 11)} WHERE id = ${kept};`);
+      await sessions.completeWorkoutSession(kept);
+      const deleted = await sessions.createWorkoutSession(day(23));
+      exec(`INSERT INTO workout_exercises (id, workout_id, exercise_id, performed_at) VALUES (${deleted}, ${deleted}, ${exerciseId}, ${day(23)});
+        INSERT INTO sets (id, workout_id, exercise_id, workout_exercise_id, weight_kg, reps, performed_at) VALUES (${deleted}, ${deleted}, ${exerciseId}, ${deleted}, 120, 5, ${day(23, 11)});
+        INSERT INTO media(local_uri, set_id, workout_id) VALUES ('set-video', ${deleted}, ${deleted}), ('workout-video', NULL, ${deleted});`);
+      await workouts.updateSet(deleted, { weight_kg: 120 });
+      await sessions.completeWorkoutSession(deleted);
+      expect(mockDatabase.rows("SELECT DISTINCT set_id FROM pr_events ORDER BY set_id")).toEqual([{ set_id: kept }, { set_id: deleted }]);
+
+      await sessions.deleteWorkoutSession(deleted);
+
+      expect(mockDatabase.rows("SELECT id FROM workouts")).toEqual([{ id: kept }]);
+      expect(mockDatabase.rows("SELECT id FROM workout_exercises")).toEqual([{ id: kept }]);
+      expect(mockDatabase.rows("SELECT id FROM sets")).toEqual([{ id: kept }]);
+      expect(mockDatabase.rows("SELECT id FROM media")).toEqual([]);
+      expect(mockDatabase.rows("SELECT DISTINCT set_id FROM pr_events")).toEqual([{ set_id: kept }]);
+      expect(await sessions.getWorkoutSessionDetail(deleted)).toBeNull();
+      expect(mockDatabase.rows("PRAGMA foreign_key_check")).toEqual([]);
+    });
+
+    it("deletes an active workout with no sets and frees the active slot", async () => {
+      const id = await sessions.createWorkoutSession(day(23));
+      await sessions.deleteWorkoutSession(id);
+      expect(mockDatabase.rows("SELECT id FROM workouts")).toEqual([]);
+      expect(await workouts.getActiveWorkout()).toBeNull();
+      await expect(sessions.createWorkoutSession(day(23))).resolves.toEqual(expect.any(Number));
+    });
+
+    it("deletes an active workout with open entries and sets", async () => {
+      const id = await sessions.createWorkoutSession(day(23));
+      entry(id);
+      expect((await sessions.getWorkoutSessionDetail(id))?.inProgressCount).toBe(1);
+      await sessions.deleteWorkoutSession(id);
+      expect(mockDatabase.rows("SELECT count(*) AS n FROM workout_exercises")).toEqual([{ n: 0 }]);
+      expect(mockDatabase.rows("SELECT count(*) AS n FROM sets")).toEqual([{ n: 0 }]);
+      expect(await workouts.getActiveWorkout()).toBeNull();
+    });
+
+    it("clears program set and exercise links, keeps the schedule rows and resyncs their status", async () => {
+      const id = await sessions.createWorkoutSession(day(23));
+      const exerciseId = entry(id);
+      await sessions.completeWorkoutSession(id);
+      programLinkedTo(id, exerciseId);
+
+      await sessions.deleteWorkoutSession(id);
+
+      expect(mockDatabase.rows("SELECT set_id, is_logged, logged_at, actual_weight, actual_reps, actual_rpe FROM program_calendar_sets")).toEqual([
+        { set_id: null, is_logged: 0, logged_at: null, actual_weight: null, actual_reps: null, actual_rpe: null },
+      ]);
+      expect(mockDatabase.rows("SELECT workout_exercise_id, status FROM program_calendar_exercises")).toEqual([
+        { workout_exercise_id: null, status: "pending" },
+      ]);
+      expect(mockDatabase.rows("SELECT id FROM program_calendar")).toEqual([{ id: 1 }]);
+      expect(mockDatabase.rows("PRAGMA foreign_key_check")).toEqual([]);
+    });
+
+    it("rolls back every write when the delete fails", async () => {
+      const id = await sessions.createWorkoutSession(day(23));
+      const exerciseId = entry(id);
+      await sessions.completeWorkoutSession(id);
+      programLinkedTo(id, exerciseId);
+      exec("CREATE TRIGGER fail_delete BEFORE DELETE ON workouts BEGIN SELECT RAISE(ABORT, 'injected delete failure'); END;");
+      try {
+        await expect(sessions.deleteWorkoutSession(id)).rejects.toThrow("injected delete failure");
+      } finally {
+        exec("DROP TRIGGER fail_delete;");
+      }
+      expect(mockDatabase.rows("SELECT id FROM sets")).toEqual([{ id }]);
+      expect(mockDatabase.rows("SELECT set_id, is_logged FROM program_calendar_sets")).toEqual([{ set_id: id, is_logged: 1 }]);
+      expect(mockDatabase.rows("SELECT workout_exercise_id FROM program_calendar_exercises")).toEqual([{ workout_exercise_id: id }]);
+    });
+
+    it("rejects an unknown or invalid workout ID", async () => {
+      await expect(sessions.deleteWorkoutSession(9999)).rejects.toThrow("does not exist");
+      await expect(sessions.deleteWorkoutSession(0)).rejects.toThrow(RangeError);
+    });
+
+    it("is what the legacy deleteWorkout runs", async () => {
+      const id = await sessions.createWorkoutSession(day(23));
+      const exerciseId = entry(id);
+      await sessions.completeWorkoutSession(id);
+      programLinkedTo(id, exerciseId);
+      await workouts.deleteWorkout(id);
+      expect(mockDatabase.rows("SELECT set_id FROM program_calendar_sets")).toEqual([{ set_id: null }]);
+      expect(mockDatabase.rows("SELECT workout_exercise_id FROM program_calendar_exercises")).toEqual([{ workout_exercise_id: null }]);
+    });
+  });
+
   it("migrates legacy duplicate active envelopes without changing notes, history or open entries", () => {
     const legacy = createManualLoggingDatabase();
     try {

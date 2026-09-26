@@ -1,8 +1,10 @@
 import { and, asc, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { newUid } from "../utils/uid";
 import { db } from "./connection";
-import { exercises, media, pbEvents, programCalendarSets, sets, workoutExercises, workouts, type SetRow, type WorkoutRow } from "./schema";
+import { exercises, media, pbEvents, programCalendar, programCalendarExercises, programCalendarSets, sets, workoutExercises, workouts, type SetRow, type WorkoutRow } from "./schema";
 import { derivePBEventsForExercise } from "./pbDerivation";
+import { syncStatusesForCalendarExercise } from "./programCalendar";
+import { refreshUpcomingCalendarForPrograms } from "../programs/psl/programRuntime";
 
 export type WorkoutSessionSummary = {
   id: number;
@@ -254,12 +256,78 @@ export async function moveWorkoutExerciseToWorkout(entryId: number, targetWorkou
     tx.update(workoutExercises).set({ workoutId: targetWorkoutId, orderIndex: nextOrder, performedAt: entryPerformedAt })
       .where(eq(workoutExercises.id, entryId)).run();
     // Dates affect PB chronology, so rebuild within the same transaction as the move.
-    for (const exerciseId of new Set(linkedSets.map((set) => set.exerciseId))) {
-      const allSets = tx.select().from(sets).where(eq(sets.exerciseId, exerciseId))
-        .orderBy(asc(sets.performedAt), asc(sets.id)).all();
-      const events = derivePBEventsForExercise(exerciseId, allSets).map((event) => ({ ...event, uid: newUid() }));
-      tx.delete(pbEvents).where(eq(pbEvents.exerciseId, exerciseId)).run();
-      if (events.length) tx.insert(pbEvents).values(events).run();
-    }
+    rebuildPBEventsInTransaction(tx, linkedSets.map((set) => set.exerciseId));
   }, { behavior: "immediate" });
+}
+
+/**
+ * Delete a workout container with all its entries, sets, attached media rows and
+ * PB events, clearing the soft program links first. The history and link writes
+ * share one transaction; derived program statuses and the upcoming calendar are
+ * refreshed afterwards because those helpers are async.
+ */
+export async function deleteWorkoutSession(id: number): Promise<void> {
+  assertId(id);
+  const { calendarExerciseIds, programIds } = db.transaction((tx) => {
+    if (!tx.select({ id: workouts.id }).from(workouts).where(eq(workouts.id, id)).get()) {
+      throw new Error(`Workout ${id} does not exist.`);
+    }
+    const loggedSets = tx.select({ id: sets.id, exerciseId: sets.exerciseId }).from(sets).where(eq(sets.workoutId, id)).all();
+    const entries = tx.select({ id: workoutExercises.id, exerciseId: workoutExercises.exerciseId })
+      .from(workoutExercises).where(eq(workoutExercises.workoutId, id)).all();
+    const setIds = loggedSets.map((set) => set.id);
+    const entryIds = entries.map((entry) => entry.id);
+    const linkedProgramSets = setIds.length === 0 ? [] : tx.select({
+      id: programCalendarSets.id,
+      calendarExerciseId: programCalendarSets.calendarExerciseId,
+      programId: programCalendar.programId,
+    }).from(programCalendarSets)
+      .innerJoin(programCalendarExercises, eq(programCalendarSets.calendarExerciseId, programCalendarExercises.id))
+      .innerJoin(programCalendar, eq(programCalendarExercises.calendarId, programCalendar.id))
+      .where(inArray(programCalendarSets.setId, setIds)).all();
+    const linkedProgramExercises = entryIds.length === 0 ? [] : tx.select({
+      id: programCalendarExercises.id,
+      programId: programCalendar.programId,
+    }).from(programCalendarExercises)
+      .innerJoin(programCalendar, eq(programCalendarExercises.calendarId, programCalendar.id))
+      .where(inArray(programCalendarExercises.workoutExerciseId, entryIds)).all();
+
+    // Same state as clearLinkedProgramSetsByWorkoutSetIds and
+    // clearLinkedProgramExercisesByWorkoutExerciseIds, written inside the transaction.
+    if (linkedProgramSets.length) {
+      tx.update(programCalendarSets)
+        .set({ actualWeight: null, actualReps: null, actualRpe: null, isLogged: false, loggedAt: null, setId: null })
+        .where(inArray(programCalendarSets.id, linkedProgramSets.map((row) => row.id))).run();
+    }
+    if (linkedProgramExercises.length) {
+      tx.update(programCalendarExercises).set({ workoutExerciseId: null })
+        .where(inArray(programCalendarExercises.id, linkedProgramExercises.map((row) => row.id))).run();
+    }
+
+    // Entries, sets, media rows and PB events cascade from the workout.
+    tx.delete(workouts).where(eq(workouts.id, id)).run();
+    rebuildPBEventsInTransaction(tx, [...loggedSets, ...entries].map((row) => row.exerciseId));
+
+    return {
+      calendarExerciseIds: [...new Set([...linkedProgramSets.map((row) => row.calendarExerciseId), ...linkedProgramExercises.map((row) => row.id)])],
+      programIds: [...new Set([...linkedProgramSets, ...linkedProgramExercises].map((row) => row.programId))],
+    };
+  }, { behavior: "immediate" });
+
+  for (const calendarExerciseId of calendarExerciseIds) {
+    await syncStatusesForCalendarExercise(calendarExerciseId);
+  }
+  await refreshUpcomingCalendarForPrograms(programIds);
+}
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function rebuildPBEventsInTransaction(tx: Transaction, exerciseIds: number[]): void {
+  for (const exerciseId of new Set(exerciseIds)) {
+    const allSets = tx.select().from(sets).where(eq(sets.exerciseId, exerciseId))
+      .orderBy(asc(sets.performedAt), asc(sets.id)).all();
+    const events = derivePBEventsForExercise(exerciseId, allSets).map((event) => ({ ...event, uid: newUid() }));
+    tx.delete(pbEvents).where(eq(pbEvents.exerciseId, exerciseId)).run();
+    if (events.length) tx.insert(pbEvents).values(events).run();
+  }
 }

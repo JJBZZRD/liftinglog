@@ -16,7 +16,7 @@ import {
   syncLinkedProgramSetsByWorkoutSetIds,
 } from "./programCalendar";
 import { refreshUpcomingCalendarForPrograms } from "../programs/psl/programRuntime";
-import { completeWorkoutSessionAt, createWorkoutSessionWithMetadata } from "./workoutSessions";
+import { completeWorkoutSessionAt, createWorkoutSessionWithMetadata, deleteWorkoutSession } from "./workoutSessions";
 
 export type Workout = WorkoutRow;
 export type WorkoutExercise = WorkoutExerciseRow;
@@ -182,17 +182,7 @@ export async function getOrCreateActiveWorkout(): Promise<number> {
 }
 
 export async function deleteWorkout(id: number): Promise<void> {
-  const exerciseRows = await db
-    .select({ exerciseId: sets.exerciseId })
-    .from(sets)
-    .where(eq(sets.workoutId, id));
-  const exerciseIds = [...new Set(exerciseRows.map((row) => row.exerciseId))];
-
-  await db.delete(workouts).where(eq(workouts.id, id)).run();
-
-  for (const exerciseId of exerciseIds) {
-    await rebuildPBEventsForExercise(exerciseId);
-  }
+  await deleteWorkoutSession(id);
 }
 
 /**

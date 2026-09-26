@@ -346,6 +346,19 @@ When a real set is deleted:
 3. PB events are rebuilt.
 4. Empty completed `workout_exercises` may be removed.
 
+When a whole workout is deleted, use `deleteWorkoutSession()` in
+`lib/db/workoutSessions.ts` (the legacy `deleteWorkout()` delegates to it):
+
+1. In one immediate transaction it clears the linked `program_calendar_sets`
+   (actuals, `is_logged`, `logged_at`, `set_id`) and
+   `program_calendar_exercises.workout_exercise_id`, deletes the `workouts` row
+   (entries, sets, `media` rows and `pr_events` cascade), and rebuilds PB events
+   for every affected exercise.
+2. After the transaction it resyncs the affected program exercise/session
+   statuses and refreshes the upcoming calendar for affected programs.
+3. Schedule rows (`program_calendar*`) are kept; they return to not logged.
+4. Gallery video files are not deleted; only their `media` rows go.
+
 ### C. Workout day history
 
 The broad workout history page does not read program tables.
