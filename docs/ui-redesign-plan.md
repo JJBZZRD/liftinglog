@@ -1,6 +1,6 @@
 # LiftingLog UI redesign plan
 
-Status: **agreed 2026-09-26. Phases 1 to 6 are done; Phase 7 is next.** A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
+Status: **agreed 2026-09-26. Phases 1 to 6 are done; in Phase 7 the Settings redesign is done and the global theme switch is next.** A new session should start with [ui-redesign-handoff.md](ui-redesign-handoff.md). This file records the design
 decisions for the next round of the UI redesign, the order of work, and the
 items deliberately deferred. Read it together with [the design system](design-system/README.md),
 [workouts-ui-redesign.md](workouts-ui-redesign.md) and, for any persistence
@@ -248,9 +248,23 @@ Intended deviations from the mockups:
 
 ### Phase 7: Settings and the global theme
 
-1. Redesign Settings as mocked. Include the About section.
+1. Redesign Settings as mocked. Include the About section. **(Done.)**
 2. Remove the colour-theme selector, and apply the Ink palette app-wide from the root provider so unmigrated screens use it too.
 3. Retire the seven legacy palettes. Check the unmigrated screens visually after the switch.
+
+Notes from the Settings build:
+
+- The screen lives in `features/settings/` (`screens/settings-screen.tsx`, `components/formula-sheet.tsx`, `hooks/use-data-transfer.ts`, `formulas.ts`); the route re-exports it. The export, CSV and restore handlers moved into `useDataTransfer` unchanged, with the same `operationOwnerRef`, `isExporting*` and `showReplacementRestore` guards, alerts and cancellation handling.
+- `ListRow` gained `tile="small"` (the 32 dp settings tile), `busy` (spinner in place of the chevron) and `disabled`. `BaseModal` gained `sheet`, a bottom-anchored placement for option sheets.
+- Display and weight unit change in one tap through `SegmentedControl`. The formula sheet holds a pending choice and applies it only on "Use …".
+- `ReplacementRestoreDialog` now builds its actions from `Button`; its phases and guards are unchanged.
+- The Color Theme picker is gone from Settings, as mocked. The `colorTheme` state in `ThemeContext` and the stored `settings.color_theme` value are untouched until step 2, so legacy screens keep the last chosen palette for now.
+
+Intended deviations from the mockups (Settings):
+
+- The formula sheet lists O'Conner (`w × (1 + r/40)`) between Brzycki and Lombardi. The mockup omits it, but the app supports it and a stored O'Conner choice must stay selectable.
+- The Display row is about 3 dp taller than mocked, because `SegmentedControl` keeps a 32 dp minimum segment height for touch.
+- Sheet buttons use the shared `Button` (44 dp) rather than the mockup's roughly 49 dp action spans, as in every other dialog.
 
 ## Deferred
 

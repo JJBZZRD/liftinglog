@@ -9,9 +9,10 @@ card of rows with inset separators.
 ```tsx
 <GroupLabel title="Data" />
 <GroupedList>
-  <ListRow title="Export backup" subtitle="Save a .db copy" chevron onPress={exportBackup} />
-  <ListRow title="Export CSV" chevron onPress={exportCsv} />
-  <ListRow title="Restore from backup" destructive onPress={restore} />
+  <ListRow icon="download" tile="small" title="Export backup" subtitle="Full copy of your data as a .db file"
+    chevron busy={exporting} onPress={exportBackup} />
+  <ListRow icon="table" tile="small" title="Export CSV" chevron onPress={exportCsv} />
+  <ListRow icon="restore" tile="small" title="Restore from backup" chevron destructive onPress={restore} />
 </GroupedList>
 ```
 
@@ -25,11 +26,18 @@ card of rows with inset separators.
   - `icon` puts an 18 dp icon in a 36 dp `surfaceSecondary` tile; `live` tints
     the tile `liveSoft` for items in the active workout. `leading` replaces the
     tile with custom content.
-  - When a row has a leading tile, its separator starts at the text (62 dp in)
-    rather than near the card edge (16 dp).
+  - `tile="small"` gives the Settings tile from the mockups (`.m-li .icn`): 32 dp
+    with a 10 dp radius and an 18 dp icon at the regular stroke in
+    `foregroundSecondary`.
+  - When a row has a leading tile, its separator starts 62 dp in (for either
+    tile size, as in the mockups) rather than near the card edge (16 dp).
   - `trailing` takes a string (muted text, such as a time) or any element, such
     as a `SegmentedControl`. `chevron` adds a disclosure arrow.
   - `destructive` colours the title for dangerous rows. Keep these last in a group.
+  - `busy` swaps the chevron for a spinner in the same 18 dp box and blocks
+    presses, for a row whose action is running (such as an export). `disabled`
+    blocks presses and dims the row to `opacity.disabled`. Both set the row's
+    accessibility state.
   - `indent` makes a nested row, such as an exercise variation: 30 dp left
     padding, 48 dp tall, a 15 sp medium title, on a band tinted with the page
     colour at 50%.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import type {
   ReplacementRestoreAvailability,
@@ -9,6 +9,7 @@ import type {
   RestorePreparation,
   RestoreProgress,
 } from "../../lib/db/replacementRestoreContract";
+import { Button } from "../design-system/button";
 import { BaseModal } from "../modals/BaseModal";
 
 export type ReplacementRestoreDialogProps = {
@@ -482,17 +483,13 @@ function ActionButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      className={secondary
-        ? "flex-1 items-center justify-center p-3.5 rounded-lg bg-surface-secondary"
-        : "flex-1 items-center justify-center p-3.5 rounded-lg bg-primary"}
+    <Button
       accessibilityLabel={label}
+      label={text}
+      variant={secondary ? "secondary" : "primary"}
       disabled={disabled}
       onPress={onPress}
-    >
-      <Text className={secondary ? "text-base font-semibold text-foreground-secondary" : "text-base font-semibold text-primary-foreground"}>
-        {text}
-      </Text>
-    </Pressable>
+      style={{ flex: 1 }}
+    />
   );
 }

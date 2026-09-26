@@ -14,7 +14,7 @@ redesign, including which screens change next, is in
 | Workouts list | `app/(tabs)/index.tsx` | Redesigned |
 | Workout detail | `app/workout-session/[id].tsx` | Redesigned |
 | Exercises | `app/(tabs)/exercises.tsx` | Redesigned (Phase 6): grouped list, chip filters, "In this workout" group |
-| Settings | `app/(tabs)/settings.tsx` | Legacy |
+| Settings | `app/(tabs)/settings.tsx` | Redesigned (Phase 7): grouped lists, inline segmented controls, 1RM formula sheet, About |
 | Programs | `app/(tabs)/programs.tsx`, `app/programs/**` | Legacy |
 | Exercise page (record, history, analytics) | `app/exercise/**` | Legacy |
 | Other screens: calculators, workout history, day workout, edit workout, set detail, user metrics, performance guide | `app/calculators/**`, `app/workout-history.tsx`, `app/workout/[dayKey].tsx`, `app/edit-workout.tsx`, `app/set/[id].tsx`, `app/user-metric*`, `app/performance-guide.tsx` | Legacy |

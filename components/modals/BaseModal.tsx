@@ -30,6 +30,8 @@ export interface BaseModalProps {
   maxWidth?: number;
   /** Whether to center content vertically (default: true) */
   centerContent?: boolean;
+  /** Anchors the dialog to the bottom edge as an option sheet, as in the Settings mockups. Overrides `centerContent`. */
+  sheet?: boolean;
 }
 
 /**
@@ -47,13 +49,14 @@ export default function BaseModal({
   contentStyle,
   maxWidth = 420,
   centerContent = true,
+  sheet = false,
 }: BaseModalProps) {
   const insets = useSafeAreaInsets();
   const blurTarget = useFrostedModalTarget();
 
   if (blurTarget) {
     return <FrostedModal visible={visible} onClose={onClose} blurTarget={blurTarget}
-      animationType={animationType} contentStyle={contentStyle} maxWidth={maxWidth} centerContent={centerContent}>
+      animationType={animationType} contentStyle={contentStyle} maxWidth={maxWidth} centerContent={centerContent} sheet={sheet}>
       {children}
     </FrostedModal>;
   }
@@ -76,7 +79,7 @@ export default function BaseModal({
           pointerEvents="box-none"
           style={[
             styles.contentContainer,
-            centerContent ? styles.centeredContent : null,
+            sheet ? styles.sheetContent : centerContent ? styles.centeredContent : null,
             {
               paddingTop: centerContent ? 16 : Math.max(insets.top + 20, 36),
               paddingBottom: Math.max(insets.bottom + 16, 16),
@@ -106,6 +109,9 @@ const styles = StyleSheet.create({
   },
   centeredContent: {
     justifyContent: "center",
+  },
+  sheetContent: {
+    justifyContent: "flex-end",
   },
 });
 

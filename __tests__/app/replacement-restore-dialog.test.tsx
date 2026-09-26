@@ -6,7 +6,10 @@ import ReplacementRestoreDialog from "../../components/settings/ReplacementResto
 type RenderedTree = ReturnType<typeof renderer.create>;
 type TestNode = { type: unknown; props: Record<string, any> };
 
-jest.mock("react-native", () => ({ Pressable: "Pressable", Text: "Text", View: "View" }));
+jest.mock("react-native", () => ({ ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View" }));
+jest.mock("../../lib/theme/ThemeContext", () => ({
+  useTheme: () => ({ isDark: false, rawColors: jest.requireActual("../../lib/design-system/tokens").designColors.light }),
+}));
 jest.mock("../../components/modals/BaseModal", () => ({ BaseModal: "BaseModal" }));
 
 const deferred = <T,>() => {

@@ -17,7 +17,7 @@ type Props = BaseModalProps & {
 /** Shared native-modal chrome. The referenced page target never contains this native window. */
 export function FrostedModal({
   visible, onClose, children, blurTarget, contentStyle, maxWidth = sizes.dialogMaxWidth,
-  centerContent = true, topOffset = space[20], animationType = 'fade',
+  centerContent = true, sheet = false, topOffset = space[20], animationType = 'fade',
 }: Props) {
   const { rawColors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -37,16 +37,17 @@ export function FrostedModal({
         <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{
             flex: 1, alignItems: 'center',
-            justifyContent: centerContent ? 'center' : 'flex-start',
-            paddingLeft: insets.left + space[16], paddingRight: insets.right + space[16],
-            paddingTop: insets.top + (centerContent ? space[16] : topOffset), paddingBottom: insets.bottom + space[24]
+            justifyContent: sheet ? 'flex-end' : centerContent ? 'center' : 'flex-start',
+            // A sheet sits 12 dp from the sides and 16 dp from the bottom, as in the mockups.
+            paddingLeft: insets.left + (sheet ? space[12] : space[16]), paddingRight: insets.right + (sheet ? space[12] : space[16]),
+            paddingTop: insets.top + (centerContent || sheet ? space[16] : topOffset), paddingBottom: insets.bottom + (sheet ? space[16] : space[24])
           }}>
           <Animated.View accessibilityViewIsModal
             entering={animate ? FadeInDown.duration(motion.dialogEnter).reduceMotion(ReduceMotion.System) : undefined}
             style={[{
               width: '100%', maxWidth, minWidth: 0, flexShrink: 1, maxHeight: '100%', borderRadius: radius.dialog,
               borderWidth: 1, borderColor: `${rawColors.border}${glass.borderAlpha}`, backgroundColor: `${rawColors.surface}${glass.surfaceAlpha}`,
-              overflow: 'hidden', padding: pageGutter
+              overflow: 'hidden', ...(sheet ? { paddingTop: space[20], paddingHorizontal: space[16], paddingBottom: space[16] } : { padding: pageGutter })
             }, contentStyle]}>
             <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator={false}
               style={{ flexGrow: 0, flexShrink: 1 }}>

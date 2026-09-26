@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandMark } from '@/components/design-system/brand-mark';
 import { Button } from '@/components/design-system/button';
 import { ConfirmDialog } from '@/components/design-system/confirm-dialog';
+import { BaseModal } from '@/components/modals/BaseModal';
 import { DesignSystemProvider } from '@/components/design-system/design-system-provider';
 import { GroupedList, GroupLabel, ListRow } from '@/components/design-system/grouped-list';
 import { Icon, type IconName } from '@/components/design-system/icon';
@@ -49,7 +50,7 @@ function Catalog({ scheme }: { scheme: 'light' | 'dark' }) {
   const { rawColors } = useTheme();
   const [mode, setMode] = useState<'system' | 'light' | 'dark'>('system');
   const [unit, setUnit] = useState<'kg' | 'lb'>('kg');
-  const [dialog, setDialog] = useState<'delete' | 'discard' | null>(null);
+  const [dialog, setDialog] = useState<'delete' | 'discard' | 'sheet' | null>(null);
   const [busy, setBusy] = useState(false);
   const noop = () => {};
 
@@ -118,17 +119,18 @@ function Catalog({ scheme }: { scheme: 'light' | 'dark' }) {
         <ListRow indent title="Paused Bench" chevron onPress={noop} />
         <ListRow title="Cable Fly" subtitle="Cable" chevron onPress={noop} />
       </GroupedList>
-      <GroupLabel title="Data" detail="3 items" />
+      <GroupLabel title="Data" detail="small tiles" />
       <GroupedList>
-        <ListRow title="Export backup" subtitle="Save a .db copy" chevron onPress={noop} />
-        <ListRow title="Export CSV" chevron onPress={noop} />
-        <ListRow title="Restore from backup" destructive onPress={noop} />
+        <ListRow icon="download" tile="small" title="Export backup" subtitle="Full copy of your data as a .db file" chevron busy onPress={noop} />
+        <ListRow icon="table" tile="small" title="Export CSV" subtitle="Workouts and sets for spreadsheets" chevron onPress={noop} />
+        <ListRow icon="restore" tile="small" title="Restore from backup" subtitle="Disabled" chevron destructive disabled onPress={noop} />
       </GroupedList>
     </View>
 
     <Section title="Press and hold">
       <HoldCard onHold={() => setDialog('delete')} />
       <Button label="Open discard dialog" variant="secondary" onPress={() => setDialog('discard')} />
+      <Button label="Open bottom sheet" variant="secondary" onPress={() => setDialog('sheet')} />
     </Section>
 
     <ConfirmDialog visible={dialog === 'delete'} title="Delete Push Day?" busy={busy}
@@ -137,6 +139,16 @@ function Catalog({ scheme }: { scheme: 'light' | 'dark' }) {
       onConfirm={() => { setBusy(true); setTimeout(() => { setBusy(false); setDialog(null); }, 900); }} />
     <ConfirmDialog visible={dialog === 'discard'} title="Discard workout?" message="This workout has no sets yet."
       confirmLabel="Discard" onCancel={() => setDialog(null)} onConfirm={() => setDialog(null)} />
+    <BaseModal visible={dialog === 'sheet'} onClose={() => setDialog(null)} sheet maxWidth={560}>
+      <View style={{ gap: space[6] }}>
+        <Text accessibilityRole="header" style={{ marginHorizontal: space[4], color: rawColors.foreground, fontSize: 20, fontWeight: '700' }}>Option sheet</Text>
+        <Text style={{ marginHorizontal: space[4], color: rawColors.foregroundSecondary, fontSize: 14 }}>BaseModal with sheet: anchored 12 dp from the sides and 16 dp from the bottom.</Text>
+        <View style={{ flexDirection: 'row', gap: space[12], marginTop: space[8] }}>
+          <Button label="Cancel" variant="secondary" onPress={() => setDialog(null)} style={{ flex: 1 }} />
+          <Button label="Done" onPress={() => setDialog(null)} style={{ flex: 1 }} />
+        </View>
+      </View>
+    </BaseModal>
   </View>;
 }
 

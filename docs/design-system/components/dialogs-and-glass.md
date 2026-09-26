@@ -13,6 +13,13 @@ See the Workouts screen for the complete safe-area and scroll composition.
 
 The shared shell owns blur intensity, scrim, translucent surface, border alpha,
 entrance animation, keyboard avoidance, safe-area spacing, and bounded scrolling.
+
+Pass `sheet` to anchor the dialog to the bottom edge as an option sheet, as in
+the Settings mockups: 12 dp from the sides, 16 dp above the bottom safe area,
+with 20/16/16 dp padding. The Settings 1RM formula picker
+(`features/settings/components/formula-sheet.tsx`) is the reference. Keep
+centred dialogs for confirmations.
+
 Keep controls opaque and readable. Older Android devices use the existing library
 fallback. A blurred background is optional decoration; the scrim and surface must
 still establish the dialog hierarchy without blur.

@@ -72,7 +72,7 @@ export const motion = {
 
 export const sizes = {
   touchTarget: 44, icon: 23, pageMaxWidth: 700, dialogMaxWidth: 420, scrollFade: 36,
-  liveDot: 7, listLeading: 36, listRowMinHeight: 60, buttonLarge: 48, holdBar: 3,
+  liveDot: 7, listLeading: 36, listLeadingSmall: 32, listRowMinHeight: 60, buttonLarge: 48, holdBar: 3,
   /** Docked tab bar: content height above the bottom safe area, and the active-icon pill. */
   dockBar: 58, dockPill: 30, dockPillWidth: 58,
   /** The in-progress workout strip docked above the tab bar. */

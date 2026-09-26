@@ -11,28 +11,38 @@ const mockExportBackup = jest.fn();
 const mockExportCsv = jest.fn();
 const mockLegacyImport = jest.fn();
 const mockAlert = jest.fn();
+const mockSetGlobalFormula = jest.fn();
+const mockSetUnit = jest.fn();
+const mockSetThemePreference = jest.fn();
 
-jest.mock("@expo/vector-icons", () => ({ MaterialCommunityIcons: "MaterialCommunityIcons" }));
 jest.mock("react-native", () => ({
-  ActivityIndicator: "ActivityIndicator", Alert: { alert: (...args: unknown[]) => mockAlert(...args) }, Modal: "Modal",
-  Pressable: "Pressable", ScrollView: "ScrollView", StyleSheet: { create: (styles: unknown) => styles },
-  Text: "Text", View: "View",
+  ActivityIndicator: "ActivityIndicator", Alert: { alert: (...args: unknown[]) => mockAlert(...args) },
+  Platform: { OS: "android" }, Pressable: "Pressable", StyleSheet: { absoluteFill: {} },
+  Text: "Text", View: "View", useWindowDimensions: () => ({ width: 448, height: 998, scale: 3, fontScale: 1 }),
 }));
-jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+jest.mock("react-native-reanimated", () => ({ __esModule: true, default: { ScrollView: "ScrollView" } }));
+jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
+jest.mock("expo-blur", () => ({ BlurTargetView: "BlurTargetView" }));
+jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.0.0" } } }));
+jest.mock("../../components/design-system/design-system-provider", () => ({ DesignSystemProvider: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock("../../components/modals/frosted-modal-context", () => ({ FrostedModalProvider: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock("../../components/workouts/scroll-fade", () => ({ ScrollFade: "ScrollFade" }));
+jest.mock("../../lib/design-system/use-scroll-edge-fades", () => ({
+  useScrollEdgeFades: () => ({ topOpacity: { value: 0 }, bottomOpacity: { value: 0 }, scrollProps: {} }),
+}));
 jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn().mockResolvedValue(false), shareAsync: jest.fn() }));
 jest.mock("../../lib/contexts/UnitPreferenceContext", () => ({
-  useUnitPreference: () => ({ unitPreference: "kg", setUnitPreference: jest.fn() }),
+  useUnitPreference: () => ({ unitPreference: "kg", setUnitPreference: (...args: unknown[]) => mockSetUnit(...args) }),
 }));
 jest.mock("../../lib/theme/ThemeContext", () => ({
   useTheme: () => ({
-    rawColors: new Proxy({}, { get: () => "#000000" }),
-    setThemePreference: jest.fn(),
-    setColorTheme: jest.fn(),
+    isDark: false,
+    rawColors: jest.requireActual("../../lib/design-system/tokens").designColors.light,
+    themePreference: "system",
+    setThemePreference: (...args: unknown[]) => mockSetThemePreference(...args),
   }),
 }));
-jest.mock("../../lib/db/index", () => ({ getGlobalFormula: () => "epley", setGlobalFormula: jest.fn() }));
-jest.mock("../../lib/db/settings", () => ({ getThemePreference: () => "system", getColorTheme: () => "default" }));
-jest.mock("../../lib/theme/themes", () => ({ COLOR_THEME_OPTIONS: [{ id: "default", label: "Default", previewColor: "#000000" }] }));
+jest.mock("../../lib/db/index", () => ({ getGlobalFormula: () => "epley", setGlobalFormula: (...args: unknown[]) => mockSetGlobalFormula(...args) }));
 jest.mock("../../lib/utils/exportCsv", () => ({
   ExportCancelledError: class ExportCancelledError extends Error {},
   FileSystemUnavailableError: class FileSystemUnavailableError extends Error {},
@@ -96,6 +106,9 @@ beforeEach(() => {
   mockExportCsv.mockReset().mockResolvedValue({ uri: "training.csv", method: "android_saf" });
   mockLegacyImport.mockReset();
   mockAlert.mockReset();
+  mockSetGlobalFormula.mockReset();
+  mockSetUnit.mockReset();
+  mockSetThemePreference.mockReset();
 });
 
 function renderSettings() {
@@ -112,7 +125,7 @@ describe("Settings replacement restore hookup", () => {
   it("confirms through the real dialog and schedules the prepared token", async () => {
     const tree = renderSettings();
     mockPrepare.mockResolvedValue(ready);
-    await act(async () => { action(tree, "Replace app data").props.onPress(); });
+    await act(async () => { action(tree, "Restore from backup").props.onPress(); });
     const choose = tree.root.findByProps({ accessibilityLabel: "Choose backup for replacement restore" });
     await act(async () => { choose.props.onPress(); });
     expect(mockPrepare).toHaveBeenCalledTimes(1);
@@ -128,7 +141,7 @@ describe("Settings replacement restore hookup", () => {
   it("disables unavailable restore without opening the dialog and leaves export available", async () => {
     mockAvailability.mockReturnValue({ available: false, reason: "unsupported_platform" });
     const tree = renderSettings();
-    const restoreAction = action(tree, "Replace app data");
+    const restoreAction = action(tree, "Restore from backup");
     expect(restoreAction.props.disabled).toBe(true);
     await act(async () => { restoreAction.props.onPress(); });
     expect(tree.root.findAllByProps({ accessibilityLabel: "Choose backup for replacement restore" })).toHaveLength(0);
@@ -144,7 +157,7 @@ describe("Settings replacement restore hookup", () => {
       exportMock.mockReturnValue(pendingExport.promise);
       const tree = renderSettings();
       const exportAction = action(tree, label);
-      const restoreAction = action(tree, "Replace app data");
+      const restoreAction = action(tree, "Restore from backup");
       await act(async () => {
         exportAction.props.onPress();
         restoreAction.props.onPress();
@@ -159,7 +172,7 @@ describe("Settings replacement restore hookup", () => {
 
   it("blocks captured backup and CSV handlers after restore opens", async () => {
     const tree = renderSettings();
-    const restoreAction = action(tree, "Replace app data");
+    const restoreAction = action(tree, "Restore from backup");
     const backupAction = action(tree, "Export backup");
     const csvAction = action(tree, "Export CSV");
     await act(async () => {
@@ -176,7 +189,7 @@ describe("Settings replacement restore hookup", () => {
   it("cancels through the real dialog, cleans the token, then allows both exports", async () => {
     mockPrepare.mockResolvedValue(ready);
     const tree = renderSettings();
-    await act(async () => { action(tree, "Replace app data").props.onPress(); });
+    await act(async () => { action(tree, "Restore from backup").props.onPress(); });
     await act(async () => { tree.root.findByProps({ accessibilityLabel: "Choose backup for replacement restore" }).props.onPress(); });
     await flush();
     await act(async () => { tree.root.findByProps({ accessibilityLabel: "Dismiss restore confirmation" }).props.onPress(); });
@@ -186,6 +199,36 @@ describe("Settings replacement restore hookup", () => {
     await act(async () => { action(tree, "Export CSV").props.onPress(); });
     expect(mockExportBackup).toHaveBeenCalled();
     expect(mockExportCsv).toHaveBeenCalled();
+    await act(async () => { tree.unmount(); });
+  });
+});
+
+describe("Settings preferences", () => {
+  const pressLabel = (tree: ReturnType<typeof renderSettings>, label: string) =>
+    tree.root.findAll((node: TestNode) => node.type === "Pressable" && node.props.accessibilityLabel === label)[0];
+
+  it("applies a formula only when the sheet is confirmed", async () => {
+    const tree = renderSettings();
+    await act(async () => { pressLabel(tree, "Estimated 1RM formula, Epley").props.onPress(); });
+    await act(async () => { pressLabel(tree, "Brzycki").props.onPress(); });
+    await act(async () => { pressLabel(tree, "Cancel").props.onPress(); });
+    expect(mockSetGlobalFormula).not.toHaveBeenCalled();
+
+    await act(async () => { pressLabel(tree, "Estimated 1RM formula, Epley").props.onPress(); });
+    await act(async () => { pressLabel(tree, "Wathan").props.onPress(); });
+    await act(async () => { pressLabel(tree, "Use Wathan").props.onPress(); });
+    expect(mockSetGlobalFormula).toHaveBeenCalledWith("wathan");
+    expect(pressLabel(tree, "Estimated 1RM formula, Wathan")).toBeDefined();
+    await act(async () => { tree.unmount(); });
+  });
+
+  it("changes display mode and weight unit inline", async () => {
+    const tree = renderSettings();
+    await act(async () => { pressLabel(tree, "Dark").props.onPress(); });
+    await act(async () => { pressLabel(tree, "lb").props.onPress(); });
+    expect(mockSetThemePreference).toHaveBeenCalledWith("dark");
+    expect(mockSetUnit).toHaveBeenCalledWith("lb");
+    expect(tree.root.findAll((node: TestNode) => node.type === "Text" && textContent(node.props.children) === "Version 1.0.0")).toHaveLength(1);
     await act(async () => { tree.unmount(); });
   });
 });
